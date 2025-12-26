@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Urgency Flow: Project Management Edition</title>
+    <style>
+        :root {
+            /* Calming Dark Green Theme */
+            --bg-color: #0c1812;
+            --dots-color: #24342b;
+            --panel-bg: #15261d;
+            
+            /* Preserved Colors */
+            --text-main: #e0e0e0;
+            --text-muted: #a0a0a0;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --border: #333;
+            
+            --node-bg: #2d2d2d;
+            --node-border: #444;
+            --node-selected: #3b82f6;
+            
+            /* Logic Colors */
+            --critical-path: #ffd700; /* Gold */
+            --ready-color: #10b981;   /* Green */
+            --blocked-color: #ef4444; /* Red */
+            --soft-dep-color: #888;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(var(--dots-color) 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--text-main);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            touch-action: none;
+        }
+
+        /* --- UI LAYOUT --- */
+        #toolbar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: var(--panel-bg);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+            border: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        #inspector {
+            width: 350px;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 50;
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            transition: transform 0.3s ease;
+            box-shadow: -4px 0 10px rgba(0,0,0,0.2);
+        }
+
+        #inspector.hidden {
+            transform: translateX(100%);
+        }
+        
+        /* --- RIGHT SIDE PANELS (Notes & Archive) --- */
+        .side-panel {
+            width: 350px;
+            background: #1a1a1a; 
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 55; /* Above inspector */
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            transition: transform 0.3s ease;
+            box-shadow: -4px 0 10px rgba(0,0,0,0.3);
+        }
+        
+        .side-panel.hidden {
+            transform: translateX(100%);
+        }
+
+        .panel-header-row {
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #222;
+        }
+        
+        .panel-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        /* --- NOTES STYLES --- */
+        .note-card {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .note-card:hover { border-color: var(--accent); }
+        .note-card.active { border-color: var(--accent); background: #333; }
+        .note-card-title { font-weight: bold; font-size: 13px; margin-bottom: 4px; color: #eee; }
+        .note-card-preview { font-size: 11px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .note-card-meta { font-size: 10px; color: #666; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; }
+        
+        #note-editor {
+            height: 300px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            background: #222;
+            transition: height 0.3s;
+        }
+        #note-editor.hidden { height: 0; overflow: hidden; border: none; }
+        .editor-toolbar { padding: 8px; display: flex; justify-content: space-between; background: #2a2a2a; }
+        #note-title-input { background: transparent; border: none; color: white; font-weight: bold; font-size: 14px; width: 100%; padding: 5px; }
+        #note-body-input { flex-grow: 1; background: #1a1a1a; border: none; color: #ddd; padding: 10px; resize: none; font-family: sans-serif; font-size: 13px; line-height: 1.5; }
+        #note-body-input:focus { outline: none; }
+
+        /* --- ARCHIVE STYLES --- */
+        .archive-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .archive-item:hover { background: rgba(255, 255, 255, 0.08); }
+        .archive-item.selected { border-color: var(--accent); background: #2a2a2a; }
+        .archive-info { font-size: 13px; color: #aaa; }
+        .archive-date { font-size: 10px; color: #666; display: block; margin-top: 3px; }
+
+        /* --- GOALS PANEL (LEFT) --- */
+        #goals-panel {
+            width: 380px; 
+            background: #112019; 
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 45; 
+            position: absolute;
+            left: 0;
+            top: 60px;
+            bottom: 0;
+            transition: transform 0.3s ease;
+            box-shadow: 4px 0 10px rgba(0,0,0,0.2);
+        }
+        #goals-panel.hidden { transform: translateX(-100%); }
+        .goals-header { padding: 15px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.3); }
+        .year-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 6px; }
+        .year-title { font-size: 18px; font-weight: 800; color: #fff; letter-spacing: 1px; }
+        .goal-tree { flex-grow: 1; overflow-y: auto; padding: 15px; }
+        .goal-node { margin-bottom: 5px; position: relative; }
+        .goal-content { display: flex; align-items: center; padding: 6px 10px; border-radius: 6px; background: rgba(255,255,255,0.03); border: 1px solid transparent; transition: all 0.2s; }
+        .goal-content:hover { background: rgba(255,255,255,0.08); border-color: #444; }
+        .goal-caret { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #888; font-size: 10px; margin-right: 5px; border-radius: 4px; transition: all 0.2s; }
+        .goal-caret:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .goal-caret.collapsed { transform: rotate(-90deg); }
+        .goal-caret.invisible { opacity: 0; pointer-events: none; }
+        .goal-text { flex-grow: 1; font-size: 13px; background: transparent; border: none; color: #ddd; padding: 4px; border-bottom: 1px solid transparent; transition: border 0.2s; }
+        .goal-text:focus { outline: none; border-bottom-color: var(--accent); color: #fff; }
+        .goal-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.2s; margin-left: 8px; }
+        .goal-content:hover .goal-actions { opacity: 1; }
+        .goal-btn { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; color: #888; font-size: 14px; }
+        .goal-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .goal-btn.add:hover { color: var(--ready-color); background: rgba(16, 185, 129, 0.1); }
+        .goal-btn.move:hover { color: var(--accent); background: rgba(59, 130, 246, 0.1); }
+        .goal-btn.del:hover { color: var(--blocked-color); background: rgba(239, 68, 68, 0.1); }
+        .goal-children { margin-left: 10px; padding-left: 10px; border-left: 1px solid #333; margin-top: 4px; }
+        .goal-children.hidden { display: none; }
+
+        /* --- MAIN LAYOUT --- */
+        #graph-container {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+            cursor: grab;
+            touch-action: none;
+        }
+        #graph-container:active { cursor: grabbing; }
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        path { fill: none; stroke-width: 2; transition: stroke 0.3s, stroke-width 0.3s; }
+        path.soft { stroke-dasharray: 5, 5; }
+        path.critical { stroke: var(--critical-path) !important; stroke-width: 3; filter: drop-shadow(0 0 3px var(--critical-path)); }
+        
+        /* SELECTION BOX */
+        #selection-rect {
+            position: absolute;
+            border: 1px dashed var(--accent);
+            background: rgba(59, 130, 246, 0.1);
+            z-index: 1000;
+            pointer-events: none;
+            display: none;
+        }
+
+        /* --- NODES --- */
+        .node { position: absolute; width: 180px; background: var(--node-bg); border: 1px solid var(--node-border); border-radius: 8px; padding: 10px; user-select: none; cursor: pointer; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.5); transition: box-shadow 0.2s, border-color 0.2s, opacity 0.3s; display: flex; flex-direction: column; gap: 5px; }
+        .node:hover { box-shadow: 0 5px 15px rgba(0,0,0,0.6); border-color: #666; }
+        .node.selected { border: 2px solid var(--node-selected); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); }
+        .node.critical { border-color: var(--critical-path); box-shadow: 0 0 10px rgba(255, 215, 0, 0.2); }
+        .node.critical-urgent { border-color: #ff4d4d; box-shadow: 0 0 15px rgba(255, 77, 77, 0.4); }
+        .node.blocked { opacity: 0.6; border-style: dashed; }
+        .node.completed { background: #1e3a2f; border-color: #10b981; text-decoration: line-through; opacity: 0.8; }
+        .node-header { display: flex; justify-content: space-between; align-items: flex-start; font-size: 14px; font-weight: 600; }
+        .node-meta { display: flex; gap: 5px; font-size: 10px; margin-top: 2px; flex-wrap: wrap; }
+        .badge { padding: 2px 4px; border-radius: 4px; background: #333; color: #aaa; }
+        .badge.critical-badge { background: rgba(255, 215, 0, 0.2); color: var(--critical-path); }
+        .badge.urgent-badge { background: rgba(239, 68, 68, 0.2); color: #ef4444; font-weight: bold; }
+        .badge.weight { background: rgba(59, 130, 246, 0.2); color: var(--accent); }
+        .badge.date-badge { background: #2c2c2c; border: 1px solid #444; color: #ccc; }
+        .badge.time-badge { background: #374151; color: #e5e7eb; font-family: monospace; display: flex; align-items: center; gap: 3px; }
+        .badge.time-badge.active { background: #991b1b; color: white; border: 1px solid #ef4444; animation: pulse 2s infinite; }
+        .icon-lock { color: var(--blocked-color); }
+        .node-timer-control { position: absolute; top: -10px; right: -10px; width: 26px; height: 26px; border-radius: 50%; background: #2d2d2d; border: 2px solid var(--border); color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: all 0.2s; z-index: 20; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        .node:hover .node-timer-control, .node-timer-control.running { opacity: 1; }
+        .node-timer-control.play { background: #059669; border-color: #059669; }
+        .node-timer-control.stop { background: #b91c1c; border-color: #b91c1c; animation: pulse-red 2s infinite; }
+        .progress-container { height: 4px; background: #444; border-radius: 2px; margin-top: 5px; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--ready-color); width: 0%; transition: width 0.3s; }
+
+        /* --- PANEL COMMON --- */
+        .panel-header { padding: 15px; border-bottom: 1px solid var(--border); font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        .panel-content { padding: 15px; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 12px; margin-bottom: 5px; color: var(--text-muted); }
+        input[type="text"], input[type="number"], input[type="date"], textarea, select { width: 100%; background: #121212; border: 1px solid var(--border); color: var(--text-main); padding: 8px; border-radius: 4px; font-family: inherit; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+        .btn { background: var(--node-bg); border: 1px solid var(--border); color: var(--text-main); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.2s; }
+        .btn:hover { background: #3a3a3a; }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-danger { background: rgba(239, 68, 68, 0.2); border-color: var(--blocked-color); color: var(--blocked-color); }
+        .btn-urgent { background: rgba(239, 68, 68, 0.1); border-color: #ef4444; color: #ef4444; }
+        .btn-urgent.active { background: #ef4444; color: white; }
+        .btn-timer { width: 100%; padding: 10px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 8px; background: #059669; color: white; border: none; }
+        .btn-timer.running { background: #b91c1c; }
+        .log-container { max-height: 150px; overflow-y: auto; border: 1px solid #333; border-radius: 4px; padding: 5px; background: #111; }
+        .log-item { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; padding: 3px 0; border-bottom: 1px solid #222; }
+        .subtask-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; padding: 5px; background: #252526; border-radius: 4px; }
+        .dep-item { display: flex; justify-content: space-between; align-items: center; background: #252526; padding: 5px 8px; margin-bottom: 4px; border-radius: 4px; font-size: 12px; }
+        .dep-controls { display: flex; gap: 5px; }
+        .toggle-soft { cursor: pointer; opacity: 0.5; }
+        .toggle-soft.active { opacity: 1; color: var(--accent); font-weight: bold; }
+
+        #notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--accent); color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 200; }
+        
+        #heatmap-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(12, 24, 18, 0.95); z-index: 150; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; }
+        #heatmap-overlay.hidden { display: none; }
+        .heatmap-header { width: 100%; max-width: 1000px; display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
+        .heatmap-controls { display: flex; align-items: center; gap: 15px; }
+        .heatmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; width: 100%; max-width: 1000px; max-height: 80vh; overflow-y: auto; }
+        .heatmap-month-container { margin-bottom: 20px; }
+        .heatmap-month-title { font-weight: bold; margin-bottom: 5px; color: var(--text-muted); }
+        .heatmap-month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .day-cell { aspect-ratio: 1; background: #222; border-radius: 2px; font-size: 9px; display: flex; align-items: center; justify-content: center; color: #555; position: relative; cursor: default; }
+        .day-cell.active { cursor: pointer; color: #fff; font-weight: bold; }
+        .level-1 { background: #1e3a8a; } .level-2 { background: #1d4ed8; } .level-3 { background: #2563eb; } .level-4 { background: #3b82f6; } .level-5 { background: #60a5fa; }
+        .day-tooltip { position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #333; padding: 5px 8px; border-radius: 4px; white-space: nowrap; font-size: 11px; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 10; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+        .day-cell:hover .day-tooltip { opacity: 1; }
+
+        #fab-inbox { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 50%; background: var(--accent); color: white; font-size: 30px; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.5); cursor: pointer; z-index: 100; display: flex; align-items: center; justify-content: center; transition: transform 0.2s, background 0.2s; }
+        #fab-inbox:hover { transform: scale(1.1); background: var(--accent-hover); }
+
+        #inbox-panel { position: fixed; bottom: 100px; right: 30px; width: 320px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 5px 20px rgba(0,0,0,0.5); z-index: 99; transform-origin: bottom right; transition: transform 0.2s ease, opacity 0.2s ease; }
+        #inbox-panel.hidden { transform: scale(0.9); opacity: 0; pointer-events: none; }
+        .inbox-header { padding: 12px 15px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .inbox-list { max-height: 300px; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 5px; }
+        .inbox-item { background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; gap: 10px; }
+        .inbox-item:hover { background: rgba(255,255,255,0.08); }
+        .inbox-item span:first-child { word-break: break-word; flex: 1; min-width: 0; line-height: 1.4; }
+        .inbox-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        .inbox-btn { cursor: pointer; opacity: 0.6; font-size: 14px; padding: 2px; }
+        .inbox-btn:hover { opacity: 1; }
+        .promote-btn { color: var(--ready-color); }
+        .promote-goal-btn { color: var(--critical-path); } 
+        .delete-btn { color: var(--blocked-color); }
+        .inbox-footer { padding: 10px; border-top: 1px solid var(--border); display: flex; gap: 5px; }
+
+        /* --- SYNC PANEL --- */
+        #sync-panel { position: fixed; top: 70px; left: 10px; width: 300px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; z-index: 110; box-shadow: 0 5px 20px rgba(0,0,0,0.5); padding: 15px; display: flex; flex-direction: column; gap: 10px; transition: transform 0.2s, opacity 0.2s; }
+        #sync-panel.hidden { transform: translateY(-20px); opacity: 0; pointer-events: none; }
+        .sync-header { font-weight: bold; border-bottom: 1px solid var(--border); padding-bottom: 8px; display: flex; justify-content: space-between; }
+        .sync-info { font-size: 11px; color: #888; margin-bottom: 8px; line-height: 1.4; }
+        .sync-status { font-size: 12px; margin-top: 5px; color: var(--accent); }
+
+        @media (max-width: 600px) {
+            #inspector { width: 100%; }
+            #goals-panel { width: 100%; top: 120px; }
+            #notes-panel, #archive-panel { width: 100%; }
+            #sync-panel { left: 50%; transform: translateX(-50%); width: 90%; }
+            #sync-panel.hidden { transform: translate(-50%, -20px); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Toolbar -->
+    <div id="toolbar">
+        <button class="btn btn-primary" onclick="addNode()">+ New Task</button>
+        <button class="btn" onclick="toggleGoals()">🎯 Life Goals</button>
+        <button class="btn" onclick="toggleNotesPanel()">📝 Notes</button>
+        <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive</button>
+        <button class="btn" onclick="fitView()">Recenter / Urgent</button>
+        <button class="btn" onclick="toggleHeatmap()">📅 Heatmap</button>
+        <button class="btn" style="border-color: var(--accent); color: var(--accent);" onclick="toggleSyncPanel()">☁️ Sync</button>
+        <button class="btn" onclick="saveData(true)">Save</button>
+        <button class="btn" onclick="document.getElementById('file-input').click()">Load</button>
+        <button class="btn btn-danger" onclick="clearData()">Reset</button>
+        <div style="border-left: 1px solid #444; margin: 0 5px;"></div>
+        <div id="status-indicator" style="font-size: 12px; color: #888; align-self: center;">Auto-saved</div>
+    </div>
+
+    <!-- Hidden File Input -->
+    <input type="file" id="file-input" style="display:none" onchange="loadFile(this)">
+
+    <!-- Main Graph Area -->
+    <div id="graph-container">
+        <div id="transform-layer" style="transform-origin: 0 0; position: absolute; top:0; left:0; width:100%; height:100%;">
+            <svg id="connections"></svg>
+            <div id="nodes-layer"></div>
+        </div>
+    </div>
+    
+    <!-- Selection Box -->
+    <div id="selection-rect"></div>
+
+    <!-- Sync Panel -->
+    <div id="sync-panel" class="hidden">
+        <div class="sync-header">
+            <span>☁️ GitHub Gist Sync</span>
+            <span style="cursor:pointer" onclick="toggleSyncPanel()">✕</span>
+        </div>
+        <div class="sync-info">
+            Enter your GitHub Personal Access Token to sync data across devices via a private Gist.
+        </div>
+        <div class="form-group">
+            <label>GitHub Token (Repo/Gist Scope)</label>
+            <input type="password" id="github-token" placeholder="ghp_xxxxxxxxxxxx" onchange="saveGithubToken(this.value)">
+        </div>
+        <div class="form-group">
+            <label>Gist ID (Auto-filled on Push)</label>
+            <input type="text" id="gist-id" placeholder="Autogenerated..." readonly>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn" style="flex:1" onclick="pullFromGist()">⬇ Pull</button>
+            <button class="btn btn-primary" style="flex:1" onclick="pushToGist()">⬆ Push</button>
+        </div>
+        <div id="sync-status" class="sync-status"></div>
+    </div>
+
+    <!-- Life Goals Panel (Left) -->
+    <div id="goals-panel" class="hidden">
+        <div class="goals-header">
+            <div class="year-nav">
+                <button class="btn" onclick="changeGoalYear(-1)">&lt;</button>
+                <span id="goals-year-display" class="year-title">2024</span>
+                <button class="btn" onclick="changeGoalYear(1)">&gt;</button>
+            </div>
+            <div style="display:flex; gap:5px">
+                <input type="text" id="new-goal-input" placeholder="New root goal..." onkeypress="if(event.key==='Enter') addRootGoal()">
+                <button class="btn btn-primary" onclick="addRootGoal()">Add</button>
+            </div>
+        </div>
+        <div class="goal-tree" id="goal-tree-container">
+            <!-- Dynamic Goals -->
+        </div>
+    </div>
+
+    <!-- Notes Panel (Right) -->
+    <div id="notes-panel" class="hidden side-panel">
+        <div class="panel-header-row">
+            <span>📝 Notes</span>
+            <button class="btn" onclick="toggleNotesPanel()">✕</button>
+        </div>
+        <div class="panel-list" id="notes-list-container">
+            <!-- Note Items -->
+        </div>
+        <div style="padding: 10px; border-top: 1px solid #333;">
+            <button class="btn btn-primary" style="width:100%" onclick="createNewNote()">+ Create Independent Note</button>
+        </div>
+        <div id="note-editor" class="hidden">
+            <div class="editor-toolbar">
+                <button class="btn btn-danger" onclick="deleteCurrentNote()">Delete</button>
+                <button class="btn" onclick="closeNoteEditor()">Done</button>
+            </div>
+            <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()">
+            <textarea id="note-body-input" placeholder="Type your note here..." oninput="saveCurrentNote()"></textarea>
+        </div>
+    </div>
+
+    <!-- Archive Panel (Right) -->
+    <div id="archive-panel" class="hidden side-panel">
+        <div class="panel-header-row">
+            <span>🗄️ Completed & Archived</span>
+            <button class="btn" onclick="toggleArchivePanel()">✕</button>
+        </div>
+        <div style="padding: 10px; font-size: 11px; color: #888; border-bottom: 1px solid #333;">
+            Tasks are auto-archived here 15 days after completion.
+        </div>
+        <div class="panel-list" id="archive-list-container">
+            <!-- Archived Items -->
+        </div>
+    </div>
+
+    <!-- Inbox FAB -->
+    <button id="fab-inbox" onclick="toggleInbox()">+</button>
+
+    <!-- Inbox Panel -->
+    <div id="inbox-panel" class="hidden">
+        <div class="inbox-header">
+            <span>Inbox (Ideas)</span>
+            <span style="cursor:pointer; font-size:18px" onclick="toggleInbox()">×</span>
+        </div>
+        <div class="inbox-list" id="inbox-list">
+            <!-- Dynamic items -->
+        </div>
+        <div class="inbox-footer">
+            <input type="text" id="inbox-input" placeholder="Quick task..." onkeypress="if(event.key==='Enter') addToInbox()">
+            <button class="btn btn-primary" onclick="addToInbox()">Add</button>
+        </div>
+    </div>
+
+    <!-- Right Sidebar / Inspector -->
+    <div id="inspector" class="hidden">
+        <div class="panel-header">
+            <span id="insp-title">Task Details</span>
+            <button class="btn" onclick="deselectNode()">✕</button>
+        </div>
+        <div class="panel-content" id="insp-content">
+            <!-- Dynamic Content Injected Here -->
+        </div>
+    </div>
+    
+    <!-- Heatmap Overlay -->
+    <div id="heatmap-overlay" class="hidden">
+        <div class="heatmap-header">
+            <div class="heatmap-controls">
+                <button class="btn" onclick="changeHeatmapYear(-1)">&lt; Prev Year</button>
+                <h2 id="heatmap-title" style="margin: 0;">2024 Heatmap</h2>
+                <button class="btn" onclick="changeHeatmapYear(1)">Next Year &gt;</button>
+            </div>
+            <button class="btn" onclick="toggleHeatmap()">Close</button>
+        </div>
+        <div id="heatmap-container" class="heatmap-grid" style="display: block;">
+            <!-- Generated Grid -->
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification">State Saved</div>
+
+<script>
+    // --- STATE MANAGEMENT ---
+    let nodes = [];
+    let archivedNodes = [];
+    let inbox = []; 
+    let lifeGoals = {}; 
+    let notes = []; 
+    let currentGoalYear = new Date().getFullYear();
+    let selectedNodeId = null; // Single node selection (for inspector)
+    let selectedIds = new Set(); // Multi-selection (for highlighting/dragging)
+    let currentEditingNoteId = null;
+    let scale = 1;
+    let panX = 0;
+    let panY = 0;
+    
+    // Sync State
+    let githubToken = '';
+    let gistId = '';
+    const GIST_FILENAME = 'urgency_flow_data.json';
+    
+    // Auto-Archive Constant
+    const ARCHIVE_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000; // 15 Days
+    
+    // Interaction State
+    let isDragging = false;
+    let isPanning = false;
+    let isBoxSelecting = false;
+    let dragStartX, dragStartY;
+    let draggedNodeId = null;
+    
+    // Box Selection
+    let boxSelectStart = { x: 0, y: 0 };
+    
+    let lastTouchX = 0, lastTouchY = 0;
+    let initialPinchDist = null;
+    let initialScale = 1;
+    let pinchStartCenter = { x: 0, y: 0 };
+    let pinchStartPan = { x: 0, y: 0 };
+    let currentHeatmapYear = new Date().getFullYear();
+
+    // --- INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        loadFromStorage();
+        if (nodes.length === 0 && inbox.length === 0 && Object.keys(lifeGoals).length === 0 && archivedNodes.length === 0) {
+            initDemoData();
+        }
+        
+        // Sync UI Init
+        if(githubToken) document.getElementById('github-token').value = githubToken;
+        if(gistId) document.getElementById('gist-id').value = gistId;
+        
+        checkAutoArchive(); 
+        updateCalculations();
+        render(); 
+        renderInbox();
+        renderGoals(); 
+        setupInteractions();
+        
+        setInterval(tickTimers, 1000);
+        setInterval(checkAutoArchive, 60000); 
+    });
+    
+    // --- GITHUB SYNC LOGIC ---
+    function toggleSyncPanel() {
+        const panel = document.getElementById('sync-panel');
+        if(panel.classList.contains('hidden')) panel.classList.remove('hidden');
+        else panel.classList.add('hidden');
+    }
+    
+    function saveGithubToken(val) {
+        githubToken = val.trim();
+        saveToStorage();
+        setSyncStatus('Token saved locally.');
+    }
+    
+    function setSyncStatus(msg, isError = false) {
+        const el = document.getElementById('sync-status');
+        el.style.color = isError ? '#ef4444' : 'var(--accent)';
+        el.innerText = msg;
+    }
+
+    async function pushToGist() {
+        if (!githubToken) return setSyncStatus('Error: Missing GitHub Token', true);
+        setSyncStatus('Pushing to GitHub...');
+        
+        const content = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes }, null, 2);
+        
+        const files = {};
+        files[GIST_FILENAME] = { content: content };
+        
+        try {
+            let url = 'https://api.github.com/gists';
+            let method = 'POST';
+            
+            // If we already have an ID, update it
+            if (gistId) {
+                url = `https://api.github.com/gists/${gistId}`;
+                method = 'PATCH';
+            }
+            
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Authorization': `token ${githubToken}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                body: JSON.stringify({
+                    description: 'Urgency Flow Data Backup',
+                    public: false,
+                    files: files
+                })
+            });
+            
+            if (!response.ok) throw new Error('GitHub API Error: ' + response.statusText);
+            
+            const data = await response.json();
+            gistId = data.id;
+            document.getElementById('gist-id').value = gistId;
+            saveToStorage(); // Save the Gist ID
+            setSyncStatus(`Success! Saved to Gist: ${gistId.substring(0,6)}...`);
+            
+        } catch (e) {
+            console.error(e);
+            setSyncStatus('Sync Failed: ' + e.message, true);
+        }
+    }
+
+    async function pullFromGist() {
+        if (!githubToken) return setSyncStatus('Error: Missing GitHub Token', true);
+        setSyncStatus('Searching for Gist...');
+        
+        try {
+            // If we don't have an ID, list user's gists to find it
+            if (!gistId) {
+                const listResp = await fetch('https://api.github.com/gists', {
+                    headers: { 'Authorization': `token ${githubToken}` }
+                });
+                if (!listResp.ok) throw new Error('Could not list Gists');
+                const gists = await listResp.json();
+                const found = gists.find(g => g.files[GIST_FILENAME]);
+                if (found) {
+                    gistId = found.id;
+                    document.getElementById('gist-id').value = gistId;
+                    setSyncStatus('Found existing Gist. Downloading...');
+                } else {
+                    return setSyncStatus('No Gist found. Push first.', true);
+                }
+            }
+            
+            // Fetch content
+            const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
+                headers: { 'Authorization': `token ${githubToken}` }
+            });
+            
+            if (!resp.ok) throw new Error('Fetch failed');
+            const data = await resp.json();
+            const fileContent = data.files[GIST_FILENAME].content;
+            const parsed = JSON.parse(fileContent);
+            
+            // Restore Data
+            if (parsed.nodes) nodes = parsed.nodes;
+            if (parsed.archivedNodes) archivedNodes = parsed.archivedNodes;
+            if (parsed.inbox) inbox = parsed.inbox;
+            if (parsed.lifeGoals) lifeGoals = parsed.lifeGoals;
+            if (parsed.notes) notes = parsed.notes;
+            
+            // Sanitize & Render
+            nodes.forEach(n => { if(!n.dependencies) n.dependencies = []; });
+            saveToStorage();
+            updateCalculations();
+            render();
+            renderInbox();
+            renderGoals();
+            
+            setSyncStatus('Pull Complete! Data updated.');
+            
+        } catch (e) {
+            console.error(e);
+            setSyncStatus('Pull Failed: ' + e.message, true);
+        }
+    }
+
+    // --- DATA STRUCTURE ---
+    function createNode(x, y, title = 'New Task') {
+        return {
+            id: 'task_' + Date.now() + Math.random().toString(36).substr(2, 5),
+            title: title,
+            description: '',
+            x: x || 100,
+            y: y || 100,
+            duration: 1, 
+            dueDate: '', 
+            syncDurationDate: true, 
+            completed: false,
+            completedDate: null, 
+            isManualUrgent: false,
+            dependencies: [], 
+            subtasks: [],
+            activeTimerStart: null,
+            timeLogs: []
+        };
+    }
+
+    function createGoal(text) {
+        return {
+            id: 'goal_' + Date.now() + Math.random().toString(36).substr(2, 5),
+            text: text,
+            collapsed: false,
+            children: []
+        };
+    }
+    
+    function createNoteObject(title, body = "", taskId = null) {
+        return {
+            id: 'note_' + Date.now() + Math.random().toString(36).substr(2, 5),
+            title: title || "New Note",
+            body: body,
+            taskId: taskId,
+            timestamp: Date.now()
+        };
+    }
+
+    function initDemoData() {
+        const today = new Date().toISOString().split('T')[0];
+        nodes = [
+            {
+                id: '1', title: 'Define Goal', x: 100, y: 300, completed: true, completedDate: Date.now(), duration: 1, dueDate: '', syncDurationDate: true, isManualUrgent: false,
+                dependencies: [], subtasks: [{text: 'Brainstorm', done: true}],
+                activeTimerStart: null, timeLogs: [] 
+            }
+        ];
+        inbox = [ { id: 'inbox_1', title: 'Check Emails' } ];
+        lifeGoals[currentGoalYear] = [
+            {
+                id: 'g1', text: 'Health & Fitness', collapsed: false, children: [
+                    { id: 'g2', text: 'Run a Marathon', collapsed: false, children: [] }
+                ]
+            }
+        ];
+        notes = [
+            createNoteObject("Project Ideas", "1. Better colors\n2. Mobile support", null)
+        ];
+        saveToStorage();
+    }
+
+    // --- ARCHIVE LOGIC ---
+    function checkAutoArchive() {
+        const now = Date.now();
+        let changed = false;
+        const activeNodes = [];
+        nodes.forEach(n => {
+            if (n.completed && n.completedDate && (now - n.completedDate > ARCHIVE_THRESHOLD_MS)) {
+                archivedNodes.push(n);
+                changed = true;
+            } else {
+                activeNodes.push(n);
+            }
+        });
+        
+        if (changed) {
+            nodes = activeNodes;
+            saveToStorage();
+            render();
+            if(!document.getElementById('archive-panel').classList.contains('hidden')) {
+                renderArchiveList();
+            }
+            if(selectedNodeId && !nodes.find(n => n.id === selectedNodeId) && !archivedNodes.find(n => n.id === selectedNodeId)) {
+                deselectNode();
+            }
+        }
+    }
+
+    function toggleArchivePanel() {
+        const panel = document.getElementById('archive-panel');
+        if(panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            document.getElementById('notes-panel').classList.add('hidden'); 
+            renderArchiveList();
+        } else {
+            panel.classList.add('hidden');
+        }
+    }
+
+    function renderArchiveList() {
+        const container = document.getElementById('archive-list-container');
+        container.innerHTML = '';
+        const sorted = [...archivedNodes].sort((a,b) => (b.completedDate || 0) - (a.completedDate || 0));
+        
+        if (sorted.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No archived tasks.</div>';
+            return;
+        }
+
+        sorted.forEach(node => {
+            const el = document.createElement('div');
+            el.className = 'archive-item';
+            if(selectedNodeId === node.id) el.classList.add('selected');
+            const dateStr = node.completedDate ? new Date(node.completedDate).toLocaleDateString() : 'Unknown';
+            el.innerHTML = `<div><div>${node.title}</div><span class="archive-date">Completed: ${dateStr}</span></div><div class="archive-info">✅</div>`;
+            el.onclick = () => selectNode(node.id); 
+            container.appendChild(el);
+        });
+    }
+
+    // --- NOTES LOGIC ---
+    
+    function toggleNotesPanel() {
+        const panel = document.getElementById('notes-panel');
+        if(panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            document.getElementById('archive-panel').classList.add('hidden'); 
+            renderNotesList();
+        } else {
+            panel.classList.add('hidden');
+        }
+    }
+    
+    window.jumpToTask = function(id) {
+        let node = nodes.find(n => n.id === id);
+        let isArchived = false;
+        if(!node) {
+            node = archivedNodes.find(n => n.id === id);
+            isArchived = true;
+        }
+        if(!node) return;
+        selectNode(id);
+        
+        if (!isArchived) {
+            scale = 1; 
+            const nodeCenterX = node.x + 90;
+            const nodeCenterY = node.y + 50;
+            const screenCenterX = window.innerWidth / 2;
+            const screenCenterY = window.innerHeight / 2;
+            panX = screenCenterX - nodeCenterX;
+            panY = screenCenterY - nodeCenterY;
+            updateTransform();
+        } else {
+            const n = document.getElementById('notification');
+            n.innerText = "Viewing Archived Task";
+            n.style.opacity = '1';
+            setTimeout(() => n.style.opacity = '0', 1500);
+            const archPanel = document.getElementById('archive-panel');
+            if(archPanel.classList.contains('hidden')) toggleArchivePanel();
+        }
+        document.getElementById('notes-panel').classList.add('hidden');
+    }
+
+    function renderNotesList() {
+        const container = document.getElementById('notes-list-container');
+        container.innerHTML = '';
+        const sortedNotes = [...notes].sort((a,b) => b.timestamp - a.timestamp);
+        if (sortedNotes.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No notes yet.</div>';
+            return;
+        }
+        sortedNotes.forEach(note => {
+            const el = document.createElement('div');
+            el.className = 'note-card';
+            if(note.id === currentEditingNoteId) el.classList.add('active');
+            let linkedTaskName = '<span style="color:#666">📄 Independent</span>';
+            if (note.taskId) {
+                const task = nodes.find(n => n.id === note.taskId) || archivedNodes.find(n => n.id === note.taskId);
+                if(task) {
+                    linkedTaskName = `<span style="cursor:pointer; color:var(--accent); text-decoration:underline;" onclick="event.stopPropagation(); jumpToTask('${task.id}')">🔗 ${task.title}</span>`;
+                } else {
+                    linkedTaskName = '<span style="color:#666">🔗 (Deleted Task)</span>';
+                }
+            }
+            el.innerHTML = `<div class="note-card-title">${note.title || '(Untitled)'}</div><div class="note-card-preview">${note.body || '<i>No content</i>'}</div><div class="note-card-meta">${linkedTaskName}<span>${new Date(note.timestamp).toLocaleDateString()}</span></div>`;
+            el.onclick = () => openNoteEditor(note.id);
+            container.appendChild(el);
+        });
+    }
+
+    function createNewNote(taskId = null) {
+        const newNote = createNoteObject("New Note", "", taskId);
+        notes.push(newNote);
+        saveToStorage();
+        const panel = document.getElementById('notes-panel');
+        if(panel.classList.contains('hidden')) toggleNotesPanel();
+        openNoteEditor(newNote.id);
+        renderNotesList();
+        if(taskId && selectedNodeId === taskId) updateInspector();
+    }
+
+    function openNoteEditor(noteId) {
+        const note = notes.find(n => n.id === noteId);
+        if(!note) return;
+        const panel = document.getElementById('notes-panel');
+        if (panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            renderNotesList(); 
+        }
+        currentEditingNoteId = noteId;
+        const editor = document.getElementById('note-editor');
+        editor.classList.remove('hidden');
+        document.getElementById('note-title-input').value = note.title;
+        document.getElementById('note-body-input').value = note.body;
+        renderNotesList(); 
+    }
+
+    function saveCurrentNote() {
+        if(!currentEditingNoteId) return;
+        const note = notes.find(n => n.id === currentEditingNoteId);
+        if(!note) return;
+        note.title = document.getElementById('note-title-input').value;
+        note.body = document.getElementById('note-body-input').value;
+        note.timestamp = Date.now();
+        saveToStorage();
+    }
+    
+    function closeNoteEditor() {
+        document.getElementById('note-editor').classList.add('hidden');
+        currentEditingNoteId = null;
+        renderNotesList();
+        if(selectedNodeId) updateInspector();
+    }
+
+    function deleteCurrentNote() {
+        if(!currentEditingNoteId) return;
+        if(confirm("Delete this note?")) {
+            notes = notes.filter(n => n.id !== currentEditingNoteId);
+            closeNoteEditor();
+            saveToStorage();
+            if(selectedNodeId) updateInspector();
+        }
+    }
+
+    // --- LIFE GOALS LOGIC ---
+    function toggleGoals() {
+        const panel = document.getElementById('goals-panel');
+        if(panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            renderGoals();
+        } else {
+            panel.classList.add('hidden');
+        }
+    }
+    function changeGoalYear(delta) { currentGoalYear += delta; renderGoals(); }
+    function renderGoals() {
+        const container = document.getElementById('goal-tree-container');
+        document.getElementById('goals-year-display').innerText = currentGoalYear;
+        container.innerHTML = '';
+        if (!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = [];
+        const goals = lifeGoals[currentGoalYear];
+        if(goals.length === 0) { container.innerHTML = '<div style="text-align:center; color:#666; font-size:12px; margin-top:20px;">No goals for ' + currentGoalYear + '</div>'; return; }
+        const buildTree = (goalList, level) => {
+            const wrapper = document.createElement('div');
+            goalList.forEach(goal => {
+                const nodeDiv = document.createElement('div'); nodeDiv.className = 'goal-node';
+                const content = document.createElement('div'); content.className = 'goal-content';
+                const caret = document.createElement('span'); caret.className = 'goal-caret';
+                if(goal.children.length === 0) caret.classList.add('invisible');
+                if(goal.collapsed) caret.classList.add('collapsed');
+                caret.innerText = '▼'; caret.onclick = (e) => { e.stopPropagation(); toggleGoalCollapse(goal); };
+                const textSpan = document.createElement('input'); textSpan.className = 'goal-text'; textSpan.value = goal.text; textSpan.onchange = (e) => { goal.text = e.target.value; saveToStorage(); };
+                const actions = document.createElement('div'); actions.className = 'goal-actions';
+                if (level < 5) { const addBtn = document.createElement('div'); addBtn.className = 'goal-btn add'; addBtn.innerHTML = '+'; addBtn.title = "Add Subgoal"; addBtn.onclick = (e) => { e.stopPropagation(); addSubGoal(goal); }; actions.appendChild(addBtn); }
+                const moveBtn = document.createElement('div'); moveBtn.className = 'goal-btn move'; moveBtn.innerHTML = '📅'; moveBtn.title = "Move to another year"; moveBtn.onclick = (e) => { e.stopPropagation(); moveGoalYear(goal); }; actions.appendChild(moveBtn);
+                const delBtn = document.createElement('div'); delBtn.className = 'goal-btn del'; delBtn.innerHTML = '✕'; delBtn.title = "Delete Goal"; delBtn.onclick = (e) => { e.stopPropagation(); deleteGoal(goal, goalList); }; actions.appendChild(delBtn);
+                content.appendChild(caret); content.appendChild(textSpan); content.appendChild(actions); nodeDiv.appendChild(content);
+                const childrenContainer = document.createElement('div'); childrenContainer.className = 'goal-children ' + (goal.collapsed ? 'hidden' : '');
+                if (goal.children.length > 0) { childrenContainer.appendChild(buildTree(goal.children, level + 1)); }
+                nodeDiv.appendChild(childrenContainer); wrapper.appendChild(nodeDiv);
+            });
+            return wrapper;
+        };
+        container.appendChild(buildTree(goals, 1));
+    }
+    function addRootGoal() { const input = document.getElementById('new-goal-input'); const val = input.value.trim(); if(val) { if(!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(val)); input.value = ''; renderGoals(); saveToStorage(); } }
+    function addSubGoal(parentGoal) { parentGoal.children.push(createGoal("New Subgoal")); parentGoal.collapsed = false; renderGoals(); saveToStorage(); }
+    function deleteGoal(goal, parentList) { if (!parentList || !goal) return; if(confirm("Delete goal '" + goal.text + "'?")) { const idx = parentList.indexOf(goal); if(idx > -1) parentList.splice(idx, 1); renderGoals(); saveToStorage(); } }
+    function toggleGoalCollapse(goal) { goal.collapsed = !goal.collapsed; renderGoals(); saveToStorage(); }
+    function moveGoalYear(goal) { const yearStr = prompt("Move '" + goal.text + "' to which year?", currentGoalYear + 1); const year = parseInt(yearStr); if(!isNaN(year)) { if(recursiveRemoveGoal(lifeGoals[currentGoalYear], goal.id)) { if(!lifeGoals[year]) lifeGoals[year] = []; lifeGoals[year].push(goal); renderGoals(); saveToStorage(); alert(`Moved to ${year}`); } else { alert("Could not find goal to move."); } } }
+    function recursiveRemoveGoal(list, id) { if (!list) return false; for(let i=0; i<list.length; i++) { if(list[i].id === id) { list.splice(i, 1); return true; } if(list[i].children && list[i].children.length > 0) { if(recursiveRemoveGoal(list[i].children, id)) return true; } } return false; }
+
+    // --- LOGIC ENGINE ---
+    function getDaysFromToday(dateStr) { if (!dateStr) return Infinity; const today = new Date(); today.setHours(0,0,0,0); const due = new Date(dateStr); return Math.ceil((due - today) / (1000 * 60 * 60 * 24)); }
+    function updateCalculations() {
+        nodes.forEach(n => { n._isBlocked = false; n._isReady = false; n._isCritical = false; n._isUrgent = false; n._isManualUrgentPath = false; n._downstreamWeight = 0; n._earliestStart = 0; n._earliestFinish = 0; n._latestFinish = Infinity; n._slack = 0; });
+        nodes.forEach(n => { if (n.completed) return; const hardParents = n.dependencies.filter(d => d.type === 'hard').map(d => nodes.find(p => p.id === d.id)).filter(p => p); if (hardParents.length === 0) n._isReady = true; else { const allDone = hardParents.every(p => p.completed); n._isBlocked = !allDone; n._isReady = allDone; } });
+        const getDescendants = (id, visited = new Set()) => { let count = 0; nodes.forEach(n => { if (n.dependencies.some(d => d.id === id) && !visited.has(n.id)) { visited.add(n.id); count += 1 + getDescendants(n.id, visited); } }); return count; };
+        nodes.forEach(n => { n._downstreamWeight = getDescendants(n.id); });
+        let changed = true; let iterations = 0;
+        while(changed && iterations < nodes.length + 2) { changed = false; nodes.forEach(n => { let maxPrevEF = 0; n.dependencies.forEach(dep => { const parent = nodes.find(p => p.id === dep.id); if (parent && parent._earliestFinish > maxPrevEF) maxPrevEF = parent._earliestFinish; }); const effDuration = n.completed ? 0 : (n.duration || 1); const newES = maxPrevEF; const newEF = newES + effDuration; if (n._earliestStart !== newES || n._earliestFinish !== newEF) { n._earliestStart = newES; n._earliestFinish = newEF; changed = true; } }); iterations++; }
+        const projectDuration = Math.max(...nodes.map(n => n._earliestFinish), 0);
+        changed = true; iterations = 0; nodes.forEach(n => n._latestFinish = Infinity);
+        while(changed && iterations < nodes.length + 2) { changed = false; nodes.forEach(n => { const children = nodes.filter(c => c.dependencies.some(d => d.id === n.id)); let derivedLF = Infinity; if (children.length === 0) derivedLF = projectDuration; else { const minChildLS = Math.min(...children.map(c => { const cDur = c.completed ? 0 : (c.duration || 1); return c._latestFinish - cDur; })); derivedLF = minChildLS; } if (n.dueDate) { const daysUntilDue = getDaysFromToday(n.dueDate); if (daysUntilDue < derivedLF) derivedLF = daysUntilDue; } if (n._latestFinish !== derivedLF) { n._latestFinish = derivedLF; changed = true; } }); iterations++; }
+        const propagateUrgency = (id) => { const children = nodes.filter(c => c.dependencies.some(d => d.id === id)); children.forEach(child => { if (!child._isManualUrgentPath) { child._isManualUrgentPath = true; propagateUrgency(child.id); } }); };
+        nodes.forEach(n => { if (n.isManualUrgent) { n._isManualUrgentPath = true; propagateUrgency(n.id); } });
+        nodes.forEach(n => { const slack = n._latestFinish - n._earliestFinish; if (n.completed) { n._isCritical = false; n._isUrgent = false; } else { if (n._isManualUrgentPath) { n._isUrgent = true; n._isCritical = true; } else if (slack < 0) { n._isUrgent = true; n._isCritical = true; } else if (slack === 0) { n._isCritical = true; } } });
+    }
+    
+    // --- TIME TRACKING LOGIC ---
+    function getTotalTime(node) {
+        let total = node.timeLogs.reduce((acc, log) => acc + log.duration, 0);
+        if (node.activeTimerStart) total += (Date.now() - node.activeTimerStart);
+        return total;
+    }
+    function formatTime(ms) {
+        const seconds = Math.floor((ms / 1000) % 60); const minutes = Math.floor((ms / (1000 * 60)) % 60); const hours = Math.floor(ms / (1000 * 60 * 60));
+        if (hours > 0) return `${hours}h ${minutes}m`; if (minutes > 0) return `${minutes}m ${seconds}s`; return `${seconds}s`;
+    }
+    function toggleTimer(id = null) {
+        const targetId = id || selectedNodeId; if(!targetId) return;
+        const node = nodes.find(n => n.id === targetId); if (!node) return;
+        if (node.activeTimerStart) { const now = Date.now(); const dur = now - node.activeTimerStart; node.timeLogs.push({ start: node.activeTimerStart, end: now, duration: dur }); node.activeTimerStart = null; } 
+        else { node.activeTimerStart = Date.now(); }
+        saveToStorage(); render(); if(selectedNodeId === targetId) updateInspector();
+    }
+    window.handleNodeTimerClick = function(e, id) { e.stopPropagation(); toggleTimer(id); }
+
+    // --- RENDERING ---
+    function render() {
+        const container = document.getElementById('nodes-layer'); const svg = document.getElementById('connections');
+        container.innerHTML = ''; svg.innerHTML = '';
+        
+        nodes.forEach(node => {
+            node.dependencies.forEach(dep => {
+                const parent = nodes.find(n => n.id === dep.id); if (!parent) return; 
+                const isCritical = node._isCritical && parent._isCritical && dep.type === 'hard' && !parent.completed; const isUrgentPath = node._isUrgent && parent._isUrgent;
+                let color = '#666'; if (dep.type === 'soft') color = 'var(--soft-dep-color)'; if (isUrgentPath) color = '#ff4d4d'; else if (isCritical) color = 'var(--critical-path)';
+                const width = (isCritical || isUrgentPath) ? 3 : 2;
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                const startX = parent.x + 180 + 2; const startY = parent.y + 40; const endX = node.x - 2; const endY = node.y + 40;
+                const d = `M ${startX} ${startY} C ${startX + 50} ${startY}, ${endX - 50} ${endY}, ${endX} ${endY}`;
+                path.setAttribute('d', d); path.setAttribute('stroke', color); path.setAttribute('stroke-width', width);
+                if (dep.type === 'soft') path.classList.add('soft'); if (isCritical || isUrgentPath) path.classList.add('critical'); path.setAttribute('marker-end', 'url(#arrow)'); svg.appendChild(path);
+            });
+        });
+        if (!document.getElementById('arrow')) { const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs"); defs.innerHTML = `<marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#666"/></marker>`; svg.appendChild(defs); }
+        
+        nodes.forEach(node => {
+            const el = document.createElement('div'); el.className = 'node'; el.style.left = node.x + 'px'; el.style.top = node.y + 'px'; el.dataset.id = node.id;
+            
+            // Selection Logic
+            if (node.id === selectedNodeId || selectedIds.has(node.id)) el.classList.add('selected');
+            
+            if (!node.completed) { if (node._isUrgent) el.classList.add('critical-urgent'); else if (node._isCritical) el.classList.add('critical'); if (node._isBlocked) el.classList.add('blocked'); }
+            if (node.completed) el.classList.add('completed');
+            let badgesHtml = '';
+            if (!node.completed) { if (node._isUrgent) badgesHtml += `<span class="badge urgent-badge">URGENT</span>`; else if (node._isCritical) badgesHtml += `<span class="badge critical-badge">CP</span>`; if (node._downstreamWeight > 0) badgesHtml += `<span class="badge weight">⚡${node._downstreamWeight}</span>`; }
+            const totalTime = getTotalTime(node); const isActive = !!node.activeTimerStart;
+            if (totalTime > 0 || isActive) { badgesHtml += `<span class="badge time-badge ${isActive?'active':''}" data-node-id="${node.id}">${isActive ? '🔴' : '⏱'} ${formatTime(totalTime)}</span>`; }
+            if (node.dueDate && !node.completed) { const due = new Date(node.dueDate); const today = new Date(); today.setHours(0,0,0,0); const isOverdue = due < today; const dateStr = due.toLocaleDateString(undefined, {month:'short', day:'numeric'}); const style = isOverdue ? 'background:#ef4444; color:white; border-color:#ef4444' : ''; badgesHtml += `<span class="badge date-badge" style="${style}">📅 ${dateStr}</span>`; }
+            let icon = ''; if (node.completed) icon = '✅'; else if (node._isBlocked) icon = '<span class="icon-lock">🔒</span>';
+            const totalSubs = node.subtasks.length; const doneSubs = node.subtasks.filter(s => s.done).length; const progress = totalSubs === 0 ? 0 : (doneSubs / totalSubs) * 100;
+            const timerBtnIcon = isActive ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M6 6h12v12H6z"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>';
+            const timerBtnClass = isActive ? 'node-timer-control stop running' : 'node-timer-control play';
+            el.innerHTML = `<div class="${timerBtnClass}" onclick="handleNodeTimerClick(event, '${node.id}')" title="${isActive ? 'Stop Timer' : 'Start Timer'}">${timerBtnIcon}</div><div class="node-header"><span>${icon} ${node.title}</span></div><div class="node-meta">${badgesHtml}</div>${totalSubs > 0 ? `<div class="progress-container"><div class="progress-bar" style="width: ${progress}%"></div></div>` : ''}`;
+            el.onmousedown = (e) => startNodeDrag(e, node.id); container.appendChild(el);
+        });
+    }
+
+    // --- INTERACTIONS ---
+    function setupInteractions() {
+        const container = document.getElementById('graph-container');
+        const selectionRect = document.getElementById('selection-rect');
+
+        document.addEventListener('mousedown', (e) => {
+            const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
+            if (!panel.classList.contains('hidden')) { if (!panel.contains(e.target) && !fab.contains(e.target)) toggleInbox(); }
+            
+            // Close sync panel on click out
+            const sync = document.getElementById('sync-panel');
+            const syncBtn = document.querySelector('button[onclick="toggleSyncPanel()"]');
+            if (!sync.classList.contains('hidden') && !sync.contains(e.target) && e.target !== syncBtn) {
+                sync.classList.add('hidden');
+            }
+        });
+        
+        container.addEventListener('mousedown', (e) => {
+            // Check if clicking on background
+            if (e.target === container || e.target.tagName === 'svg' || e.target.id === 'nodes-layer') {
+                if (e.shiftKey) {
+                    // Start Box Select
+                    isBoxSelecting = true;
+                    boxSelectStart = { x: e.clientX, y: e.clientY };
+                    selectionRect.style.display = 'block';
+                    selectionRect.style.left = e.clientX + 'px';
+                    selectionRect.style.top = e.clientY + 'px';
+                    selectionRect.style.width = '0px';
+                    selectionRect.style.height = '0px';
+                } else {
+                    // Start Pan
+                    isPanning = true; 
+                    dragStartX = e.clientX - panX; 
+                    dragStartY = e.clientY - panY;
+                    
+                    // Clear panels and selection
+                    document.getElementById('goals-panel').classList.add('hidden');
+                    document.getElementById('notes-panel').classList.add('hidden');
+                    document.getElementById('archive-panel').classList.add('hidden');
+                    deselectNode();
+                }
+            } 
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isPanning) { 
+                panX = e.clientX - dragStartX; 
+                panY = e.clientY - dragStartY; 
+                updateTransform(); 
+            }
+            if (isBoxSelecting) {
+                const currentX = e.clientX;
+                const currentY = e.clientY;
+                
+                const left = Math.min(boxSelectStart.x, currentX);
+                const top = Math.min(boxSelectStart.y, currentY);
+                const width = Math.abs(currentX - boxSelectStart.x);
+                const height = Math.abs(currentY - boxSelectStart.y);
+                
+                selectionRect.style.left = left + 'px';
+                selectionRect.style.top = top + 'px';
+                selectionRect.style.width = width + 'px';
+                selectionRect.style.height = height + 'px';
+            }
+            if (isDragging) {
+                const currentX = (e.clientX - panX) / scale;
+                const currentY = (e.clientY - panY) / scale;
+                
+                // Calculate Delta
+                const dx = currentX - dragStartX;
+                const dy = currentY - dragStartY;
+                
+                // Move ALL selected nodes
+                if (selectedIds.size > 0) {
+                    selectedIds.forEach(id => {
+                        const node = nodes.find(n => n.id === id);
+                        if (node) {
+                            node.x += dx;
+                            node.y += dy;
+                        }
+                    });
+                } else if (draggedNodeId) {
+                    // Fallback for single drag (should be covered by selectedIds, but safe to keep)
+                     const node = nodes.find(n => n.id === draggedNodeId);
+                     if(node) {
+                         node.x += dx;
+                         node.y += dy;
+                     }
+                }
+                
+                // Update start for next frame (relative movement)
+                dragStartX = currentX;
+                dragStartY = currentY;
+                
+                render();
+            }
+        });
+
+        window.addEventListener('mouseup', (e) => { 
+            if (isDragging) { 
+                isDragging = false; 
+                draggedNodeId = null; 
+                saveToStorage(); 
+            } 
+            isPanning = false; 
+            
+            if (isBoxSelecting) {
+                isBoxSelecting = false;
+                selectionRect.style.display = 'none';
+                finishBoxSelection(e.clientX, e.clientY);
+            }
+        });
+
+        container.addEventListener('wheel', (e) => { e.preventDefault(); if (e.ctrlKey) { const zoomFactor = 0.002; const delta = -e.deltaY; scale = Math.min(Math.max(0.2, scale + (delta * zoomFactor * scale)), 3); } else { panX -= e.deltaX; panY -= e.deltaY; } updateTransform(); }, {passive: false});
+        container.addEventListener('contextmenu', e => e.preventDefault());
+        
+        // Touch events omitted for brevity in this specific update (Box select is mouse-primary)
+    }
+
+    function finishBoxSelection(endX, endY) {
+        // Calculate box in screen coords
+        const rectLeft = Math.min(boxSelectStart.x, endX);
+        const rectTop = Math.min(boxSelectStart.y, endY);
+        const rectRight = Math.max(boxSelectStart.x, endX);
+        const rectBottom = Math.max(boxSelectStart.y, endY);
+        
+        // Clear previous if not holding shift? Standard behavior is usually new selection
+        // Let's clear unless Shift was held initially (which it was)
+        // Actually, if simply dragging box, usually clears old selection.
+        selectedIds.clear();
+        
+        nodes.forEach(node => {
+            // Project node world coords to screen coords
+            const screenX = (node.x * scale) + panX;
+            const screenY = (node.y * scale) + panY;
+            const width = 180 * scale; // Approx node width
+            const height = 100 * scale; // Approx node height
+            
+            // Simple bounding box intersection
+            if (screenX + width > rectLeft && screenX < rectRight &&
+                screenY + height > rectTop && screenY < rectBottom) {
+                selectedIds.add(node.id);
+            }
+        });
+        
+        if (selectedIds.size === 1) {
+            selectNode(selectedIds.values().next().value);
+        } else if (selectedIds.size > 1) {
+            // Hide inspector for multi-selection
+            selectedNodeId = null;
+            document.getElementById('inspector').classList.add('hidden');
+            render();
+        } else {
+            deselectNode();
+        }
+    }
+
+    function startNodeDrag(e, id) { 
+        e.stopPropagation(); 
+        
+        if (e.shiftKey) {
+            // Multi-select toggle logic
+            if (selectedIds.has(id)) {
+                selectedIds.delete(id);
+                if(selectedNodeId === id) selectedNodeId = null; // Hide inspector if primary deselected
+            } else {
+                selectedIds.add(id);
+                // If it's the only one, show inspector
+                if(selectedIds.size === 1) selectNode(id);
+            }
+        } else {
+            // Normal click logic
+            if (!selectedIds.has(id)) {
+                // If clicking a node NOT in the group, reset group to just this node
+                selectedIds.clear();
+                selectedIds.add(id);
+                selectNode(id);
+            }
+            // If clicking a node IN the group, do NOT clear (allows dragging the group)
+        }
+        
+        // Prepare drag
+        isDragging = true; 
+        draggedNodeId = id; 
+        
+        // Record world coordinates start
+        dragStartX = (e.clientX - panX) / scale;
+        dragStartY = (e.clientY - panY) / scale;
+        
+        // Update UI
+        if (selectedIds.size > 1) {
+            document.getElementById('inspector').classList.add('hidden');
+            render();
+        }
+    }
+
+    function getPinchDistance(e) { return Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
+    function getPinchCenter(e) { return { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 }; }
+    function updateTransform() { document.getElementById('transform-layer').style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`; }
+    function fitView() {
+        let target = nodes.find(n => n.isManualUrgent && !n.completed); if (!target) target = nodes.find(n => n._isUrgent && !n.completed); if (!target) target = nodes.find(n => n._isCritical && !n.completed); if (!target) target = nodes.find(n => !n.completed); if (!target && nodes.length > 0) target = nodes[0];
+        if (target) { scale = 1; const nodeCenterX = target.x + 90; const nodeCenterY = target.y + 50; const screenCenterX = window.innerWidth / 2; const screenCenterY = window.innerHeight / 2; panX = screenCenterX - nodeCenterX; panY = screenCenterY - nodeCenterY; updateTransform(); const n = document.getElementById('notification'); n.innerText = "Focused on: " + target.title; n.style.opacity = '1'; setTimeout(() => n.style.opacity = '0', 1500); } else { panX = 0; panY = 0; scale = 1; updateTransform(); }
+    }
+
+    // --- NODE MANAGEMENT ---
+    function addNode() { const worldX = (window.innerWidth/2 - panX) / scale - 90 + (Math.random()*40-20); const worldY = (window.innerHeight/2 - panY) / scale - 50 + (Math.random()*40-20); const n = createNode(worldX, worldY); nodes.push(n); selectNode(n.id); updateCalculations(); render(); saveToStorage(); }
+    
+    // Updated Select Node to search in archive too
+    function selectNode(id) { 
+        selectedNodeId = id; 
+        selectedIds.clear(); // Ensure sync
+        selectedIds.add(id);
+        
+        document.getElementById('inspector').classList.remove('hidden'); 
+        render(); 
+        if(document.getElementById('archive-panel').classList.contains('hidden') === false) renderArchiveList();
+        updateInspector(); 
+    }
+    
+    function deselectNode() { 
+        selectedNodeId = null; 
+        selectedIds.clear();
+        document.getElementById('inspector').classList.add('hidden'); 
+        render(); 
+        if(document.getElementById('archive-panel').classList.contains('hidden') === false) renderArchiveList(); 
+    }
+
+    // --- INSPECTOR Logic ---
+    function updateInspector() {
+        const panel = document.getElementById('insp-content'); if (!selectedNodeId) return;
+        // Search in active OR archived
+        let node = nodes.find(n => n.id === selectedNodeId);
+        let isArchived = false;
+        if (!node) {
+            node = archivedNodes.find(n => n.id === selectedNodeId);
+            isArchived = true;
+        }
+        if (!node) return;
+        
+        const isRunning = !!node.activeTimerStart;
+        const linkedNotes = notes.filter(n => n.taskId === node.id);
+
+        panel.innerHTML = `
+            ${isArchived ? '<div style="background:#333; color:#aaa; padding:8px; border-radius:4px; margin-bottom:10px; font-size:12px; text-align:center;">🔒 This task is archived. Uncheck "Completed" to restore.</div>' : ''}
+            <div class="form-group"><label>Title</label><input type="text" value="${node.title}" oninput="updateNodeField('title', this.value)"></div>
+            <div class="form-group" style="display:flex; gap:10px"><div style="flex:1"><label>Duration (Est. Days)</label><input type="number" value="${node.duration}" min="1" onchange="updateNodeField('duration', parseInt(this.value))"></div><div style="flex:1"><label>Status</label><button class="btn ${node.completed ? 'btn-primary' : ''}" style="width:100%" onclick="toggleCompletion()">${node.completed ? 'Completed' : 'Active'}</button></div></div>
+            <div class="form-group" style="display:flex; align-items:center; gap:5px; margin-bottom: 10px;"><input type="checkbox" id="sync-toggle" ${node.syncDurationDate ? 'checked' : ''} onchange="updateNodeField('syncDurationDate', this.checked)" style="width:auto;"><label for="sync-toggle" style="margin:0; cursor:pointer; font-size:12px; color:var(--text-muted)">Link Duration & Due Date</label></div>
+            <div class="form-group"><label>Due Date (Optional)</label><input type="date" value="${node.dueDate || ''}" onchange="updateNodeField('dueDate', this.value)"></div>
+            <div class="form-group"><button class="btn btn-urgent ${node.isManualUrgent ? 'active' : ''}" style="width:100%" onclick="toggleUrgency()">${node.isManualUrgent ? '🔥 Marked as Urgent' : '🔥 Mark as Urgent'}</button><div style="font-size:10px; color:var(--text-muted); margin-top:4px;">Marks this task and all following steps as high priority.</div></div>
+            <div class="form-group"><label>Dependencies (Prerequisites)</label><div id="dep-list">${node.dependencies.map(d => { const parent = nodes.find(n => n.id === d.id) || archivedNodes.find(n => n.id === d.id); return `<div class="dep-item"><span>${parent ? parent.title : 'Unknown/Archived'}</span><div class="dep-controls"><span class="toggle-soft ${d.type === 'soft' ? 'active' : ''}" onclick="toggleDepType('${d.id}')" title="Toggle Soft/Hard">${d.type === 'soft' ? 'Soft' : 'Hard'}</span><span style="cursor:pointer; color:#ef4444" onclick="removeDependency('${d.id}')">✕</span></div></div>`; }).join('')}</div><select id="add-dep-select" onchange="addDependency(this.value)" style="margin-top:5px"><option value="">+ Add Dependency...</option>${nodes.filter(n => n.id !== node.id && !node.dependencies.some(d => d.id === n.id)).map(n => `<option value="${n.id}">${n.title}</option>`).join('')}</select></div>
+            <div class="form-group"><label>Subtasks</label><div id="subtask-list">${node.subtasks.map((st, idx) => `<div class="subtask-item"><input type="checkbox" ${st.done ? 'checked' : ''} onchange="toggleSubtask(${idx})"><input type="text" value="${st.text}" onchange="updateSubtaskText(${idx}, this.value)" style="border:none; background:transparent; width:100%; color: inherit"><span onclick="removeSubtask(${idx})" style="cursor:pointer; color:#666">✕</span></div>`).join('')}</div><button class="btn" style="width:100%; margin-top:5px" onclick="addSubtask()">+ Add Subtask</button></div>
+            
+            <div class="form-group" style="border: 1px solid #333; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.1);">
+                <label>Linked Notes</label>
+                <div style="margin-bottom:5px;">
+                    ${linkedNotes.length === 0 ? '<span style="color:#666; font-size:11px;">No linked notes</span>' : ''}
+                    ${linkedNotes.map(note => `
+                        <div class="note-card" style="padding:6px; margin-bottom:4px;" onclick="openNoteEditor('${note.id}')">
+                            <div class="note-card-title" style="font-size:12px;">${note.title || '(Untitled)'}</div>
+                            <div class="note-card-preview" style="font-size:10px;">${note.body.substring(0,40)}...</div>
+                        </div>
+                    `).join('')}
+                </div>
+                <button class="btn" style="width:100%" onclick="createNewNote('${node.id}')">+ Add Note</button>
+            </div>
+
+            <hr style="border-color:#333; margin: 20px 0;">
+            <div style="display:flex; gap:10px; margin-bottom: 20px;"><button class="btn" style="flex:1; border-color:var(--accent); color:var(--accent);" onclick="demoteToInbox()">⬇ Move to Inbox</button><button class="btn btn-danger" style="flex:1" onclick="deleteSelectedNode()">Delete</button></div>
+            <div class="form-group" style="border: 1px solid #333; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.2);"><label>Time Tracking</label><button class="btn-timer ${isRunning ? 'running' : ''}" onclick="toggleTimer()"><span id="timer-btn-text">${isRunning ? 'Stop Timer' : 'Start Timer'}</span></button><div style="margin-top:5px; font-size:11px; color:#aaa; display:flex; justify-content:space-between"><span>Total Tracked:</span><span style="color:#fff; font-weight:bold">${formatTime(getTotalTime(node))}</span></div>${node.timeLogs.length > 0 ? `<div style="margin-top:5px;"><label style="font-size:10px;">History</label><div class="log-container">${node.timeLogs.slice().reverse().map(log => `<div class="log-item"><span>${new Date(log.start).toLocaleDateString()}</span><span>${formatTime(log.duration)}</span></div>`).join('')}</div></div>` : ''}</div>
+        `;
+    }
+
+    function updateNodeField(field, value) {
+        let node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
+        if (node) {
+            node[field] = value;
+            const today = new Date(); today.setHours(0,0,0,0);
+            if (node.syncDurationDate) {
+                if (field === 'duration') { const days = parseInt(value); if (!isNaN(days) && days > 0) { const newDate = new Date(today); newDate.setDate(today.getDate() + days); const yyyy = newDate.getFullYear(); const mm = String(newDate.getMonth() + 1).padStart(2, '0'); const dd = String(newDate.getDate()).padStart(2, '0'); node.dueDate = `${yyyy}-${mm}-${dd}`; const dateInput = document.querySelector('input[type="date"]'); if(dateInput) dateInput.value = node.dueDate; } } 
+                else if (field === 'dueDate') { if (value) { const due = new Date(value); const diffTime = due - today; let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if (diffDays < 1) diffDays = 1; node.duration = diffDays; const durInput = document.querySelector('input[type="number"]'); if(durInput) durInput.value = diffDays; } }
+            }
+            if (field === 'duration' || field === 'dueDate' || field === 'syncDurationDate') updateCalculations();
+            render(); saveToStorage();
+        }
+    }
+    
+    function toggleCompletion() {
+        let node = nodes.find(n => n.id === selectedNodeId);
+        let inArchive = false;
+        
+        if (!node) {
+            node = archivedNodes.find(n => n.id === selectedNodeId);
+            inArchive = true;
+        }
+
+        if (node) {
+            node.completed = !node.completed;
+            
+            if (node.completed) {
+                node.completedDate = Date.now();
+            } else {
+                node.completedDate = null;
+                // RESTORE FROM ARCHIVE
+                if(inArchive) {
+                    archivedNodes = archivedNodes.filter(n => n.id !== node.id);
+                    nodes.push(node);
+                    renderArchiveList();
+                }
+            }
+            
+            updateCalculations();
+            render();
+            updateInspector(); 
+            saveToStorage();
+        }
+    }
+    
+    // Generic wrappers that handle active nodes only (usually) - dependencies generally need active nodes to visualize properly
+    function toggleUrgency() { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.isManualUrgent = !node.isManualUrgent; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+    function addDependency(parentId) { if (!parentId) return; const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies.push({ id: parentId, type: 'hard' }); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+    function removeDependency(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies = node.dependencies.filter(d => d.id !== parentId); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+    function toggleDepType(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+    function addSubtask() { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks.push({ text: 'New Step', done: false }); render(); updateInspector(); saveToStorage(); } }
+    function toggleSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks[index].done = !node.subtasks[index].done; render(); saveToStorage(); } }
+    function updateSubtaskText(index, val) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks[index].text = val; saveToStorage(); }
+    function removeSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks.splice(index, 1); render(); updateInspector(); saveToStorage(); }
+    
+    function deleteSelectedNode() { 
+        if (!selectedNodeId) return; 
+        if (!confirm('Delete this task completely?')) return; 
+        
+        nodes = nodes.filter(n => n.id !== selectedNodeId); 
+        archivedNodes = archivedNodes.filter(n => n.id !== selectedNodeId);
+        
+        // Clean deps
+        nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); });
+        
+        deselectNode(); 
+        updateCalculations(); 
+        render(); 
+        renderArchiveList();
+        saveToStorage(); 
+    }
+    
+    function toggleHeatmap() { const overlay = document.getElementById('heatmap-overlay'); const isHidden = overlay.classList.contains('hidden'); if (isHidden) { overlay.classList.remove('hidden'); renderHeatmap(); } else { overlay.classList.add('hidden'); } }
+    function changeHeatmapYear(delta) { currentHeatmapYear += delta; renderHeatmap(); }
+    function renderHeatmap() {
+        const container = document.getElementById('heatmap-container'); document.getElementById('heatmap-title').textContent = `${currentHeatmapYear} Heatmap`; container.innerHTML = '';
+        const year = currentHeatmapYear; const months = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" ];
+        const counts = {}; 
+        // Heatmap includes BOTH active and archived tasks
+        [...nodes, ...archivedNodes].forEach(n => { if (n.dueDate) { counts[n.dueDate] = (counts[n.dueDate] || 0) + 1; } });
+        months.forEach((mName, mIdx) => {
+            const monthDiv = document.createElement('div'); monthDiv.className = 'heatmap-month-container';
+            const title = document.createElement('div'); title.className = 'heatmap-month-title'; title.textContent = mName; monthDiv.appendChild(title);
+            const grid = document.createElement('div'); grid.className = 'heatmap-month-grid';
+            const daysInMonth = new Date(year, mIdx + 1, 0).getDate(); const firstDayDow = new Date(year, mIdx, 1).getDay(); 
+            for(let i=0; i<firstDayDow; i++) { const empty = document.createElement('div'); empty.className = 'day-cell'; empty.style.background = 'transparent'; grid.appendChild(empty); }
+            for(let d=1; d<=daysInMonth; d++) {
+                const cell = document.createElement('div'); cell.className = 'day-cell'; cell.textContent = d;
+                const dateStr = `${year}-${String(mIdx+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                if (counts[dateStr]) {
+                    const count = counts[dateStr]; cell.classList.add('active'); if(count === 1) cell.classList.add('level-1'); else if(count === 2) cell.classList.add('level-2'); else if(count === 3) cell.classList.add('level-3'); else if(count === 4) cell.classList.add('level-4'); else cell.classList.add('level-5');
+                    const tip = document.createElement('div'); tip.className = 'day-tooltip'; 
+                    const taskNames = [...nodes, ...archivedNodes].filter(n => n.dueDate === dateStr).map(n => n.title).join(', '); 
+                    tip.textContent = `${count} tasks: ${taskNames}`; cell.appendChild(tip);
+                }
+                grid.appendChild(cell);
+            }
+            monthDiv.appendChild(grid); container.appendChild(monthDiv);
+        });
+    }
+
+    // --- STORAGE & PERSISTENCE ---
+    function saveToStorage() { const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId }; localStorage.setItem('urgencyFlowData', JSON.stringify(data)); showNotification(); }
+    
+    function loadFromStorage() {
+        const data = localStorage.getItem('urgencyFlowData');
+        if (data) {
+            try {
+                const parsed = JSON.parse(data);
+                if (Array.isArray(parsed)) { nodes = parsed; inbox = []; lifeGoals = {}; notes = []; archivedNodes = []; } 
+                else { 
+                    nodes = parsed.nodes || []; 
+                    inbox = parsed.inbox || []; 
+                    lifeGoals = parsed.lifeGoals || {}; 
+                    notes = parsed.notes || []; 
+                    archivedNodes = parsed.archivedNodes || [];
+                    githubToken = parsed.githubToken || '';
+                    gistId = parsed.gistId || '';
+                }
+                
+                const sanitize = (list) => {
+                    list.forEach(n => {
+                        if (!n.dependencies) n.dependencies = []; if (n.parentIds) { n.dependencies = n.parentIds.map(pid => ({id: pid, type: 'hard'})); delete n.parentIds; }
+                        if (!n.subtasks) n.subtasks = []; if (!n.dueDate) n.dueDate = ''; if (n.syncDurationDate === undefined) n.syncDurationDate = true; 
+                        if (n.isManualUrgent === undefined) n.isManualUrgent = false; if (n.timeLogs === undefined) n.timeLogs = []; if (n.activeTimerStart === undefined) n.activeTimerStart = null; 
+                        if (n.completedDate === undefined) {
+                            if (n.completed) n.completedDate = Date.now();
+                            else n.completedDate = null;
+                        }
+                    });
+                };
+                
+                sanitize(nodes);
+                sanitize(archivedNodes);
+                
+            } catch (e) { console.error("Save data corrupted", e); }
+        }
+    }
+    
+    // --- GENERIC INBOX/ETC LOGIC (Unchanged but ensuring functions exist) ---
+    function toggleInbox() { const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) { panel.classList.remove('hidden'); setTimeout(() => document.getElementById('inbox-input').focus(), 100); } else { panel.classList.add('hidden'); } }
+    function renderInbox() {
+        const list = document.getElementById('inbox-list'); list.innerHTML = '';
+        if (inbox.length === 0) { list.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:20px;">No pending tasks</div>'; return; }
+        inbox.forEach((item, index) => {
+            const el = document.createElement('div'); el.className = 'inbox-item';
+            el.innerHTML = `<span>${item.title}</span><div class="inbox-actions"><span class="inbox-btn promote-btn" onclick="promoteInboxTask(${index})" title="Move to Board">⬆</span><span class="inbox-btn promote-goal-btn" onclick="promoteInboxToGoal(${index})" title="Move to Goals">🎯</span><span class="inbox-btn delete-btn" onclick="deleteInboxTask(${index})" title="Delete">✕</span></div>`;
+            list.appendChild(el);
+        });
+    }
+    function addToInbox() { const input = document.getElementById('inbox-input'); const val = input.value.trim(); if (val) { inbox.push({ id: 'inbox_' + Date.now(), title: val }); input.value = ''; renderInbox(); saveToStorage(); } }
+    function deleteInboxTask(index) { inbox.splice(index, 1); renderInbox(); saveToStorage(); }
+    function promoteInboxTask(index) { const item = inbox[index]; const worldX = (window.innerWidth/2 - panX) / scale - 90; const worldY = (window.innerHeight/2 - panY) / scale - 50; const newNode = createNode(worldX, worldY, item.title); inbox.splice(index, 1); nodes.push(newNode); renderInbox(); updateCalculations(); render(); selectNode(newNode.id); saveToStorage(); }
+    function promoteInboxToGoal(index) { const item = inbox[index]; if(!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(item.title)); inbox.splice(index, 1); renderInbox(); renderGoals(); const panel = document.getElementById('goals-panel'); if(panel.classList.contains('hidden')) panel.classList.remove('hidden'); saveToStorage(); }
+    function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); const n = document.getElementById('notification'); n.innerText = "Moved to Inbox"; n.style.opacity = '1'; setTimeout(() => n.style.opacity = '0', 1500); }
+    function saveData(download = false) { const data = JSON.stringify({nodes, archivedNodes, inbox, lifeGoals, notes}, null, 2); if (download) { const blob = new Blob([data], {type: 'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
+    function loadFile(input) {
+        const file = input.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const parsed = JSON.parse(e.target.result);
+                if (Array.isArray(parsed)) { nodes = parsed; inbox = []; lifeGoals = {}; notes = []; archivedNodes = []; } 
+                else { nodes = parsed.nodes || []; inbox = parsed.inbox || []; lifeGoals = parsed.lifeGoals || {}; notes = parsed.notes || []; archivedNodes = parsed.archivedNodes || []; }
+                nodes.forEach(n => { if(!n.dependencies) n.dependencies = []; if(!n.subtasks) n.subtasks = []; if(!n.dueDate) n.dueDate = ''; if (n.syncDurationDate === undefined) n.syncDurationDate = true; if (n.isManualUrgent === undefined) n.isManualUrgent = false; if (n.timeLogs === undefined) n.timeLogs = []; if (n.activeTimerStart === undefined) n.activeTimerStart = null; if (n.completedDate === undefined) { if (n.completed) n.completedDate = Date.now(); else n.completedDate = null; } });
+                archivedNodes.forEach(n => { if(!n.dependencies) n.dependencies = []; if(!n.subtasks) n.subtasks = []; });
+                updateCalculations(); render(); renderInbox(); renderGoals(); saveToStorage(); alert("File loaded successfully!");
+            } catch (err) { alert("Error parsing JSON"); }
+        }; reader.readAsText(file);
+    }
+    function clearData() { if(confirm("Are you sure you want to clear all tasks? This cannot be undone.")) { nodes = []; archivedNodes = []; inbox = []; lifeGoals = {}; notes = []; localStorage.removeItem('urgencyFlowData'); render(); renderInbox(); renderGoals(); deselectNode(); } }
+    function showNotification() { const n = document.getElementById('notification'); n.style.opacity = '1'; setTimeout(() => n.style.opacity = '0', 1500); document.getElementById('status-indicator').innerText = "Saved " + new Date().toLocaleTimeString(); }
+    
+    // --- TIMERS ---
+    function tickTimers() {
+        nodes.forEach(node => {
+            if (node.activeTimerStart) {
+                const badge = document.querySelector(`.time-badge[data-node-id="${node.id}"]`);
+                if (badge) { badge.innerHTML = `🔴 ${formatTime(getTotalTime(node))}`; badge.classList.add('active'); }
+                if (selectedNodeId === node.id) { const btnText = document.getElementById('timer-btn-text'); if (btnText) btnText.innerText = `Stop Timer (${formatTime(Date.now() - node.activeTimerStart)})`; }
+            }
+        });
+    }
+
+</script>
+</body>
+</html>
