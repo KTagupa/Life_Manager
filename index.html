@@ -39,10 +39,12 @@
             background-size: 20px 20px;
             color: var(--text-main);
             overflow: hidden;
+            /* Fix for mobile address bars covering content */
             height: 100vh;
+            height: 100dvh; 
             width: 100vw;
             display: flex;
-            touch-action: none;
+            touch-action: none; /* Critical for mobile dragging */
         }
 
         /* --- UI LAYOUT --- */
@@ -315,12 +317,16 @@
         .sync-info { font-size: 11px; color: #888; margin-bottom: 8px; line-height: 1.4; }
         .sync-status { font-size: 12px; margin-top: 5px; color: var(--accent); }
 
+        /* MOBILE FIXES v21 */
         @media (max-width: 600px) {
-            #inspector { width: 100%; }
-            #goals-panel { width: 100%; top: 120px; }
-            #notes-panel, #archive-panel { width: 100%; }
+            #inspector { width: 90%; } /* Leave strip on left to click out */
+            #goals-panel { width: 90%; top: 60px; }
+            #notes-panel, #archive-panel { width: 90%; }
             #sync-panel { left: 50%; transform: translateX(-50%); width: 90%; }
             #sync-panel.hidden { transform: translate(-50%, -20px); }
+            /* Make toolbar buttons bigger for touch */
+            .btn { padding: 8px 16px; font-size: 13px; margin-bottom: 5px; }
+            #inbox-panel { width: 90%; bottom: 80px; right: 5%; }
         }
 
     </style>
@@ -1152,7 +1158,78 @@
         container.addEventListener('wheel', (e) => { e.preventDefault(); if (e.ctrlKey) { const zoomFactor = 0.002; const delta = -e.deltaY; scale = Math.min(Math.max(0.2, scale + (delta * zoomFactor * scale)), 3); } else { panX -= e.deltaX; panY -= e.deltaY; } updateTransform(); }, {passive: false});
         container.addEventListener('contextmenu', e => e.preventDefault());
         
-        // Touch events omitted for brevity in this specific update (Box select is mouse-primary)
+        // --- MOBILE TOUCH EVENTS (FIXED) ---
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) { 
+                const touch = e.touches[0];
+                const nodeEl = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.node');
+                
+                if (nodeEl) { 
+                    const id = nodeEl.dataset.id;
+                    if (selectedNodeId !== id) selectNode(id);
+                    isDragging = true;
+                    draggedNodeId = id;
+                    const node = nodes.find(n => n.id === id);
+                    dragStartX = (touch.clientX - panX) / scale - node.x;
+                    dragStartY = (touch.clientY - panY) / scale - node.y;
+                } else { 
+                    isPanning = true; 
+                    dragStartX = touch.clientX - panX; 
+                    dragStartY = touch.clientY - panY; 
+                    deselectNode(); 
+                    
+                    // Close panels on background tap
+                    document.getElementById('goals-panel').classList.add('hidden');
+                    document.getElementById('notes-panel').classList.add('hidden');
+                    document.getElementById('archive-panel').classList.add('hidden');
+                } 
+            } else if (e.touches.length === 2) { 
+                isPanning = false; 
+                isDragging = false; 
+                initialPinchDist = getPinchDistance(e); 
+                initialScale = scale; 
+                pinchStartPan = { x: panX, y: panY }; 
+                pinchStartCenter = getPinchCenter(e); 
+            }
+        }, {passive: false});
+
+        container.addEventListener('touchmove', (e) => { 
+            // Prevent default to stop scrolling/refreshing on mobile
+            if(e.cancelable) e.preventDefault(); 
+            
+            if (e.touches.length === 1) { 
+                const touch = e.touches[0]; 
+                if (isDragging && draggedNodeId) { 
+                    const node = nodes.find(n => n.id === draggedNodeId); 
+                    if (node) { 
+                        node.x = (touch.clientX - panX) / scale - dragStartX; 
+                        node.y = (touch.clientY - panY) / scale - dragStartY; 
+                        render(); 
+                    } 
+                } else if (isPanning) { 
+                    panX = touch.clientX - dragStartX; 
+                    panY = touch.clientY - dragStartY; 
+                    updateTransform(); 
+                } 
+            } else if (e.touches.length === 2 && initialPinchDist) { 
+                const currentDist = getPinchDistance(e); 
+                const ratio = currentDist / initialPinchDist; 
+                const newScale = Math.max(0.2, Math.min(3, initialScale * ratio)); 
+                const currentCenter = getPinchCenter(e); 
+                const worldX = (pinchStartCenter.x - pinchStartPan.x) / initialScale; 
+                const worldY = (pinchStartCenter.y - pinchStartPan.y) / initialScale; 
+                panX = currentCenter.x - (worldX * newScale); 
+                panY = currentCenter.y - (worldY * newScale); 
+                scale = newScale; 
+                updateTransform(); 
+            } 
+        }, {passive: false});
+
+        container.addEventListener('touchend', (e) => { 
+            if (isDragging) { isDragging = false; saveToStorage(); } 
+            if (e.touches.length < 2) initialPinchDist = null; 
+            if (e.touches.length === 0) isPanning = false; 
+        });
     }
 
     function finishBoxSelection(endX, endY) {
@@ -1460,7 +1537,23 @@
     }
     function addToInbox() { const input = document.getElementById('inbox-input'); const val = input.value.trim(); if (val) { inbox.push({ id: 'inbox_' + Date.now(), title: val }); input.value = ''; renderInbox(); saveToStorage(); } }
     function deleteInboxTask(index) { inbox.splice(index, 1); renderInbox(); saveToStorage(); }
-    function promoteInboxTask(index) { const item = inbox[index]; const worldX = (window.innerWidth/2 - panX) / scale - 90; const worldY = (window.innerHeight/2 - panY) / scale - 50; const newNode = createNode(worldX, worldY, item.title); inbox.splice(index, 1); nodes.push(newNode); renderInbox(); updateCalculations(); render(); selectNode(newNode.id); saveToStorage(); }
+    function promoteInboxTask(index) { 
+        const item = inbox[index]; 
+        const worldX = (window.innerWidth/2 - panX) / scale - 90; 
+        const worldY = (window.innerHeight/2 - panY) / scale - 50; 
+        const newNode = createNode(worldX, worldY, item.title); 
+        inbox.splice(index, 1); 
+        nodes.push(newNode); 
+        renderInbox(); 
+        updateCalculations(); 
+        render(); 
+        selectNode(newNode.id); 
+        saveToStorage(); 
+        
+        // Fix for mobile: Close inbox to prevent overlap confusion
+        const inboxPanel = document.getElementById('inbox-panel');
+        if (!inboxPanel.classList.contains('hidden')) inboxPanel.classList.add('hidden');
+    }
     function promoteInboxToGoal(index) { const item = inbox[index]; if(!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(item.title)); inbox.splice(index, 1); renderInbox(); renderGoals(); const panel = document.getElementById('goals-panel'); if(panel.classList.contains('hidden')) panel.classList.remove('hidden'); saveToStorage(); }
     function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); const n = document.getElementById('notification'); n.innerText = "Moved to Inbox"; n.style.opacity = '1'; setTimeout(() => n.style.opacity = '0', 1500); }
     function saveData(download = false) { const data = JSON.stringify({nodes, archivedNodes, inbox, lifeGoals, notes}, null, 2); if (download) { const blob = new Blob([data], {type: 'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
