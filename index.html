@@ -572,6 +572,7 @@
     async function pushToGist() {
         if (!githubToken) return setSyncStatus('Error: Missing GitHub Token', true);
         setSyncStatus('Pushing to GitHub...');
+        showNotification('Pushing to GitHub...'); // Feedback for shortcut
         
         const content = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes }, null, 2);
         
@@ -608,10 +609,12 @@
             document.getElementById('gist-id').value = gistId;
             saveToStorage(); // Save the Gist ID
             setSyncStatus(`Success! Saved to Gist: ${gistId.substring(0,6)}...`);
+            showNotification('GitHub Sync Complete!');
             
         } catch (e) {
             console.error(e);
             setSyncStatus('Sync Failed: ' + e.message, true);
+            showNotification('GitHub Sync Failed');
         }
     }
 
@@ -663,10 +666,12 @@
             renderGoals();
             
             setSyncStatus('Pull Complete! Data updated.');
+            showNotification('GitHub Pull Complete!');
             
         } catch (e) {
             console.error(e);
             setSyncStatus('Pull Failed: ' + e.message, true);
+            showNotification('GitHub Pull Failed');
         }
     }
 
@@ -1046,6 +1051,15 @@
     function setupInteractions() {
         const container = document.getElementById('graph-container');
         const selectionRect = document.getElementById('selection-rect');
+        
+        // Add Global Key Listener for Shortcut
+        document.addEventListener('keydown', (e) => {
+             // Ctrl + S (Mac/Windows safe non-overlap for Save Page)
+             if (e.ctrlKey && e.key === 's') {
+                 e.preventDefault();
+                 pushToGist();
+             }
+        });
 
         document.addEventListener('mousedown', (e) => {
             const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
@@ -1572,7 +1586,15 @@
         }; reader.readAsText(file);
     }
     function clearData() { if(confirm("Are you sure you want to clear all tasks? This cannot be undone.")) { nodes = []; archivedNodes = []; inbox = []; lifeGoals = {}; notes = []; localStorage.removeItem('urgencyFlowData'); render(); renderInbox(); renderGoals(); deselectNode(); } }
-    function showNotification() { const n = document.getElementById('notification'); n.style.opacity = '1'; setTimeout(() => n.style.opacity = '0', 1500); document.getElementById('status-indicator').innerText = "Saved " + new Date().toLocaleTimeString(); }
+    
+    // Updated to accept custom message
+    function showNotification(msg) { 
+        const n = document.getElementById('notification'); 
+        n.innerText = msg || "State Saved"; 
+        n.style.opacity = '1'; 
+        setTimeout(() => n.style.opacity = '0', 1500); 
+        if(!msg) document.getElementById('status-indicator').innerText = "Saved " + new Date().toLocaleTimeString(); 
+    }
     
     // --- TIMERS ---
     function tickTimers() {
