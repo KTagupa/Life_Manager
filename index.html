@@ -499,6 +499,22 @@
     <div id="notification">State Saved</div>
 
 <script>
+    // --- UTILITIES FOR LINKS ---
+    function linkify(text) {
+        if (!text) return '';
+        // Regex for URLs starting with http/https/www/ftp/file
+        const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+        return text.replace(urlRegex, function(url) {
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;" onclick="event.stopPropagation()">${url}</a>`;
+        });
+    }
+
+    function extractLink(text) {
+        if (!text) return null;
+        const match = text.match(/(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/i);
+        return match ? match[0] : null;
+    }
+
     // --- STATE MANAGEMENT ---
     let nodes = [];
     let archivedNodes = [];
@@ -913,7 +929,7 @@
                     linkedTaskName = '<span style="color:#666">🔗 (Deleted Task)</span>';
                 }
             }
-            el.innerHTML = `<div class="note-card-title">${note.title || '(Untitled)'}</div><div class="note-card-preview">${note.body || '<i>No content</i>'}</div><div class="note-card-meta">${linkedTaskName}<span>${new Date(note.timestamp).toLocaleDateString()}</span></div>`;
+            el.innerHTML = `<div class="note-card-title">${note.title || '(Untitled)'}</div><div class="note-card-preview">${linkify(note.body) || '<i>No content</i>'}</div><div class="note-card-meta">${linkedTaskName}<span>${new Date(note.timestamp).toLocaleDateString()}</span></div>`;
             el.onclick = () => openNoteEditor(note.id);
             container.appendChild(el);
         });
@@ -1444,16 +1460,22 @@
         
         const isRunning = !!node.activeTimerStart;
         const linkedNotes = notes.filter(n => n.taskId === node.id);
+        
+        // Detect links in title
+        const titleLink = extractLink(node.title);
 
         panel.innerHTML = `
             ${isArchived ? '<div style="background:#333; color:#aaa; padding:8px; border-radius:4px; margin-bottom:10px; font-size:12px; text-align:center;">🔒 This task is archived. Uncheck "Completed" to restore.</div>' : ''}
-            <div class="form-group"><label>Title</label><input type="text" value="${node.title}" oninput="updateNodeField('title', this.value)"></div>
+            <div class="form-group"><label>Title ${titleLink ? `<a href="${titleLink}" target="_blank" style="text-decoration:none; margin-left:5px;">🔗 Open Link</a>` : ''}</label><input type="text" value="${node.title}" oninput="updateNodeField('title', this.value)"></div>
             <div class="form-group" style="display:flex; gap:10px"><div style="flex:1"><label>Duration (Est. Days)</label><input type="number" value="${node.duration}" min="1" onchange="updateNodeField('duration', parseInt(this.value))"></div><div style="flex:1"><label>Status</label><button class="btn ${node.completed ? 'btn-primary' : ''}" style="width:100%" onclick="toggleCompletion()">${node.completed ? 'Completed' : 'Active'}</button></div></div>
             <div class="form-group" style="display:flex; align-items:center; gap:5px; margin-bottom: 10px;"><input type="checkbox" id="sync-toggle" ${node.syncDurationDate ? 'checked' : ''} onchange="updateNodeField('syncDurationDate', this.checked)" style="width:auto;"><label for="sync-toggle" style="margin:0; cursor:pointer; font-size:12px; color:var(--text-muted)">Link Duration & Due Date</label></div>
             <div class="form-group"><label>Due Date (Optional)</label><input type="date" value="${node.dueDate || ''}" onchange="updateNodeField('dueDate', this.value)"></div>
             <div class="form-group"><button class="btn btn-urgent ${node.isManualUrgent ? 'active' : ''}" style="width:100%" onclick="toggleUrgency()">${node.isManualUrgent ? '🔥 Marked as Urgent' : '🔥 Mark as Urgent'}</button><div style="font-size:10px; color:var(--text-muted); margin-top:4px;">Marks this task and all following steps as high priority.</div></div>
             <div class="form-group"><label>Dependencies (Prerequisites)</label><div id="dep-list">${node.dependencies.map(d => { const parent = nodes.find(n => n.id === d.id) || archivedNodes.find(n => n.id === d.id); return `<div class="dep-item"><span>${parent ? parent.title : 'Unknown/Archived'}</span><div class="dep-controls"><span class="toggle-soft ${d.type === 'soft' ? 'active' : ''}" onclick="toggleDepType('${d.id}')" title="Toggle Soft/Hard">${d.type === 'soft' ? 'Soft' : 'Hard'}</span><span style="cursor:pointer; color:#ef4444" onclick="removeDependency('${d.id}')">✕</span></div></div>`; }).join('')}</div><select id="add-dep-select" onchange="addDependency(this.value)" style="margin-top:5px"><option value="">+ Add Dependency...</option>${nodes.filter(n => n.id !== node.id && !node.dependencies.some(d => d.id === n.id)).map(n => `<option value="${n.id}">${n.title}</option>`).join('')}</select></div>
-            <div class="form-group"><label>Subtasks</label><div id="subtask-list">${node.subtasks.map((st, idx) => `<div class="subtask-item"><input type="checkbox" ${st.done ? 'checked' : ''} onchange="toggleSubtask(${idx})"><input type="text" value="${st.text}" onchange="updateSubtaskText(${idx}, this.value)" style="border:none; background:transparent; width:100%; color: inherit"><span onclick="removeSubtask(${idx})" style="cursor:pointer; color:#666">✕</span></div>`).join('')}</div><button class="btn" style="width:100%; margin-top:5px" onclick="addSubtask()">+ Add Subtask</button></div>
+            <div class="form-group"><label>Subtasks</label><div id="subtask-list">${node.subtasks.map((st, idx) => {
+                const subLink = extractLink(st.text);
+                return `<div class="subtask-item"><input type="checkbox" ${st.done ? 'checked' : ''} onchange="toggleSubtask(${idx})"><input type="text" value="${st.text}" onchange="updateSubtaskText(${idx}, this.value)" style="border:none; background:transparent; width:100%; color: inherit">${subLink ? `<a href="${subLink}" target="_blank" style="text-decoration:none; margin-right:5px; font-size:12px;">🔗</a>` : ''}<span onclick="removeSubtask(${idx})" style="cursor:pointer; color:#666">✕</span></div>`;
+            }).join('')}</div><button class="btn" style="width:100%; margin-top:5px" onclick="addSubtask()">+ Add Subtask</button></div>
             
             <div class="form-group" style="border: 1px solid #333; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.1);">
                 <label>Linked Notes</label>
@@ -1462,7 +1484,7 @@
                     ${linkedNotes.map(note => `
                         <div class="note-card" style="padding:6px; margin-bottom:4px;" onclick="openNoteEditor('${note.id}')">
                             <div class="note-card-title" style="font-size:12px;">${note.title || '(Untitled)'}</div>
-                            <div class="note-card-preview" style="font-size:10px;">${note.body.substring(0,40)}...</div>
+                            <div class="note-card-preview" style="font-size:10px;">${linkify(note.body.substring(0,40))}...</div>
                         </div>
                     `).join('')}
                 </div>
@@ -1621,7 +1643,7 @@
         if (inbox.length === 0) { list.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:20px;">No pending tasks</div>'; return; }
         inbox.forEach((item, index) => {
             const el = document.createElement('div'); el.className = 'inbox-item';
-            el.innerHTML = `<span>${item.title}</span><div class="inbox-actions"><span class="inbox-btn promote-btn" onclick="promoteInboxTask(${index})" title="Move to Board">⬆</span><span class="inbox-btn promote-goal-btn" onclick="promoteInboxToGoal(${index})" title="Move to Goals">🎯</span><span class="inbox-btn delete-btn" onclick="deleteInboxTask(${index})" title="Delete">✕</span></div>`;
+            el.innerHTML = `<span>${linkify(item.title)}</span><div class="inbox-actions"><span class="inbox-btn promote-btn" onclick="promoteInboxTask(${index})" title="Move to Board">⬆</span><span class="inbox-btn promote-goal-btn" onclick="promoteInboxToGoal(${index})" title="Move to Goals">🎯</span><span class="inbox-btn delete-btn" onclick="deleteInboxTask(${index})" title="Delete">✕</span></div>`;
             list.appendChild(el);
         });
     }
