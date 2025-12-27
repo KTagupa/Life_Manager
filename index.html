@@ -1484,7 +1484,7 @@
                     ${linkedNotes.map(note => `
                         <div class="note-card" style="padding:6px; margin-bottom:4px;" onclick="openNoteEditor('${note.id}')">
                             <div class="note-card-title" style="font-size:12px;">${note.title || '(Untitled)'}</div>
-                            <div class="note-card-preview" style="font-size:10px;">${linkify(note.body.substring(0,40))}...</div>
+                            <div class="note-card-preview" style="font-size:10px;">${linkify(note.body)}</div>
                         </div>
                     `).join('')}
                 </div>
