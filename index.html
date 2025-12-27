@@ -61,6 +61,14 @@
             z-index: 100;
             border: 1px solid var(--border);
             flex-wrap: wrap;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        
+        /* Auto-hide state */
+        #toolbar.hidden-bar {
+            transform: translateY(-150%);
+            opacity: 0;
+            pointer-events: none;
         }
 
         #inspector {
@@ -346,6 +354,8 @@
         <button class="btn" onclick="document.getElementById('file-input').click()">Load</button>
         <button class="btn btn-danger" onclick="clearData()">Reset</button>
         <div style="border-left: 1px solid #444; margin: 0 5px;"></div>
+        <!-- Toggle Toolbar Mode Button -->
+        <button class="btn" id="toolbar-toggle-btn" onclick="toggleToolbarMode()">📌 Fixed</button>
         <div id="status-indicator" style="font-size: 12px; color: #888; align-self: center;">Auto-saved</div>
     </div>
 
@@ -508,6 +518,10 @@
     let gistId = '';
     const GIST_FILENAME = 'urgency_flow_data.json';
     
+    // Toolbar State
+    let toolbarAutoHide = false;
+    let toolbarTimer = null;
+    
     // Auto-Archive Constant
     const ARCHIVE_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000; // 15 Days
     
@@ -549,6 +563,44 @@
         setInterval(tickTimers, 1000);
         setInterval(checkAutoArchive, 60000); 
     });
+    
+    // --- TOOLBAR LOGIC ---
+    function toggleToolbarMode() {
+        toolbarAutoHide = !toolbarAutoHide;
+        const btn = document.getElementById('toolbar-toggle-btn');
+        const toolbar = document.getElementById('toolbar');
+        
+        if (toolbarAutoHide) {
+            btn.innerHTML = "👻 Auto";
+            btn.style.color = "var(--accent)";
+            showToolbar(); // Ensure visible initially
+            // Start a timer immediately so it hides if not touched
+            resetToolbarTimer();
+        } else {
+            btn.innerHTML = "📌 Fixed";
+            btn.style.color = "var(--text-main)";
+            if (toolbarTimer) clearTimeout(toolbarTimer);
+            toolbar.classList.remove('hidden-bar');
+        }
+    }
+
+    function showToolbar() {
+        const toolbar = document.getElementById('toolbar');
+        toolbar.classList.remove('hidden-bar');
+        resetToolbarTimer();
+    }
+
+    function resetToolbarTimer() {
+        if (!toolbarAutoHide) return;
+        if (toolbarTimer) clearTimeout(toolbarTimer);
+        toolbarTimer = setTimeout(() => {
+            const toolbar = document.getElementById('toolbar');
+            // Don't hide if mouse is currently OVER the toolbar (Desktop only concept, but useful)
+            if (!toolbar.matches(':hover')) { 
+                toolbar.classList.add('hidden-bar');
+            }
+        }, 5000);
+    }
     
     // --- GITHUB SYNC LOGIC ---
     function toggleSyncPanel() {
@@ -1061,6 +1113,20 @@
              }
         });
 
+        // Global Mouse Move for Auto-Hide Toolbar Trigger
+        document.addEventListener('mousemove', (e) => {
+            if (!toolbarAutoHide) return;
+            // If toolbar is hidden and mouse is near top (60px)
+            if (e.clientY < 60) {
+                showToolbar();
+            }
+            // If inside toolbar, also keep it open (reset timer)
+            const toolbar = document.getElementById('toolbar');
+            if (toolbar.contains(e.target)) {
+                showToolbar();
+            }
+        });
+
         document.addEventListener('mousedown', (e) => {
             const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
             if (!panel.classList.contains('hidden')) { if (!panel.contains(e.target) && !fab.contains(e.target)) toggleInbox(); }
@@ -1091,11 +1157,8 @@
                     dragStartX = e.clientX - panX; 
                     dragStartY = e.clientY - panY;
                     
-                    // Clear panels and selection
-                    document.getElementById('goals-panel').classList.add('hidden');
-                    document.getElementById('notes-panel').classList.add('hidden');
-                    document.getElementById('archive-panel').classList.add('hidden');
-                    deselectNode();
+                    // Force close all panels
+                    closeAllSidePanels();
                 }
             } 
         });
@@ -1174,6 +1237,11 @@
         
         // --- MOBILE TOUCH EVENTS (FIXED) ---
         container.addEventListener('touchstart', (e) => {
+            // Show toolbar on tap near top
+            if (toolbarAutoHide && e.touches[0].clientY < 60) {
+                 showToolbar();
+            }
+
             if (e.touches.length === 1) { 
                 const touch = e.touches[0];
                 const nodeEl = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.node');
@@ -1190,12 +1258,8 @@
                     isPanning = true; 
                     dragStartX = touch.clientX - panX; 
                     dragStartY = touch.clientY - panY; 
-                    deselectNode(); 
-                    
-                    // Close panels on background tap
-                    document.getElementById('goals-panel').classList.add('hidden');
-                    document.getElementById('notes-panel').classList.add('hidden');
-                    document.getElementById('archive-panel').classList.add('hidden');
+                    // Explicitly close all panels on background tap
+                    closeAllSidePanels();
                 } 
             } else if (e.touches.length === 2) { 
                 isPanning = false; 
@@ -1244,6 +1308,13 @@
             if (e.touches.length < 2) initialPinchDist = null; 
             if (e.touches.length === 0) isPanning = false; 
         });
+    }
+
+    function closeAllSidePanels() {
+        document.getElementById('goals-panel').classList.add('hidden');
+        document.getElementById('notes-panel').classList.add('hidden');
+        document.getElementById('archive-panel').classList.add('hidden');
+        deselectNode(); // Closes inspector
     }
 
     function finishBoxSelection(endX, endY) {
@@ -1339,6 +1410,11 @@
         selectedNodeId = id; 
         selectedIds.clear(); // Ensure sync
         selectedIds.add(id);
+        
+        // Close other side panels when opening a node details
+        document.getElementById('goals-panel').classList.add('hidden');
+        document.getElementById('notes-panel').classList.add('hidden');
+        document.getElementById('archive-panel').classList.add('hidden');
         
         document.getElementById('inspector').classList.remove('hidden'); 
         render(); 
