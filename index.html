@@ -39,12 +39,11 @@
             background-size: 20px 20px;
             color: var(--text-main);
             overflow: hidden;
-            /* Fix for mobile address bars covering content */
             height: 100vh;
             height: 100dvh; 
             width: 100vw;
             display: flex;
-            touch-action: none; /* Critical for mobile dragging */
+            touch-action: none;
         }
 
         /* --- UI LAYOUT --- */
@@ -56,10 +55,9 @@
             display: flex;
             align-items: flex-start;
             transition: all 0.3s ease;
-            pointer-events: none; /* Let clicks pass through the container gaps */
+            pointer-events: none;
         }
 
-        /* The toggle button is always clickable */
         #menu-btn {
             width: 40px;
             height: 40px;
@@ -98,7 +96,7 @@
             transform: translateX(0) scale(1);
             transform-origin: top left;
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            pointer-events: auto; /* Content is clickable */
+            pointer-events: auto;
             max-width: calc(100vw - 70px);
         }
         
@@ -107,7 +105,7 @@
             transform: translateX(-20px) scale(0.9);
             pointer-events: none;
             position: absolute;
-            left: 40px; /* Align near button */
+            left: 40px;
             visibility: hidden;
         }
 
@@ -130,14 +128,13 @@
             transform: translateX(100%);
         }
         
-        /* --- RIGHT SIDE PANELS (Notes & Archive) --- */
         .side-panel {
             width: 380px;
             background: #1a1a1a; 
             border-left: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            z-index: 55; /* Above inspector */
+            z-index: 55;
             position: absolute;
             right: 0;
             top: 0;
@@ -150,27 +147,25 @@
             transform: translateX(100%);
         }
 
-        /* Pinning & Floating Support */
         .side-panel.pinned {
-            /* Visual indication of pinned state */
             box-shadow: -4px 0 15px rgba(59, 130, 246, 0.2);
         }
 
         .side-panel.floating {
-            position: fixed; /* Detach from sidebar flow */
+            position: fixed;
             right: auto;
             bottom: auto;
             border: 1px solid var(--accent);
             border-radius: 8px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            transition: none; /* Disable transition during drag */
-            z-index: 200; /* Top most */
+            transition: none;
+            z-index: 200;
             resize: both;
             overflow: hidden;
         }
         
         .side-panel.floating .panel-header-row {
-            cursor: move; /* Indicate draggable */
+            cursor: move;
             background: #2a2a2a;
         }
 
@@ -189,7 +184,7 @@
             padding: 10px;
         }
 
-        /* --- NOTES STYLES (ENHANCED) --- */
+        /* --- NOTES STYLES --- */
         .note-card {
             background: #2d2d2d;
             border: 1px solid #444;
@@ -214,7 +209,24 @@
             transition: height 0.3s;
         }
         #note-editor.hidden { height: 0; overflow: hidden; border: none; }
-        #note-editor.fullscreen { height: 100%; position: absolute; top:0; bottom:0; left:0; right:0; z-index: 60; }
+        
+        /* POP-OUT STATE STYLES */
+        #note-editor.popped-out {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85vw;
+            height: 85dvh;
+            max-width: 1200px;
+            max-height: 900px;
+            z-index: 1000;
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 0 100vmax rgba(0,0,0,0.6);
+            overflow: hidden;
+            transition: none;
+        }
 
         .editor-toolbar { padding: 8px; display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; border-bottom: 1px solid #333; flex-wrap: wrap; gap: 5px; }
         .editor-tools-group { display: flex; gap: 2px; }
@@ -242,7 +254,6 @@
         #note-body-input:focus { outline: none; }
         #note-body-input.hidden { display: none; }
 
-        /* MARKDOWN PREVIEW STYLES */
         #note-preview-pane {
             flex-grow: 1; width: 100%; height: 100%;
             background: #1a1a1a; color: #ccc; padding: 15px; 
@@ -260,7 +271,6 @@
         #note-preview-pane code { background: #333; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em; }
         #note-preview-pane pre { background: #252525; padding: 10px; border-radius: 4px; overflow-x: auto; }
         
-        /* Interactive Elements */
         .wiki-link { color: var(--accent); text-decoration: underline; cursor: pointer; padding: 0 2px; border-radius: 2px; transition: background 0.2s; }
         .wiki-link:hover { background: rgba(59, 130, 246, 0.2); color: #fff; }
         .chk-list-item { list-style: none; margin-left: -20px; display: flex; align-items: center; gap: 8px; }
@@ -283,7 +293,7 @@
         .archive-info { font-size: 13px; color: #aaa; }
         .archive-date { font-size: 10px; color: #666; display: block; margin-top: 3px; }
 
-        /* --- GOALS PANEL (LEFT) --- */
+        /* --- GOALS PANEL --- */
         #goals-panel {
             width: 380px; 
             background: #112019; 
@@ -363,11 +373,10 @@
         .badge.date-badge { background: #2c2c2c; border: 1px solid #444; color: #ccc; }
         .badge.time-badge { background: #374151; color: #e5e7eb; font-family: monospace; display: flex; align-items: center; gap: 3px; }
         .badge.time-badge.active { background: #991b1b; color: white; border: 1px solid #ef4444; animation: pulse 2s infinite; }
-        .icon-lock { color: var(--blocked-color); }
         .node-timer-control { position: absolute; top: -10px; right: -10px; width: 26px; height: 26px; border-radius: 50%; background: #2d2d2d; border: 2px solid var(--border); color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; transition: all 0.2s; z-index: 20; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
         .node:hover .node-timer-control, .node-timer-control.running { opacity: 1; }
         .node-timer-control.play { background: #059669; border-color: #059669; }
-        .node-timer-control.stop { background: #b91c1c; border-color: #b91c1c; animation: pulse-red 2s infinite; }
+        .node-timer-control.stop { background: #b91c1c; border-color: #b91c1c; }
         .progress-container { height: 4px; background: #444; border-radius: 2px; margin-top: 5px; overflow: hidden; }
         .progress-bar { height: 100%; background: var(--ready-color); width: 0%; transition: width 0.3s; }
 
@@ -429,25 +438,23 @@
         .delete-btn { color: var(--blocked-color); }
         .inbox-footer { padding: 10px; border-top: 1px solid var(--border); display: flex; gap: 5px; }
 
-        /* --- SYNC PANEL --- */
         #sync-panel { position: fixed; top: 70px; left: 10px; width: 300px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; z-index: 110; box-shadow: 0 5px 20px rgba(0,0,0,0.5); padding: 15px; display: flex; flex-direction: column; gap: 10px; transition: transform 0.2s, opacity 0.2s; }
         #sync-panel.hidden { transform: translateY(-20px); opacity: 0; pointer-events: none; }
         .sync-header { font-weight: bold; border-bottom: 1px solid var(--border); padding-bottom: 8px; display: flex; justify-content: space-between; }
         .sync-info { font-size: 11px; color: #888; margin-bottom: 8px; line-height: 1.4; }
         .sync-status { font-size: 12px; margin-top: 5px; color: var(--accent); }
 
-        /* MOBILE FIXES v21 */
         @media (max-width: 600px) {
-            #inspector { width: 90%; } /* Leave strip on left to click out */
+            #inspector { width: 90%; }
             #goals-panel { width: 90%; top: 60px; }
             #notes-panel, #archive-panel { width: 90%; }
             #sync-panel { left: 50%; transform: translateX(-50%); width: 90%; }
             #sync-panel.hidden { transform: translate(-50%, -20px); }
-            /* Make toolbar buttons bigger for touch */
             .btn { padding: 8px 16px; font-size: 13px; margin-bottom: 5px; }
             #inbox-panel { width: 90%; bottom: 80px; right: 5%; }
             #toolbar { flex-direction: column; gap: 10px; }
             #toolbar-content { margin-left: 0; margin-top: 5px; flex-direction: column; align-items: stretch; }
+            #note-editor.popped-out { width: 95vw; height: 95dvh; }
         }
 
     </style>
@@ -565,10 +572,11 @@
                 </div>
 
                 <div class="editor-tools-group">
-                     <button class="tool-btn" style="color:var(--critical-path)" onclick="createTaskFromSelection()" title="Convert Selection to Linked Task">✨ Make Task</button>
+                     <button class="tool-btn" style="color:var(--critical-path)" onclick="createTaskFromSelection()" title="Convert Selection to Linked Task">✨ Task</button>
                 </div>
 
                 <div class="editor-tools-group">
+                    <button class="tool-btn" id="btn-pop-out-note" onclick="toggleNotePopOut()" title="Pop out editor">↗️</button>
                     <button class="tool-btn btn-danger" onclick="deleteCurrentNote()" title="Delete Note">🗑️</button>
                     <button class="tool-btn" onclick="closeNoteEditor()" title="Close">✕</button>
                 </div>
@@ -648,7 +656,6 @@
     // --- UTILITIES FOR LINKS ---
     function linkify(text) {
         if (!text) return '';
-        // Regex for URLs starting with http/https/www/ftp/file
         const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
         return text.replace(urlRegex, function(url) {
             return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;" onclick="event.stopPropagation()">${url}</a>`;
@@ -668,8 +675,8 @@
     let lifeGoals = {}; 
     let notes = []; 
     let currentGoalYear = new Date().getFullYear();
-    let selectedNodeId = null; // Single node selection (for inspector)
-    let selectedIds = new Set(); // Multi-selection (for highlighting/dragging)
+    let selectedNodeId = null; 
+    let selectedIds = new Set(); 
     let currentEditingNoteId = null;
     let scale = 1;
     let panX = 0;
@@ -681,7 +688,7 @@
     const GIST_FILENAME = 'urgency_flow_data.json';
     
     // Auto-Archive Constant
-    const ARCHIVE_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000; // 15 Days
+    const ARCHIVE_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000; 
     
     // Interaction State
     let isDragging = false;
@@ -711,7 +718,6 @@
             initDemoData();
         }
         
-        // Sync UI Init
         if(githubToken) document.getElementById('github-token').value = githubToken;
         if(gistId) document.getElementById('gist-id').value = gistId;
         
@@ -761,18 +767,15 @@
     async function pushToGist() {
         if (!githubToken) return setSyncStatus('Error: Missing GitHub Token', true);
         setSyncStatus('Pushing to GitHub...');
-        showNotification('Pushing to GitHub...'); // Feedback for shortcut
+        showNotification('Pushing to GitHub...'); 
         
         const content = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes }, null, 2);
-        
         const files = {};
         files[GIST_FILENAME] = { content: content };
         
         try {
             let url = 'https://api.github.com/gists';
             let method = 'POST';
-            
-            // If we already have an ID, update it
             if (gistId) {
                 url = `https://api.github.com/gists/${gistId}`;
                 method = 'PATCH';
@@ -796,7 +799,7 @@
             const data = await response.json();
             gistId = data.id;
             document.getElementById('gist-id').value = gistId;
-            saveToStorage(); // Save the Gist ID
+            saveToStorage(); 
             setSyncStatus(`Success! Saved to Gist: ${gistId.substring(0,6)}...`);
             showNotification('GitHub Sync Complete!');
             
@@ -812,7 +815,6 @@
         setSyncStatus('Searching for Gist...');
         
         try {
-            // If we don't have an ID, list user's gists to find it
             if (!gistId) {
                 const listResp = await fetch('https://api.github.com/gists', {
                     headers: { 'Authorization': `token ${githubToken}` }
@@ -829,7 +831,6 @@
                 }
             }
             
-            // Fetch content
             const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
                 headers: { 'Authorization': `token ${githubToken}` }
             });
@@ -839,14 +840,12 @@
             const fileContent = data.files[GIST_FILENAME].content;
             const parsed = JSON.parse(fileContent);
             
-            // Restore Data
             if (parsed.nodes) nodes = parsed.nodes;
             if (parsed.archivedNodes) archivedNodes = parsed.archivedNodes;
             if (parsed.inbox) inbox = parsed.inbox;
             if (parsed.lifeGoals) lifeGoals = parsed.lifeGoals;
             if (parsed.notes) notes = parsed.notes;
             
-            // Sanitize & Render
             nodes.forEach(n => { if(!n.dependencies) n.dependencies = []; });
             saveToStorage();
             updateCalculations();
@@ -905,7 +904,6 @@
     }
 
     function initDemoData() {
-        const today = new Date().toISOString().split('T')[0];
         nodes = [
             {
                 id: '1', title: 'Define Goal', x: 100, y: 300, completed: true, completedDate: Date.now(), duration: 1, dueDate: '', syncDurationDate: true, isManualUrgent: false,
@@ -958,7 +956,6 @@
         const panel = document.getElementById('archive-panel');
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
-            // Check if notes panel is pinned, if so, don't hide it
             const notePanel = document.getElementById('notes-panel');
             if(!notePanel.classList.contains('pinned')) notePanel.classList.add('hidden');
             renderArchiveList();
@@ -994,7 +991,6 @@
         const panel = document.getElementById('notes-panel');
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
-            // Only hide archive if it's open, no pinned logic there usually
             document.getElementById('archive-panel').classList.add('hidden'); 
             renderNotesList();
         } else {
@@ -1011,11 +1007,9 @@
         if(panel.classList.contains('pinned')) {
             btn.style.opacity = '1';
             btn.style.color = 'var(--accent)';
-            // Set initial float position if undefined
             if(!panel.style.left) {
                 panel.style.right = 'auto';
                 panel.style.bottom = 'auto';
-                // Center-ish default
                 panel.style.left = (window.innerWidth - 400) + 'px';
                 panel.style.top = '100px';
                 panel.style.height = '600px'; 
@@ -1023,7 +1017,6 @@
         } else {
             btn.style.opacity = '';
             btn.style.color = '';
-            // Reset to sidebar mode
             panel.style.right = '0';
             panel.style.top = '0';
             panel.style.bottom = '0';
@@ -1038,26 +1031,21 @@
 
         handle.addEventListener('mousedown', (e) => {
             if (!panel.classList.contains('floating')) return;
-            // Only trigger if clicking the header background/text, not buttons
             if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
 
             isPanelDragging = true;
             panelDragOffset.x = e.clientX - panel.getBoundingClientRect().left;
             panelDragOffset.y = e.clientY - panel.getBoundingClientRect().top;
-            e.preventDefault(); // Prevent text selection
+            e.preventDefault();
         });
 
         window.addEventListener('mousemove', (e) => {
             if (!isPanelDragging) return;
-            
-            // Constrain to viewport (basic)
             let newX = e.clientX - panelDragOffset.x;
             let newY = e.clientY - panelDragOffset.y;
-            
-            // Apply
             panel.style.left = newX + 'px';
             panel.style.top = newY + 'px';
-            panel.style.right = 'auto'; // ensure overrides
+            panel.style.right = 'auto';
             panel.style.bottom = 'auto';
         });
 
@@ -1098,33 +1086,17 @@
     // MARKDOWN ENGINE
     function renderMarkdown(text) {
         if(!text) return '';
-        
-        // Escape HTML first
         let html = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-        // Headers
         html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
         html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
         html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-        
-        // Bold / Italic
         html = html.replace(/\*\*(.*?)\*\*/gim, '<b>$1</b>');
         html = html.replace(/\*(.*?)\*/gim, '<i>$1</i>');
-        
-        // Checkboxes
         html = html.replace(/^- \[ \] (.*$)/gim, '<li class="chk-list-item"><span class="chk-box">⬜</span> <span>$1</span></li>');
         html = html.replace(/^- \[x\] (.*$)/gim, '<li class="chk-list-item"><span class="chk-box">✅</span> <span style="text-decoration:line-through; color:#666;">$1</span></li>');
-        
-        // Lists (Bullets that aren't checkboxes)
         html = html.replace(/^- (?!\[)(.*$)/gim, '<ul><li>$1</li></ul>');
-        
-        // Fix UL clustering (simple regex replace leaves multiple ULs)
-        // A proper parser is cleaner, but for single file regex:
         html = html.replace(/<\/ul>\n<ul>/g, ''); 
-        
-        // Wiki Links [[Task Name]]
         html = html.replace(/\[\[(.*?)\]\]/g, (match, title) => {
-            // Find task by title (fuzzy-ish)
             const target = nodes.find(n => n.title.toLowerCase() === title.toLowerCase()) || 
                            archivedNodes.find(n => n.title.toLowerCase() === title.toLowerCase());
             if(target) {
@@ -1133,10 +1105,7 @@
                 return `<span style="color:#666; font-style:italic;">${title} (missing)</span>`;
             }
         });
-        
-        // New lines to BR
         html = html.replace(/\n/g, '<br>');
-        
         return html;
     }
 
@@ -1162,7 +1131,7 @@
 
     function insertTextAtCursor(prefix, suffix = '') {
         const textarea = document.getElementById('note-body-input');
-        if (textarea.classList.contains('hidden')) return; // Can't edit in view mode
+        if (textarea.classList.contains('hidden')) return; 
         
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
@@ -1206,13 +1175,11 @@
             return;
         }
         
-        // Create new Node
         const worldX = (window.innerWidth/2 - panX) / scale - 90 + (Math.random()*40-20);
         const worldY = (window.innerHeight/2 - panY) / scale - 50 + (Math.random()*40-20);
         const newNode = createNode(worldX, worldY, selection);
         nodes.push(newNode);
         
-        // Replace text with wiki link
         const replacement = `[[${selection}]]`;
         textarea.value = text.substring(0, start) + replacement + text.substring(end);
         
@@ -1245,7 +1212,6 @@
                     linkedTaskName = '<span style="color:#666">🔗 (Deleted Task)</span>';
                 }
             }
-            // Simple strip markdown for preview
             const plainText = note.body.replace(/[#*\[\]]/g, '');
             el.innerHTML = `<div class="note-card-title">${note.title || '(Untitled)'}</div><div class="note-card-preview">${plainText || '<i>No content</i>'}</div><div class="note-card-meta">${linkedTaskName}<span>${new Date(note.timestamp).toLocaleDateString()}</span></div>`;
             el.onclick = () => openNoteEditor(note.id);
@@ -1278,10 +1244,21 @@
         document.getElementById('note-title-input').value = note.title;
         document.getElementById('note-body-input').value = note.body;
         
-        // Default to edit mode
         setNoteMode('edit');
-        
         renderNotesList(); 
+    }
+
+    function toggleNotePopOut() {
+        const editor = document.getElementById('note-editor');
+        const btn = document.getElementById('btn-pop-out-note');
+        editor.classList.toggle('popped-out');
+        if (editor.classList.contains('popped-out')) {
+            btn.innerHTML = '🗗';
+            btn.title = "Return to side panel";
+        } else {
+            btn.innerHTML = '↗️';
+            btn.title = "Pop out editor";
+        }
     }
 
     function saveCurrentNote() {
@@ -1295,7 +1272,10 @@
     }
     
     function closeNoteEditor() {
-        document.getElementById('note-editor').classList.add('hidden');
+        const editor = document.getElementById('note-editor');
+        editor.classList.add('hidden');
+        editor.classList.remove('popped-out'); // Ensure it resets on close
+        document.getElementById('btn-pop-out-note').innerHTML = '↗️';
         currentEditingNoteId = null;
         renderNotesList();
         if(selectedNodeId) updateInspector();
@@ -1377,7 +1357,6 @@
         nodes.forEach(n => { const slack = n._latestFinish - n._earliestFinish; if (n.completed) { n._isCritical = false; n._isUrgent = false; } else { if (n._isManualUrgentPath) { n._isUrgent = true; n._isCritical = true; } else if (slack < 0) { n._isUrgent = true; n._isCritical = true; } else if (slack === 0) { n._isCritical = true; } } });
     }
     
-    // --- TIME TRACKING LOGIC ---
     function getTotalTime(node) {
         let total = node.timeLogs.reduce((acc, log) => acc + log.duration, 0);
         if (node.activeTimerStart) total += (Date.now() - node.activeTimerStart);
@@ -1400,7 +1379,6 @@
     function render() {
         const container = document.getElementById('nodes-layer'); const svg = document.getElementById('connections');
         container.innerHTML = ''; svg.innerHTML = '';
-        
         nodes.forEach(node => {
             node.dependencies.forEach(dep => {
                 const parent = nodes.find(n => n.id === dep.id); if (!parent) return; 
@@ -1418,10 +1396,7 @@
         
         nodes.forEach(node => {
             const el = document.createElement('div'); el.className = 'node'; el.style.left = node.x + 'px'; el.style.top = node.y + 'px'; el.dataset.id = node.id;
-            
-            // Selection Logic
             if (node.id === selectedNodeId || selectedIds.has(node.id)) el.classList.add('selected');
-            
             if (!node.completed) { if (node._isUrgent) el.classList.add('critical-urgent'); else if (node._isCritical) el.classList.add('critical'); if (node._isBlocked) el.classList.add('blocked'); }
             if (node.completed) el.classList.add('completed');
             let badgesHtml = '';
@@ -1443,9 +1418,7 @@
         const container = document.getElementById('graph-container');
         const selectionRect = document.getElementById('selection-rect');
         
-        // Add Global Key Listener for Shortcut
         document.addEventListener('keydown', (e) => {
-             // Ctrl + S (Mac/Windows safe non-overlap for Save Page)
              if (e.ctrlKey && e.key === 's') {
                  e.preventDefault();
                  pushToGist();
@@ -1455,8 +1428,6 @@
         document.addEventListener('mousedown', (e) => {
             const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
             if (!panel.classList.contains('hidden')) { if (!panel.contains(e.target) && !fab.contains(e.target)) toggleInbox(); }
-            
-            // Close sync panel on click out
             const sync = document.getElementById('sync-panel');
             const syncBtn = document.querySelector('button[onclick="toggleSyncPanel()"]');
             if (!sync.classList.contains('hidden') && !sync.contains(e.target) && e.target !== syncBtn) {
@@ -1465,10 +1436,8 @@
         });
         
         container.addEventListener('mousedown', (e) => {
-            // Check if clicking on background
             if (e.target === container || e.target.tagName === 'svg' || e.target.id === 'nodes-layer') {
                 if (e.shiftKey) {
-                    // Start Box Select
                     isBoxSelecting = true;
                     boxSelectStart = { x: e.clientX, y: e.clientY };
                     selectionRect.style.display = 'block';
@@ -1477,12 +1446,9 @@
                     selectionRect.style.width = '0px';
                     selectionRect.style.height = '0px';
                 } else {
-                    // Start Pan
                     isPanning = true; 
                     dragStartX = e.clientX - panX; 
                     dragStartY = e.clientY - panY;
-                    
-                    // Force close all panels if not pinned
                     closeAllSidePanels();
                 }
             } 
@@ -1497,12 +1463,10 @@
             if (isBoxSelecting) {
                 const currentX = e.clientX;
                 const currentY = e.clientY;
-                
                 const left = Math.min(boxSelectStart.x, currentX);
                 const top = Math.min(boxSelectStart.y, currentY);
                 const width = Math.abs(currentX - boxSelectStart.x);
                 const height = Math.abs(currentY - boxSelectStart.y);
-                
                 selectionRect.style.left = left + 'px';
                 selectionRect.style.top = top + 'px';
                 selectionRect.style.width = width + 'px';
@@ -1511,45 +1475,26 @@
             if (isDragging) {
                 const currentX = (e.clientX - panX) / scale;
                 const currentY = (e.clientY - panY) / scale;
-                
-                // Calculate Delta
                 const dx = currentX - dragStartX;
                 const dy = currentY - dragStartY;
-                
-                // Move ALL selected nodes
                 if (selectedIds.size > 0) {
                     selectedIds.forEach(id => {
                         const node = nodes.find(n => n.id === id);
-                        if (node) {
-                            node.x += dx;
-                            node.y += dy;
-                        }
+                        if (node) { node.x += dx; node.y += dy; }
                     });
                 } else if (draggedNodeId) {
-                    // Fallback for single drag (should be covered by selectedIds, but safe to keep)
                       const node = nodes.find(n => n.id === draggedNodeId);
-                      if(node) {
-                          node.x += dx;
-                          node.y += dy;
-                      }
+                      if(node) { node.x += dx; node.y += dy; }
                 }
-                
-                // Update start for next frame (relative movement)
                 dragStartX = currentX;
                 dragStartY = currentY;
-                
                 render();
             }
         });
 
         window.addEventListener('mouseup', (e) => { 
-            if (isDragging) { 
-                isDragging = false; 
-                draggedNodeId = null; 
-                saveToStorage(); 
-            } 
+            if (isDragging) { isDragging = false; draggedNodeId = null; saveToStorage(); } 
             isPanning = false; 
-            
             if (isBoxSelecting) {
                 isBoxSelecting = false;
                 selectionRect.style.display = 'none';
@@ -1560,12 +1505,10 @@
         container.addEventListener('wheel', (e) => { e.preventDefault(); if (e.ctrlKey) { const zoomFactor = 0.002; const delta = -e.deltaY; scale = Math.min(Math.max(0.2, scale + (delta * zoomFactor * scale)), 3); } else { panX -= e.deltaX; panY -= e.deltaY; } updateTransform(); }, {passive: false});
         container.addEventListener('contextmenu', e => e.preventDefault());
         
-        // --- MOBILE TOUCH EVENTS (FIXED) ---
         container.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) { 
                 const touch = e.touches[0];
                 const nodeEl = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.node');
-                
                 if (nodeEl) { 
                     const id = nodeEl.dataset.id;
                     if (selectedNodeId !== id) selectNode(id);
@@ -1578,7 +1521,6 @@
                     isPanning = true; 
                     dragStartX = touch.clientX - panX; 
                     dragStartY = touch.clientY - panY; 
-                    // Explicitly close all panels on background tap
                     closeAllSidePanels();
                 } 
             } else if (e.touches.length === 2) { 
@@ -1592,9 +1534,7 @@
         }, {passive: false});
 
         container.addEventListener('touchmove', (e) => { 
-            // Prevent default to stop scrolling/refreshing on mobile
             if(e.cancelable) e.preventDefault(); 
-            
             if (e.touches.length === 1) { 
                 const touch = e.touches[0]; 
                 if (isDragging && draggedNodeId) { 
@@ -1631,48 +1571,36 @@
     }
 
     function closeAllSidePanels() {
-        // Force Close Menu if open
         const tb = document.getElementById('toolbar');
         if (!tb.classList.contains('collapsed')) toggleMenu();
-
-        // Check for pinned notes
         const notePanel = document.getElementById('notes-panel');
         if (!notePanel.classList.contains('pinned')) {
             notePanel.classList.add('hidden');
         }
-
         document.getElementById('goals-panel').classList.add('hidden');
         document.getElementById('archive-panel').classList.add('hidden');
-        deselectNode(); // Closes inspector
+        deselectNode();
     }
 
     function finishBoxSelection(endX, endY) {
-        // Calculate box in screen coords
         const rectLeft = Math.min(boxSelectStart.x, endX);
         const rectTop = Math.min(boxSelectStart.y, endY);
         const rectRight = Math.max(boxSelectStart.x, endX);
         const rectBottom = Math.max(boxSelectStart.y, endY);
-        
         selectedIds.clear();
-        
         nodes.forEach(node => {
-            // Project node world coords to screen coords
             const screenX = (node.x * scale) + panX;
             const screenY = (node.y * scale) + panY;
-            const width = 180 * scale; // Approx node width
-            const height = 100 * scale; // Approx node height
-            
-            // Simple bounding box intersection
+            const width = 180 * scale;
+            const height = 100 * scale;
             if (screenX + width > rectLeft && screenX < rectRight &&
                 screenY + height > rectTop && screenY < rectBottom) {
                 selectedIds.add(node.id);
             }
         });
-        
         if (selectedIds.size === 1) {
             selectNode(selectedIds.values().next().value);
         } else if (selectedIds.size > 1) {
-            // Hide inspector for multi-selection
             selectedNodeId = null;
             document.getElementById('inspector').classList.add('hidden');
             render();
@@ -1683,37 +1611,25 @@
 
     function startNodeDrag(e, id) { 
         e.stopPropagation(); 
-        
         if (e.shiftKey) {
-            // Multi-select toggle logic
             if (selectedIds.has(id)) {
                 selectedIds.delete(id);
-                if(selectedNodeId === id) selectedNodeId = null; // Hide inspector if primary deselected
+                if(selectedNodeId === id) selectedNodeId = null;
             } else {
                 selectedIds.add(id);
-                // If it's the only one, show inspector
                 if(selectedIds.size === 1) selectNode(id);
             }
         } else {
-            // Normal click logic
             if (!selectedIds.has(id)) {
-                // If clicking a node NOT in the group, reset group to just this node
                 selectedIds.clear();
                 selectedIds.add(id);
                 selectNode(id);
             }
-            // If clicking a node IN the group, do NOT clear (allows dragging the group)
         }
-        
-        // Prepare drag
         isDragging = true; 
         draggedNodeId = id; 
-        
-        // Record world coordinates start
         dragStartX = (e.clientX - panX) / scale;
         dragStartY = (e.clientY - panY) / scale;
-        
-        // Update UI
         if (selectedIds.size > 1) {
             document.getElementById('inspector').classList.add('hidden');
             render();
@@ -1731,19 +1647,14 @@
     // --- NODE MANAGEMENT ---
     function addNode() { const worldX = (window.innerWidth/2 - panX) / scale - 90 + (Math.random()*40-20); const worldY = (window.innerHeight/2 - panY) / scale - 50 + (Math.random()*40-20); const n = createNode(worldX, worldY); nodes.push(n); selectNode(n.id); updateCalculations(); render(); saveToStorage(); }
     
-    // Updated Select Node to search in archive too
     function selectNode(id) { 
         selectedNodeId = id; 
-        selectedIds.clear(); // Ensure sync
+        selectedIds.clear(); 
         selectedIds.add(id);
-        
-        // Close other side panels when opening a node details IF NOT PINNED
         document.getElementById('goals-panel').classList.add('hidden');
         document.getElementById('archive-panel').classList.add('hidden');
-        
         const notePanel = document.getElementById('notes-panel');
         if(!notePanel.classList.contains('pinned')) notePanel.classList.add('hidden');
-        
         document.getElementById('inspector').classList.remove('hidden'); 
         render(); 
         if(document.getElementById('archive-panel').classList.contains('hidden') === false) renderArchiveList();
@@ -1761,19 +1672,13 @@
     // --- INSPECTOR Logic ---
     function updateInspector() {
         const panel = document.getElementById('insp-content'); if (!selectedNodeId) return;
-        // Search in active OR archived
         let node = nodes.find(n => n.id === selectedNodeId);
         let isArchived = false;
-        if (!node) {
-            node = archivedNodes.find(n => n.id === selectedNodeId);
-            isArchived = true;
-        }
+        if (!node) { node = archivedNodes.find(n => n.id === selectedNodeId); isArchived = true; }
         if (!node) return;
         
         const isRunning = !!node.activeTimerStart;
         const linkedNotes = notes.filter(n => n.taskId === node.id);
-        
-        // Detect links in title
         const titleLink = extractLink(node.title);
 
         panel.innerHTML = `
@@ -1782,8 +1687,8 @@
             <div class="form-group" style="display:flex; gap:10px"><div style="flex:1"><label>Duration (Est. Days)</label><input type="number" value="${node.duration}" min="1" onchange="updateNodeField('duration', parseInt(this.value))"></div><div style="flex:1"><label>Status</label><button class="btn ${node.completed ? 'btn-primary' : ''}" style="width:100%" onclick="toggleCompletion()">${node.completed ? 'Completed' : 'Active'}</button></div></div>
             <div class="form-group" style="display:flex; align-items:center; gap:5px; margin-bottom: 10px;"><input type="checkbox" id="sync-toggle" ${node.syncDurationDate ? 'checked' : ''} onchange="updateNodeField('syncDurationDate', this.checked)" style="width:auto;"><label for="sync-toggle" style="margin:0; cursor:pointer; font-size:12px; color:var(--text-muted)">Link Duration & Due Date</label></div>
             <div class="form-group"><label>Due Date (Optional)</label><input type="date" value="${node.dueDate || ''}" onchange="updateNodeField('dueDate', this.value)"></div>
-            <div class="form-group"><button class="btn btn-urgent ${node.isManualUrgent ? 'active' : ''}" style="width:100%" onclick="toggleUrgency()">${node.isManualUrgent ? '🔥 Marked as Urgent' : '🔥 Mark as Urgent'}</button><div style="font-size:10px; color:var(--text-muted); margin-top:4px;">Marks this task and all following steps as high priority.</div></div>
-            <div class="form-group"><label>Dependencies (Prerequisites)</label><div id="dep-list">${node.dependencies.map(d => { const parent = nodes.find(n => n.id === d.id) || archivedNodes.find(n => n.id === d.id); return `<div class="dep-item"><span>${parent ? parent.title : 'Unknown/Archived'}</span><div class="dep-controls"><span class="toggle-soft ${d.type === 'soft' ? 'active' : ''}" onclick="toggleDepType('${d.id}')" title="Toggle Soft/Hard">${d.type === 'soft' ? 'Soft' : 'Hard'}</span><span style="cursor:pointer; color:#ef4444" onclick="removeDependency('${d.id}')">✕</span></div></div>`; }).join('')}</div><select id="add-dep-select" onchange="addDependency(this.value)" style="margin-top:5px"><option value="">+ Add Dependency...</option>${nodes.filter(n => n.id !== node.id && !node.dependencies.some(d => d.id === n.id)).map(n => `<option value="${n.id}">${n.title}</option>`).join('')}</select></div>
+            <div class="form-group"><button class="btn btn-urgent ${node.isManualUrgent ? 'active' : ''}" style="width:100%" onclick="toggleUrgency()">${node.isManualUrgent ? '🔥 Marked as Urgent' : '🔥 Mark as Urgent'}</button></div>
+            <div class="form-group"><label>Dependencies</label><div id="dep-list">${node.dependencies.map(d => { const parent = nodes.find(n => n.id === d.id) || archivedNodes.find(n => n.id === d.id); return `<div class="dep-item"><span>${parent ? parent.title : 'Unknown'}</span><div class="dep-controls"><span class="toggle-soft ${d.type === 'soft' ? 'active' : ''}" onclick="toggleDepType('${d.id}')">${d.type === 'soft' ? 'Soft' : 'Hard'}</span><span style="cursor:pointer; color:#ef4444" onclick="removeDependency('${d.id}')">✕</span></div></div>`; }).join('')}</div><select id="add-dep-select" onchange="addDependency(this.value)" style="margin-top:5px"><option value="">+ Add Dependency...</option>${nodes.filter(n => n.id !== node.id && !node.dependencies.some(d => d.id === n.id)).map(n => `<option value="${n.id}">${n.title}</option>`).join('')}</select></div>
             <div class="form-group"><label>Subtasks</label><div id="subtask-list">${node.subtasks.map((st, idx) => {
                 const subLink = extractLink(st.text);
                 return `<div class="subtask-item"><input type="checkbox" ${st.done ? 'checked' : ''} onchange="toggleSubtask(${idx})"><input type="text" value="${st.text}" onchange="updateSubtaskText(${idx}, this.value)" style="border:none; background:transparent; width:100%; color: inherit">${subLink ? `<a href="${subLink}" target="_blank" style="text-decoration:none; margin-right:5px; font-size:12px;">🔗</a>` : ''}<span onclick="removeSubtask(${idx})" style="cursor:pointer; color:#666">✕</span></div>`;
@@ -1796,7 +1701,6 @@
                     ${linkedNotes.map(note => `
                         <div class="note-card" style="padding:6px; margin-bottom:4px;" onclick="openNoteEditor('${note.id}')">
                             <div class="note-card-title" style="font-size:12px;">${note.title || '(Untitled)'}</div>
-                            <div class="note-card-preview" style="font-size:10px;">${note.body.replace(/[#*]/g, '').substring(0, 30)}...</div>
                         </div>
                     `).join('')}
                 </div>
@@ -1805,7 +1709,7 @@
 
             <hr style="border-color:#333; margin: 20px 0;">
             <div style="display:flex; gap:10px; margin-bottom: 20px;"><button class="btn" style="flex:1; border-color:var(--accent); color:var(--accent);" onclick="demoteToInbox()">⬇ Move to Inbox</button><button class="btn btn-danger" style="flex:1" onclick="deleteSelectedNode()">Delete</button></div>
-            <div class="form-group" style="border: 1px solid #333; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.2);"><label>Time Tracking</label><button class="btn-timer ${isRunning ? 'running' : ''}" onclick="toggleTimer()"><span id="timer-btn-text">${isRunning ? 'Stop Timer' : 'Start Timer'}</span></button><div style="margin-top:5px; font-size:11px; color:#aaa; display:flex; justify-content:space-between"><span>Total Tracked:</span><span style="color:#fff; font-weight:bold">${formatTime(getTotalTime(node))}</span></div>${node.timeLogs.length > 0 ? `<div style="margin-top:5px;"><label style="font-size:10px;">History</label><div class="log-container">${node.timeLogs.slice().reverse().map(log => `<div class="log-item"><span>${new Date(log.start).toLocaleDateString()}</span><span>${formatTime(log.duration)}</span></div>`).join('')}</div></div>` : ''}</div>
+            <div class="form-group" style="border: 1px solid #333; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.2);"><label>Time Tracking</label><button class="btn-timer ${isRunning ? 'running' : ''}" onclick="toggleTimer()"><span id="timer-btn-text">${isRunning ? 'Stop Timer' : 'Start Timer'}</span></button></div>
         `;
     }
 
@@ -1826,27 +1730,17 @@
     function toggleCompletion() {
         let node = nodes.find(n => n.id === selectedNodeId);
         let inArchive = false;
-        
-        if (!node) {
-            node = archivedNodes.find(n => n.id === selectedNodeId);
-            inArchive = true;
-        }
-
+        if (!node) { node = archivedNodes.find(n => n.id === selectedNodeId); inArchive = true; }
         if (node) {
             node.completed = !node.completed;
-            
-            if (node.completed) {
-                node.completedDate = Date.now();
-            } else {
+            if (node.completed) { node.completedDate = Date.now(); } else {
                 node.completedDate = null;
-                // RESTORE FROM ARCHIVE
                 if(inArchive) {
                     archivedNodes = archivedNodes.filter(n => n.id !== node.id);
                     nodes.push(node);
                     renderArchiveList();
                 }
             }
-            
             updateCalculations();
             render();
             updateInspector(); 
@@ -1854,7 +1748,6 @@
         }
     }
     
-    // Generic wrappers that handle active nodes only (usually) - dependencies generally need active nodes to visualize properly
     function toggleUrgency() { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.isManualUrgent = !node.isManualUrgent; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
     function addDependency(parentId) { if (!parentId) return; const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies.push({ id: parentId, type: 'hard' }); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
     function removeDependency(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies = node.dependencies.filter(d => d.id !== parentId); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
@@ -1867,13 +1760,9 @@
     function deleteSelectedNode() { 
         if (!selectedNodeId) return; 
         if (!confirm('Delete this task completely?')) return; 
-        
         nodes = nodes.filter(n => n.id !== selectedNodeId); 
         archivedNodes = archivedNodes.filter(n => n.id !== selectedNodeId);
-        
-        // Clean deps
         nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); });
-        
         deselectNode(); 
         updateCalculations(); 
         render(); 
@@ -1887,7 +1776,6 @@
         const container = document.getElementById('heatmap-container'); document.getElementById('heatmap-title').textContent = `${currentHeatmapYear} Heatmap`; container.innerHTML = '';
         const year = currentHeatmapYear; const months = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" ];
         const counts = {}; 
-        // Heatmap includes BOTH active and archived tasks
         [...nodes, ...archivedNodes].forEach(n => { if (n.dueDate) { counts[n.dueDate] = (counts[n.dueDate] || 0) + 1; } });
         months.forEach((mName, mIdx) => {
             const monthDiv = document.createElement('div'); monthDiv.className = 'heatmap-month-container';
@@ -1928,27 +1816,19 @@
                     githubToken = parsed.githubToken || '';
                     gistId = parsed.gistId || '';
                 }
-                
                 const sanitize = (list) => {
                     list.forEach(n => {
                         if (!n.dependencies) n.dependencies = []; if (n.parentIds) { n.dependencies = n.parentIds.map(pid => ({id: pid, type: 'hard'})); delete n.parentIds; }
                         if (!n.subtasks) n.subtasks = []; if (!n.dueDate) n.dueDate = ''; if (n.syncDurationDate === undefined) n.syncDurationDate = true; 
                         if (n.isManualUrgent === undefined) n.isManualUrgent = false; if (n.timeLogs === undefined) n.timeLogs = []; if (n.activeTimerStart === undefined) n.activeTimerStart = null; 
-                        if (n.completedDate === undefined) {
-                            if (n.completed) n.completedDate = Date.now();
-                            else n.completedDate = null;
-                        }
+                        if (n.completedDate === undefined) { if (n.completed) n.completedDate = Date.now(); else n.completedDate = null; }
                     });
                 };
-                
-                sanitize(nodes);
-                sanitize(archivedNodes);
-                
+                sanitize(nodes); sanitize(archivedNodes);
             } catch (e) { console.error("Save data corrupted", e); }
         }
     }
     
-    // --- GENERIC INBOX/ETC LOGIC (Unchanged but ensuring functions exist) ---
     function toggleInbox() { const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) { panel.classList.remove('hidden'); setTimeout(() => document.getElementById('inbox-input').focus(), 100); } else { panel.classList.add('hidden'); } }
     function renderInbox() {
         const list = document.getElementById('inbox-list'); list.innerHTML = '';
@@ -1966,20 +1846,13 @@
         const worldX = (window.innerWidth/2 - panX) / scale - 90; 
         const worldY = (window.innerHeight/2 - panY) / scale - 50; 
         const newNode = createNode(worldX, worldY, item.title); 
-        inbox.splice(index, 1); 
-        nodes.push(newNode); 
-        renderInbox(); 
-        updateCalculations(); 
-        render(); 
-        selectNode(newNode.id); 
-        saveToStorage(); 
-        
-        // Fix for mobile: Close inbox to prevent overlap confusion
+        inbox.splice(index, 1); nodes.push(newNode); 
+        renderInbox(); updateCalculations(); render(); selectNode(newNode.id); saveToStorage(); 
         const inboxPanel = document.getElementById('inbox-panel');
         if (!inboxPanel.classList.contains('hidden')) inboxPanel.classList.add('hidden');
     }
     function promoteInboxToGoal(index) { const item = inbox[index]; if(!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(item.title)); inbox.splice(index, 1); renderInbox(); renderGoals(); const panel = document.getElementById('goals-panel'); if(panel.classList.contains('hidden')) panel.classList.remove('hidden'); saveToStorage(); }
-    function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); const n = document.getElementById('notification'); n.innerText = "Moved to Inbox"; n.style.opacity = '1'; setTimeout(() => n.style.opacity = '0', 1500); }
+    function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); }
     function saveData(download = false) { const data = JSON.stringify({nodes, archivedNodes, inbox, lifeGoals, notes}, null, 2); if (download) { const blob = new Blob([data], {type: 'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
     function loadFile(input) {
         const file = input.files[0]; if (!file) return;
@@ -1989,15 +1862,12 @@
                 const parsed = JSON.parse(e.target.result);
                 if (Array.isArray(parsed)) { nodes = parsed; inbox = []; lifeGoals = {}; notes = []; archivedNodes = []; } 
                 else { nodes = parsed.nodes || []; inbox = parsed.inbox || []; lifeGoals = parsed.lifeGoals || {}; notes = parsed.notes || []; archivedNodes = parsed.archivedNodes || []; }
-                nodes.forEach(n => { if(!n.dependencies) n.dependencies = []; if(!n.subtasks) n.subtasks = []; if(!n.dueDate) n.dueDate = ''; if (n.syncDurationDate === undefined) n.syncDurationDate = true; if (n.isManualUrgent === undefined) n.isManualUrgent = false; if (n.timeLogs === undefined) n.timeLogs = []; if (n.activeTimerStart === undefined) n.activeTimerStart = null; if (n.completedDate === undefined) { if (n.completed) n.completedDate = Date.now(); else n.completedDate = null; } });
-                archivedNodes.forEach(n => { if(!n.dependencies) n.dependencies = []; if(!n.subtasks) n.subtasks = []; });
                 updateCalculations(); render(); renderInbox(); renderGoals(); saveToStorage(); alert("File loaded successfully!");
             } catch (err) { alert("Error parsing JSON"); }
         }; reader.readAsText(file);
     }
-    function clearData() { if(confirm("Are you sure you want to clear all tasks? This cannot be undone.")) { nodes = []; archivedNodes = []; inbox = []; lifeGoals = {}; notes = []; localStorage.removeItem('urgencyFlowData'); render(); renderInbox(); renderGoals(); deselectNode(); } }
+    function clearData() { if(confirm("Are you sure you want to clear all tasks?")) { nodes = []; archivedNodes = []; inbox = []; lifeGoals = {}; notes = []; localStorage.removeItem('urgencyFlowData'); render(); renderInbox(); renderGoals(); deselectNode(); } }
     
-    // Updated to accept custom message
     function showNotification(msg) { 
         const n = document.getElementById('notification'); 
         n.innerText = msg || "State Saved"; 
@@ -2006,17 +1876,15 @@
         if(!msg) document.getElementById('status-indicator').innerText = "Saved " + new Date().toLocaleTimeString(); 
     }
     
-    // --- TIMERS ---
     function tickTimers() {
         nodes.forEach(node => {
             if (node.activeTimerStart) {
                 const badge = document.querySelector(`.time-badge[data-node-id="${node.id}"]`);
-                if (badge) { badge.innerHTML = `🔴 ${formatTime(getTotalTime(node))}`; badge.classList.add('active'); }
+                if (badge) { badge.innerHTML = `🔴 ${formatTime(getTotalTime(node))}`; }
                 if (selectedNodeId === node.id) { const btnText = document.getElementById('timer-btn-text'); if (btnText) btnText.innerText = `Stop Timer (${formatTime(Date.now() - node.activeTimerStart)})`; }
             }
         });
     }
-
 </script>
 </body>
 </html>
