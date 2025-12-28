@@ -27,6 +27,9 @@
             --ready-color: #10b981;   /* Green */
             --blocked-color: #ef4444; /* Red */
             --soft-dep-color: #888;
+
+            /* AI Colors */
+            --ai-accent: #8b5cf6;
         }
 
         * { box-sizing: border-box; }
@@ -261,37 +264,11 @@
         }
         #note-preview-pane.hidden { display: none; }
         
-        /* Markdown Elements */
-        #note-preview-pane h1, #note-preview-pane h2, #note-preview-pane h3 { color: #fff; margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 5px; }
-        #note-preview-pane h1 { font-size: 1.4em; }
-        #note-preview-pane h2 { font-size: 1.2em; }
-        #note-preview-pane h3 { font-size: 1.1em; color: var(--accent); }
-        #note-preview-pane ul, #note-preview-pane ol { padding-left: 20px; margin: 5px 0; }
-        #note-preview-pane blockquote { border-left: 3px solid var(--accent); margin: 0; padding-left: 10px; color: #888; font-style: italic; }
-        #note-preview-pane code { background: #333; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em; }
-        #note-preview-pane pre { background: #252525; padding: 10px; border-radius: 4px; overflow-x: auto; }
-        
-        .wiki-link { color: var(--accent); text-decoration: underline; cursor: pointer; padding: 0 2px; border-radius: 2px; transition: background 0.2s; }
-        .wiki-link:hover { background: rgba(59, 130, 246, 0.2); color: #fff; }
-        .chk-list-item { list-style: none; margin-left: -20px; display: flex; align-items: center; gap: 8px; }
-        .chk-box { cursor: default; }
-
-        /* --- ARCHIVE STYLES --- */
-        .archive-item {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid #333;
-            border-radius: 6px;
-            padding: 10px;
-            margin-bottom: 8px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .archive-item:hover { background: rgba(255, 255, 255, 0.08); }
-        .archive-item.selected { border-color: var(--accent); background: #2a2a2a; }
-        .archive-info { font-size: 13px; color: #aaa; }
-        .archive-date { font-size: 10px; color: #666; display: block; margin-top: 3px; }
+        /* AI CHAT STYLES */
+        .ai-msg { padding: 10px; border-radius: 8px; max-width: 85%; font-size: 13px; word-break: break-word; line-height: 1.5; }
+        .ai-msg.user { background: var(--ai-accent); color: white; align-self: flex-end; }
+        .ai-msg.bot { background: #2d2d2d; border: 1px solid #444; color: #eee; align-self: flex-start; }
+        .ai-msg pre { background: #111; padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 11px; }
 
         /* --- GOALS PANEL --- */
         #goals-panel {
@@ -466,6 +443,7 @@
         <button id="menu-btn" onclick="toggleMenu()">☰</button>
         <div id="toolbar-content">
             <button class="btn btn-primary" onclick="addNode()">+ New Task</button>
+            <button class="btn" style="border-color: var(--ai-accent); color: var(--ai-accent);" onclick="toggleAIPanel()">✨ AI Assistant</button>
             <button class="btn" onclick="toggleGoals()">🎯 Life Goals</button>
             <button class="btn" onclick="toggleNotesPanel()">📝 Notes</button>
             <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive</button>
@@ -515,6 +493,22 @@
             <button class="btn btn-primary" style="flex:1" onclick="pushToGist()">⬆ Push</button>
         </div>
         <div id="sync-status" class="sync-status"></div>
+    </div>
+
+    <!-- AI Assistant Panel (Right) -->
+    <div id="ai-panel" class="hidden side-panel">
+        <div class="panel-header-row">
+            <span>✨ AI Project Assistant</span>
+            <button class="btn" onclick="toggleAIPanel()">✕</button>
+        </div>
+        <div id="ai-chat-history" class="panel-list" style="padding: 15px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
+            <div class="ai-msg bot">Hello! I can analyze your tasks, notes, and life goals to provide strategic insights. Ask me about your project health, timeline, or alignment with your goals.</div>
+        </div>
+        <div id="ai-loading" class="hidden" style="padding: 0 15px 10px; color: var(--ai-accent); font-size: 11px;">Gemini is thinking...</div>
+        <div style="padding: 10px; border-top: 1px solid #333; display: flex; gap: 5px;">
+            <input type="text" id="ai-input" placeholder="Analyze my current risks..." onkeypress="if(event.key==='Enter') askAI()">
+            <button class="btn btn-primary" style="background: var(--ai-accent); border-color: var(--ai-accent);" onclick="askAI()">Ask</button>
+        </div>
     </div>
 
     <!-- Life Goals Panel (Left) -->
@@ -653,6 +647,8 @@
     <div id="notification">State Saved</div>
 
 <script>
+    const apiKey = "AIzaSyDE3pSSwp7vxxWK3UEcA4xi3HB9wKiHr2Y"; // Environment handles this
+
     // --- UTILITIES FOR LINKS ---
     function linkify(text) {
         if (!text) return '';
@@ -863,6 +859,98 @@
         }
     }
 
+    // --- GEMINI AI INTEGRATION ---
+    function toggleAIPanel() {
+        const panel = document.getElementById('ai-panel');
+        if(panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            document.getElementById('notes-panel').classList.add('hidden');
+            document.getElementById('archive-panel').classList.add('hidden');
+            document.getElementById('goals-panel').classList.add('hidden');
+        } else {
+            panel.classList.add('hidden');
+        }
+    }
+
+    async function fetchGemini(payload, retries = 5, delay = 1000) {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) return await response.json();
+            } catch (e) {}
+            await new Promise(r => setTimeout(r, delay));
+            delay *= 2;
+        }
+        throw new Error("Failed to reach Gemini after retries.");
+    }
+
+    function addAIChatMessage(text, role) {
+        const history = document.getElementById('ai-chat-history');
+        const msg = document.createElement('div');
+        msg.className = `ai-msg ${role}`;
+        
+        // Simple markdown parsing for chat
+        let parsed = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        parsed = parsed.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+        parsed = parsed.replace(/\*(.*?)\*/g, "<i>$1</i>");
+        parsed = parsed.replace(/\n/g, "<br>");
+        
+        msg.innerHTML = parsed;
+        history.appendChild(msg);
+        history.scrollTop = history.scrollHeight;
+    }
+
+    async function askAI() {
+        const input = document.getElementById('ai-input');
+        const query = input.value.trim();
+        if (!query) return;
+
+        addAIChatMessage(query, 'user');
+        input.value = '';
+        document.getElementById('ai-loading').classList.remove('hidden');
+
+        // Build context from app state
+        const appState = {
+            activeTasks: nodes.map(n => ({ 
+                title: n.title, 
+                due: n.dueDate, 
+                urgent: n.isManualUrgent, 
+                completed: n.completed,
+                progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : 'N/A'
+            })),
+            notes: notes.map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 150) })),
+            goals: lifeGoals[currentGoalYear] || []
+        };
+
+        const systemPrompt = `
+            You are a strategic Project Management Assistant. 
+            The user is using a tool called "Urgency Flow" to manage tasks via a dependency graph.
+            Current Data: ${JSON.stringify(appState)}
+            
+            Goal: Analyze this data to answer questions, identify bottlenecks, or suggest strategy. 
+            Be concise. Use bolding for emphasis. If suggesting a task, suggest its name.
+        `;
+
+        const payload = {
+            contents: [{ parts: [{ text: query }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] }
+        };
+
+        try {
+            const result = await fetchGemini(payload);
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "I couldn't generate a response.";
+            addAIChatMessage(text, 'bot');
+        } catch (e) {
+            addAIChatMessage("Error: Could not connect to AI service. Please check your internet or try again later.", 'bot');
+        } finally {
+            document.getElementById('ai-loading').classList.add('hidden');
+        }
+    }
+
     // --- DATA STRUCTURE ---
     function createNode(x, y, title = 'New Task') {
         return {
@@ -956,8 +1044,8 @@
         const panel = document.getElementById('archive-panel');
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
-            const notePanel = document.getElementById('notes-panel');
-            if(!notePanel.classList.contains('pinned')) notePanel.classList.add('hidden');
+            document.getElementById('notes-panel').classList.add('hidden');
+            document.getElementById('ai-panel').classList.add('hidden');
             renderArchiveList();
         } else {
             panel.classList.add('hidden');
@@ -992,6 +1080,7 @@
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
             document.getElementById('archive-panel').classList.add('hidden'); 
+            document.getElementById('ai-panel').classList.add('hidden');
             renderNotesList();
         } else {
             panel.classList.add('hidden');
@@ -1074,10 +1163,6 @@
             panY = screenCenterY - nodeCenterY;
             updateTransform();
         } else {
-            const n = document.getElementById('notification');
-            n.innerText = "Viewing Archived Task";
-            n.style.opacity = '1';
-            setTimeout(() => n.style.opacity = '0', 1500);
             const archPanel = document.getElementById('archive-panel');
             if(archPanel.classList.contains('hidden')) toggleArchivePanel();
         }
@@ -1274,7 +1359,7 @@
     function closeNoteEditor() {
         const editor = document.getElementById('note-editor');
         editor.classList.add('hidden');
-        editor.classList.remove('popped-out'); // Ensure it resets on close
+        editor.classList.remove('popped-out'); 
         document.getElementById('btn-pop-out-note').innerHTML = '↗️';
         currentEditingNoteId = null;
         renderNotesList();
@@ -1297,6 +1382,9 @@
         const panel = document.getElementById('goals-panel');
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
+            document.getElementById('archive-panel').classList.add('hidden');
+            document.getElementById('notes-panel').classList.add('hidden');
+            document.getElementById('ai-panel').classList.add('hidden');
             renderGoals();
         } else {
             panel.classList.add('hidden');
@@ -1402,7 +1490,7 @@
             let badgesHtml = '';
             if (!node.completed) { if (node._isUrgent) badgesHtml += `<span class="badge urgent-badge">URGENT</span>`; else if (node._isCritical) badgesHtml += `<span class="badge critical-badge">CP</span>`; if (node._downstreamWeight > 0) badgesHtml += `<span class="badge weight">⚡${node._downstreamWeight}</span>`; }
             const totalTime = getTotalTime(node); const isActive = !!node.activeTimerStart;
-            if (totalTime > 0 || isActive) { badgesHtml += `<span class="badge time-badge ${isActive?'active':''}" data-node-id="${node.id}">${isActive ? '🔴' : '⏱'} ${formatTime(totalTime)}</span>`; }
+            if (totalTime > 0 || isActive) { badgesHtml += `<span class="badge time-badge ${isActive?'active':''}" data-node-id="${node.id}">${isActive ? '🔴' : '⏱'} ${formatTime(getTotalTime(node))}</span>`; }
             if (node.dueDate && !node.completed) { const due = new Date(node.dueDate); const today = new Date(); today.setHours(0,0,0,0); const isOverdue = due < today; const dateStr = due.toLocaleDateString(undefined, {month:'short', day:'numeric'}); const style = isOverdue ? 'background:#ef4444; color:white; border-color:#ef4444' : ''; badgesHtml += `<span class="badge date-badge" style="${style}">📅 ${dateStr}</span>`; }
             let icon = ''; if (node.completed) icon = '✅'; else if (node._isBlocked) icon = '<span class="icon-lock">🔒</span>';
             const totalSubs = node.subtasks.length; const doneSubs = node.subtasks.filter(s => s.done).length; const progress = totalSubs === 0 ? 0 : (doneSubs / totalSubs) * 100;
@@ -1579,6 +1667,7 @@
         }
         document.getElementById('goals-panel').classList.add('hidden');
         document.getElementById('archive-panel').classList.add('hidden');
+        document.getElementById('ai-panel').classList.add('hidden');
         deselectNode();
     }
 
@@ -1637,7 +1726,7 @@
     }
 
     function getPinchDistance(e) { return Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
-    function getPinchCenter(e) { return { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 }; }
+    function getPinchCenter(e) { return { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientX) / 2 }; }
     function updateTransform() { document.getElementById('transform-layer').style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`; }
     function fitView() {
         let target = nodes.find(n => n.isManualUrgent && !n.completed); if (!target) target = nodes.find(n => n._isUrgent && !n.completed); if (!target) target = nodes.find(n => n._isCritical && !n.completed); if (!target) target = nodes.find(n => !n.completed); if (!target && nodes.length > 0) target = nodes[0];
@@ -1653,6 +1742,7 @@
         selectedIds.add(id);
         document.getElementById('goals-panel').classList.add('hidden');
         document.getElementById('archive-panel').classList.add('hidden');
+        document.getElementById('ai-panel').classList.add('hidden');
         const notePanel = document.getElementById('notes-panel');
         if(!notePanel.classList.contains('pinned')) notePanel.classList.add('hidden');
         document.getElementById('inspector').classList.remove('hidden'); 
