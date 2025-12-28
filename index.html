@@ -52,23 +52,63 @@
             position: absolute;
             top: 10px;
             left: 10px;
+            z-index: 100;
+            display: flex;
+            align-items: flex-start;
+            transition: all 0.3s ease;
+            pointer-events: none; /* Let clicks pass through the container gaps */
+        }
+
+        /* The toggle button is always clickable */
+        #menu-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 101;
+            flex-shrink: 0;
+            transition: transform 0.2s, background 0.2s;
+            pointer-events: auto; 
+        }
+        
+        #menu-btn:hover {
+            background: #2a2a2a;
+            transform: scale(1.05);
+        }
+
+        #toolbar-content {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
             background: var(--panel-bg);
             padding: 10px;
             border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            display: flex;
-            gap: 10px;
-            z-index: 100;
             border: 1px solid var(--border);
-            flex-wrap: wrap;
-            transition: transform 0.3s ease, opacity 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            margin-left: 10px; 
+            opacity: 1;
+            transform: translateX(0) scale(1);
+            transform-origin: top left;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: auto; /* Content is clickable */
+            max-width: calc(100vw - 70px);
         }
         
-        /* Auto-hide state */
-        #toolbar.hidden-bar {
-            transform: translateY(-150%);
+        #toolbar.collapsed #toolbar-content {
             opacity: 0;
+            transform: translateX(-20px) scale(0.9);
             pointer-events: none;
+            position: absolute;
+            left: 40px; /* Align near button */
+            visibility: hidden;
         }
 
         #inspector {
@@ -92,7 +132,7 @@
         
         /* --- RIGHT SIDE PANELS (Notes & Archive) --- */
         .side-panel {
-            width: 350px;
+            width: 380px;
             background: #1a1a1a; 
             border-left: 1px solid var(--border);
             display: flex;
@@ -110,6 +150,12 @@
             transform: translateX(100%);
         }
 
+        /* Pinning Support */
+        .side-panel.pinned {
+            border-left: 2px solid var(--accent);
+            box-shadow: -4px 0 15px rgba(59, 130, 246, 0.2);
+        }
+
         .panel-header-row {
             padding: 15px;
             border-bottom: 1px solid var(--border);
@@ -125,7 +171,7 @@
             padding: 10px;
         }
 
-        /* --- NOTES STYLES --- */
+        /* --- NOTES STYLES (ENHANCED) --- */
         .note-card {
             background: #2d2d2d;
             border: 1px solid #444;
@@ -142,7 +188,7 @@
         .note-card-meta { font-size: 10px; color: #666; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; }
         
         #note-editor {
-            height: 300px;
+            height: 400px;
             border-top: 1px solid var(--border);
             display: flex;
             flex-direction: column;
@@ -150,10 +196,57 @@
             transition: height 0.3s;
         }
         #note-editor.hidden { height: 0; overflow: hidden; border: none; }
-        .editor-toolbar { padding: 8px; display: flex; justify-content: space-between; background: #2a2a2a; }
-        #note-title-input { background: transparent; border: none; color: white; font-weight: bold; font-size: 14px; width: 100%; padding: 5px; }
-        #note-body-input { flex-grow: 1; background: #1a1a1a; border: none; color: #ddd; padding: 10px; resize: none; font-family: sans-serif; font-size: 13px; line-height: 1.5; }
+        #note-editor.fullscreen { height: 100%; position: absolute; top:0; bottom:0; left:0; right:0; z-index: 60; }
+
+        .editor-toolbar { padding: 8px; display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; border-bottom: 1px solid #333; flex-wrap: wrap; gap: 5px; }
+        .editor-tools-group { display: flex; gap: 2px; }
+        
+        .tool-btn {
+            background: transparent; border: 1px solid transparent; color: #aaa; cursor: pointer; padding: 4px 6px; border-radius: 3px; font-size: 14px;
+        }
+        .tool-btn:hover { background: #3a3a3a; color: #fff; }
+        .tool-btn.active { background: #3a3a3a; color: var(--accent); border-color: #444; }
+
+        #note-title-input { background: transparent; border: none; color: white; font-weight: bold; font-size: 14px; width: 100%; padding: 10px; border-bottom: 1px solid #333; }
+        
+        .editor-content-area {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+        }
+
+        #note-body-input { 
+            flex-grow: 1; width: 100%; height: 100%;
+            background: #1a1a1a; border: none; color: #ddd; padding: 10px; resize: none; 
+            font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; line-height: 1.5; 
+        }
         #note-body-input:focus { outline: none; }
+        #note-body-input.hidden { display: none; }
+
+        /* MARKDOWN PREVIEW STYLES */
+        #note-preview-pane {
+            flex-grow: 1; width: 100%; height: 100%;
+            background: #1a1a1a; color: #ccc; padding: 15px; 
+            overflow-y: auto; font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.6;
+        }
+        #note-preview-pane.hidden { display: none; }
+        
+        /* Markdown Elements */
+        #note-preview-pane h1, #note-preview-pane h2, #note-preview-pane h3 { color: #fff; margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        #note-preview-pane h1 { font-size: 1.4em; }
+        #note-preview-pane h2 { font-size: 1.2em; }
+        #note-preview-pane h3 { font-size: 1.1em; color: var(--accent); }
+        #note-preview-pane ul, #note-preview-pane ol { padding-left: 20px; margin: 5px 0; }
+        #note-preview-pane blockquote { border-left: 3px solid var(--accent); margin: 0; padding-left: 10px; color: #888; font-style: italic; }
+        #note-preview-pane code { background: #333; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em; }
+        #note-preview-pane pre { background: #252525; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        
+        /* Interactive Elements */
+        .wiki-link { color: var(--accent); text-decoration: underline; cursor: pointer; padding: 0 2px; border-radius: 2px; transition: background 0.2s; }
+        .wiki-link:hover { background: rgba(59, 130, 246, 0.2); color: #fff; }
+        .chk-list-item { list-style: none; margin-left: -20px; display: flex; align-items: center; gap: 8px; }
+        .chk-box { cursor: default; }
 
         /* --- ARCHIVE STYLES --- */
         .archive-item {
@@ -335,6 +428,8 @@
             /* Make toolbar buttons bigger for touch */
             .btn { padding: 8px 16px; font-size: 13px; margin-bottom: 5px; }
             #inbox-panel { width: 90%; bottom: 80px; right: 5%; }
+            #toolbar { flex-direction: column; gap: 10px; }
+            #toolbar-content { margin-left: 0; margin-top: 5px; flex-direction: column; align-items: stretch; }
         }
 
     </style>
@@ -342,21 +437,21 @@
 <body>
 
     <!-- Toolbar -->
-    <div id="toolbar">
-        <button class="btn btn-primary" onclick="addNode()">+ New Task</button>
-        <button class="btn" onclick="toggleGoals()">🎯 Life Goals</button>
-        <button class="btn" onclick="toggleNotesPanel()">📝 Notes</button>
-        <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive</button>
-        <button class="btn" onclick="fitView()">Recenter / Urgent</button>
-        <button class="btn" onclick="toggleHeatmap()">📅 Heatmap</button>
-        <button class="btn" style="border-color: var(--accent); color: var(--accent);" onclick="toggleSyncPanel()">☁️ Sync</button>
-        <button class="btn" onclick="saveData(true)">Save</button>
-        <button class="btn" onclick="document.getElementById('file-input').click()">Load</button>
-        <button class="btn btn-danger" onclick="clearData()">Reset</button>
-        <div style="border-left: 1px solid #444; margin: 0 5px;"></div>
-        <!-- Toggle Toolbar Mode Button -->
-        <button class="btn" id="toolbar-toggle-btn" onclick="toggleToolbarMode()">📌 Fixed</button>
-        <div id="status-indicator" style="font-size: 12px; color: #888; align-self: center;">Auto-saved</div>
+    <div id="toolbar" class="collapsed">
+        <button id="menu-btn" onclick="toggleMenu()">☰</button>
+        <div id="toolbar-content">
+            <button class="btn btn-primary" onclick="addNode()">+ New Task</button>
+            <button class="btn" onclick="toggleGoals()">🎯 Life Goals</button>
+            <button class="btn" onclick="toggleNotesPanel()">📝 Notes</button>
+            <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive</button>
+            <button class="btn" onclick="fitView()">Recenter / Urgent</button>
+            <button class="btn" onclick="toggleHeatmap()">📅 Heatmap</button>
+            <button class="btn" style="border-color: var(--accent); color: var(--accent);" onclick="toggleSyncPanel()">☁️ Sync</button>
+            <button class="btn" onclick="saveData(true)">Save</button>
+            <button class="btn" onclick="document.getElementById('file-input').click()">Load</button>
+            <button class="btn btn-danger" onclick="clearData()">Reset</button>
+            <div id="status-indicator" style="font-size: 11px; color: #888; align-self: center; margin-left:5px;">Auto-saved</div>
+        </div>
     </div>
 
     <!-- Hidden File Input -->
@@ -418,7 +513,10 @@
     <!-- Notes Panel (Right) -->
     <div id="notes-panel" class="hidden side-panel">
         <div class="panel-header-row">
-            <span>📝 Notes</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+                <span>📝 Notes</span>
+                <button class="tool-btn" id="pin-note-btn" onclick="togglePinNotePanel()" title="Pin Panel (Don't close on click)">📌</button>
+            </div>
             <button class="btn" onclick="toggleNotesPanel()">✕</button>
         </div>
         <div class="panel-list" id="notes-list-container">
@@ -427,13 +525,43 @@
         <div style="padding: 10px; border-top: 1px solid #333;">
             <button class="btn btn-primary" style="width:100%" onclick="createNewNote()">+ Create Independent Note</button>
         </div>
+        
+        <!-- Enhanced Note Editor -->
         <div id="note-editor" class="hidden">
             <div class="editor-toolbar">
-                <button class="btn btn-danger" onclick="deleteCurrentNote()">Delete</button>
-                <button class="btn" onclick="closeNoteEditor()">Done</button>
+                <div class="editor-tools-group">
+                    <button class="tool-btn active" id="btn-edit-mode" onclick="setNoteMode('edit')" title="Edit Mode">✏️</button>
+                    <button class="tool-btn" id="btn-view-mode" onclick="setNoteMode('view')" title="Preview Mode (Render Markdown)">👁️</button>
+                </div>
+                
+                <div class="editor-tools-group">
+                    <button class="tool-btn" onclick="insertTextAtCursor('**', '**')" title="Bold"><b>B</b></button>
+                    <button class="tool-btn" onclick="insertTextAtCursor('*', '*')" title="Italic"><i>I</i></button>
+                    <button class="tool-btn" onclick="insertTextAtCursor('- [ ] ')" title="Checklist">☑</button>
+                    <select id="template-select" onchange="insertTemplate(this.value)" style="width: auto; padding: 2px; height: 24px; font-size: 11px; background: #333; border:none; color:#ccc;">
+                        <option value="">Templates...</option>
+                        <option value="meeting">Meeting Minutes</option>
+                        <option value="bug">Bug Report</option>
+                        <option value="idea">Idea Scoping</option>
+                    </select>
+                </div>
+
+                <div class="editor-tools-group">
+                     <button class="tool-btn" style="color:var(--critical-path)" onclick="createTaskFromSelection()" title="Convert Selection to Linked Task">✨ Make Task</button>
+                </div>
+
+                <div class="editor-tools-group">
+                    <button class="tool-btn btn-danger" onclick="deleteCurrentNote()" title="Delete Note">🗑️</button>
+                    <button class="tool-btn" onclick="closeNoteEditor()" title="Close">✕</button>
+                </div>
             </div>
+            
             <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()">
-            <textarea id="note-body-input" placeholder="Type your note here..." oninput="saveCurrentNote()"></textarea>
+            
+            <div class="editor-content-area">
+                <textarea id="note-body-input" placeholder="Type your note here... Supports Markdown. Use [[Task Name]] to link to tasks." oninput="saveCurrentNote()"></textarea>
+                <div id="note-preview-pane" class="hidden"></div>
+            </div>
         </div>
     </div>
 
@@ -534,10 +662,6 @@
     let gistId = '';
     const GIST_FILENAME = 'urgency_flow_data.json';
     
-    // Toolbar State
-    let toolbarAutoHide = false;
-    let toolbarTimer = null;
-    
     // Auto-Archive Constant
     const ARCHIVE_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000; // 15 Days
     
@@ -581,41 +705,15 @@
     });
     
     // --- TOOLBAR LOGIC ---
-    function toggleToolbarMode() {
-        toolbarAutoHide = !toolbarAutoHide;
-        const btn = document.getElementById('toolbar-toggle-btn');
-        const toolbar = document.getElementById('toolbar');
-        
-        if (toolbarAutoHide) {
-            btn.innerHTML = "👻 Auto";
-            btn.style.color = "var(--accent)";
-            showToolbar(); // Ensure visible initially
-            // Start a timer immediately so it hides if not touched
-            resetToolbarTimer();
+    function toggleMenu() {
+        const tb = document.getElementById('toolbar');
+        const btn = document.getElementById('menu-btn');
+        tb.classList.toggle('collapsed');
+        if(tb.classList.contains('collapsed')) {
+            btn.innerHTML = '☰';
         } else {
-            btn.innerHTML = "📌 Fixed";
-            btn.style.color = "var(--text-main)";
-            if (toolbarTimer) clearTimeout(toolbarTimer);
-            toolbar.classList.remove('hidden-bar');
+            btn.innerHTML = '✕';
         }
-    }
-
-    function showToolbar() {
-        const toolbar = document.getElementById('toolbar');
-        toolbar.classList.remove('hidden-bar');
-        resetToolbarTimer();
-    }
-
-    function resetToolbarTimer() {
-        if (!toolbarAutoHide) return;
-        if (toolbarTimer) clearTimeout(toolbarTimer);
-        toolbarTimer = setTimeout(() => {
-            const toolbar = document.getElementById('toolbar');
-            // Don't hide if mouse is currently OVER the toolbar (Desktop only concept, but useful)
-            if (!toolbar.matches(':hover')) { 
-                toolbar.classList.add('hidden-bar');
-            }
-        }, 1000);
     }
     
     // --- GITHUB SYNC LOGIC ---
@@ -801,7 +899,7 @@
             }
         ];
         notes = [
-            createNoteObject("Project Ideas", "1. Better colors\n2. Mobile support", null)
+            createNoteObject("Project Ideas", "# My Project\n\n- [ ] Better colors\n- [ ] Mobile support\n\nSee [[Define Goal]] for more context.", null)
         ];
         saveToStorage();
     }
@@ -837,7 +935,9 @@
         const panel = document.getElementById('archive-panel');
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
-            document.getElementById('notes-panel').classList.add('hidden'); 
+            // Check if notes panel is pinned, if so, don't hide it
+            const notePanel = document.getElementById('notes-panel');
+            if(!notePanel.classList.contains('pinned')) notePanel.classList.add('hidden');
             renderArchiveList();
         } else {
             panel.classList.add('hidden');
@@ -871,10 +971,24 @@
         const panel = document.getElementById('notes-panel');
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
+            // Only hide archive if it's open, no pinned logic there usually
             document.getElementById('archive-panel').classList.add('hidden'); 
             renderNotesList();
         } else {
             panel.classList.add('hidden');
+        }
+    }
+
+    function togglePinNotePanel() {
+        const panel = document.getElementById('notes-panel');
+        const btn = document.getElementById('pin-note-btn');
+        panel.classList.toggle('pinned');
+        if(panel.classList.contains('pinned')) {
+            btn.style.opacity = '1';
+            btn.style.color = 'var(--accent)';
+        } else {
+            btn.style.opacity = '';
+            btn.style.color = '';
         }
     }
     
@@ -905,7 +1019,135 @@
             const archPanel = document.getElementById('archive-panel');
             if(archPanel.classList.contains('hidden')) toggleArchivePanel();
         }
-        document.getElementById('notes-panel').classList.add('hidden');
+    }
+
+    // MARKDOWN ENGINE
+    function renderMarkdown(text) {
+        if(!text) return '';
+        
+        // Escape HTML first
+        let html = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+        // Headers
+        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+        
+        // Bold / Italic
+        html = html.replace(/\*\*(.*?)\*\*/gim, '<b>$1</b>');
+        html = html.replace(/\*(.*?)\*/gim, '<i>$1</i>');
+        
+        // Checkboxes
+        html = html.replace(/^- \[ \] (.*$)/gim, '<li class="chk-list-item"><span class="chk-box">⬜</span> <span>$1</span></li>');
+        html = html.replace(/^- \[x\] (.*$)/gim, '<li class="chk-list-item"><span class="chk-box">✅</span> <span style="text-decoration:line-through; color:#666;">$1</span></li>');
+        
+        // Lists (Bullets that aren't checkboxes)
+        html = html.replace(/^- (?!\[)(.*$)/gim, '<ul><li>$1</li></ul>');
+        
+        // Fix UL clustering (simple regex replace leaves multiple ULs)
+        // A proper parser is cleaner, but for single file regex:
+        html = html.replace(/<\/ul>\n<ul>/g, ''); 
+        
+        // Wiki Links [[Task Name]]
+        html = html.replace(/\[\[(.*?)\]\]/g, (match, title) => {
+            // Find task by title (fuzzy-ish)
+            const target = nodes.find(n => n.title.toLowerCase() === title.toLowerCase()) || 
+                           archivedNodes.find(n => n.title.toLowerCase() === title.toLowerCase());
+            if(target) {
+                return `<span class="wiki-link" onclick="jumpToTask('${target.id}')">${title}</span>`;
+            } else {
+                return `<span style="color:#666; font-style:italic;">${title} (missing)</span>`;
+            }
+        });
+        
+        // New lines to BR
+        html = html.replace(/\n/g, '<br>');
+        
+        return html;
+    }
+
+    function setNoteMode(mode) {
+        const editor = document.getElementById('note-body-input');
+        const preview = document.getElementById('note-preview-pane');
+        const btnEdit = document.getElementById('btn-edit-mode');
+        const btnView = document.getElementById('btn-view-mode');
+        
+        if(mode === 'view') {
+            editor.classList.add('hidden');
+            preview.classList.remove('hidden');
+            preview.innerHTML = renderMarkdown(editor.value);
+            btnEdit.classList.remove('active');
+            btnView.classList.add('active');
+        } else {
+            editor.classList.remove('hidden');
+            preview.classList.add('hidden');
+            btnEdit.classList.add('active');
+            btnView.classList.remove('active');
+        }
+    }
+
+    function insertTextAtCursor(prefix, suffix = '') {
+        const textarea = document.getElementById('note-body-input');
+        if (textarea.classList.contains('hidden')) return; // Can't edit in view mode
+        
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const selection = text.substring(start, end);
+        
+        const replacement = prefix + selection + suffix;
+        textarea.value = text.substring(0, start) + replacement + text.substring(end);
+        
+        textarea.focus();
+        textarea.selectionStart = start + prefix.length;
+        textarea.selectionEnd = start + prefix.length + selection.length;
+        
+        saveCurrentNote();
+    }
+    
+    function insertTemplate(type) {
+        let content = "";
+        if(type === 'meeting') {
+            content = "\n# Meeting Minutes\n**Date:** " + new Date().toLocaleDateString() + "\n\n### Attendees\n- \n\n### Key Points\n- \n\n### Action Items\n- [ ] ";
+        } else if (type === 'bug') {
+            content = "\n# Bug Report\n\n**Severity:** High/Medium/Low\n\n### Repro Steps\n1. \n2. \n\n### Expected Result\n\n### Actual Result\n";
+        } else if (type === 'idea') {
+            content = "\n# Idea Scoping\n\n### The Problem\n\n### The Solution\n- Feature A\n- Feature B\n\n### Next Steps\n- [ ] Research";
+        }
+        if(content) insertTextAtCursor(content);
+        document.getElementById('template-select').value = "";
+    }
+
+    function createTaskFromSelection() {
+        const textarea = document.getElementById('note-body-input');
+        if (textarea.classList.contains('hidden')) return; 
+        
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const selection = text.substring(start, end).trim();
+        
+        if(!selection) {
+            showNotification("Select text to convert");
+            return;
+        }
+        
+        // Create new Node
+        const worldX = (window.innerWidth/2 - panX) / scale - 90 + (Math.random()*40-20);
+        const worldY = (window.innerHeight/2 - panY) / scale - 50 + (Math.random()*40-20);
+        const newNode = createNode(worldX, worldY, selection);
+        nodes.push(newNode);
+        
+        // Replace text with wiki link
+        const replacement = `[[${selection}]]`;
+        textarea.value = text.substring(0, start) + replacement + text.substring(end);
+        
+        updateCalculations();
+        render();
+        saveToStorage();
+        saveCurrentNote();
+        
+        showNotification("Task Created: " + selection);
     }
 
     function renderNotesList() {
@@ -929,7 +1171,9 @@
                     linkedTaskName = '<span style="color:#666">🔗 (Deleted Task)</span>';
                 }
             }
-            el.innerHTML = `<div class="note-card-title">${note.title || '(Untitled)'}</div><div class="note-card-preview">${linkify(note.body) || '<i>No content</i>'}</div><div class="note-card-meta">${linkedTaskName}<span>${new Date(note.timestamp).toLocaleDateString()}</span></div>`;
+            // Simple strip markdown for preview
+            const plainText = note.body.replace(/[#*\[\]]/g, '');
+            el.innerHTML = `<div class="note-card-title">${note.title || '(Untitled)'}</div><div class="note-card-preview">${plainText || '<i>No content</i>'}</div><div class="note-card-meta">${linkedTaskName}<span>${new Date(note.timestamp).toLocaleDateString()}</span></div>`;
             el.onclick = () => openNoteEditor(note.id);
             container.appendChild(el);
         });
@@ -959,6 +1203,10 @@
         editor.classList.remove('hidden');
         document.getElementById('note-title-input').value = note.title;
         document.getElementById('note-body-input').value = note.body;
+        
+        // Default to edit mode
+        setNoteMode('edit');
+        
         renderNotesList(); 
     }
 
@@ -985,6 +1233,7 @@
             notes = notes.filter(n => n.id !== currentEditingNoteId);
             closeNoteEditor();
             saveToStorage();
+            renderNotesList();
             if(selectedNodeId) updateInspector();
         }
     }
@@ -1129,20 +1378,6 @@
              }
         });
 
-        // Global Mouse Move for Auto-Hide Toolbar Trigger
-        document.addEventListener('mousemove', (e) => {
-            if (!toolbarAutoHide) return;
-            // If toolbar is hidden and mouse is near top (60px)
-            if (e.clientY < 60) {
-                showToolbar();
-            }
-            // If inside toolbar, also keep it open (reset timer)
-            const toolbar = document.getElementById('toolbar');
-            if (toolbar.contains(e.target)) {
-                showToolbar();
-            }
-        });
-
         document.addEventListener('mousedown', (e) => {
             const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
             if (!panel.classList.contains('hidden')) { if (!panel.contains(e.target) && !fab.contains(e.target)) toggleInbox(); }
@@ -1173,7 +1408,7 @@
                     dragStartX = e.clientX - panX; 
                     dragStartY = e.clientY - panY;
                     
-                    // Force close all panels
+                    // Force close all panels if not pinned
                     closeAllSidePanels();
                 }
             } 
@@ -1218,11 +1453,11 @@
                     });
                 } else if (draggedNodeId) {
                     // Fallback for single drag (should be covered by selectedIds, but safe to keep)
-                     const node = nodes.find(n => n.id === draggedNodeId);
-                     if(node) {
-                         node.x += dx;
-                         node.y += dy;
-                     }
+                      const node = nodes.find(n => n.id === draggedNodeId);
+                      if(node) {
+                          node.x += dx;
+                          node.y += dy;
+                      }
                 }
                 
                 // Update start for next frame (relative movement)
@@ -1253,11 +1488,6 @@
         
         // --- MOBILE TOUCH EVENTS (FIXED) ---
         container.addEventListener('touchstart', (e) => {
-            // Show toolbar on tap near top
-            if (toolbarAutoHide && e.touches[0].clientY < 60) {
-                 showToolbar();
-            }
-
             if (e.touches.length === 1) { 
                 const touch = e.touches[0];
                 const nodeEl = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.node');
@@ -1327,8 +1557,17 @@
     }
 
     function closeAllSidePanels() {
+        // Force Close Menu if open
+        const tb = document.getElementById('toolbar');
+        if (!tb.classList.contains('collapsed')) toggleMenu();
+
+        // Check for pinned notes
+        const notePanel = document.getElementById('notes-panel');
+        if (!notePanel.classList.contains('pinned')) {
+            notePanel.classList.add('hidden');
+        }
+
         document.getElementById('goals-panel').classList.add('hidden');
-        document.getElementById('notes-panel').classList.add('hidden');
         document.getElementById('archive-panel').classList.add('hidden');
         deselectNode(); // Closes inspector
     }
@@ -1340,9 +1579,6 @@
         const rectRight = Math.max(boxSelectStart.x, endX);
         const rectBottom = Math.max(boxSelectStart.y, endY);
         
-        // Clear previous if not holding shift? Standard behavior is usually new selection
-        // Let's clear unless Shift was held initially (which it was)
-        // Actually, if simply dragging box, usually clears old selection.
         selectedIds.clear();
         
         nodes.forEach(node => {
@@ -1427,10 +1663,12 @@
         selectedIds.clear(); // Ensure sync
         selectedIds.add(id);
         
-        // Close other side panels when opening a node details
+        // Close other side panels when opening a node details IF NOT PINNED
         document.getElementById('goals-panel').classList.add('hidden');
-        document.getElementById('notes-panel').classList.add('hidden');
         document.getElementById('archive-panel').classList.add('hidden');
+        
+        const notePanel = document.getElementById('notes-panel');
+        if(!notePanel.classList.contains('pinned')) notePanel.classList.add('hidden');
         
         document.getElementById('inspector').classList.remove('hidden'); 
         render(); 
@@ -1484,7 +1722,7 @@
                     ${linkedNotes.map(note => `
                         <div class="note-card" style="padding:6px; margin-bottom:4px;" onclick="openNoteEditor('${note.id}')">
                             <div class="note-card-title" style="font-size:12px;">${note.title || '(Untitled)'}</div>
-                            <div class="note-card-preview" style="font-size:10px;">${linkify(note.body)}</div>
+                            <div class="note-card-preview" style="font-size:10px;">${note.body.replace(/[#*]/g, '').substring(0, 30)}...</div>
                         </div>
                     `).join('')}
                 </div>
