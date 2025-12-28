@@ -150,10 +150,28 @@
             transform: translateX(100%);
         }
 
-        /* Pinning Support */
+        /* Pinning & Floating Support */
         .side-panel.pinned {
-            border-left: 2px solid var(--accent);
+            /* Visual indication of pinned state */
             box-shadow: -4px 0 15px rgba(59, 130, 246, 0.2);
+        }
+
+        .side-panel.floating {
+            position: fixed; /* Detach from sidebar flow */
+            right: auto;
+            bottom: auto;
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: none; /* Disable transition during drag */
+            z-index: 200; /* Top most */
+            resize: both;
+            overflow: hidden;
+        }
+        
+        .side-panel.floating .panel-header-row {
+            cursor: move; /* Indicate draggable */
+            background: #2a2a2a;
         }
 
         .panel-header-row {
@@ -512,10 +530,10 @@
 
     <!-- Notes Panel (Right) -->
     <div id="notes-panel" class="hidden side-panel">
-        <div class="panel-header-row">
+        <div class="panel-header-row" id="notes-header-drag-handle">
             <div style="display:flex; align-items:center; gap:5px;">
                 <span>📝 Notes</span>
-                <button class="tool-btn" id="pin-note-btn" onclick="togglePinNotePanel()" title="Pin Panel (Don't close on click)">📌</button>
+                <button class="tool-btn" id="pin-note-btn" onclick="togglePinNotePanel()" title="Pin/Detach Panel">📌</button>
             </div>
             <button class="btn" onclick="toggleNotesPanel()">✕</button>
         </div>
@@ -682,6 +700,10 @@
     let pinchStartPan = { x: 0, y: 0 };
     let currentHeatmapYear = new Date().getFullYear();
 
+    // Draggable Panel State
+    let isPanelDragging = false;
+    let panelDragOffset = {x: 0, y: 0};
+
     // --- INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', () => {
         loadFromStorage();
@@ -699,6 +721,7 @@
         renderInbox();
         renderGoals(); 
         setupInteractions();
+        setupPanelDrag();
         
         setInterval(tickTimers, 1000);
         setInterval(checkAutoArchive, 60000); 
@@ -983,13 +1006,64 @@
         const panel = document.getElementById('notes-panel');
         const btn = document.getElementById('pin-note-btn');
         panel.classList.toggle('pinned');
+        panel.classList.toggle('floating');
+
         if(panel.classList.contains('pinned')) {
             btn.style.opacity = '1';
             btn.style.color = 'var(--accent)';
+            // Set initial float position if undefined
+            if(!panel.style.left) {
+                panel.style.right = 'auto';
+                panel.style.bottom = 'auto';
+                // Center-ish default
+                panel.style.left = (window.innerWidth - 400) + 'px';
+                panel.style.top = '100px';
+                panel.style.height = '600px'; 
+            }
         } else {
             btn.style.opacity = '';
             btn.style.color = '';
+            // Reset to sidebar mode
+            panel.style.right = '0';
+            panel.style.top = '0';
+            panel.style.bottom = '0';
+            panel.style.left = '';
+            panel.style.height = '';
         }
+    }
+
+    function setupPanelDrag() {
+        const handle = document.getElementById('notes-header-drag-handle');
+        const panel = document.getElementById('notes-panel');
+
+        handle.addEventListener('mousedown', (e) => {
+            if (!panel.classList.contains('floating')) return;
+            // Only trigger if clicking the header background/text, not buttons
+            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+
+            isPanelDragging = true;
+            panelDragOffset.x = e.clientX - panel.getBoundingClientRect().left;
+            panelDragOffset.y = e.clientY - panel.getBoundingClientRect().top;
+            e.preventDefault(); // Prevent text selection
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isPanelDragging) return;
+            
+            // Constrain to viewport (basic)
+            let newX = e.clientX - panelDragOffset.x;
+            let newY = e.clientY - panelDragOffset.y;
+            
+            // Apply
+            panel.style.left = newX + 'px';
+            panel.style.top = newY + 'px';
+            panel.style.right = 'auto'; // ensure overrides
+            panel.style.bottom = 'auto';
+        });
+
+        window.addEventListener('mouseup', () => {
+            isPanelDragging = false;
+        });
     }
     
     window.jumpToTask = function(id) {
