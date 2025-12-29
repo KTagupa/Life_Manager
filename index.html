@@ -264,11 +264,65 @@
         }
         #note-preview-pane.hidden { display: none; }
         
-        /* AI CHAT STYLES */
-        .ai-msg { padding: 10px; border-radius: 8px; max-width: 85%; font-size: 13px; word-break: break-word; line-height: 1.5; }
+        /* AI CHAT STYLES (Bottom Left) */
+        #fab-ai {
+            position: fixed; bottom: 30px; left: 30px;
+            width: 60px; height: 60px; border-radius: 50%;
+            background: var(--ai-accent); color: white;
+            font-size: 24px; border: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            cursor: pointer; z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.2s, background 0.2s;
+        }
+        #fab-ai:hover { transform: scale(1.1); filter: brightness(1.2); }
+
+        #ai-panel {
+            position: fixed; bottom: 100px; left: 30px;
+            width: 350px; height: 500px; max-height: 60vh;
+            background: var(--panel-bg);
+            border: 1px solid var(--border); border-radius: 12px;
+            display: flex; flex-direction: column;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.6);
+            z-index: 99;
+            transform-origin: bottom left;
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+        }
+        #ai-panel.hidden {
+            transform: scale(0.9) translateY(20px);
+            opacity: 0; pointer-events: none;
+        }
+
+        .ai-msg { padding: 10px; border-radius: 8px; max-width: 85%; font-size: 13px; word-break: break-word; line-height: 1.5; margin-bottom: 5px; }
         .ai-msg.user { background: var(--ai-accent); color: white; align-self: flex-end; }
         .ai-msg.bot { background: #2d2d2d; border: 1px solid #444; color: #eee; align-self: flex-start; }
         .ai-msg pre { background: #111; padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 11px; }
+
+        /* SELECTION MENU (Contextual) */
+        #selection-menu {
+            position: fixed;
+            display: none;
+            flex-direction: row;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 4px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            z-index: 1100;
+            padding: 4px;
+            gap: 4px;
+            transform: translateY(-100%);
+            margin-top: -10px;
+        }
+        .sel-menu-btn {
+            background: transparent;
+            border: none;
+            color: #eee;
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 3px;
+        }
+        .sel-menu-btn:hover { background: #444; color: var(--accent); }
 
         /* --- GOALS PANEL --- */
         #goals-panel {
@@ -429,6 +483,7 @@
             #sync-panel.hidden { transform: translate(-50%, -20px); }
             .btn { padding: 8px 16px; font-size: 13px; margin-bottom: 5px; }
             #inbox-panel { width: 90%; bottom: 80px; right: 5%; }
+            #ai-panel { width: 90%; bottom: 100px; left: 5%; }
             #toolbar { flex-direction: column; gap: 10px; }
             #toolbar-content { margin-left: 0; margin-top: 5px; flex-direction: column; align-items: stretch; }
             #note-editor.popped-out { width: 95vw; height: 95dvh; }
@@ -443,7 +498,6 @@
         <button id="menu-btn" onclick="toggleMenu()">☰</button>
         <div id="toolbar-content">
             <button class="btn btn-primary" onclick="addNode()">+ New Task</button>
-            <button class="btn" style="border-color: var(--ai-accent); color: var(--ai-accent);" onclick="toggleAIPanel()">✨ AI Assistant</button>
             <button class="btn" onclick="toggleGoals()">🎯 Life Goals</button>
             <button class="btn" onclick="toggleNotesPanel()">📝 Notes</button>
             <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive</button>
@@ -471,6 +525,12 @@
     <!-- Selection Box -->
     <div id="selection-rect"></div>
 
+    <!-- Contextual Selection Menu -->
+    <div id="selection-menu">
+        <button class="sel-menu-btn" onclick="createTaskFromSelection()">✨ To Task</button>
+        <button class="sel-menu-btn" onclick="createNoteFromSelection()">📝 To Note</button>
+    </div>
+
     <!-- Sync Panel -->
     <div id="sync-panel" class="hidden">
         <div class="sync-header">
@@ -495,8 +555,9 @@
         <div id="sync-status" class="sync-status"></div>
     </div>
 
-    <!-- AI Assistant Panel (Right) -->
-    <div id="ai-panel" class="hidden side-panel">
+    <!-- AI Assistant FAB & Panel (Bottom Left) -->
+    <button id="fab-ai" onclick="toggleAIPanel()">✨</button>
+    <div id="ai-panel" class="hidden">
         <div class="panel-header-row">
             <span>✨ AI Project Assistant</span>
             <button class="btn" onclick="toggleAIPanel()">✕</button>
@@ -566,7 +627,7 @@
                 </div>
 
                 <div class="editor-tools-group">
-                     <button class="tool-btn" style="color:var(--critical-path)" onclick="createTaskFromSelection()" title="Convert Selection to Linked Task">✨ Task</button>
+                    <button class="tool-btn" style="color:var(--critical-path)" onclick="createTaskFromSelection()" title="Convert Selection to Linked Task">✨ Task</button>
                 </div>
 
                 <div class="editor-tools-group">
@@ -579,7 +640,7 @@
             <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()">
             
             <div class="editor-content-area">
-                <textarea id="note-body-input" placeholder="Type your note here... Supports Markdown. Use [[Task Name]] to link to tasks." oninput="saveCurrentNote()"></textarea>
+                <textarea id="note-body-input" placeholder="Type your note here... Select text to convert to Tasks or Sub-notes." oninput="saveCurrentNote()"></textarea>
                 <div id="note-preview-pane" class="hidden"></div>
             </div>
         </div>
@@ -647,7 +708,7 @@
     <div id="notification">State Saved</div>
 
 <script>
-    const apiKey = "AIzaSyDE3pSSwp7vxxWK3UEcA4xi3HB9wKiHr2Y"; // Environment handles this
+    const apiKey = ""; // Environment handles this
 
     // --- UTILITIES FOR LINKS ---
     function linkify(text) {
@@ -724,6 +785,7 @@
         renderGoals(); 
         setupInteractions();
         setupPanelDrag();
+        setupContextualMenu();
         
         setInterval(tickTimers, 1000);
         setInterval(checkAutoArchive, 60000); 
@@ -741,6 +803,43 @@
         }
     }
     
+    // --- CONTEXTUAL MENU LOGIC ---
+    function setupContextualMenu() {
+        const textarea = document.getElementById('note-body-input');
+        const menu = document.getElementById('selection-menu');
+
+        const updateMenuPosition = () => {
+            if (textarea.selectionStart !== textarea.selectionEnd) {
+                // Approximate position near cursor (simple implementation for textarea)
+                // Since textarea doesn't give pixel coords easily, we'll position near mouse or top of area
+                // For better UX in this simple app, we'll show it fixed above the textarea or use mouse position if triggered by mouse
+            } else {
+                menu.style.display = 'none';
+            }
+        };
+
+        textarea.addEventListener('mouseup', (e) => {
+            if (textarea.selectionStart !== textarea.selectionEnd) {
+                menu.style.display = 'flex';
+                // Position near mouse click, but keep within bounds
+                let left = e.clientX;
+                let top = e.clientY - 40;
+                if(left + 150 > window.innerWidth) left = window.innerWidth - 160;
+                if(top < 0) top = 10;
+                
+                menu.style.left = left + 'px';
+                menu.style.top = top + 'px';
+            } else {
+                menu.style.display = 'none';
+            }
+        });
+
+        // Hide on type
+        textarea.addEventListener('input', () => {
+            menu.style.display = 'none';
+        });
+    }
+
     // --- GITHUB SYNC LOGIC ---
     function toggleSyncPanel() {
         const panel = document.getElementById('sync-panel');
@@ -864,9 +963,7 @@
         const panel = document.getElementById('ai-panel');
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
-            document.getElementById('notes-panel').classList.add('hidden');
-            document.getElementById('archive-panel').classList.add('hidden');
-            document.getElementById('goals-panel').classList.add('hidden');
+            setTimeout(() => document.getElementById('ai-input').focus(), 100);
         } else {
             panel.classList.add('hidden');
         }
@@ -1080,7 +1177,7 @@
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
             document.getElementById('archive-panel').classList.add('hidden'); 
-            document.getElementById('ai-panel').classList.add('hidden');
+            // We don't hide AI panel here to allow multitasking if needed
             renderNotesList();
         } else {
             panel.classList.add('hidden');
@@ -1182,10 +1279,20 @@
         html = html.replace(/^- (?!\[)(.*$)/gim, '<ul><li>$1</li></ul>');
         html = html.replace(/<\/ul>\n<ul>/g, ''); 
         html = html.replace(/\[\[(.*?)\]\]/g, (match, title) => {
-            const target = nodes.find(n => n.title.toLowerCase() === title.toLowerCase()) || 
-                           archivedNodes.find(n => n.title.toLowerCase() === title.toLowerCase());
+            const cleanTitle = title.replace(/^Note: /, ''); // Handle "Note: " prefix
+            const target = nodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) || 
+                           archivedNodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) ||
+                           notes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase());
+            
             if(target) {
-                return `<span class="wiki-link" onclick="jumpToTask('${target.id}')">${title}</span>`;
+                // Determine type for jump
+                if (target.body !== undefined) {
+                    // It's a note
+                    return `<span class="wiki-link" style="color:var(--accent); cursor:pointer; text-decoration:underline;" onclick="openNoteEditor('${target.id}')">${title}</span>`;
+                } else {
+                    // It's a task
+                    return `<span class="wiki-link" style="color:var(--ready-color); cursor:pointer; text-decoration:underline;" onclick="jumpToTask('${target.id}')">${title}</span>`;
+                }
             } else {
                 return `<span style="color:#666; font-style:italic;">${title} (missing)</span>`;
             }
@@ -1248,6 +1355,9 @@
 
     function createTaskFromSelection() {
         const textarea = document.getElementById('note-body-input');
+        const menu = document.getElementById('selection-menu');
+        menu.style.display = 'none'; // Hide menu
+
         if (textarea.classList.contains('hidden')) return; 
         
         const start = textarea.selectionStart;
@@ -1274,6 +1384,48 @@
         saveCurrentNote();
         
         showNotification("Task Created: " + selection);
+    }
+
+    function createNoteFromSelection() {
+        const textarea = document.getElementById('note-body-input');
+        const menu = document.getElementById('selection-menu');
+        menu.style.display = 'none'; // Hide menu
+
+        if (textarea.classList.contains('hidden')) return; 
+        
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const selection = text.substring(start, end).trim();
+        
+        if(!selection) {
+            showNotification("Select text to convert");
+            return;
+        }
+
+        // Create new note
+        // Truncate title if too long
+        let title = selection;
+        if (title.length > 30) title = title.substring(0, 30) + "...";
+        
+        // Link parent ID if we are editing a note linked to a task
+        let parentTaskID = null;
+        if (currentEditingNoteId) {
+            const currentNote = notes.find(n => n.id === currentEditingNoteId);
+            if(currentNote) parentTaskID = currentNote.taskId;
+        }
+
+        const newNote = createNoteObject(title, `**From:** [[${document.getElementById('note-title-input').value}]]\n\n${selection}`, parentTaskID);
+        notes.push(newNote);
+
+        const replacement = `[[Note: ${title}]]`;
+        textarea.value = text.substring(0, start) + replacement + text.substring(end);
+        
+        saveToStorage();
+        saveCurrentNote();
+        renderNotesList();
+        
+        showNotification("Note Created: " + title);
     }
 
     function renderNotesList() {
@@ -1516,10 +1668,20 @@
         document.addEventListener('mousedown', (e) => {
             const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
             if (!panel.classList.contains('hidden')) { if (!panel.contains(e.target) && !fab.contains(e.target)) toggleInbox(); }
+            
+            const aiPanel = document.getElementById('ai-panel'); const aiFab = document.getElementById('fab-ai');
+            if (!aiPanel.classList.contains('hidden')) { if (!aiPanel.contains(e.target) && !aiFab.contains(e.target)) toggleAIPanel(); }
+
             const sync = document.getElementById('sync-panel');
             const syncBtn = document.querySelector('button[onclick="toggleSyncPanel()"]');
             if (!sync.classList.contains('hidden') && !sync.contains(e.target) && e.target !== syncBtn) {
                 sync.classList.add('hidden');
+            }
+            
+            // Hide selection menu on outside click
+            const selMenu = document.getElementById('selection-menu');
+            if(!selMenu.contains(e.target) && e.target.id !== 'note-body-input') {
+                selMenu.style.display = 'none';
             }
         });
         
@@ -1742,7 +1904,7 @@
         selectedIds.add(id);
         document.getElementById('goals-panel').classList.add('hidden');
         document.getElementById('archive-panel').classList.add('hidden');
-        document.getElementById('ai-panel').classList.add('hidden');
+        // AI panel can stay open
         const notePanel = document.getElementById('notes-panel');
         if(!notePanel.classList.contains('pinned')) notePanel.classList.add('hidden');
         document.getElementById('inspector').classList.remove('hidden'); 
