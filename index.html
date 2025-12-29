@@ -293,6 +293,14 @@
             opacity: 0; pointer-events: none;
         }
 
+        #ai-settings-pane {
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid var(--border);
+            display: none;
+        }
+        #ai-settings-pane.visible { display: block; }
+
         .ai-msg { padding: 10px; border-radius: 8px; max-width: 85%; font-size: 13px; word-break: break-word; line-height: 1.5; margin-bottom: 5px; }
         .ai-msg.user { background: var(--ai-accent); color: white; align-self: flex-end; }
         .ai-msg.bot { background: #2d2d2d; border: 1px solid #444; color: #eee; align-self: flex-start; }
@@ -559,10 +567,20 @@
     <div id="ai-panel" class="hidden">
         <div class="panel-header-row">
             <span>✨ AI Project Assistant</span>
-            <button class="btn" onclick="toggleAIPanel()">✕</button>
+            <div style="display:flex; gap:5px;">
+                <button class="tool-btn" onclick="toggleAISettings()" title="API Key Settings">⚙️</button>
+                <button class="btn" onclick="toggleAIPanel()">✕</button>
+            </div>
         </div>
+        
+        <div id="ai-settings-pane">
+            <label style="margin-bottom:5px; display:block;">Gemini API Key</label>
+            <input type="password" id="gemini-api-key-input" placeholder="Paste API Key here..." onchange="saveGeminiKey(this.value)" style="width:100%; margin-bottom:5px;">
+            <div style="font-size:10px; color:#888;">Key is saved to your browser's Local Storage.</div>
+        </div>
+
         <div id="ai-chat-history" class="panel-list" style="padding: 15px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
-            <div class="ai-msg bot">Hello! I can analyze your tasks, notes, and life goals to provide strategic insights. Ask me about your project health, timeline, or alignment with your goals.</div>
+            <div class="ai-msg bot">Hello! I can analyze your tasks, notes, and life goals to provide strategic insights. <br><br>Please click the ⚙️ icon to set your Google Gemini API Key to get started.</div>
         </div>
         <div id="ai-loading" class="hidden" style="padding: 0 15px 10px; color: var(--ai-accent); font-size: 11px;">Gemini is thinking...</div>
         <div style="padding: 10px; border-top: 1px solid #333; display: flex; gap: 5px;">
@@ -707,7 +725,8 @@
     <div id="notification">State Saved</div>
 
 <script>
-    const apiKey = ""; // Environment handles this
+    // REMOVED HARDCODED KEY
+    let geminiApiKey = localStorage.getItem('urgency_flow_gemini_key') || "";
 
     // --- UTILITIES FOR LINKS ---
     function linkify(text) {
@@ -782,6 +801,9 @@
         if(githubToken) document.getElementById('github-token').value = githubToken;
         if(gistId) document.getElementById('gist-id').value = gistId;
         
+        // Load API Key into input if exists
+        if(geminiApiKey) document.getElementById('gemini-api-key-input').value = geminiApiKey;
+
         checkAutoArchive(); 
         updateCalculations();
         render(); 
@@ -996,10 +1018,23 @@
         }
     }
 
+    function toggleAISettings() {
+        const pane = document.getElementById('ai-settings-pane');
+        pane.classList.toggle('visible');
+    }
+
+    function saveGeminiKey(val) {
+        geminiApiKey = val.trim();
+        localStorage.setItem('urgency_flow_gemini_key', geminiApiKey);
+        showNotification("API Key Saved");
+    }
+
     async function fetchGemini(payload, retries = 5, delay = 1000) {
+        if (!geminiApiKey) throw new Error("Missing API Key");
+
         for (let i = 0; i < retries; i++) {
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -1032,6 +1067,12 @@
         const input = document.getElementById('ai-input');
         const query = input.value.trim();
         if (!query) return;
+
+        if (!geminiApiKey) {
+            addAIChatMessage("⚠️ Please set your Gemini API Key in the settings (⚙️ icon above) to use AI features.", 'bot');
+            toggleAISettings();
+            return;
+        }
 
         addAIChatMessage(query, 'user');
         input.value = '';
