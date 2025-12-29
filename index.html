@@ -728,10 +728,11 @@
     // REMOVED HARDCODED KEY
     let geminiApiKey = localStorage.getItem('urgency_flow_gemini_key') || "";
 
-    // --- UTILITIES FOR LINKS ---
+  // --- UTILITIES FOR LINKS ---
     function linkify(text) {
         if (!text) return '';
-        const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+        // Updated regex to include obsidian protocol explicitly
+        const urlRegex = /(\b(https?|ftp|file|obsidian):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
         return text.replace(urlRegex, function(url) {
             return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;" onclick="event.stopPropagation()">${url}</a>`;
         });
@@ -739,7 +740,8 @@
 
     function extractLink(text) {
         if (!text) return null;
-        const match = text.match(/(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/i);
+        // Updated regex to include obsidian protocol explicitly
+        const match = text.match(/(\b(https?|ftp|file|obsidian):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/i);
         return match ? match[0] : null;
     }
 
@@ -1133,7 +1135,8 @@
             dependencies: [], 
             subtasks: [],
             activeTimerStart: null,
-            timeLogs: []
+            timeLogs: [],
+            externalLink: ''
         };
     }
 
@@ -2015,6 +2018,13 @@
             <div class="form-group" style="display:flex; gap:10px"><div style="flex:1"><label>Duration (Est. Days)</label><input type="number" value="${node.duration}" min="1" onchange="updateNodeField('duration', parseInt(this.value))"></div><div style="flex:1"><label>Status</label><button class="btn ${node.completed ? 'btn-primary' : ''}" style="width:100%" onclick="toggleCompletion()">${node.completed ? 'Completed' : 'Active'}</button></div></div>
             <div class="form-group" style="display:flex; align-items:center; gap:5px; margin-bottom: 10px;"><input type="checkbox" id="sync-toggle" ${node.syncDurationDate ? 'checked' : ''} onchange="updateNodeField('syncDurationDate', this.checked)" style="width:auto;"><label for="sync-toggle" style="margin:0; cursor:pointer; font-size:12px; color:var(--text-muted)">Link Duration & Due Date</label></div>
             <div class="form-group"><label>Due Date (Optional)</label><input type="date" value="${node.dueDate || ''}" onchange="updateNodeField('dueDate', this.value)"></div>
+            <div class="form-group">
+                <label>External Link (Obsidian, Drive, etc)</label>
+                <div style="display:flex; gap:5px;">
+                    <input type="text" value="${node.externalLink || ''}" placeholder="Paste URL here..." onchange="updateNodeField('externalLink', this.value)">
+                    ${node.externalLink ? `<a href="${node.externalLink}" target="_blank" class="btn" style="width:40px; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="Open Link">🔗</a>` : ''}
+                </div>
+            </div>
             <div class="form-group"><button class="btn btn-urgent ${node.isManualUrgent ? 'active' : ''}" style="width:100%" onclick="toggleUrgency()">${node.isManualUrgent ? '🔥 Marked as Urgent' : '🔥 Mark as Urgent'}</button></div>
             <div class="form-group"><label>Dependencies</label><div id="dep-list">${node.dependencies.map(d => { const parent = nodes.find(n => n.id === d.id) || archivedNodes.find(n => n.id === d.id); return `<div class="dep-item"><span>${parent ? parent.title : 'Unknown'}</span><div class="dep-controls"><span class="toggle-soft ${d.type === 'soft' ? 'active' : ''}" onclick="toggleDepType('${d.id}')">${d.type === 'soft' ? 'Soft' : 'Hard'}</span><span style="cursor:pointer; color:#ef4444" onclick="removeDependency('${d.id}')">✕</span></div></div>`; }).join('')}</div><select id="add-dep-select" onchange="addDependency(this.value)" style="margin-top:5px"><option value="">+ Add Dependency...</option>${nodes.filter(n => n.id !== node.id && !node.dependencies.some(d => d.id === n.id)).map(n => `<option value="${n.id}">${n.title}</option>`).join('')}</select></div>
             <div class="form-group"><label>Subtasks</label><div id="subtask-list">${node.subtasks.map((st, idx) => {
@@ -2150,6 +2160,7 @@
                         if (!n.subtasks) n.subtasks = []; if (!n.dueDate) n.dueDate = ''; if (n.syncDurationDate === undefined) n.syncDurationDate = true; 
                         if (n.isManualUrgent === undefined) n.isManualUrgent = false; if (n.timeLogs === undefined) n.timeLogs = []; if (n.activeTimerStart === undefined) n.activeTimerStart = null; 
                         if (n.completedDate === undefined) { if (n.completed) n.completedDate = Date.now(); else n.completedDate = null; }
+                        if (n.externalLink === undefined) n.externalLink = '';
                     });
                 };
                 sanitize(nodes); sanitize(archivedNodes);
