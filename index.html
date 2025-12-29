@@ -310,7 +310,6 @@
             z-index: 1100;
             padding: 4px;
             gap: 4px;
-            transform: translateY(-100%);
             margin-top: -10px;
         }
         .sel-menu-btn {
@@ -708,7 +707,7 @@
     <div id="notification">State Saved</div>
 
 <script>
-    const apiKey = "AIzaSyDE3pSSwp7vxxWK3UEcA4xi3HB9wKiHr2Y"; // Environment handles this
+    const apiKey = ""; // Environment handles this
 
     // --- UTILITIES FOR LINKS ---
     function linkify(text) {
@@ -768,6 +767,11 @@
     let isPanelDragging = false;
     let panelDragOffset = {x: 0, y: 0};
 
+    // Global variables for context menu
+    let currentSelectionText = '';
+    let currentSelectionSource = ''; // 'note' or 'ai'
+    let noteSelectionRange = null; // Store indices for note replacement
+
     // --- INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', () => {
         loadFromStorage();
@@ -805,39 +809,62 @@
     
     // --- CONTEXTUAL MENU LOGIC ---
     function setupContextualMenu() {
-        const textarea = document.getElementById('note-body-input');
         const menu = document.getElementById('selection-menu');
+        
+        document.addEventListener('mouseup', (e) => {
+            // 1. Check if clicking inside the menu itself - do nothing
+            if (menu.contains(e.target)) return;
 
-        const updateMenuPosition = () => {
-            if (textarea.selectionStart !== textarea.selectionEnd) {
-                // Approximate position near cursor (simple implementation for textarea)
-                // Since textarea doesn't give pixel coords easily, we'll position near mouse or top of area
-                // For better UX in this simple app, we'll show it fixed above the textarea or use mouse position if triggered by mouse
-            } else {
-                menu.style.display = 'none';
+            // 2. Check Note Editor Selection
+            const noteInput = document.getElementById('note-body-input');
+            if (!noteInput.classList.contains('hidden') && noteInput.contains(e.target)) {
+                const text = noteInput.value.substring(noteInput.selectionStart, noteInput.selectionEnd).trim();
+                if (text) {
+                    currentSelectionText = text;
+                    currentSelectionSource = 'note';
+                    noteSelectionRange = { start: noteInput.selectionStart, end: noteInput.selectionEnd };
+                    showContextMenu(e.clientX, e.clientY);
+                    return;
+                }
             }
-        };
 
-        textarea.addEventListener('mouseup', (e) => {
-            if (textarea.selectionStart !== textarea.selectionEnd) {
-                menu.style.display = 'flex';
-                // Position near mouse click, but keep within bounds
-                let left = e.clientX;
-                let top = e.clientY - 40;
-                if(left + 150 > window.innerWidth) left = window.innerWidth - 160;
-                if(top < 0) top = 10;
-                
-                menu.style.left = left + 'px';
-                menu.style.top = top + 'px';
-            } else {
-                menu.style.display = 'none';
+            // 3. Check AI Panel Selection
+            const aiPanel = document.getElementById('ai-panel');
+            if (!aiPanel.classList.contains('hidden')) {
+                const selection = window.getSelection();
+                const text = selection.toString().trim();
+                // Check if selection anchor is within the AI panel
+                if (text && aiPanel.contains(selection.anchorNode.nodeType === 3 ? selection.anchorNode.parentNode : selection.anchorNode)) {
+                    currentSelectionText = text;
+                    currentSelectionSource = 'ai';
+                    noteSelectionRange = null;
+                    showContextMenu(e.clientX, e.clientY);
+                    return;
+                }
             }
-        });
 
-        // Hide on type
-        textarea.addEventListener('input', () => {
+            // 4. Default: Hide menu if no valid selection or click outside
             menu.style.display = 'none';
         });
+
+        // Hide on scroll or resize to prevent floating menu in wrong place
+        window.addEventListener('scroll', () => { menu.style.display = 'none'; }, true);
+        window.addEventListener('resize', () => { menu.style.display = 'none'; });
+    }
+
+    function showContextMenu(x, y) {
+        const menu = document.getElementById('selection-menu');
+        menu.style.display = 'flex';
+        
+        // Bounds checking
+        let left = x;
+        let top = y - 40;
+        
+        if (left + 150 > window.innerWidth) left = window.innerWidth - 160;
+        if (top < 10) top = y + 20; // Show below if too close to top
+        
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
     }
 
     // --- GITHUB SYNC LOGIC ---
@@ -1354,75 +1381,83 @@
     }
 
     function createTaskFromSelection() {
-        const textarea = document.getElementById('note-body-input');
         const menu = document.getElementById('selection-menu');
         menu.style.display = 'none'; // Hide menu
 
-        if (textarea.classList.contains('hidden')) return; 
-        
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        const selection = text.substring(start, end).trim();
-        
-        if(!selection) {
-            showNotification("Select text to convert");
+        if (!currentSelectionText) {
+            showNotification("No text selected");
             return;
         }
         
+        // Create the task
         const worldX = (window.innerWidth/2 - panX) / scale - 90 + (Math.random()*40-20);
         const worldY = (window.innerHeight/2 - panY) / scale - 50 + (Math.random()*40-20);
-        const newNode = createNode(worldX, worldY, selection);
+        const newNode = createNode(worldX, worldY, currentSelectionText);
         nodes.push(newNode);
         
-        const replacement = `[[${selection}]]`;
-        textarea.value = text.substring(0, start) + replacement + text.substring(end);
+        // Only if selection source is 'note', we replace the text in the editor
+        if (currentSelectionSource === 'note' && noteSelectionRange) {
+            const textarea = document.getElementById('note-body-input');
+            const text = textarea.value;
+            const replacement = `[[${currentSelectionText}]]`;
+            
+            const before = text.substring(0, noteSelectionRange.start);
+            const after = text.substring(noteSelectionRange.end);
+            textarea.value = before + replacement + after;
+            saveCurrentNote();
+        }
         
         updateCalculations();
         render();
         saveToStorage();
-        saveCurrentNote();
         
-        showNotification("Task Created: " + selection);
+        showNotification("Task Created: " + currentSelectionText.substring(0, 20) + (currentSelectionText.length > 20 ? "..." : ""));
     }
 
     function createNoteFromSelection() {
-        const textarea = document.getElementById('note-body-input');
         const menu = document.getElementById('selection-menu');
         menu.style.display = 'none'; // Hide menu
 
-        if (textarea.classList.contains('hidden')) return; 
-        
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        const selection = text.substring(start, end).trim();
-        
-        if(!selection) {
-            showNotification("Select text to convert");
+        if (!currentSelectionText) {
+            showNotification("No text selected");
             return;
         }
 
         // Create new note
         // Truncate title if too long
-        let title = selection;
+        let title = currentSelectionText;
         if (title.length > 30) title = title.substring(0, 30) + "...";
         
         // Link parent ID if we are editing a note linked to a task
         let parentTaskID = null;
-        if (currentEditingNoteId) {
+        if (currentEditingNoteId && currentSelectionSource === 'note') {
             const currentNote = notes.find(n => n.id === currentEditingNoteId);
             if(currentNote) parentTaskID = currentNote.taskId;
         }
 
-        const newNote = createNoteObject(title, `**From:** [[${document.getElementById('note-title-input').value}]]\n\n${selection}`, parentTaskID);
+        let originText = "";
+        if (currentSelectionSource === 'note') {
+            originText = `**From:** [[${document.getElementById('note-title-input').value}]]\n\n`;
+        } else if (currentSelectionSource === 'ai') {
+            originText = `**From:** AI Chat\n\n`;
+        }
+
+        const newNote = createNoteObject(title, `${originText}${currentSelectionText}`, parentTaskID);
         notes.push(newNote);
 
-        const replacement = `[[Note: ${title}]]`;
-        textarea.value = text.substring(0, start) + replacement + text.substring(end);
+        // Only replace text if source is note
+        if (currentSelectionSource === 'note' && noteSelectionRange) {
+            const textarea = document.getElementById('note-body-input');
+            const text = textarea.value;
+            const replacement = `[[Note: ${title}]]`;
+            
+            const before = text.substring(0, noteSelectionRange.start);
+            const after = text.substring(noteSelectionRange.end);
+            textarea.value = before + replacement + after;
+            saveCurrentNote();
+        }
         
         saveToStorage();
-        saveCurrentNote();
         renderNotesList();
         
         showNotification("Note Created: " + title);
