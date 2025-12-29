@@ -212,6 +212,37 @@
             transition: height 0.3s;
         }
         #note-editor.hidden { height: 0; overflow: hidden; border: none; }
+
+        /* --- HEALTH DASHBOARD --- */
+        #health-dashboard {
+            position: fixed;
+            bottom: 10px;
+            right: 100px; /* Positioned to the left of the Inbox FAB */
+            background: rgba(12, 24, 18, 0.9);
+            backdrop-filter: blur(4px);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 10px;
+            color: #888;
+            z-index: 90;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 180px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            pointer-events: none; /* Let clicks pass through unless we want interactivity */
+            user-select: none;
+        }
+        .health-row { display: flex; justify-content: space-between; align-items: center; }
+        .health-label { color: #666; font-weight: 600; }
+        .health-val { color: #aaa; font-family: monospace; }
+        .health-bar-bg { width: 60px; height: 3px; background: #333; border-radius: 2px; overflow: hidden; margin-left: 5px; }
+        .health-bar-fill { height: 100%; background: var(--ready-color); width: 0%; transition: width 0.5s; }
+        .health-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px; background: #333; }
+        .health-dot.ok { background: var(--ready-color); box-shadow: 0 0 4px var(--ready-color); }
+        .health-dot.warn { background: var(--critical-path); }
+        .health-dot.err { background: var(--blocked-color); }
         
         /* POP-OUT STATE STYLES */
         #note-editor.popped-out {
@@ -514,7 +545,6 @@
             <button class="btn" onclick="saveData(true)">Save</button>
             <button class="btn" onclick="document.getElementById('file-input').click()">Load</button>
             <button class="btn btn-danger" onclick="clearData()">Reset</button>
-            <div id="status-indicator" style="font-size: 11px; color: #888; align-self: center; margin-left:5px;">Auto-saved</div>
         </div>
     </div>
 
@@ -721,6 +751,32 @@
         </div>
     </div>
 
+    <!-- Health Dashboard -->
+    <div id="health-dashboard">
+        <div class="health-row" title="Active vs Archived Nodes">
+            <span class="health-label">Task Load</span>
+            <span class="health-val" id="hd-load">0 / 0</span>
+        </div>
+        <div class="health-row" title="Browser LocalStorage Usage (~5MB Limit)">
+            <span class="health-label">Storage</span>
+            <div style="display:flex; align-items:center;">
+                <span class="health-val" id="hd-storage-text">0%</span>
+                <div class="health-bar-bg"><div class="health-bar-fill" id="hd-storage-bar"></div></div>
+            </div>
+        </div>
+        <div class="health-row" title="Render Time (Lower is better)">
+            <span class="health-label">Engine</span>
+            <div style="display:flex; align-items:center;">
+                <div class="health-dot ok" id="hd-fps-dot"></div>
+                <span class="health-val" id="hd-fps">0ms</span>
+            </div>
+        </div>
+        <div class="health-row" style="margin-top:2px; border-top:1px solid #333; padding-top:2px;">
+            <span class="health-label">Sync</span>
+            <span class="health-val" id="hd-sync">Ready</span>
+        </div>
+    </div>
+    
     <!-- Notification Toast -->
     <div id="notification">State Saved</div>
 
@@ -758,6 +814,7 @@
     let scale = 1;
     let panX = 0;
     let panY = 0;
+    let lastRenderTime = 0;
     
     // Sync State
     let githubToken = '';
@@ -1696,40 +1753,116 @@
 
     // --- RENDERING ---
     function render() {
-        const container = document.getElementById('nodes-layer'); const svg = document.getElementById('connections');
-        container.innerHTML = ''; svg.innerHTML = '';
+        const startRender = performance.now(); // Start timer
+
+        const container = document.getElementById('nodes-layer'); 
+        const svg = document.getElementById('connections');
+        container.innerHTML = ''; 
+        svg.innerHTML = '';
+
+        // --- Render Connections (Lines) ---
         nodes.forEach(node => {
             node.dependencies.forEach(dep => {
-                const parent = nodes.find(n => n.id === dep.id); if (!parent) return; 
-                const isCritical = node._isCritical && parent._isCritical && dep.type === 'hard' && !parent.completed; const isUrgentPath = node._isUrgent && parent._isUrgent;
-                let color = '#666'; if (dep.type === 'soft') color = 'var(--soft-dep-color)'; if (isUrgentPath) color = '#ff4d4d'; else if (isCritical) color = 'var(--critical-path)';
+                const parent = nodes.find(n => n.id === dep.id); 
+                if (!parent) return; 
+                
+                const isCritical = node._isCritical && parent._isCritical && dep.type === 'hard' && !parent.completed; 
+                const isUrgentPath = node._isUrgent && parent._isUrgent;
+                
+                let color = '#666'; 
+                if (dep.type === 'soft') color = 'var(--soft-dep-color)'; 
+                if (isUrgentPath) color = '#ff4d4d'; 
+                else if (isCritical) color = 'var(--critical-path)';
+                
                 const width = (isCritical || isUrgentPath) ? 3 : 2;
+                
                 const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                const startX = parent.x + 180 + 2; const startY = parent.y + 40; const endX = node.x - 2; const endY = node.y + 40;
+                const startX = parent.x + 180 + 2; 
+                const startY = parent.y + 40; 
+                const endX = node.x - 2; 
+                const endY = node.y + 40;
+                
                 const d = `M ${startX} ${startY} C ${startX + 50} ${startY}, ${endX - 50} ${endY}, ${endX} ${endY}`;
-                path.setAttribute('d', d); path.setAttribute('stroke', color); path.setAttribute('stroke-width', width);
-                if (dep.type === 'soft') path.classList.add('soft'); if (isCritical || isUrgentPath) path.classList.add('critical'); path.setAttribute('marker-end', 'url(#arrow)'); svg.appendChild(path);
+                
+                path.setAttribute('d', d); 
+                path.setAttribute('stroke', color); 
+                path.setAttribute('stroke-width', width);
+                
+                if (dep.type === 'soft') path.classList.add('soft'); 
+                if (isCritical || isUrgentPath) path.classList.add('critical'); 
+                path.setAttribute('marker-end', 'url(#arrow)'); 
+                svg.appendChild(path);
             });
         });
-        if (!document.getElementById('arrow')) { const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs"); defs.innerHTML = `<marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#666"/></marker>`; svg.appendChild(defs); }
+
+        // Ensure arrow marker exists
+        if (!document.getElementById('arrow')) { 
+            const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs"); 
+            defs.innerHTML = `<marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#666"/></marker>`; 
+            svg.appendChild(defs); 
+        }
         
+        // --- Render Nodes ---
         nodes.forEach(node => {
-            const el = document.createElement('div'); el.className = 'node'; el.style.left = node.x + 'px'; el.style.top = node.y + 'px'; el.dataset.id = node.id;
+            const el = document.createElement('div'); 
+            el.className = 'node'; 
+            el.style.left = node.x + 'px'; 
+            el.style.top = node.y + 'px'; 
+            el.dataset.id = node.id;
+            
             if (node.id === selectedNodeId || selectedIds.has(node.id)) el.classList.add('selected');
-            if (!node.completed) { if (node._isUrgent) el.classList.add('critical-urgent'); else if (node._isCritical) el.classList.add('critical'); if (node._isBlocked) el.classList.add('blocked'); }
+            
+            if (!node.completed) { 
+                if (node._isUrgent) el.classList.add('critical-urgent'); 
+                else if (node._isCritical) el.classList.add('critical'); 
+                if (node._isBlocked) el.classList.add('blocked'); 
+            }
             if (node.completed) el.classList.add('completed');
+            
+            // Badges Generation
             let badgesHtml = '';
-            if (!node.completed) { if (node._isUrgent) badgesHtml += `<span class="badge urgent-badge">URGENT</span>`; else if (node._isCritical) badgesHtml += `<span class="badge critical-badge">CP</span>`; if (node._downstreamWeight > 0) badgesHtml += `<span class="badge weight">⚡${node._downstreamWeight}</span>`; }
-            const totalTime = getTotalTime(node); const isActive = !!node.activeTimerStart;
-            if (totalTime > 0 || isActive) { badgesHtml += `<span class="badge time-badge ${isActive?'active':''}" data-node-id="${node.id}">${isActive ? '🔴' : '⏱'} ${formatTime(getTotalTime(node))}</span>`; }
-            if (node.dueDate && !node.completed) { const due = new Date(node.dueDate); const today = new Date(); today.setHours(0,0,0,0); const isOverdue = due < today; const dateStr = due.toLocaleDateString(undefined, {month:'short', day:'numeric'}); const style = isOverdue ? 'background:#ef4444; color:white; border-color:#ef4444' : ''; badgesHtml += `<span class="badge date-badge" style="${style}">📅 ${dateStr}</span>`; }
-            let icon = ''; if (node.completed) icon = '✅'; else if (node._isBlocked) icon = '<span class="icon-lock">🔒</span>';
-            const totalSubs = node.subtasks.length; const doneSubs = node.subtasks.filter(s => s.done).length; const progress = totalSubs === 0 ? 0 : (doneSubs / totalSubs) * 100;
+            if (!node.completed) { 
+                if (node._isUrgent) badgesHtml += `<span class="badge urgent-badge">URGENT</span>`; 
+                else if (node._isCritical) badgesHtml += `<span class="badge critical-badge">CP</span>`; 
+                if (node._downstreamWeight > 0) badgesHtml += `<span class="badge weight">⚡${node._downstreamWeight}</span>`; 
+            }
+            
+            const totalTime = getTotalTime(node); 
+            const isActive = !!node.activeTimerStart;
+            if (totalTime > 0 || isActive) { 
+                badgesHtml += `<span class="badge time-badge ${isActive?'active':''}" data-node-id="${node.id}">${isActive ? '🔴' : '⏱'} ${formatTime(getTotalTime(node))}</span>`; 
+            }
+            
+            if (node.dueDate && !node.completed) { 
+                const due = new Date(node.dueDate); 
+                const today = new Date(); 
+                today.setHours(0,0,0,0); 
+                const isOverdue = due < today; 
+                const dateStr = due.toLocaleDateString(undefined, {month:'short', day:'numeric'}); 
+                const style = isOverdue ? 'background:#ef4444; color:white; border-color:#ef4444' : ''; 
+                badgesHtml += `<span class="badge date-badge" style="${style}">📅 ${dateStr}</span>`; 
+            }
+            
+            let icon = ''; 
+            if (node.completed) icon = '✅'; 
+            else if (node._isBlocked) icon = '<span class="icon-lock">🔒</span>';
+            
+            const totalSubs = node.subtasks.length; 
+            const doneSubs = node.subtasks.filter(s => s.done).length; 
+            const progress = totalSubs === 0 ? 0 : (doneSubs / totalSubs) * 100;
+            
             const timerBtnIcon = isActive ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M6 6h12v12H6z"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>';
             const timerBtnClass = isActive ? 'node-timer-control stop running' : 'node-timer-control play';
+            
             el.innerHTML = `<div class="${timerBtnClass}" onclick="handleNodeTimerClick(event, '${node.id}')" title="${isActive ? 'Stop Timer' : 'Start Timer'}">${timerBtnIcon}</div><div class="node-header"><span>${icon} ${node.title}</span></div><div class="node-meta">${badgesHtml}</div>${totalSubs > 0 ? `<div class="progress-container"><div class="progress-bar" style="width: ${progress}%"></div></div>` : ''}`;
-            el.onmousedown = (e) => startNodeDrag(e, node.id); container.appendChild(el);
+            
+            el.onmousedown = (e) => startNodeDrag(e, node.id); 
+            container.appendChild(el);
         });
+
+        const endRender = performance.now(); // Stop timer
+        lastRenderTime = endRender - startRender;
+        updateHealthMonitor(); // <--- Trigger Dashboard Update
     }
 
     // --- INTERACTIONS ---
@@ -2137,7 +2270,26 @@
     }
 
     // --- STORAGE & PERSISTENCE ---
-    function saveToStorage() { const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId }; localStorage.setItem('urgencyFlowData', JSON.stringify(data)); showNotification(); }
+    function saveToStorage() { 
+        const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId }; 
+        localStorage.setItem('urgencyFlowData', JSON.stringify(data)); 
+        
+        // Update Dashboard Sync Text
+        const time = new Date().toLocaleTimeString();
+        const syncEl = document.getElementById('hd-sync');
+        if(syncEl) {
+            syncEl.innerText = "Saved " + time;
+            syncEl.style.color = "var(--ready-color)";
+        }
+        
+        // Also update the full monitor (calculations)
+        if(typeof updateHealthMonitor === 'function') {
+            updateHealthMonitor();
+        }
+        
+        // Keep the original toast notification
+        showNotification(); 
+    }
     
     function loadFromStorage() {
         const data = localStorage.getItem('urgencyFlowData');
@@ -2223,6 +2375,42 @@
                 if (selectedNodeId === node.id) { const btnText = document.getElementById('timer-btn-text'); if (btnText) btnText.innerText = `Stop Timer (${formatTime(Date.now() - node.activeTimerStart)})`; }
             }
         });
+    }
+
+    function updateHealthMonitor() {
+        // 1. Task Load
+        const activeCount = nodes.length;
+        const archCount = archivedNodes.length;
+        document.getElementById('hd-load').innerText = `${activeCount} Act / ${archCount} Arch`;
+
+        // 2. Storage Usage (Approximate characters / 5MB limit)
+        // We calculate based on the raw string size stored in local storage
+        const rawData = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId });
+        const bytes = new Blob([rawData]).size; // Accurate byte size
+        const limit = 5 * 1024 * 1024; // 5MB
+        const percent = Math.min(100, (bytes / limit) * 100).toFixed(1);
+        
+        document.getElementById('hd-storage-text').innerText = percent + '%';
+        document.getElementById('hd-storage-bar').style.width = percent + '%';
+        
+        // Color code storage bar
+        const bar = document.getElementById('hd-storage-bar');
+        if(percent > 80) bar.style.background = '#ef4444'; 
+        else if(percent > 50) bar.style.background = '#eab308';
+        else bar.style.background = 'var(--ready-color)';
+
+        // 3. Engine Health (Render Speed)
+        const fpsText = document.getElementById('hd-fps');
+        const fpsDot = document.getElementById('hd-fps-dot');
+        fpsText.innerText = lastRenderTime.toFixed(1) + 'ms';
+        
+        if (lastRenderTime < 16) { // < 16ms is roughly 60fps
+            fpsDot.className = 'health-dot ok';
+        } else if (lastRenderTime < 50) {
+            fpsDot.className = 'health-dot warn';
+        } else {
+            fpsDot.className = 'health-dot err';
+        }
     }
 </script>
 </body>
