@@ -546,6 +546,7 @@
             <button class="btn" onclick="toggleNotesPanel()">📝 Notes</button>
             <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive</button>
             <button class="btn" onclick="fitView()">Recenter / Urgent</button>
+            <button class="btn" onclick="autoArrangeGraph()">🪄 Declutter</button>
             <button class="btn" onclick="toggleHeatmap()">📅 Heatmap</button>
             <button class="btn" style="border-color: var(--accent); color: var(--accent);" onclick="toggleSyncPanel()">☁️ Sync</button>
             <button class="btn" onclick="saveData(true)">Save</button>
@@ -782,6 +783,109 @@
         // Updated regex to include obsidian protocol explicitly
         const match = text.match(/(\b(https?|ftp|file|obsidian):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/i);
         return match ? match[0] : null;
+    }
+
+    // --- AUTO-ARRANGE / DECLUTTER LOGIC ---
+    function autoArrangeGraph() {
+        if (!confirm("Auto-arrange all tasks? This will overwrite manual positions.")) return;
+
+        // Ensure latest urgency data is calculated before arranging
+        updateCalculations(); 
+
+        const NODE_WIDTH = 220;  
+        const NODE_HEIGHT = 160; 
+        const START_X = 100;
+        const START_Y = 100;
+
+        // 1. Reset calculation helpers
+        const levels = {}; 
+
+        // 2. Helper to determine Depth (Topological Sort)
+        const getNodeLevel = (nodeId, visited = new Set()) => {
+            if (visited.has(nodeId)) return 0; 
+            if (levels[nodeId] !== undefined) return levels[nodeId];
+
+            visited.add(nodeId);
+            const node = nodes.find(n => n.id === nodeId);
+            if (!node) return 0;
+
+            const parents = node.dependencies
+                .filter(d => d.type === 'hard')
+                .map(d => nodes.find(p => p.id === d.id))
+                .filter(p => p); 
+
+            if (parents.length === 0) {
+                levels[nodeId] = 0;
+                return 0;
+            }
+
+            let maxParentLevel = 0;
+            parents.forEach(p => {
+                const pLevel = getNodeLevel(p.id, new Set(visited));
+                if (pLevel > maxParentLevel) maxParentLevel = pLevel;
+            });
+
+            const myLevel = maxParentLevel + 1;
+            levels[nodeId] = myLevel;
+            return myLevel;
+        };
+
+        // 3. Calculate levels
+        nodes.forEach(node => getNodeLevel(node.id));
+
+        // 4. GROUP nodes by Level
+        // instead of iterating randomly, we put them in buckets: { 0: [nodeA, nodeB], 1: [nodeC]... }
+        const levelGroups = {};
+        nodes.forEach(node => {
+            const lvl = levels[node.id] || 0;
+            if (!levelGroups[lvl]) levelGroups[lvl] = [];
+            levelGroups[lvl].push(node);
+        });
+
+        // 5. SORT and ASSIGN coordinates
+        Object.keys(levelGroups).forEach(levelKey => {
+            const lvl = parseInt(levelKey);
+            const group = levelGroups[lvl];
+
+            // --- THE SORTING LOGIC ---
+            // This determines who gets to be on top (index 0)
+            group.sort((a, b) => {
+                // 1. Manual Urgent flag ("🔥") takes highest priority
+                if (a.isManualUrgent && !b.isManualUrgent) return -1;
+                if (!a.isManualUrgent && b.isManualUrgent) return 1;
+
+                // 2. Calculated Urgency (Red border/Critical Path)
+                if (a._isUrgent && !b._isUrgent) return -1;
+                if (!a._isUrgent && b._isUrgent) return 1;
+
+                // 3. Critical Path (Yellow)
+                if (a._isCritical && !b._isCritical) return -1;
+                if (!a._isCritical && b._isCritical) return 1;
+
+                // 4. Downstream Weight (Heavier chains float up)
+                // This keeps big projects together at the top
+                const weightA = a._downstreamWeight || 0;
+                const weightB = b._downstreamWeight || 0;
+                if (weightB !== weightA) return weightB - weightA;
+
+                return 0; // Default (keep existing order)
+            });
+
+            // Assign positions based on sorted order
+            group.forEach((node, index) => {
+                node.x = START_X + (lvl * NODE_WIDTH);
+                
+                // Add stagger to even columns for visual variety
+                const stagger = (lvl % 2 === 0) ? 0 : 30; 
+                node.y = START_Y + (index * NODE_HEIGHT) + stagger;
+            });
+        });
+
+        // 6. Save and Render
+        render();
+        saveToStorage();
+        fitView();
+        showNotification("Workspace organized by Urgency");
     }
 
     // --- STATE MANAGEMENT ---
