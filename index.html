@@ -785,107 +785,140 @@
         return match ? match[0] : null;
     }
 
-    // --- AUTO-ARRANGE / DECLUTTER LOGIC ---
+    // --- TIMELINE / GANTT LAYOUT LOGIC ---
     function autoArrangeGraph() {
-        if (!confirm("Auto-arrange all tasks? This will overwrite manual positions.")) return;
+        if (!confirm("Arrange as Timeline? Positions will represent Due Dates.")) return;
 
-        // Ensure latest urgency data is calculated before arranging
-        updateCalculations(); 
+        // Ensure calculations are fresh
+        updateCalculations();
 
-        const NODE_WIDTH = 220;  
-        const NODE_HEIGHT = 160; 
-        const START_X = 100;
-        const START_Y = 100;
+        const ROW_HEIGHT = 180; // Height per "Swimlane" (Path)
+        const START_X = 50;     // Starting Left Margin
+        const START_Y = 100;    // Starting Top Margin
+        const PIXELS_PER_DAY = 20; // 1 Day = 20px width (The "Scale")
+        const MIN_NODE_GAP = 220; // Minimum width between parent/child (Node + Arrow)
 
-        // 1. Reset calculation helpers
-        const levels = {}; 
-
-        // 2. Helper to determine Depth (Topological Sort)
-        const getNodeLevel = (nodeId, visited = new Set()) => {
-            if (visited.has(nodeId)) return 0; 
-            if (levels[nodeId] !== undefined) return levels[nodeId];
-
-            visited.add(nodeId);
-            const node = nodes.find(n => n.id === nodeId);
-            if (!node) return 0;
-
+        // 1. Identify "Chain Heads" (Start of paths)
+        // A "Head" is any node that has NO parents, or whose parents are all completed.
+        // We also treat "Completed" nodes as heads if they start a chain.
+        const chainHeads = nodes.filter(node => {
             const parents = node.dependencies
                 .filter(d => d.type === 'hard')
-                .map(d => nodes.find(p => p.id === d.id))
-                .filter(p => p); 
+                .map(d => nodes.find(p => p.id === d.id));
+            
+            // It's a head if it has no parents
+            if (parents.length === 0) return true;
+            
+            // OR if all parents are in a different "state" (e.g. you want active tasks to start new lines)
+            // For now, simple logic: Roots are heads.
+            return false;
+        });
 
-            if (parents.length === 0) {
-                levels[nodeId] = 0;
-                return 0;
-            }
+        // 2. Build Chains (Paths)
+        // We traverse down from each head. If a node branches, the "most urgent" child stays 
+        // on the main row, others spawn new rows.
+        const rows = []; // Will store arrays of nodes: [ [A, B], [C, D] ... ]
 
-            let maxParentLevel = 0;
-            parents.forEach(p => {
-                const pLevel = getNodeLevel(p.id, new Set(visited));
-                if (pLevel > maxParentLevel) maxParentLevel = pLevel;
+        const visited = new Set();
+
+        const buildChain = (nodeId, currentChain = []) => {
+            if (visited.has(nodeId)) return;
+            visited.add(nodeId);
+            
+            const node = nodes.find(n => n.id === nodeId);
+            if (!node) return;
+            
+            currentChain.push(node);
+
+            // Find children
+            const children = nodes.filter(n => n.dependencies.some(d => d.id === nodeId && d.type === 'hard'));
+            
+            if (children.length === 0) return;
+
+            // Sort children by urgency so the "main" path keeps the most urgent task
+            children.sort((a, b) => {
+                const dueA = a.dueDate ? new Date(a.dueDate) : new Date(8640000000000000);
+                const dueB = b.dueDate ? new Date(b.dueDate) : new Date(8640000000000000);
+                return dueA - dueB;
             });
 
-            const myLevel = maxParentLevel + 1;
-            levels[nodeId] = myLevel;
-            return myLevel;
+            // The first child continues THIS chain
+            buildChain(children[0].id, currentChain);
+
+            // Any extra children start NEW chains (Forking)
+            for (let i = 1; i < children.length; i++) {
+                const newRow = [];
+                buildChain(children[i].id, newRow);
+                if (newRow.length > 0) rows.push(newRow);
+            }
         };
 
-        // 3. Calculate levels
-        nodes.forEach(node => getNodeLevel(node.id));
-
-        // 4. GROUP nodes by Level
-        // instead of iterating randomly, we put them in buckets: { 0: [nodeA, nodeB], 1: [nodeC]... }
-        const levelGroups = {};
-        nodes.forEach(node => {
-            const lvl = levels[node.id] || 0;
-            if (!levelGroups[lvl]) levelGroups[lvl] = [];
-            levelGroups[lvl].push(node);
+        // Initialize chains from heads
+        chainHeads.forEach(head => {
+            const chain = [];
+            buildChain(head.id, chain);
+            if (chain.length > 0) rows.push(chain);
         });
 
-        // 5. SORT and ASSIGN coordinates
-        Object.keys(levelGroups).forEach(levelKey => {
-            const lvl = parseInt(levelKey);
-            const group = levelGroups[lvl];
+        // 3. SORT ROWS VERTICALLY
+        // "Use the most urgent first task of the path as basis"
+        rows.sort((rowA, rowB) => {
+            // Find first ACTIVE task in row A
+            const firstActiveA = rowA.find(n => !n.completed) || rowA[0];
+            const firstActiveB = rowB.find(n => !n.completed) || rowB[0];
 
-            // --- THE SORTING LOGIC ---
-            // This determines who gets to be on top (index 0)
-            group.sort((a, b) => {
-                // 1. Manual Urgent flag ("🔥") takes highest priority
-                if (a.isManualUrgent && !b.isManualUrgent) return -1;
-                if (!a.isManualUrgent && b.isManualUrgent) return 1;
+            // Get Due Dates (Default to far future if none)
+            const dateA = firstActiveA.dueDate ? new Date(firstActiveA.dueDate) : new Date(8640000000000000);
+            const dateB = firstActiveB.dueDate ? new Date(firstActiveB.dueDate) : new Date(8640000000000000);
 
-                // 2. Calculated Urgency (Red border/Critical Path)
-                if (a._isUrgent && !b._isUrgent) return -1;
-                if (!a._isUrgent && b._isUrgent) return 1;
+            return dateA - dateB;
+        });
 
-                // 3. Critical Path (Yellow)
-                if (a._isCritical && !b._isCritical) return -1;
-                if (!a._isCritical && b._isCritical) return 1;
+        // 4. ASSIGN POSITIONS (X-Axis Logic)
+        const today = new Date();
+        today.setHours(0,0,0,0);
 
-                // 4. Downstream Weight (Heavier chains float up)
-                // This keeps big projects together at the top
-                const weightA = a._downstreamWeight || 0;
-                const weightB = b._downstreamWeight || 0;
-                if (weightB !== weightA) return weightB - weightA;
+        rows.forEach((row, rowIndex) => {
+            let previousNodeX = START_X; // Track X of previous node in chain to prevent overlap
 
-                return 0; // Default (keep existing order)
-            });
+            row.forEach(node => {
+                // Set Y: Simple row stacking
+                node.y = START_Y + (rowIndex * ROW_HEIGHT);
 
-            // Assign positions based on sorted order
-            group.forEach((node, index) => {
-                node.x = START_X + (lvl * NODE_WIDTH);
+                // Set X: Based on TIME
+                let targetX = START_X;
+
+                if (node.dueDate) {
+                    const due = new Date(node.dueDate);
+                    const diffTime = due - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    // Logic: Start X + (Days * Scale)
+                    // If due in 10 days: 50 + (10 * 20) = 250px
+                    // If due in 5 days: 50 + (5 * 20) = 150px
+                    targetX = START_X + (diffDays * PIXELS_PER_DAY);
+                } 
                 
-                // Add stagger to even columns for visual variety
-                const stagger = (lvl % 2 === 0) ? 0 : 30; 
-                node.y = START_Y + (index * NODE_HEIGHT) + stagger;
+                // If node is completed/past, ensure it doesn't fly off screen left
+                if (targetX < START_X) targetX = START_X;
+
+                // CRITICAL VISUAL CHECK:
+                // Even if "Task B" is due tomorrow, if it depends on "Task A", 
+                // it visually MUST appear to the right of "Task A".
+                // So we take the MAX of (Time-Based-X) and (Parent-X + Gap)
+                if (targetX < previousNodeX + MIN_NODE_GAP) {
+                    targetX = previousNodeX + MIN_NODE_GAP;
+                }
+
+                node.x = targetX;
+                previousNodeX = node.x; // Update for next child in chain
             });
         });
 
-        // 6. Save and Render
+        // 5. Save & Render
         render();
         saveToStorage();
-        fitView();
-        showNotification("Workspace organized by Urgency");
+        showNotification("Timeline View Applied");
     }
 
     // --- STATE MANAGEMENT ---
