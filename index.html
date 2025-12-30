@@ -2288,10 +2288,33 @@
 
     // --- STORAGE & PERSISTENCE ---
     function saveToStorage() { 
+        // 1. Serialize Data ONCE
         const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId }; 
-        localStorage.setItem('urgencyFlowData', JSON.stringify(data)); 
+        const rawString = JSON.stringify(data); 
         
-        // Update Dashboard Sync Text
+        // 2. Save to Browser Storage
+        localStorage.setItem('urgencyFlowData', rawString); 
+        
+        // 3. Calculate Storage Usage HERE (Heavy operation moved out of render loop)
+        const bytes = new Blob([rawString]).size; 
+        const limit = 5 * 1024 * 1024; // 5MB limit for LocalStorage
+        const percent = Math.min(100, (bytes / limit) * 100).toFixed(1); 
+        
+        // 4. Update the Dashboard UI immediately
+        const bar = document.getElementById('hd-storage-bar');
+        const text = document.getElementById('hd-storage-text');
+        
+        if(bar && text) {
+            text.innerText = percent + '%';
+            bar.style.width = percent + '%';
+            
+            // Color coding
+            if(percent > 80) bar.style.background = '#ef4444'; 
+            else if(percent > 50) bar.style.background = '#eab308';
+            else bar.style.background = 'var(--ready-color)';
+        }
+        
+        // 5. Update Dashboard Sync Text
         const time = new Date().toLocaleTimeString();
         const syncEl = document.getElementById('hd-sync');
         if(syncEl) {
@@ -2299,12 +2322,7 @@
             syncEl.style.color = "var(--ready-color)";
         }
         
-        // Also update the full monitor (calculations)
-        if(typeof updateHealthMonitor === 'function') {
-            updateHealthMonitor();
-        }
-        
-        // Keep the original toast notification
+        // 6. Trigger Toast Notification
         showNotification(); 
     }
     
@@ -2400,33 +2418,23 @@
         const archCount = archivedNodes.length;
         document.getElementById('hd-load').innerText = `${activeCount} Act / ${archCount} Arch`;
 
-        // 2. Storage Usage (Approximate characters / 5MB limit)
-        // We calculate based on the raw string size stored in local storage
-        const rawData = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId });
-        const bytes = new Blob([rawData]).size; // Accurate byte size
-        const limit = 5 * 1024 * 1024; // 5MB
-        const percent = Math.min(100, (bytes / limit) * 100).toFixed(1);
-        
-        document.getElementById('hd-storage-text').innerText = percent + '%';
-        document.getElementById('hd-storage-bar').style.width = percent + '%';
-        
-        // Color code storage bar
-        const bar = document.getElementById('hd-storage-bar');
-        if(percent > 80) bar.style.background = '#ef4444'; 
-        else if(percent > 50) bar.style.background = '#eab308';
-        else bar.style.background = 'var(--ready-color)';
+        // 2. Storage Usage logic REMOVED from here to fix drag lag.
+        // It is now handled in saveToStorage()
 
         // 3. Engine Health (Render Speed)
         const fpsText = document.getElementById('hd-fps');
         const fpsDot = document.getElementById('hd-fps-dot');
-        fpsText.innerText = lastRenderTime.toFixed(1) + 'ms';
         
-        if (lastRenderTime < 16) { // < 16ms is roughly 60fps
-            fpsDot.className = 'health-dot ok';
-        } else if (lastRenderTime < 50) {
-            fpsDot.className = 'health-dot warn';
-        } else {
-            fpsDot.className = 'health-dot err';
+        if (fpsText && fpsDot) {
+            fpsText.innerText = lastRenderTime.toFixed(1) + 'ms';
+            
+            if (lastRenderTime < 16) { // < 16ms is roughly 60fps
+                fpsDot.className = 'health-dot ok';
+            } else if (lastRenderTime < 50) {
+                fpsDot.className = 'health-dot warn';
+            } else {
+                fpsDot.className = 'health-dot err';
+            }
         }
     }
 </script>
