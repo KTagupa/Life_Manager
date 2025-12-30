@@ -1346,57 +1346,74 @@
     }
 
     async function askAI() {
-        const input = document.getElementById('ai-input');
-        const query = input.value.trim();
-        if (!query) return;
+    const input = document.getElementById('ai-input');
+    const query = input.value.trim();
+    if (!query) return;
 
-        if (!geminiApiKey) {
-            addAIChatMessage("⚠️ Please set your Gemini API Key in the settings (⚙️ icon above) to use AI features.", 'bot');
-            toggleAISettings();
-            return;
-        }
-
-        addAIChatMessage(query, 'user');
-        input.value = '';
-        document.getElementById('ai-loading').classList.remove('hidden');
-
-        // Build context from app state
-        const appState = {
-            activeTasks: nodes.map(n => ({ 
-                title: n.title, 
-                due: n.dueDate, 
-                urgent: n.isManualUrgent, 
-                completed: n.completed,
-                progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : 'N/A'
-            })),
-            notes: notes.map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 150) })),
-            goals: lifeGoals[currentGoalYear] || []
-        };
-
-        const systemPrompt = `
-            You are a strategic Project Management Assistant. 
-            The user is using a tool called "Urgency Flow" to manage tasks via a dependency graph.
-            Current Data: ${JSON.stringify(appState)}
-            
-            Goal: Analyze this data to answer questions, identify bottlenecks, or suggest strategy. 
-            Be concise. Use bolding for emphasis. If suggesting a task, suggest its name.
-        `;
-
-        const payload = {
-            contents: [{ parts: [{ text: query }] }],
-            systemInstruction: { parts: [{ text: systemPrompt }] }
-        };
-
-        try {
-            const result = await fetchGemini(payload);
-            const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "I couldn't generate a response.";
-            addAIChatMessage(text, 'bot');
-        } catch (e) {
-            addAIChatMessage("Error: Could not connect to AI service. Please check your internet or try again later.", 'bot');
-        } finally {
-            document.getElementById('ai-loading').classList.add('hidden');
-        }
+    if (!geminiApiKey) {
+        addAIChatMessage("⚠️ Please set your Gemini API Key in the settings (⚙️ icon above) to use AI features.", 'bot');
+        toggleAISettings();
+        return;
     }
+
+    addAIChatMessage(query, 'user');
+    input.value = '';
+    document.getElementById('ai-loading').classList.remove('hidden');
+
+    // --- EXPANDED CONTEXT BUNDLE ---
+    const appState = {
+        // 1. Active Tasks (Existing)
+        activeTasks: nodes.map(n => ({ 
+            title: n.title, 
+            due: n.dueDate, 
+            urgent: n.isManualUrgent, 
+            completed: n.completed,
+            link: n.externalLink,
+            progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : 'N/A'
+        })),
+        
+        // 2. Inbox / Ideas (NEW)
+        inboxIdeas: inbox.map(i => i.title),
+
+        // 3. Archived Tasks (NEW - helps AI see what you've already finished)
+        archivedTasks: archivedNodes.map(n => ({ title: n.title, completedOn: n.completedDate })),
+
+        // 4. Notes (Increased snippet length for better context)
+        notes: notes.map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 300) })),
+
+        // 5. Life Goals (Existing)
+        goals: lifeGoals[currentGoalYear] || []
+    };
+
+    const systemPrompt = `
+        You are a strategic Project Management Assistant. 
+        The user is using "Urgency Flow" to manage tasks via a dependency graph.
+        
+        CONTEXT DATA: ${JSON.stringify(appState)}
+        
+        GOAL: Analyze active tasks, ideas in the inbox, and archived history.
+        - If the user asks for a summary, look at everything.
+        - If an idea in the 'inboxIdeas' seems high-priority based on their goals, suggest promoting it.
+        - Identify bottlenecks where active tasks are stalled compared to archived velocity.
+        
+        Be concise. Use bolding for emphasis. Use Markdown for lists.
+    `;
+
+    const payload = {
+        contents: [{ parts: [{ text: query }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] }
+    };
+
+    try {
+        const result = await fetchGemini(payload);
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "I couldn't generate a response.";
+        addAIChatMessage(text, 'bot');
+    } catch (e) {
+        addAIChatMessage("Error: Could not connect to AI service. Please check your internet or try again later.", 'bot');
+    } finally {
+        document.getElementById('ai-loading').classList.add('hidden');
+    }
+}
 
     // --- DATA STRUCTURE ---
     function createNode(x, y, title = 'New Task') {
