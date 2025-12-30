@@ -548,26 +548,27 @@
             #note-editor.popped-out { width: 95vw; height: 95dvh; }
         }
 
-        /* Eco Mode Styles */
+        /* --- ENHANCED ECO MODE (GPU PROTECTION) --- */
         body.eco-mode .node {
             box-shadow: none !important;
             filter: none !important;
+            border: 1px solid #444 !important;
+            background: #1a1a1a !important;
+        }
+        
+        body.eco-mode svg {
+            shape-rendering: crispEdges; /* Disables expensive antialiasing */
         }
         
         body.eco-mode path {
             filter: none !important;
+            stroke-dasharray: none !important; /* Disables animated dashes */
         }
         
-        #eco-indicator {
-            display: none;
-            color: #10b981;
-            font-size: 10px;
-            font-weight: bold;
-            margin-left: 5px;
-        }
-        
-        body.eco-mode #eco-indicator {
-            display: inline;
+        /* Hiding sub-elements during Eco Mode saves massive rendering cycles */
+        body.eco-mode .progress-container, 
+        body.eco-mode .node-timer-control {
+            display: none !important;
         }
         
     </style>
@@ -2144,14 +2145,16 @@
                 const endX = node.x - 2; 
                 const endY = node.y + 40;
                 
-                // Change the way lines are drawn based on mode
+                // --- Updated Eco Rendering ---
                 let d;
                 if (isEcoMode) {
-                    // ECO: Straight Line (Zero GPU math)
+                    // ECO: Straight Line + No Arrowheads = Minimum CPU usage
                     d = `M ${startX} ${startY} L ${endX} ${endY}`;
+                    path.setAttribute('marker-end', ''); 
                 } else {
-                    // TURBO: Smooth Curve (High GPU math)
+                    // TURBO: Smooth Curves + Arrowheads
                     d = `M ${startX} ${startY} C ${startX + 50} ${startY}, ${endX - 50} ${endY}, ${endX} ${endY}`;
+                    path.setAttribute('marker-end', 'url(#arrow)'); 
                 }
                 
                 path.setAttribute('d', d); 
@@ -2815,19 +2818,39 @@
     function toggleEcoMode(force = null) {
         isEcoMode = (force !== null) ? force : !isEcoMode;
         
+        const statusEl = document.getElementById('eco-status');
+        const btnEl = document.getElementById('eco-toggle-btn');
+    
         if (isEcoMode) {
             document.body.classList.add('eco-mode');
-            showNotification("Eco Mode Active: Graphics Simplified");
+            if (statusEl) statusEl.textContent = "Eco"; 
+            if (btnEl) {
+                btnEl.style.borderColor = "#10b981";
+                btnEl.style.color = "#10b981";
+            }
+            showNotification("Eco Mode: Maximum Performance");
         } else {
             document.body.classList.remove('eco-mode');
-            showNotification("Turbo Mode Active: High Quality");
-            redZoneStartTime = null; // Reset tracker
+            if (statusEl) statusEl.textContent = "Turbo";
+            if (btnEl) {
+                btnEl.style.borderColor = "";
+                btnEl.style.color = "";
+            }
+            showNotification("Turbo Mode: High Quality");
+            redZoneStartTime = null; 
         }
         render();
     }
     
     // Replace your existing updateHealthMonitor with this one
+    let lastHealthUpdateTime = 0;
+    
     function updateHealthMonitor() {
+        // Throttle: Only update the UI every 500ms to save CPU
+        const now = Date.now();
+        if (now - lastHealthUpdateTime < 500) return;
+        lastHealthUpdateTime = now;
+    
         const activeCount = nodes.length;
         const archCount = archivedNodes.length;
         document.getElementById('hd-load').innerText = `${activeCount} Act / ${archCount} Arch`;
@@ -2840,19 +2863,15 @@
             
             if (lastRenderTime < 16) {
                 fpsDot.className = 'health-dot ok';
-                redZoneStartTime = null; // Back in the green, reset timer
+                redZoneStartTime = null;
             } else if (lastRenderTime < 50) {
                 fpsDot.className = 'health-dot warn';
                 redZoneStartTime = null; 
             } else {
                 fpsDot.className = 'health-dot err';
-                
-                // --- AUTO-THROTTLE LOGIC ---
                 if (!isEcoMode) {
                     if (!redZoneStartTime) redZoneStartTime = Date.now();
-                    const timeInRed = Date.now() - redZoneStartTime;
-                    
-                    if (timeInRed > 5000) { // 5 seconds in Red
+                    if (Date.now() - redZoneStartTime > 5000) {
                         toggleEcoMode(true);
                     }
                 }
