@@ -146,8 +146,31 @@
             box-shadow: -4px 0 10px rgba(0,0,0,0.3);
         }
         
+        /* Update this block in your <style> section */
         .side-panel.hidden {
             transform: translateX(100%);
+            /* This makes it invisible to the Tab key: */
+            visibility: hidden; 
+            /* This ensures the animation finishes before it disappears: */
+            transition: transform 0.3s ease, visibility 0s linear 0.3s;
+        }
+        
+        /* Also update the base .side-panel to ensure it reappears instantly */
+        .side-panel {
+            width: 380px;
+            background: #1a1a1a;
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 55;
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            box-shadow: -4px 0 10px rgba(0,0,0,0.3);
+            
+            /* MODIFIED TRANSITION HERE: */
+            transition: transform 0.3s ease, visibility 0s linear 0s;
         }
 
         .side-panel.pinned {
