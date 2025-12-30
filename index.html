@@ -538,7 +538,6 @@
 </head>
 <body>
 
-    <!-- Toolbar -->
     <div id="toolbar" class="collapsed">
         <button id="menu-btn" onclick="toggleMenu()">☰</button>
         <div id="toolbar-content">
@@ -555,10 +554,8 @@
         </div>
     </div>
 
-    <!-- Hidden File Input -->
     <input type="file" id="file-input" style="display:none" onchange="loadFile(this)">
 
-    <!-- Main Graph Area -->
     <div id="graph-container">
         <div id="transform-layer" style="transform-origin: 0 0; position: absolute; top:0; left:0; width:100%; height:100%;">
             <svg id="connections"></svg>
@@ -566,16 +563,13 @@
         </div>
     </div>
     
-    <!-- Selection Box -->
     <div id="selection-rect"></div>
 
-    <!-- Contextual Selection Menu -->
     <div id="selection-menu">
         <button class="sel-menu-btn" onclick="createTaskFromSelection()">✨ To Task</button>
         <button class="sel-menu-btn" onclick="createNoteFromSelection()">📝 To Note</button>
     </div>
 
-    <!-- Sync Panel -->
     <div id="sync-panel" class="hidden">
         <div class="sync-header">
             <span>☁️ GitHub Gist Sync</span>
@@ -599,7 +593,6 @@
         <div id="sync-status" class="sync-status"></div>
     </div>
 
-    <!-- AI Assistant FAB & Panel (Bottom Left) -->
     <button id="fab-ai" onclick="toggleAIPanel()">✨</button>
     <div id="ai-panel" class="hidden">
         <div class="panel-header-row">
@@ -626,7 +619,6 @@
         </div>
     </div>
 
-    <!-- Life Goals Panel (Left) -->
     <div id="goals-panel" class="hidden">
         <div class="goals-header">
             <div class="year-nav">
@@ -640,12 +632,10 @@
             </div>
         </div>
         <div class="goal-tree" id="goal-tree-container">
-            <!-- Dynamic Goals -->
-        </div>
+            </div>
     </div>
 
-    <!-- Notes Panel (Right) -->
-   <div id="notes-panel" class="hidden side-panel">
+    <div id="notes-panel" class="hidden side-panel">
         <div class="panel-header-row" id="notes-header-drag-handle">
             <div style="display:flex; align-items:center; gap:5px;">
                 <span>📝 Notes</span>
@@ -658,7 +648,8 @@
         <div style="padding: 10px; border-top: 1px solid #333;">
             <button class="btn btn-primary" style="width:100%" onclick="createNewNote()">+ Create Independent Note</button>
         </div>
-    </div> 
+    </div>
+
     <div id="note-editor" class="hidden">
         <div class="editor-toolbar">
             <div class="editor-tools-group">
@@ -696,7 +687,6 @@
         </div>
     </div>
 
-    <!-- Archive Panel (Right) -->
     <div id="archive-panel" class="hidden side-panel">
         <div class="panel-header-row">
             <span>🗄️ Completed & Archived</span>
@@ -706,40 +696,33 @@
             Tasks are auto-archived here 15 days after completion.
         </div>
         <div class="panel-list" id="archive-list-container">
-            <!-- Archived Items -->
-        </div>
+            </div>
     </div>
 
-    <!-- Inbox FAB -->
     <button id="fab-inbox" onclick="toggleInbox()">+</button>
 
-    <!-- Inbox Panel -->
     <div id="inbox-panel" class="hidden">
         <div class="inbox-header">
             <span>Inbox (Ideas)</span>
             <span style="cursor:pointer; font-size:18px" onclick="toggleInbox()">×</span>
         </div>
         <div class="inbox-list" id="inbox-list">
-            <!-- Dynamic items -->
-        </div>
+            </div>
         <div class="inbox-footer">
             <input type="text" id="inbox-input" placeholder="Quick task..." onkeypress="if(event.key==='Enter') addToInbox()">
             <button class="btn btn-primary" onclick="addToInbox()">Add</button>
         </div>
     </div>
 
-    <!-- Right Sidebar / Inspector -->
     <div id="inspector" class="hidden">
         <div class="panel-header">
             <span id="insp-title">Task Details</span>
             <button class="btn" onclick="deselectNode()">✕</button>
         </div>
         <div class="panel-content" id="insp-content">
-            <!-- Dynamic Content Injected Here -->
-        </div>
+            </div>
     </div>
     
-    <!-- Heatmap Overlay -->
     <div id="heatmap-overlay" class="hidden">
         <div class="heatmap-header">
             <div class="heatmap-controls">
@@ -750,11 +733,9 @@
             <button class="btn" onclick="toggleHeatmap()">Close</button>
         </div>
         <div id="heatmap-container" class="heatmap-grid" style="display: block;">
-            <!-- Generated Grid -->
-        </div>
+            </div>
     </div>
 
-    <!-- Health Dashboard -->
     <div id="health-dashboard">
         <div class="health-row" title="Active vs Archived Nodes">
             <span class="health-label">Task Load</span>
@@ -780,7 +761,6 @@
         </div>
     </div>
     
-    <!-- Notification Toast -->
     <div id="notification">State Saved</div>
 
 <script>
@@ -1272,7 +1252,7 @@
         const panel = document.getElementById('archive-panel');
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
-            document.getElementById('notes-panel').classList.add('hidden');
+            document.getElementById('notes-panel').classList.add('hidden'); 
             document.getElementById('ai-panel').classList.add('hidden');
             renderArchiveList();
         } else {
