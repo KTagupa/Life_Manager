@@ -268,7 +268,21 @@
         .health-dot.ok { background: var(--ready-color); box-shadow: 0 0 4px var(--ready-color); }
         .health-dot.warn { background: var(--critical-path); }
         .health-dot.err { background: var(--blocked-color); }
+        .health-btn {
+            cursor: pointer !important;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            pointer-events: auto !important;
+        }
+        
+        .health-btn:hover {
+            background: rgba(59, 130, 246, 0.2);
+        }
 
+        #health-dashboard {
+            pointer-events: auto !important;
+        }
         .editor-toolbar { padding: 8px; display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; border-bottom: 1px solid #333; flex-wrap: wrap; gap: 5px; }
         .editor-tools-group { display: flex; gap: 2px; }
         
@@ -783,30 +797,32 @@
             </div>
     </div>
 
-    <div id="health-dashboard">
-        <div class="health-row" title="Active vs Archived Nodes">
-            <span class="health-label">Task Load</span>
-            <span class="health-val" id="hd-load">0 / 0</span>
-        </div>
-        <div class="health-row" title="Browser LocalStorage Usage (~5MB Limit)">
-            <span class="health-label">Storage</span>
-            <div style="display:flex; align-items:center;">
-                <span class="health-val" id="hd-storage-text">0%</span>
-                <div class="health-bar-bg"><div class="health-bar-fill" id="hd-storage-bar"></div></div>
+       <div id="health-dashboard">
+            <div class="health-row" title="Active vs Archived Nodes">
+                <span class="health-label">Task Load</span>
+                <span class="health-val" id="hd-load">0 / 0</span>
+            </div>
+            <div class="health-row" title="Browser LocalStorage Usage (~5MB Limit)">
+                <span class="health-label">Storage</span>
+                <div style="display:flex; align-items:center;">
+                    <span class="health-val" id="hd-storage-text">0%</span>
+                    <div class="health-bar-bg"><div class="health-bar-fill" id="hd-storage-bar"></div></div>
+                </div>
+            </div>
+    
+            <div class="health-row health-btn" title="Click to flush memory & cool down CPU" onclick="cleanAppMemory()">
+                <span class="health-label" style="pointer-events: none;">Engine 🧹</span>
+                <div style="display:flex; align-items:center; pointer-events: none;">
+                    <div class="health-dot ok" id="hd-fps-dot"></div>
+                    <span class="health-val" id="hd-fps">0ms</span>
+                </div>
+            </div>
+    
+            <div class="health-row" style="margin-top:2px; border-top:1px solid #333; padding-top:2px;">
+                <span class="health-label">Sync</span>
+                <span class="health-val" id="hd-sync">Ready</span>
             </div>
         </div>
-       <div class="health-row" title="Click to flush memory & cool down CPU" style="cursor: pointer;" onclick="cleanAppMemory()">
-            <span class="health-label">Engine 🧹</span>
-            <div style="display:flex; align-items:center;">
-                <div class="health-dot ok" id="hd-fps-dot"></div>
-                <span class="health-val" id="hd-fps">0ms</span>
-            </div>
-        </div>
-        <div class="health-row" style="margin-top:2px; border-top:1px solid #333; padding-top:2px;">
-            <span class="health-label">Sync</span>
-            <span class="health-val" id="hd-sync">Ready</span>
-        </div>
-    </div>
     
     <div id="notification">State Saved</div>
 
