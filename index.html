@@ -1140,8 +1140,12 @@
     
     function setSyncStatus(msg, isError = false) {
         const el = document.getElementById('sync-status');
-        el.style.color = isError ? '#ef4444' : 'var(--accent)';
-        el.innerText = msg;
+        if (el) {
+            el.style.color = isError ? '#ef4444' : 'var(--accent)';
+            el.innerText = msg;
+        } else {
+            console.warn("Sync status element missing:", msg);
+        }
     }
 
     async function pushToGist() {
@@ -2666,12 +2670,21 @@
     }
     function clearData() { if(confirm("Are you sure you want to clear all tasks?")) { nodes = []; archivedNodes = []; inbox = []; lifeGoals = {}; notes = []; localStorage.removeItem('urgencyFlowData'); render(); renderInbox(); renderGoals(); deselectNode(); } }
     
-    function showNotification(msg) { 
-        const n = document.getElementById('notification'); 
-        n.innerText = msg || "State Saved"; 
-        n.style.opacity = '1'; 
-        setTimeout(() => n.style.opacity = '0', 1500); 
-        if(!msg) document.getElementById('status-indicator').innerText = "Saved " + new Date().toLocaleTimeString(); 
+    function showNotification(msg) {
+        const n = document.getElementById('notification');
+        if (n) {
+            n.innerText = msg || "State Saved";
+            n.style.opacity = '1';
+            setTimeout(() => n.style.opacity = '0', 1500);
+        } else {
+            console.log("Notification:", msg); // Fallback to console if UI missing
+        }
+        
+        // Also safeguard the status indicator if it exists
+        const statusInd = document.getElementById('status-indicator');
+        if (!msg && statusInd) {
+             statusInd.innerText = "Saved " + new Date().toLocaleTimeString();
+        }
     }
     
     function tickTimers() {
