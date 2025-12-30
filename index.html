@@ -785,140 +785,197 @@
         return match ? match[0] : null;
     }
 
-    // --- TIMELINE / GANTT LAYOUT LOGIC ---
+    // --- TIMELINE / GANTT HYBRID LAYOUT ---
     function autoArrangeGraph() {
-        if (!confirm("Arrange as Timeline? Positions will represent Due Dates.")) return;
+        if (!confirm("Arrange layout? (Active Heads aligned left, Timeline to right)")) return;
 
-        // Ensure calculations are fresh
-        updateCalculations();
+        // 1. Setup & Safety
+        updateCalculations(); // Ensure urgent flags/due dates are fresh
+        
+        const ROW_HEIGHT = 180;        // Vertical space between paths
+        const COL_GAP = 220;           // Standard gap between nodes
+        const TIME_SCALE = 15;         // 1 Day = 15px
+        const MAX_GAP = 400;           // Max distance (prevents Task J from flying too far)
+        
+        const COMPLETED_X = 100;       // X for Completed Tasks
+        const ACTIVE_START_X = 350;    // X for "First Active Tasks" (The main column)
 
-        const ROW_HEIGHT = 180; // Height per "Swimlane" (Path)
-        const START_X = 50;     // Starting Left Margin
-        const START_Y = 100;    // Starting Top Margin
-        const PIXELS_PER_DAY = 20; // 1 Day = 20px width (The "Scale")
-        const MIN_NODE_GAP = 220; // Minimum width between parent/child (Node + Arrow)
+        const processedIds = new Set();
+        const rows = [];
 
-        // 1. Identify "Chain Heads" (Start of paths)
-        // A "Head" is any node that has NO parents, or whose parents are all completed.
-        // We also treat "Completed" nodes as heads if they start a chain.
-        const chainHeads = nodes.filter(node => {
-            const parents = node.dependencies
+        // 2. Identify "Active Heads" 
+        // These are Active nodes that either have NO parents, or ALL their parents are completed.
+        // These form your "Column 1" (Task A, C, E, G, I)
+        const activeHeads = nodes.filter(n => {
+            if (n.completed) return false; // We handle active heads only
+            
+            const hardParents = n.dependencies
                 .filter(d => d.type === 'hard')
-                .map(d => nodes.find(p => p.id === d.id));
-            
-            // It's a head if it has no parents
-            if (parents.length === 0) return true;
-            
-            // OR if all parents are in a different "state" (e.g. you want active tasks to start new lines)
-            // For now, simple logic: Roots are heads.
-            return false;
+                .map(d => nodes.find(p => p.id === d.id))
+                .filter(p => p); // Valid parents
+
+            // It is a head if it has no parents OR no *active* parents
+            const hasActiveParent = hardParents.some(p => !p.completed);
+            return !hasActiveParent;
         });
 
-        // 2. Build Chains (Paths)
-        // We traverse down from each head. If a node branches, the "most urgent" child stays 
-        // on the main row, others spawn new rows.
-        const rows = []; // Will store arrays of nodes: [ [A, B], [C, D] ... ]
-
-        const visited = new Set();
-
-        const buildChain = (nodeId, currentChain = []) => {
-            if (visited.has(nodeId)) return;
-            visited.add(nodeId);
+        // 3. Build "Rows" (Swimlanes) starting from each Head
+        activeHeads.forEach(head => {
+            const rowNodes = [];
             
-            const node = nodes.find(n => n.id === nodeId);
-            if (!node) return;
+            // A. Find immediate Completed Parents (for the left column)
+            // We only look one level back for visual simplicity in this mode
+            const completedParents = head.dependencies
+                .filter(d => d.type === 'hard')
+                .map(d => nodes.find(p => p.id === d.id))
+                .filter(p => p && p.completed);
             
-            currentChain.push(node);
-
-            // Find children
-            const children = nodes.filter(n => n.dependencies.some(d => d.id === nodeId && d.type === 'hard'));
-            
-            if (children.length === 0) return;
-
-            // Sort children by urgency so the "main" path keeps the most urgent task
-            children.sort((a, b) => {
-                const dueA = a.dueDate ? new Date(a.dueDate) : new Date(8640000000000000);
-                const dueB = b.dueDate ? new Date(b.dueDate) : new Date(8640000000000000);
-                return dueA - dueB;
+            // Add them to processed so we don't duplicate them
+            completedParents.forEach(p => {
+                rowNodes.push({ node: p, type: 'completed' });
+                processedIds.add(p.id);
             });
 
-            // The first child continues THIS chain
-            buildChain(children[0].id, currentChain);
+            // B. Add the Head (The start of the active chain)
+            rowNodes.push({ node: head, type: 'head' });
+            processedIds.add(head.id);
 
-            // Any extra children start NEW chains (Forking)
-            for (let i = 1; i < children.length; i++) {
-                const newRow = [];
-                buildChain(children[i].id, newRow);
-                if (newRow.length > 0) rows.push(newRow);
+            // C. Trace the "Main Path" to the right
+            let current = head;
+            while (true) {
+                // Find active children
+                const children = nodes.filter(n => 
+                    !n.completed && 
+                    !processedIds.has(n.id) &&
+                    n.dependencies.some(d => d.id === current.id && d.type === 'hard')
+                );
+
+                if (children.length === 0) break;
+
+                // If multiple children, pick the "Most Urgent" to stay on this row
+                // (Others will be caught by the "Orphan Catcher" later and made into new rows)
+                children.sort((a, b) => {
+                    // Sort by Due Date (earliest first)
+                    const dateA = a.dueDate ? new Date(a.dueDate) : new Date(8640000000000000);
+                    const dateB = b.dueDate ? new Date(b.dueDate) : new Date(8640000000000000);
+                    return dateA - dateB;
+                });
+
+                const nextNode = children[0];
+                rowNodes.push({ node: nextNode, type: 'child' });
+                processedIds.add(nextNode.id);
+                current = nextNode;
             }
-        };
 
-        // Initialize chains from heads
-        chainHeads.forEach(head => {
-            const chain = [];
-            buildChain(head.id, chain);
-            if (chain.length > 0) rows.push(chain);
+            rows.push(rowNodes);
         });
 
-        // 3. SORT ROWS VERTICALLY
-        // "Use the most urgent first task of the path as basis"
+        // 4. Sort Rows Vertically
+        // Based on the Due Date of the "Head" (Task A vs C vs E...)
         rows.sort((rowA, rowB) => {
-            // Find first ACTIVE task in row A
-            const firstActiveA = rowA.find(n => !n.completed) || rowA[0];
-            const firstActiveB = rowB.find(n => !n.completed) || rowB[0];
+            const headA = rowA.find(item => item.type === 'head').node;
+            const headB = rowB.find(item => item.type === 'head').node;
+            
+            // Urgent flag priority
+            if (headA.isManualUrgent && !headB.isManualUrgent) return -1;
+            if (!headA.isManualUrgent && headB.isManualUrgent) return 1;
 
-            // Get Due Dates (Default to far future if none)
-            const dateA = firstActiveA.dueDate ? new Date(firstActiveA.dueDate) : new Date(8640000000000000);
-            const dateB = firstActiveB.dueDate ? new Date(firstActiveB.dueDate) : new Date(8640000000000000);
-
+            // Then Date priority
+            const dateA = headA.dueDate ? new Date(headA.dueDate) : new Date(8640000000000000);
+            const dateB = headB.dueDate ? new Date(headB.dueDate) : new Date(8640000000000000);
             return dateA - dateB;
         });
 
-        // 4. ASSIGN POSITIONS (X-Axis Logic)
-        const today = new Date();
-        today.setHours(0,0,0,0);
+        // 5. Assign Coordinates
+        let currentY = 100;
+        
+        rows.forEach(row => {
+            let previousX = ACTIVE_START_X;
+            let headDueDate = null;
 
-        rows.forEach((row, rowIndex) => {
-            let previousNodeX = START_X; // Track X of previous node in chain to prevent overlap
+            row.forEach(item => {
+                item.node.y = currentY;
 
-            row.forEach(node => {
-                // Set Y: Simple row stacking
-                node.y = START_Y + (rowIndex * ROW_HEIGHT);
-
-                // Set X: Based on TIME
-                let targetX = START_X;
-
-                if (node.dueDate) {
-                    const due = new Date(node.dueDate);
-                    const diffTime = due - today;
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    
-                    // Logic: Start X + (Days * Scale)
-                    // If due in 10 days: 50 + (10 * 20) = 250px
-                    // If due in 5 days: 50 + (5 * 20) = 150px
-                    targetX = START_X + (diffDays * PIXELS_PER_DAY);
+                if (item.type === 'completed') {
+                    // Stack completed tasks to the left
+                    item.node.x = COMPLETED_X; 
+                    // If multiple completed parents, we might overlap them. 
+                    // Simple fix: stagger slightly if needed, but standardizing X is cleaner.
                 } 
-                
-                // If node is completed/past, ensure it doesn't fly off screen left
-                if (targetX < START_X) targetX = START_X;
+                else if (item.type === 'head') {
+                    // Align strictly to the start column
+                    item.node.x = ACTIVE_START_X;
+                    previousX = item.node.x;
+                    if (item.node.dueDate) headDueDate = new Date(item.node.dueDate);
+                } 
+                else if (item.type === 'child') {
+                    // TIME-BASED PLACEMENT
+                    let dist = COL_GAP; // Default minimum gap
 
-                // CRITICAL VISUAL CHECK:
-                // Even if "Task B" is due tomorrow, if it depends on "Task A", 
-                // it visually MUST appear to the right of "Task A".
-                // So we take the MAX of (Time-Based-X) and (Parent-X + Gap)
-                if (targetX < previousNodeX + MIN_NODE_GAP) {
-                    targetX = previousNodeX + MIN_NODE_GAP;
+                    if (item.node.dueDate && headDueDate) {
+                        const currentDue = new Date(item.node.dueDate);
+                        const diffTime = currentDue - headDueDate;
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        
+                        // Calculate Scaled Distance
+                        // Logic: MinGap + (Days * Scale)
+                        // This places Task D (5 days) closer than Task B (10 days)
+                        let timeDist = diffDays * TIME_SCALE;
+                        
+                        // Cap the distance for Task J (300 days)
+                        if (timeDist > MAX_GAP) timeDist = MAX_GAP;
+                        if (timeDist < 0) timeDist = 0; // Handle overdue
+
+                        dist = Math.max(COL_GAP, timeDist + COL_GAP); 
+                    }
+
+                    // Place node relative to PREVIOUS node in chain
+                    // Actually, for "Timeline", absolute time from Head is better,
+                    // BUT to prevent overlap, we ensure it's at least COL_GAP from previous.
+                    
+                    // Simple approach: Previous X + calculated gap
+                    // If we want relative to Head (A), B is at A + 10days.
+                    // If we want relative to Prev (C), D is at C + 5days.
+                    
+                    // Let's stick to: Always minimum gap from previous, plus extra if time allows.
+                    item.node.x = previousX + dist;
+                    
+                    // Adjust HeadDueDate to this node for the next link in chain?
+                    // No, keeping it relative to the chain start usually looks cleaner for "Timeline".
+                    // But your drawing shows sequential. Let's update previousX.
+                    previousX = item.node.x;
+                    if (item.node.dueDate) headDueDate = new Date(item.node.dueDate);
                 }
-
-                node.x = targetX;
-                previousNodeX = node.x; // Update for next child in chain
             });
+
+            currentY += ROW_HEIGHT;
         });
 
-        // 5. Save & Render
+        // 6. ORPHAN CATCHER (The Bug Fix)
+        // Any node not processed above (isolated nodes, or complex branches) gets placed below.
+        let orphanX = ACTIVE_START_X;
+        let foundOrphans = false;
+        
+        nodes.forEach(n => {
+            if (!processedIds.has(n.id)) {
+                if (!foundOrphans) {
+                    currentY += 50; // Add divider space
+                    foundOrphans = true;
+                }
+                n.x = orphanX;
+                n.y = currentY;
+                orphanX += COL_GAP;
+                if (orphanX > ACTIVE_START_X + (COL_GAP * 3)) {
+                    orphanX = ACTIVE_START_X;
+                    currentY += ROW_HEIGHT;
+                }
+            }
+        });
+
         render();
         saveToStorage();
-        showNotification("Timeline View Applied");
+        fitView();
+        showNotification("Hybrid Timeline Applied");
     }
 
     // --- STATE MANAGEMENT ---
