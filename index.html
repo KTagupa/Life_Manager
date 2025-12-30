@@ -1530,10 +1530,10 @@
         if (title.length > 30) title = title.substring(0, 30) + "...";
         
         // Link parent ID if we are editing a note linked to a task
-        let parentTaskID = null;
+        let parentTaskID = null; // Variable defined here
         if (currentEditingNoteId && currentSelectionSource === 'note') {
             const currentNote = notes.find(n => n.id === currentEditingNoteId);
-            if(currentNote) parentTaskID = currentNote.taskId;
+            if(currentNote) parentTaskID = currentNote.taskId; // Logic fixed
         }
 
         let originText = "";
@@ -1543,6 +1543,7 @@
             originText = `**From:** AI Chat\n\n`;
         }
 
+        // Use parentTaskID correctly here
         const newNote = createNoteObject(title, `${originText}${currentSelectionText}`, parentTaskID);
         notes.push(newNote);
 
@@ -1593,16 +1594,23 @@
     }
 
     function createNewNote(taskId = null) {
-        const newNote = createNoteObject("New Note", "", taskId);
+        // Fix: Ensure taskId is a string or null, ignore Event objects if passed by onclick
+        const safeTaskId = (typeof taskId === 'string') ? taskId : null;
+
+        const newNote = createNoteObject("New Note", "", safeTaskId);
         notes.push(newNote);
         saveToStorage();
+        
         const panel = document.getElementById('notes-panel');
         if(panel.classList.contains('hidden')) toggleNotesPanel();
+        
         openNoteEditor(newNote.id);
         renderNotesList();
-        if(taskId && selectedNodeId === taskId) updateInspector();
+        
+        // Update Inspector if we added a note to the currently selected task
+        if(safeTaskId && selectedNodeId === safeTaskId) updateInspector();
     }
-
+    
     function openNoteEditor(noteId) {
         const note = notes.find(n => n.id === noteId);
         if(!note) return;
@@ -1656,11 +1664,20 @@
 
     function deleteCurrentNote() {
         if(!currentEditingNoteId) return;
+        
         if(confirm("Delete this note?")) {
+            // Remove from array
             notes = notes.filter(n => n.id !== currentEditingNoteId);
+            
+            // Clear editor ID first to prevent saveCurrentNote from firing on ghost data
+            const deletedId = currentEditingNoteId;
+            currentEditingNoteId = null;
+            
             closeNoteEditor();
             saveToStorage();
             renderNotesList();
+            
+            // Force update inspector if the deleted note was linked to the active task
             if(selectedNodeId) updateInspector();
         }
     }
