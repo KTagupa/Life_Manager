@@ -1054,6 +1054,9 @@
     let panX = 0;
     let panY = 0;
     let lastRenderTime = 0;
+
+    let isEcoMode = false;
+    let redZoneStartTime = null;
     
     // Sync State
     let githubToken = '';
@@ -1639,16 +1642,20 @@
     }
 
     function toggleArchivePanel() {
-        const panel = document.getElementById('archive-panel');
-        const notesPanel = document.getElementById('notes-panel'); // Add this line
-        
-        if(panel.classList.contains('hidden')) {
-            panel.classList.remove('hidden');
-            notesPanel.classList.add('hidden'); // This ensures Notes close when Archive opens
-            document.getElementById('ai-panel').classList.add('hidden');
+        const archivePanel = document.getElementById('archive-panel');
+        const notesPanel = document.getElementById('notes-panel');
+        const goalsPanel = document.getElementById('goals-panel');
+        const aiPanel = document.getElementById('ai-panel');
+    
+        if (archivePanel.classList.contains('hidden')) {
+            // Opening Archive: Hide everything else
+            archivePanel.classList.remove('hidden');
+            notesPanel.classList.add('hidden');
+            goalsPanel.classList.add('hidden');
+            aiPanel.classList.add('hidden');
             renderArchiveList();
         } else {
-            panel.classList.add('hidden');
+            archivePanel.classList.add('hidden');
         }
     }
 
@@ -1676,15 +1683,20 @@
     // --- NOTES LOGIC ---
     
     function toggleNotesPanel() {
-        const panel = document.getElementById('notes-panel');
+        const notesPanel = document.getElementById('notes-panel');
         const archivePanel = document.getElementById('archive-panel');
-        
-        if(panel.classList.contains('hidden')) {
-            panel.classList.remove('hidden');
-            archivePanel.classList.add('hidden'); // Close archive when opening notes
+        const goalsPanel = document.getElementById('goals-panel');
+        const aiPanel = document.getElementById('ai-panel');
+    
+        if (notesPanel.classList.contains('hidden')) {
+            // Opening Notes: Hide everything else
+            notesPanel.classList.remove('hidden');
+            archivePanel.classList.add('hidden');
+            goalsPanel.classList.add('hidden');
+            aiPanel.classList.add('hidden');
             renderNotesList();
         } else {
-            panel.classList.add('hidden');
+            notesPanel.classList.add('hidden');
         }
     }
 
