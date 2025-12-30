@@ -1466,24 +1466,40 @@
 }
 
     function toggleEcoMode(force = null) {
-        isEcoMode = (force !== null) ? force : !isEcoMode;
+        // 1. Force the state or flip the current boolean
+        if (force !== null) {
+            isEcoMode = force;
+        } else {
+            isEcoMode = !isEcoMode;
+        }
         
+        // 2. Safely grab the UI elements
         const statusEl = document.getElementById('eco-status');
         const btnEl = document.getElementById('eco-toggle-btn');
     
+        // 3. Execute Mode Changes
         if (isEcoMode) {
             document.body.classList.add('eco-mode');
-            if (statusEl) statusEl.innerText = "Eco";
-            if (btnEl) btnEl.style.borderColor = "#10b981"; // Turn border green in Eco
-            showNotification("Eco Mode Active: Graphics Simplified");
+            if (statusEl) statusEl.innerText = "Eco"; // This updates the text
+            if (btnEl) {
+                btnEl.style.borderColor = "#10b981";
+                btnEl.style.color = "#10b981";
+            }
+            showNotification("Eco Mode Active");
         } else {
             document.body.classList.remove('eco-mode');
-            if (statusEl) statusEl.innerText = "Turbo";
-            if (btnEl) btnEl.style.borderColor = ""; // Reset border
-            showNotification("Turbo Mode Active: High Quality");
+            if (statusEl) statusEl.innerText = "Turbo"; // This updates the text
+            if (btnEl) {
+                btnEl.style.borderColor = "";
+                btnEl.style.color = "";
+            }
+            showNotification("Turbo Mode Active");
             redZoneStartTime = null; 
         }
-        render();
+    
+        // 4. Force a re-render to change lines from curves to straight
+        // This is the part that actually helps your MacBook's CPU
+        render(); 
     }
     
     // --- DATA STRUCTURE ---
