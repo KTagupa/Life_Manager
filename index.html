@@ -1145,10 +1145,18 @@
     }
 
     async function pushToGist() {
-        if (!githubToken) return setSyncStatus('Error: Missing GitHub Token', true);
-        setSyncStatus('Pushing to GitHub...');
-        showNotification('Pushing to GitHub...'); 
+        // Ensure we grab the latest value from the input if the variable is empty
+        if (!githubToken) githubToken = document.getElementById('github-token').value.trim();
         
+        if (!githubToken) {
+            alert("Please enter a GitHub Personal Access Token first.");
+            return;
+        }
+
+        setSyncStatus('Pushing to GitHub...');
+        showNotification('Pushing to GitHub...');
+        
+        // Prepare content - ensure it's a clean string
         const content = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes }, null, 2);
         const files = {};
         files[GIST_FILENAME] = { content: content };
@@ -1156,6 +1164,8 @@
         try {
             let url = 'https://api.github.com/gists';
             let method = 'POST';
+            
+            // If we have an ID, update existing; otherwise create new
             if (gistId) {
                 url = `https://api.github.com/gists/${gistId}`;
                 method = 'PATCH';
@@ -1165,7 +1175,8 @@
                 method: method,
                 headers: {
                     'Authorization': `token ${githubToken}`,
-                    'Accept': 'application/vnd.github.v3+json'
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     description: 'Urgency Flow Data Backup',
@@ -1174,59 +1185,90 @@
                 })
             });
             
-            if (!response.ok) throw new Error('GitHub API Error: ' + response.statusText);
-            
             const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || response.statusText);
+            }
+            
+            // Save the Gist ID if we just created a new one
             gistId = data.id;
             document.getElementById('gist-id').value = gistId;
-            saveToStorage(); 
+            saveToStorage();
+            
             setSyncStatus(`Success! Saved to Gist: ${gistId.substring(0,6)}...`);
             showNotification('GitHub Sync Complete!');
             
         } catch (e) {
             console.error(e);
-            setSyncStatus('Sync Failed: ' + e.message, true);
-            showNotification('GitHub Sync Failed');
+            setSyncStatus('Push Failed: ' + e.message, true);
+            alert("GitHub Push Failed: " + e.message + "\nCheck your Token permissions (must have 'gist' scope).");
         }
     }
 
     async function pullFromGist() {
-        if (!githubToken) return setSyncStatus('Error: Missing GitHub Token', true);
-        setSyncStatus('Searching for Gist...');
+        if (!githubToken) githubToken = document.getElementById('github-token').value.trim();
+
+        if (!githubToken) {
+            alert("Please enter a GitHub Personal Access Token first.");
+            return;
+        }
+
+        setSyncStatus('Connecting to GitHub...');
         
         try {
+            // 1. If we don't have an ID, we must search for the file
             if (!gistId) {
                 const listResp = await fetch('https://api.github.com/gists', {
-                    headers: { 'Authorization': `token ${githubToken}` }
+                    headers: { 
+                        'Authorization': `token ${githubToken}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
                 });
-                if (!listResp.ok) throw new Error('Could not list Gists');
+
                 const gists = await listResp.json();
-                const found = gists.find(g => g.files[GIST_FILENAME]);
+
+                // ERROR CHECK: If API returns an error object instead of an array
+                if (!Array.isArray(gists)) {
+                    throw new Error(gists.message || "Failed to list Gists");
+                }
+
+                const found = gists.find(g => g.files && g.files[GIST_FILENAME]);
                 if (found) {
                     gistId = found.id;
                     document.getElementById('gist-id').value = gistId;
-                    setSyncStatus('Found existing Gist. Downloading...');
+                    setSyncStatus('Found Gist. Downloading...');
                 } else {
-                    return setSyncStatus('No Gist found. Push first.', true);
+                    throw new Error("No Gist found containing '" + GIST_FILENAME + "'. Try pushing first.");
                 }
             }
             
+            // 2. Fetch the specific Gist content
             const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
                 headers: { 'Authorization': `token ${githubToken}` }
             });
             
-            if (!resp.ok) throw new Error('Fetch failed');
             const data = await resp.json();
+            if (!resp.ok) throw new Error(data.message || "Fetch failed");
+
+            // 3. Parse the content
+            if (!data.files[GIST_FILENAME]) throw new Error("Gist found, but file is missing.");
+            
+            // Use the raw_url to fetch content if truncated (files > 1MB)
+            // But usually 'content' is present for standard text files
             const fileContent = data.files[GIST_FILENAME].content;
             const parsed = JSON.parse(fileContent);
             
+            // 4. Update Application State
             if (parsed.nodes) nodes = parsed.nodes;
             if (parsed.archivedNodes) archivedNodes = parsed.archivedNodes;
             if (parsed.inbox) inbox = parsed.inbox;
             if (parsed.lifeGoals) lifeGoals = parsed.lifeGoals;
             if (parsed.notes) notes = parsed.notes;
             
+            // 5. Sanitize logic (restore missing arrays if file was old)
             nodes.forEach(n => { if(!n.dependencies) n.dependencies = []; });
+            
             saveToStorage();
             updateCalculations();
             render();
@@ -1239,7 +1281,7 @@
         } catch (e) {
             console.error(e);
             setSyncStatus('Pull Failed: ' + e.message, true);
-            showNotification('GitHub Pull Failed');
+            alert("GitHub Pull Failed: " + e.message);
         }
     }
 
@@ -2576,16 +2618,51 @@
     function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); }
     function saveData(download = false) { const data = JSON.stringify({nodes, archivedNodes, inbox, lifeGoals, notes}, null, 2); if (download) { const blob = new Blob([data], {type: 'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
     function loadFile(input) {
-        const file = input.files[0]; if (!file) return;
+        const file = input.files[0];
+        if (!file) return;
+
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
+                // 1. Attempt to parse
                 const parsed = JSON.parse(e.target.result);
-                if (Array.isArray(parsed)) { nodes = parsed; inbox = []; lifeGoals = {}; notes = []; archivedNodes = []; } 
-                else { nodes = parsed.nodes || []; inbox = parsed.inbox || []; lifeGoals = parsed.lifeGoals || {}; notes = parsed.notes || []; archivedNodes = parsed.archivedNodes || []; }
-                updateCalculations(); render(); renderInbox(); renderGoals(); saveToStorage(); alert("File loaded successfully!");
-            } catch (err) { alert("Error parsing JSON"); }
-        }; reader.readAsText(file);
+
+                // 2. Data Validation logic
+                if (Array.isArray(parsed)) {
+                    // Legacy support: if the file is just an array of nodes
+                    nodes = parsed;
+                    inbox = [];
+                    lifeGoals = {};
+                    notes = [];
+                    archivedNodes = [];
+                } else {
+                    // Modern support: Wrapper object
+                    nodes = parsed.nodes || [];
+                    inbox = parsed.inbox || [];
+                    lifeGoals = parsed.lifeGoals || {};
+                    notes = parsed.notes || [];
+                    archivedNodes = parsed.archivedNodes || [];
+                    // Do NOT load tokens from file for security, unless specifically desired
+                }
+
+                // 3. Post-load updates
+                updateCalculations();
+                render();
+                renderInbox();
+                renderGoals();
+                
+                // 4. Save to local storage immediately so a refresh keeps the data
+                saveToStorage();
+                
+                showNotification("File loaded successfully!");
+            } catch (err) {
+                console.error("Load Error details:", err);
+                alert("Failed to load file.\nError: " + err.message);
+            }
+        };
+        // Ensure the input is cleared so you can load the same file again if needed
+        input.value = ''; 
+        reader.readAsText(file);
     }
     function clearData() { if(confirm("Are you sure you want to clear all tasks?")) { nodes = []; archivedNodes = []; inbox = []; lifeGoals = {}; notes = []; localStorage.removeItem('urgencyFlowData'); render(); renderInbox(); renderGoals(); deselectNode(); } }
     
