@@ -109,7 +109,7 @@
             pointer-events: none;
             position: absolute;
             left: 40px;
-            visibility: hidden;
+            display: none; /* Add this to stop the Tab key from finding buttons */
         }
 
         #inspector {
@@ -1119,11 +1119,16 @@
     function toggleMenu() {
         const tb = document.getElementById('toolbar');
         const btn = document.getElementById('menu-btn');
+        const content = document.getElementById('toolbar-content');
+        
         tb.classList.toggle('collapsed');
+        
         if(tb.classList.contains('collapsed')) {
             btn.innerHTML = '☰';
+            content.style.display = 'none';
         } else {
             btn.innerHTML = '✕';
+            content.style.display = 'flex';
         }
     }
     
@@ -1635,9 +1640,11 @@
 
     function toggleArchivePanel() {
         const panel = document.getElementById('archive-panel');
+        const notesPanel = document.getElementById('notes-panel'); // Add this line
+        
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
-            document.getElementById('notes-panel').classList.add('hidden'); 
+            notesPanel.classList.add('hidden'); // This ensures Notes close when Archive opens
             document.getElementById('ai-panel').classList.add('hidden');
             renderArchiveList();
         } else {
@@ -1670,10 +1677,11 @@
     
     function toggleNotesPanel() {
         const panel = document.getElementById('notes-panel');
+        const archivePanel = document.getElementById('archive-panel');
+        
         if(panel.classList.contains('hidden')) {
             panel.classList.remove('hidden');
-            document.getElementById('archive-panel').classList.add('hidden'); 
-            // We don't hide AI panel here to allow multitasking if needed
+            archivePanel.classList.add('hidden'); // Close archive when opening notes
             renderNotesList();
         } else {
             panel.classList.add('hidden');
@@ -2850,36 +2858,6 @@
                 if (selectedNodeId === node.id) { const btnText = document.getElementById('timer-btn-text'); if (btnText) btnText.innerText = `Stop Timer (${formatTime(Date.now() - node.activeTimerStart)})`; }
             }
         });
-    }
-
-    let isEcoMode = false;
-    let redZoneStartTime = null;
-    
-    function toggleEcoMode(force = null) {
-        isEcoMode = (force !== null) ? force : !isEcoMode;
-        
-        const statusEl = document.getElementById('eco-status');
-        const btnEl = document.getElementById('eco-toggle-btn');
-    
-        if (isEcoMode) {
-            document.body.classList.add('eco-mode');
-            if (statusEl) statusEl.textContent = "Eco"; 
-            if (btnEl) {
-                btnEl.style.borderColor = "#10b981";
-                btnEl.style.color = "#10b981";
-            }
-            showNotification("Eco Mode: Maximum Performance");
-        } else {
-            document.body.classList.remove('eco-mode');
-            if (statusEl) statusEl.textContent = "Turbo";
-            if (btnEl) {
-                btnEl.style.borderColor = "";
-                btnEl.style.color = "";
-            }
-            showNotification("Turbo Mode: High Quality");
-            redZoneStartTime = null; 
-        }
-        render();
     }
     
     // Replace your existing updateHealthMonitor with this one
