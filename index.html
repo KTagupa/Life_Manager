@@ -645,7 +645,7 @@
     </div>
 
     <!-- Notes Panel (Right) -->
-    <div id="notes-panel" class="hidden side-panel">
+   <div id="notes-panel" class="hidden side-panel">
         <div class="panel-header-row" id="notes-header-drag-handle">
             <div style="display:flex; align-items:center; gap:5px;">
                 <span>📝 Notes</span>
@@ -654,48 +654,45 @@
             <button class="btn" onclick="toggleNotesPanel()">✕</button>
         </div>
         <div class="panel-list" id="notes-list-container">
-            <!-- Note Items -->
-        </div>
+            </div>
         <div style="padding: 10px; border-top: 1px solid #333;">
             <button class="btn btn-primary" style="width:100%" onclick="createNewNote()">+ Create Independent Note</button>
         </div>
+    </div> 
+    <div id="note-editor" class="hidden">
+        <div class="editor-toolbar">
+            <div class="editor-tools-group">
+                <button class="tool-btn active" id="btn-edit-mode" onclick="setNoteMode('edit')" title="Edit Mode">✏️</button>
+                <button class="tool-btn" id="btn-view-mode" onclick="setNoteMode('view')" title="Preview Mode (Render Markdown)">👁️</button>
+            </div>
+            
+            <div class="editor-tools-group">
+                <button class="tool-btn" onclick="insertTextAtCursor('**', '**')" title="Bold"><b>B</b></button>
+                <button class="tool-btn" onclick="insertTextAtCursor('*', '*')" title="Italic"><i>I</i></button>
+                <button class="tool-btn" onclick="insertTextAtCursor('- [ ] ')" title="Checklist">☑</button>
+                <select id="template-select" onchange="insertTemplate(this.value)" style="width: auto; padding: 2px; height: 24px; font-size: 11px; background: #333; border:none; color:#ccc;">
+                    <option value="">Templates...</option>
+                    <option value="meeting">Meeting Minutes</option>
+                    <option value="bug">Bug Report</option>
+                    <option value="idea">Idea Scoping</option>
+                </select>
+            </div>
+
+            <div class="editor-tools-group">
+                <button class="tool-btn" style="color:var(--critical-path)" onclick="createTaskFromSelection()" title="Convert Selection to Linked Task">✨ Task</button>
+            </div>
+
+            <div class="editor-tools-group">
+                <button class="tool-btn btn-danger" onclick="deleteCurrentNote()" title="Delete Note">🗑️</button>
+                <button class="tool-btn" onclick="closeNoteEditor()" title="Close">✕</button>
+            </div>
+        </div>
         
-        <!-- Enhanced Note Editor -->
-        <div id="note-editor" class="hidden">
-            <div class="editor-toolbar">
-                <div class="editor-tools-group">
-                    <button class="tool-btn active" id="btn-edit-mode" onclick="setNoteMode('edit')" title="Edit Mode">✏️</button>
-                    <button class="tool-btn" id="btn-view-mode" onclick="setNoteMode('view')" title="Preview Mode (Render Markdown)">👁️</button>
-                </div>
-                
-                <div class="editor-tools-group">
-                    <button class="tool-btn" onclick="insertTextAtCursor('**', '**')" title="Bold"><b>B</b></button>
-                    <button class="tool-btn" onclick="insertTextAtCursor('*', '*')" title="Italic"><i>I</i></button>
-                    <button class="tool-btn" onclick="insertTextAtCursor('- [ ] ')" title="Checklist">☑</button>
-                    <select id="template-select" onchange="insertTemplate(this.value)" style="width: auto; padding: 2px; height: 24px; font-size: 11px; background: #333; border:none; color:#ccc;">
-                        <option value="">Templates...</option>
-                        <option value="meeting">Meeting Minutes</option>
-                        <option value="bug">Bug Report</option>
-                        <option value="idea">Idea Scoping</option>
-                    </select>
-                </div>
-
-                <div class="editor-tools-group">
-                    <button class="tool-btn" style="color:var(--critical-path)" onclick="createTaskFromSelection()" title="Convert Selection to Linked Task">✨ Task</button>
-                </div>
-
-                <div class="editor-tools-group">
-                    <button class="tool-btn btn-danger" onclick="deleteCurrentNote()" title="Delete Note">🗑️</button>
-                    <button class="tool-btn" onclick="closeNoteEditor()" title="Close">✕</button>
-                </div>
-            </div>
-            
-            <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()">
-            
-            <div class="editor-content-area">
-                <textarea id="note-body-input" placeholder="Type your note here... Select text to convert to Tasks or Sub-notes." oninput="saveCurrentNote()"></textarea>
-                <div id="note-preview-pane" class="hidden"></div>
-            </div>
+        <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()">
+        
+        <div class="editor-content-area">
+            <textarea id="note-body-input" placeholder="Type your note here... Select text to convert to Tasks or Sub-notes." oninput="saveCurrentNote()"></textarea>
+            <div id="note-preview-pane" class="hidden"></div>
         </div>
     </div>
 
