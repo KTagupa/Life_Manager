@@ -203,15 +203,40 @@
         .note-card-preview { font-size: 11px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .note-card-meta { font-size: 10px; color: #666; margin-top: 5px; display: flex; justify-content: space-between; align-items: center; }
         
+        /* REPLACEMENT CSS FOR NOTE EDITOR (Modal Style) */
         #note-editor {
-            height: 400px;
-            border-top: 1px solid var(--border);
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85vw;
+            height: 85vh;
+            max-width: 1000px;
+            max-height: 800px;
+            z-index: 2000; /* High z-index to be on top of everything */
+            background: #222;
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.9), 0 0 0 100vmax rgba(0,0,0,0.7); /* Dark backdrop */
             display: flex;
             flex-direction: column;
-            background: #222;
-            transition: height 0.3s;
+            overflow: hidden;
+            transition: opacity 0.2s;
         }
-        #note-editor.hidden { height: 0; overflow: hidden; border: none; }
+
+        #note-editor.hidden {
+            display: none;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Ensure the notes list in the side panel takes full height */
+        #notes-list-container {
+            flex-grow: 1;
+            height: 100%;
+            overflow-y: auto;
+            padding-bottom: 60px; /* Space for the create button */
+        }
 
         /* --- HEALTH DASHBOARD --- */
         #health-dashboard {
@@ -243,24 +268,6 @@
         .health-dot.ok { background: var(--ready-color); box-shadow: 0 0 4px var(--ready-color); }
         .health-dot.warn { background: var(--critical-path); }
         .health-dot.err { background: var(--blocked-color); }
-        
-        /* POP-OUT STATE STYLES */
-        #note-editor.popped-out {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 85vw;
-            height: 85dvh;
-            max-width: 1200px;
-            max-height: 900px;
-            z-index: 1000;
-            border: 1px solid var(--accent);
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 0 100vmax rgba(0,0,0,0.6);
-            overflow: hidden;
-            transition: none;
-        }
 
         .editor-toolbar { padding: 8px; display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; border-bottom: 1px solid #333; flex-wrap: wrap; gap: 5px; }
         .editor-tools-group { display: flex; gap: 2px; }
@@ -678,7 +685,6 @@
                 </div>
 
                 <div class="editor-tools-group">
-                    <button class="tool-btn" id="btn-pop-out-note" onclick="toggleNotePopOut()" title="Pop out editor">↗️</button>
                     <button class="tool-btn btn-danger" onclick="deleteCurrentNote()" title="Delete Note">🗑️</button>
                     <button class="tool-btn" onclick="closeNoteEditor()" title="Close">✕</button>
                 </div>
@@ -1593,40 +1599,68 @@
         });
     }
 
+    // 1. UPDATED createNewNote
+    // Prevents duplicates by immediately opening the modal
     function createNewNote(taskId = null) {
-        // Fix: Ensure taskId is a string or null, ignore Event objects if passed by onclick
+        // Safe check for task ID
         const safeTaskId = (typeof taskId === 'string') ? taskId : null;
 
         const newNote = createNoteObject("New Note", "", safeTaskId);
         notes.push(newNote);
+        
+        // Save immediately
         saveToStorage();
         
+        // Render the list (so it appears in the side panel background)
         const panel = document.getElementById('notes-panel');
         if(panel.classList.contains('hidden')) toggleNotesPanel();
-        
-        openNoteEditor(newNote.id);
         renderNotesList();
         
-        // Update Inspector if we added a note to the currently selected task
-        if(safeTaskId && selectedNodeId === safeTaskId) updateInspector();
+        // IMMEDIATELY open the editor modal
+        openNoteEditor(newNote.id);
+        
+        // Show confirmation
+        showNotification("Note Created");
     }
-    
+
+    // 2. UPDATED openNoteEditor
+    // Always opens as a modal now
     function openNoteEditor(noteId) {
         const note = notes.find(n => n.id === noteId);
         if(!note) return;
-        const panel = document.getElementById('notes-panel');
-        if (panel.classList.contains('hidden')) {
-            panel.classList.remove('hidden');
-            renderNotesList(); 
-        }
+
         currentEditingNoteId = noteId;
-        const editor = document.getElementById('note-editor');
-        editor.classList.remove('hidden');
+        
+        // Populate fields
         document.getElementById('note-title-input').value = note.title;
         document.getElementById('note-body-input').value = note.body;
         
+        // Show the editor (CSS now makes it a modal automatically)
+        const editor = document.getElementById('note-editor');
+        editor.classList.remove('hidden');
+        
+        // Reset to Edit mode by default
         setNoteMode('edit');
-        renderNotesList(); 
+        
+        // Focus the body for immediate typing
+        setTimeout(() => {
+            document.getElementById('note-body-input').focus();
+        }, 100);
+    }
+
+    // 3. UPDATED closeNoteEditor
+    // Simply hides the modal and refreshes the list
+    function closeNoteEditor() {
+        const editor = document.getElementById('note-editor');
+        editor.classList.add('hidden');
+        
+        currentEditingNoteId = null;
+        
+        // Re-render list to show any title changes/previews
+        renderNotesList();
+        
+        // If we were editing a note linked to a specific task, update the inspector too
+        if(selectedNodeId) updateInspector();
     }
 
     function toggleNotePopOut() {
@@ -1650,16 +1684,6 @@
         note.body = document.getElementById('note-body-input').value;
         note.timestamp = Date.now();
         saveToStorage();
-    }
-    
-    function closeNoteEditor() {
-        const editor = document.getElementById('note-editor');
-        editor.classList.add('hidden');
-        editor.classList.remove('popped-out'); 
-        document.getElementById('btn-pop-out-note').innerHTML = '↗️';
-        currentEditingNoteId = null;
-        renderNotesList();
-        if(selectedNodeId) updateInspector();
     }
 
     function deleteCurrentNote() {
