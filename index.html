@@ -795,8 +795,8 @@
                 <div class="health-bar-bg"><div class="health-bar-fill" id="hd-storage-bar"></div></div>
             </div>
         </div>
-        <div class="health-row" title="Render Time (Lower is better)">
-            <span class="health-label">Engine</span>
+       <div class="health-row" title="Click to flush memory & cool down CPU" style="cursor: pointer;" onclick="cleanAppMemory()">
+            <span class="health-label">Engine 🧹</span>
             <div style="display:flex; align-items:center;">
                 <div class="health-dot ok" id="hd-fps-dot"></div>
                 <span class="health-val" id="hd-fps">0ms</span>
@@ -1466,6 +1466,30 @@
     }
 }
 
+    function cleanAppMemory() {
+        // 1. Clear the Chat History UI (The "heavy" part of the AI panel)
+        const history = document.getElementById('ai-chat-history');
+        if (history) {
+            history.innerHTML = '<div class="ai-msg bot">Memory Cleaned. Chat history cleared to save CPU.</div>';
+        }
+    
+        // 2. Clear Selection State
+        selectedIds.clear();
+        selectedNodeId = null;
+    
+        // 3. Force a complete re-draw of the SVG layer
+        // This clears "ghost" coordinates from the browser's GPU cache
+        const svg = document.getElementById('connections');
+        const nodesLayer = document.getElementById('nodes-layer');
+        if (svg) svg.innerHTML = '';
+        if (nodesLayer) nodesLayer.innerHTML = '';
+    
+        // 4. Trigger the browser's internal cleanup
+        render(); 
+        
+        showNotification("🧹 System Memory Flushed");
+    }
+    
     function toggleEcoMode(force = null) {
         // 1. Force the state or flip the current boolean
         if (force !== null) {
