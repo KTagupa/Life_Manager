@@ -548,6 +548,28 @@
             #note-editor.popped-out { width: 95vw; height: 95dvh; }
         }
 
+        /* Eco Mode Styles */
+        body.eco-mode .node {
+            box-shadow: none !important;
+            filter: none !important;
+        }
+        
+        body.eco-mode path {
+            filter: none !important;
+        }
+        
+        #eco-indicator {
+            display: none;
+            color: #10b981;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        
+        body.eco-mode #eco-indicator {
+            display: inline;
+        }
+        
     </style>
 </head>
 <body>
@@ -566,6 +588,7 @@
             <button class="btn" onclick="saveData(true)">Save</button>
             <button class="btn" onclick="document.getElementById('file-input').click()">Load</button>
             <button class="btn btn-danger" onclick="clearData()">Reset</button>
+            <button class="btn" id="eco-toggle-btn" onclick="toggleEcoMode()">🚀 Mode: <span id="eco-status">Turbo</span></button>
         </div>
     </div>
 
@@ -1442,6 +1465,27 @@
     }
 }
 
+    function toggleEcoMode(force = null) {
+        isEcoMode = (force !== null) ? force : !isEcoMode;
+        
+        const statusEl = document.getElementById('eco-status');
+        const btnEl = document.getElementById('eco-toggle-btn');
+    
+        if (isEcoMode) {
+            document.body.classList.add('eco-mode');
+            if (statusEl) statusEl.innerText = "Eco";
+            if (btnEl) btnEl.style.borderColor = "#10b981"; // Turn border green in Eco
+            showNotification("Eco Mode Active: Graphics Simplified");
+        } else {
+            document.body.classList.remove('eco-mode');
+            if (statusEl) statusEl.innerText = "Turbo";
+            if (btnEl) btnEl.style.borderColor = ""; // Reset border
+            showNotification("Turbo Mode Active: High Quality");
+            redZoneStartTime = null; 
+        }
+        render();
+    }
+    
     // --- DATA STRUCTURE ---
     function createNode(x, y, title = 'New Task') {
         return {
@@ -2084,7 +2128,15 @@
                 const endX = node.x - 2; 
                 const endY = node.y + 40;
                 
-                const d = `M ${startX} ${startY} C ${startX + 50} ${startY}, ${endX - 50} ${endY}, ${endX} ${endY}`;
+                // Change the way lines are drawn based on mode
+                let d;
+                if (isEcoMode) {
+                    // ECO: Straight Line (Zero GPU math)
+                    d = `M ${startX} ${startY} L ${endX} ${endY}`;
+                } else {
+                    // TURBO: Smooth Curve (High GPU math)
+                    d = `M ${startX} ${startY} C ${startX + 50} ${startY}, ${endX - 50} ${endY}, ${endX} ${endY}`;
+                }
                 
                 path.setAttribute('d', d); 
                 path.setAttribute('stroke', color); 
@@ -2741,31 +2793,57 @@
         });
     }
 
+    let isEcoMode = false;
+    let redZoneStartTime = null;
+    
+    function toggleEcoMode(force = null) {
+        isEcoMode = (force !== null) ? force : !isEcoMode;
+        
+        if (isEcoMode) {
+            document.body.classList.add('eco-mode');
+            showNotification("Eco Mode Active: Graphics Simplified");
+        } else {
+            document.body.classList.remove('eco-mode');
+            showNotification("Turbo Mode Active: High Quality");
+            redZoneStartTime = null; // Reset tracker
+        }
+        render();
+    }
+    
+    // Replace your existing updateHealthMonitor with this one
     function updateHealthMonitor() {
-        // 1. Task Load
         const activeCount = nodes.length;
         const archCount = archivedNodes.length;
         document.getElementById('hd-load').innerText = `${activeCount} Act / ${archCount} Arch`;
-
-        // 2. Storage Usage logic REMOVED from here to fix drag lag.
-        // It is now handled in saveToStorage()
-
-        // 3. Engine Health (Render Speed)
+    
         const fpsText = document.getElementById('hd-fps');
         const fpsDot = document.getElementById('hd-fps-dot');
         
         if (fpsText && fpsDot) {
             fpsText.innerText = lastRenderTime.toFixed(1) + 'ms';
             
-            if (lastRenderTime < 16) { // < 16ms is roughly 60fps
+            if (lastRenderTime < 16) {
                 fpsDot.className = 'health-dot ok';
+                redZoneStartTime = null; // Back in the green, reset timer
             } else if (lastRenderTime < 50) {
                 fpsDot.className = 'health-dot warn';
+                redZoneStartTime = null; 
             } else {
                 fpsDot.className = 'health-dot err';
+                
+                // --- AUTO-THROTTLE LOGIC ---
+                if (!isEcoMode) {
+                    if (!redZoneStartTime) redZoneStartTime = Date.now();
+                    const timeInRed = Date.now() - redZoneStartTime;
+                    
+                    if (timeInRed > 5000) { // 5 seconds in Red
+                        toggleEcoMode(true);
+                    }
+                }
             }
         }
     }
+    
 </script>
 </body>
 </html>
