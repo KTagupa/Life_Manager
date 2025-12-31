@@ -376,7 +376,16 @@
             z-index: 99;
             transform-origin: bottom left;
             transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+            resize: both;      /* Enable manual resizing */
+            overflow: hidden;  /* Required for resizing to work */
+            min-width: 300px;
+            min-height: 400px;
         }
+
+        #ai-panel .panel-header-row {
+            cursor: move;      /* Shows the "move" cursor on the top bar */
+        }
+        
         #ai-panel.hidden {
             transform: scale(0.9) translateY(20px);
             opacity: 0; pointer-events: none;
@@ -390,10 +399,26 @@
         }
         #ai-settings-pane.visible { display: block; }
 
-        .ai-msg { padding: 10px; border-radius: 8px; max-width: 85%; font-size: 13px; word-break: break-word; line-height: 1.5; margin-bottom: 5px; }
+        .ai-msg { padding: 10px; border-radius: 8px; max-width: 85%; font-size: 13px; word-break: break-word; line-height: 1.5; margin-bottom: 5px; overflow-x: auto;}
         .ai-msg.user { background: var(--ai-accent); color: white; align-self: flex-end; }
         .ai-msg.bot { background: #2d2d2d; border: 1px solid #444; color: #eee; align-self: flex-start; }
         .ai-msg pre { background: #111; padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 11px; }
+        /* PASTE THE NEW TABLE STYLES HERE: */
+        .ai-msg table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+        .ai-msg th, .ai-msg td {
+            border: 1px solid #444;
+            padding: 6px;
+            text-align: left;
+        }
+        .ai-msg th {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--ai-accent); /* Optional: This highlights the header with your purple AI theme */
+        }
 
         /* SELECTION MENU (Contextual) */
         #selection-menu {
@@ -609,6 +634,8 @@
         }
         
     </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 
@@ -1141,6 +1168,10 @@
         setupInteractions();
         setupPanelDrag();
         setupContextualMenu();
+
+        const aiPanel = document.getElementById('ai-panel');
+        const aiHeader = aiPanel.querySelector('.panel-header-row');
+        makeElementDraggable(aiPanel, aiHeader);
         
         setInterval(tickTimers, 1000);
         setInterval(checkAutoArchive, 60000); 
@@ -1437,13 +1468,9 @@
         const msg = document.createElement('div');
         msg.className = `ai-msg ${role}`;
         
-        // Simple markdown parsing for chat
-        let parsed = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        parsed = parsed.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
-        parsed = parsed.replace(/\*(.*?)\*/g, "<i>$1</i>");
-        parsed = parsed.replace(/\n/g, "<br>");
+        // USES MARKED.JS TO PARSE EVERYTHING (Tables, Bold, Italic, etc.)
+        msg.innerHTML = marked.parse(text); 
         
-        msg.innerHTML = parsed;
         history.appendChild(msg);
         history.scrollTop = history.scrollHeight;
     }
@@ -1553,11 +1580,16 @@
         // 2. Safely grab the UI elements
         const statusEl = document.getElementById('eco-status');
         const btnEl = document.getElementById('eco-toggle-btn');
+        const aiPanel = document.getElementById('ai-panel'); // ADD THIS LINE
     
         // 3. Execute Mode Changes
         if (isEcoMode) {
             document.body.classList.add('eco-mode');
-            if (statusEl) statusEl.innerText = "Eco"; // This updates the text
+            
+            // --- ADD THIS AI LOGIC ---
+            if (aiPanel) aiPanel.style.resize = 'none'; 
+            
+            if (statusEl) statusEl.innerText = "Eco"; 
             if (btnEl) {
                 btnEl.style.borderColor = "#10b981";
                 btnEl.style.color = "#10b981";
@@ -1565,7 +1597,11 @@
             showNotification("Eco Mode Active");
         } else {
             document.body.classList.remove('eco-mode');
-            if (statusEl) statusEl.innerText = "Turbo"; // This updates the text
+            
+            // --- ADD THIS AI LOGIC ---
+            if (aiPanel) aiPanel.style.resize = 'both'; 
+            
+            if (statusEl) statusEl.innerText = "Turbo"; 
             if (btnEl) {
                 btnEl.style.borderColor = "";
                 btnEl.style.color = "";
@@ -1574,8 +1610,7 @@
             redZoneStartTime = null; 
         }
     
-        // 4. Force a re-render to change lines from curves to straight
-        // This is the part that actually helps your MacBook's CPU
+        // 4. Force a re-render
         render(); 
     }
     
@@ -2193,6 +2228,38 @@
         const seconds = Math.floor((ms / 1000) % 60); const minutes = Math.floor((ms / (1000 * 60)) % 60); const hours = Math.floor(ms / (1000 * 60 * 60));
         if (hours > 0) return `${hours}h ${minutes}m`; if (minutes > 0) return `${minutes}m ${seconds}s`; return `${seconds}s`;
     }
+    
+    function makeElementDraggable(el, handle) {
+        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        handle.onmousedown = dragMouseDown;
+    
+        function dragMouseDown(e) {
+            if (e.target.tagName === 'BUTTON') return; // Don't drag if clicking buttons
+            e.preventDefault();
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            document.onmouseup = closeDragElement;
+            document.onmousemove = elementDrag;
+        }
+    
+        function elementDrag(e) {
+            e.preventDefault();
+            pos1 = pos3 - e.clientX;
+            pos2 = pos4 - e.clientY;
+            pos3 = e.clientX;
+            pos4 = e.clientY;
+            el.style.top = (el.offsetTop - pos2) + "px";
+            el.style.left = (el.offsetLeft - pos1) + "px";
+            el.style.bottom = 'auto'; // Break the fixed bottom/left positioning
+            el.style.right = 'auto';
+        }
+    
+        function closeDragElement() {
+            document.onmouseup = null;
+            document.onmousemove = null;
+        }
+    }
+    
     function toggleTimer(id = null) {
         const targetId = id || selectedNodeId; if(!targetId) return;
         const node = nodes.find(n => n.id === targetId); if (!node) return;
