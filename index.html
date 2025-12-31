@@ -416,7 +416,19 @@
         }
         #ai-settings-pane.visible { display: block; }
 
-        .ai-msg { padding: 10px; border-radius: 8px; max-width: 85%; font-size: 13px; word-break: break-word; line-height: 1.5; margin-bottom: 5px; overflow-x: auto;}
+        .ai-msg { 
+            padding: 10px; 
+            border-radius: 8px; 
+            max-width: 85%; 
+            font-size: 13px; 
+            word-break: break-word; 
+            line-height: 1.5; 
+            margin-bottom: 5px;
+            height: auto !important;
+            overflow-y: visible !important; 
+            overflow-x: visible; /* Changed from auto to visible */
+            display: block; /* Ensures it stacks correctly in the flex container */
+        }
         .ai-msg.user { background: var(--ai-accent); color: white; align-self: flex-end; }
         .ai-msg.bot { background: #2d2d2d; border: 1px solid #444; color: #eee; align-self: flex-start; }
         .ai-msg pre { background: #111; padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 11px; }
