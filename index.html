@@ -3129,13 +3129,23 @@
     }
     
     function tickTimers() {
+        // 1. Existing Task Timers
         nodes.forEach(node => {
             if (node.activeTimerStart) {
                 const badge = document.querySelector(`.time-badge[data-node-id="${node.id}"]`);
                 if (badge) { badge.innerHTML = `🔴 ${formatTime(getTotalTime(node))}`; }
-                if (selectedNodeId === node.id) { const btnText = document.getElementById('timer-btn-text'); if (btnText) btnText.innerText = `Stop Timer (${formatTime(Date.now() - node.activeTimerStart)})`; }
+                if (selectedNodeId === node.id) { 
+                    const btnText = document.getElementById('timer-btn-text'); 
+                    if (btnText) btnText.innerText = `Stop Timer (${formatTime(Date.now() - node.activeTimerStart)})`; 
+                }
             }
         });
+    
+        // 2. NEW: Habit Timers
+        const hasRunningHabit = habits.some(h => h.activeTimerStart);
+        if (hasRunningHabit && !document.getElementById('habits-panel').classList.contains('hidden')) {
+            renderHabits();
+        }
     }
     
     // Replace your existing updateHealthMonitor with this one
@@ -3176,165 +3186,316 @@
     }
 
     // --- HABIT TRACKER LOGIC ---
-    function toggleHabits() {
-        const panel = document.getElementById('habits-panel');
-        const goalsPanel = document.getElementById('goals-panel');
         
-        // Toggle visibility
-        if (panel.classList.contains('hidden')) {
-            panel.classList.remove('hidden');
-            goalsPanel.classList.add('hidden'); // Close goals to avoid clutter
-            document.getElementById('archive-panel').classList.add('hidden');
-            document.getElementById('notes-panel').classList.add('hidden');
-            renderHabits();
-            updateHabitGoalSelect(); // Refresh dropdown
-        } else {
-            panel.classList.add('hidden');
-        }
-    }
-    
-    function updateHabitGoalSelect() {
-        const select = document.getElementById('habit-goal-select');
-        select.innerHTML = '<option value="">(Optional) Link to a Life Goal...</option>';
-        
-        // Flatten goals for the dropdown
-        if (lifeGoals[currentGoalYear]) {
-            const flatten = (list, depth = 0) => {
-                list.forEach(g => {
-                    const opt = document.createElement('option');
-                    opt.value = g.id;
-                    opt.text = "- ".repeat(depth) + g.text;
-                    select.appendChild(opt);
-                    if (g.children) flatten(g.children, depth + 1);
-                });
-            };
-            flatten(lifeGoals[currentGoalYear]);
-        }
-    }
-    
-    function addHabit() {
-        const input = document.getElementById('new-habit-input');
-        const select = document.getElementById('habit-goal-select');
-        const title = input.value.trim();
-        
-        if (title) {
-            habits.push({
-                id: 'habit_' + Date.now(),
-                title: title,
-                goalId: select.value || null,
-                history: {}, // Map of "YYYY-MM-DD": true
-                created: Date.now()
-            });
-            input.value = '';
-            select.value = '';
-            renderHabits();
-            saveToStorage();
-        }
-    }
-    
-    function deleteHabit(id) {
-        if(confirm("Delete this habit and its history?")) {
-            habits = habits.filter(h => h.id !== id);
-            renderHabits();
-            saveToStorage();
-        }
-    }
-    
-    function toggleHabitDay(id) {
-        const habit = habits.find(h => h.id === id);
-        if (!habit) return;
-        
-        // Get today in local YYYY-MM-DD
-        const today = new Date();
-        const dateStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-        
-        if (habit.history[dateStr]) {
-            delete habit.history[dateStr]; // Toggle Off
-        } else {
-            habit.history[dateStr] = true; // Toggle On
-        }
-        
-        renderHabits();
-        saveToStorage();
-    }
-    
-    function calculateStreak(habit) {
-        let streak = 0;
-        const today = new Date();
-        // Check up to 365 days back
-        for (let i = 0; i < 365; i++) {
-            const d = new Date();
-            d.setDate(today.getDate() - i);
-            const dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        function toggleHabits() {
+            const panel = document.getElementById('habits-panel');
+            const goalsPanel = document.getElementById('goals-panel');
             
-            if (habit.history[dateStr]) {
-                streak++;
-            } else if (i === 0) {
-                // If today is not done, don't break streak yet, just continue to check yesterday
-                continue; 
+            // Toggle visibility
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                goalsPanel.classList.add('hidden'); // Close goals to avoid clutter
+                document.getElementById('archive-panel').classList.add('hidden');
+                document.getElementById('notes-panel').classList.add('hidden');
+                renderHabits();
+                updateHabitGoalSelect(); 
             } else {
-                // Break on missing day (excluding today)
-                break; 
+                panel.classList.add('hidden');
             }
         }
-        return streak;
-    }
-    
-    function renderHabits() {
-        const container = document.getElementById('habits-list-container');
-        container.innerHTML = '';
         
-        if (habits.length === 0) {
-            container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No habits tracked yet.</div>';
-            return;
-        }
-        
-        // Get today str
-        const today = new Date();
-        const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-    
-        habits.forEach(h => {
-            const isDone = !!h.history[todayStr];
-            const streak = calculateStreak(h);
+        function updateHabitGoalSelect() {
+            const select = document.getElementById('habit-goal-select');
+            select.innerHTML = '<option value="">(Optional) Link to a Life Goal...</option>';
             
-            // Resolve goal name if linked
-            let goalName = '';
-            if (h.goalId && lifeGoals[currentGoalYear]) {
-                // Simple recursive search for goal name
-                const findGoal = (list) => {
-                    for(let g of list) {
-                        if (g.id === h.goalId) return g.text;
-                        if (g.children) {
-                            const found = findGoal(g.children);
-                            if(found) return found;
-                        }
-                    }
-                    return null;
+            // Flatten goals for the dropdown
+            if (lifeGoals[currentGoalYear]) {
+                const flatten = (list, depth = 0) => {
+                    list.forEach(g => {
+                        const opt = document.createElement('option');
+                        opt.value = g.id;
+                        opt.text = "- ".repeat(depth) + g.text;
+                        select.appendChild(opt);
+                        if (g.children) flatten(g.children, depth + 1);
+                    });
                 };
-                const name = findGoal(lifeGoals[currentGoalYear]);
-                if(name) goalName = '🎯 ' + name;
+                flatten(lifeGoals[currentGoalYear]);
             }
-    
-            const el = document.createElement('div');
-            el.className = `habit-item ${isDone ? 'done-today' : ''}`;
-            el.innerHTML = `
-                <div class="habit-checkbox ${isDone ? 'checked' : ''}" onclick="toggleHabitDay('${h.id}')">
-                    ${isDone ? '✓' : ''}
-                </div>
-                <div class="habit-details">
-                    <div class="habit-title">${h.title}</div>
-                    <div class="habit-meta">
-                        <span class="habit-streak" title="Current Streak">🔥 ${streak}</span>
-                        <span class="habit-goal-link">${goalName}</span>
+        }
+        
+        function toggleHabitInputs() {
+            const type = document.getElementById('habit-type-select').value;
+            const targetInput = document.getElementById('habit-target-input');
+            const unitLabel = document.getElementById('habit-unit-label');
+            
+            if (type === 'checkbox') {
+                targetInput.style.display = 'none';
+                unitLabel.style.display = 'none';
+            } else if (type === 'counter') {
+                targetInput.style.display = 'block';
+                targetInput.placeholder = "Target (e.g. 5)";
+                unitLabel.style.display = 'none';
+            } else if (type === 'timer') {
+                targetInput.style.display = 'block';
+                targetInput.placeholder = "Mins (e.g. 30)";
+                unitLabel.style.display = 'block';
+            }
+        }
+        
+        // Helper to get today's key YYYY-MM-DD
+        function getHabitDateKey(offsetDays = 0) {
+            const d = new Date();
+            d.setDate(d.getDate() - offsetDays);
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+        
+        function getHabitValue(habit, dateKey) {
+            let val = habit.history[dateKey];
+            // If undefined, return 0
+            if (val === undefined) return 0;
+            // If it's a boolean (legacy data), return 1 if true
+            if (val === true) return 1;
+            if (val === false) return 0;
+            
+            // If it's a timer and we are checking TODAY, add the active running time
+            if (habit.type === 'timer' && dateKey === getHabitDateKey(0) && habit.activeTimerStart) {
+                val += (Date.now() - habit.activeTimerStart);
+            }
+            return val;
+        }
+        
+        function addHabit() {
+            const input = document.getElementById('new-habit-input');
+            const typeSelect = document.getElementById('habit-type-select');
+            const targetInput = document.getElementById('habit-target-input');
+            const goalSelect = document.getElementById('habit-goal-select');
+            
+            const title = input.value.trim();
+            const type = typeSelect.value;
+            let target = parseFloat(targetInput.value);
+        
+            // Validate target
+            if (type !== 'checkbox' && (!target || target <= 0)) {
+                alert("Please enter a valid target number.");
+                return;
+            }
+            
+            // For timers, convert minutes to milliseconds for storage
+            if (type === 'timer') target = target * 60 * 1000;
+        
+            if (title) {
+                habits.push({
+                    id: 'habit_' + Date.now(),
+                    title: title,
+                    type: type, // 'checkbox', 'counter', 'timer'
+                    target: target || 1, // Default 1 for checkbox
+                    goalId: goalSelect.value || null,
+                    history: {}, 
+                    activeTimerStart: null,
+                    created: Date.now()
+                });
+                
+                // Reset UI
+                input.value = '';
+                toggleHabitInputs(); // Reset visibility
+                renderHabits();
+                saveToStorage();
+            }
+        }
+        
+        function deleteHabit(id) {
+            if(confirm("Delete this habit and its history?")) {
+                habits = habits.filter(h => h.id !== id);
+                renderHabits();
+                saveToStorage();
+            }
+        }
+        
+        function toggleHabitDay(id) {
+            const habit = habits.find(h => h.id === id);
+            if (!habit) return;
+            
+            const key = getHabitDateKey(0);
+            
+            // Simple toggle logic for checkboxes
+            if (habit.history[key]) {
+                delete habit.history[key];
+            } else {
+                habit.history[key] = 1; // 1 means done for checkbox
+            }
+            
+            renderHabits();
+            saveToStorage();
+        }
+        
+        // FOR COUNTERS
+        function updateHabitCounter(id, change) {
+            const habit = habits.find(h => h.id === id);
+            if (!habit) return;
+            
+            const key = getHabitDateKey(0);
+            let current = habit.history[key] || 0;
+            
+            // Handle legacy boolean if switching types
+            if (current === true) current = 1;
+            if (current === false) current = 0;
+            
+            let newVal = current + change;
+            if (newVal < 0) newVal = 0;
+            
+            habit.history[key] = newVal;
+            renderHabits();
+            saveToStorage();
+        }
+        
+        // FOR TIMERS
+        function toggleHabitTimer(id) {
+            const habit = habits.find(h => h.id === id);
+            if (!habit) return;
+            
+            const key = getHabitDateKey(0);
+            
+            if (habit.activeTimerStart) {
+                // STOPPING
+                const duration = Date.now() - habit.activeTimerStart;
+                const currentStored = habit.history[key] || 0;
+                habit.history[key] = currentStored + duration;
+                habit.activeTimerStart = null;
+            } else {
+                // STARTING
+                habit.activeTimerStart = Date.now();
+            }
+            
+            renderHabits();
+            saveToStorage();
+        }
+        
+        function calculateStreak(habit) {
+            let streak = 0;
+            // Check up to 365 days back
+            for (let i = 0; i < 365; i++) {
+                const key = getHabitDateKey(i);
+                const val = getHabitValue(habit, key); // Helper handles types
+                
+                // Check if target met
+                const target = habit.target || 1;
+                const isMet = val >= target;
+        
+                if (isMet) {
+                    streak++;
+                } else if (i === 0) {
+                    // Today not done? Continue to check yesterday.
+                    continue; 
+                } else {
+                    break; 
+                }
+            }
+            return streak;
+        }
+        
+        function renderHabits() {
+            const container = document.getElementById('habits-list-container');
+            container.innerHTML = '';
+            
+            if (habits.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No habits tracked yet.</div>';
+                return;
+            }
+            
+            const todayKey = getHabitDateKey(0);
+        
+            habits.forEach(h => {
+                const val = getHabitValue(h, todayKey);
+                const target = h.target || 1;
+                // Legacy fix: ensure type exists
+                if(!h.type) h.type = 'checkbox';
+                
+                const isDone = val >= target;
+                const streak = calculateStreak(h);
+                const percent = Math.min(100, (val / target) * 100);
+        
+                // --- GENERATE CONTROLS BASED ON TYPE ---
+                let controlsHtml = '';
+                let displayVal = '';
+        
+                if (h.type === 'checkbox') {
+                    controlsHtml = `
+                        <div class="habit-checkbox ${isDone ? 'checked' : ''}" onclick="toggleHabitDay('${h.id}')">
+                            ${isDone ? '✓' : ''}
+                        </div>`;
+                } 
+                else if (h.type === 'counter') {
+                    displayVal = `${val} / ${target}`;
+                    controlsHtml = `
+                        <div class="habit-controls">
+                            <button class="habit-btn-small" onclick="updateHabitCounter('${h.id}', -1)">-</button>
+                            <div class="habit-val-display" style="${isDone ? 'color:var(--ready-color); font-weight:bold;':''}">${displayVal}</div>
+                            <button class="habit-btn-small" onclick="updateHabitCounter('${h.id}', 1)">+</button>
+                        </div>
+                    `;
+                } 
+                else if (h.type === 'timer') {
+                    // Convert ms to mins for display
+                    const minsVal = Math.floor(val / 60000);
+                    const minsTarget = Math.floor(target / 60000);
+                    displayVal = `${minsVal}m / ${minsTarget}m`;
+                    const isRunning = !!h.activeTimerStart;
+                    
+                    controlsHtml = `
+                        <div class="habit-controls">
+                            <button class="habit-btn-small" style="${isRunning ? 'border-color:var(--ready-color); color:var(--ready-color);' : ''}" onclick="toggleHabitTimer('${h.id}')">
+                                ${isRunning ? '⏸' : '▶'}
+                            </button>
+                            <div class="habit-val-display" style="${isDone ? 'color:var(--ready-color); font-weight:bold;':''}">${displayVal}</div>
+                        </div>
+                    `;
+                }
+        
+                // --- RESOLVE GOAL NAME ---
+                let goalName = '';
+                if (h.goalId && lifeGoals[currentGoalYear]) {
+                    const findGoal = (list) => {
+                        for(let g of list) {
+                            if (g.id === h.goalId) return g.text;
+                            if (g.children) {
+                                const f = findGoal(g.children);
+                                if(f) return f;
+                            }
+                        }
+                        return null;
+                    };
+                    const name = findGoal(lifeGoals[currentGoalYear]);
+                    if(name) goalName = '🎯 ' + name;
+                }
+        
+                const el = document.createElement('div');
+                el.className = `habit-item ${isDone ? 'done-today' : ''}`;
+                el.innerHTML = `
+                    ${h.type === 'checkbox' ? controlsHtml : ''}
+                    <div class="habit-details">
+                        <div style="display:flex; justify-content:space-between; align-items:center">
+                            <div class="habit-title">${h.title}</div>
+                            ${h.type !== 'checkbox' ? controlsHtml : ''}
+                        </div>
+                        
+                        ${h.type !== 'checkbox' ? `
+                            <div class="habit-progress-bar-bg">
+                                <div class="habit-progress-fill ${isDone?'done':''}" style="width: ${percent}%"></div>
+                            </div>
+                        ` : ''}
+        
+                        <div class="habit-meta">
+                            <span class="habit-streak">🔥 ${streak}</span>
+                            <span class="habit-goal-link">${goalName}</span>
+                        </div>
                     </div>
-                </div>
-                <div class="habit-actions">
-                    <button class="btn btn-danger" style="padding: 2px 6px; font-size:10px;" onclick="deleteHabit('${h.id}')">✕</button>
-                </div>
-            `;
-            container.appendChild(el);
-        });
-    }
+                    <div class="habit-actions">
+                        <button class="btn btn-danger" style="padding: 2px 6px; font-size:10px;" onclick="deleteHabit('${h.id}')">✕</button>
+                    </div>
+                `;
+                container.appendChild(el);
+            });
+        }
 </script>
 </body>
 </html>
