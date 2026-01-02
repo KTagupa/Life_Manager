@@ -2566,14 +2566,25 @@
     function setupInteractions() {
         const container = document.getElementById('graph-container');
         const selectionRect = document.getElementById('selection-rect');
-        
-        document.addEventListener('keydown', (e) => {
-             if (e.ctrlKey && e.key === 's') {
-                 e.preventDefault();
-                 pushToGist();
-             }
-        });
 
+        document.addEventListener('keydown', (e) => {
+            // 1. Existing Sync Shortcut
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                pushToGist();
+            }
+        
+            // 2. NEW: Toggle Habits Panel (Option + H)
+            // We check for e.altKey because 'Option' on Mac registers as 'Alt' in JavaScript
+            if (e.altKey && e.key.toLowerCase() === 'h') {
+                // Only toggle if we aren't currently typing in a text box
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                    e.preventDefault();
+                    toggleHabits();
+                }
+            }
+        });
+        
         document.addEventListener('mousedown', (e) => {
             const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
             if (!panel.classList.contains('hidden')) { if (!panel.contains(e.target) && !fab.contains(e.target)) toggleInbox(); }
