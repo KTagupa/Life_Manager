@@ -567,6 +567,53 @@
         
         .habit-actions { opacity: 0; transition: opacity 0.2s; }
         .habit-item:hover .habit-actions { opacity: 1; }
+
+        /* --- HABIT TYPES & CONTROLS --- */
+        .habit-type-row {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+        .habit-controls {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .habit-btn-small {
+            background: #333;
+            border: 1px solid #555;
+            color: #eee;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        .habit-btn-small:hover { background: #444; border-color: var(--accent); }
+        .habit-val-display {
+            font-family: monospace;
+            font-size: 11px;
+            color: #aaa;
+            min-width: 60px;
+            text-align: center;
+        }
+        .habit-progress-bar-bg {
+            height: 3px;
+            background: #333;
+            width: 100%;
+            margin-top: 4px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .habit-progress-fill {
+            height: 100%;
+            background: var(--accent);
+            transition: width 0.3s;
+        }
+        .habit-progress-fill.done { background: var(--ready-color); }
         
         /* --- MAIN LAYOUT --- */
         #graph-container {
@@ -843,10 +890,22 @@
         </div>
         
         <div style="padding: 15px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2);">
-            <div style="display:flex; gap: 5px; margin-bottom: 5px;">
-                <input type="text" id="new-habit-input" placeholder="New habit (e.g. Read 10 mins)..." onkeypress="if(event.key==='Enter') addHabit()">
+            <div style="display:flex; gap: 5px; margin-bottom: 8px;">
+                <input type="text" id="new-habit-input" placeholder="Habit title..." style="flex-grow:1;">
                 <button class="btn btn-primary" onclick="addHabit()">Add</button>
             </div>
+        
+            <div class="habit-type-row">
+                <select id="habit-type-select" style="flex:1; font-size: 11px; padding: 4px; color:#ccc; border-color:#333; background:#1a1a1a;" onchange="toggleHabitInputs()">
+                    <option value="checkbox">☑ Checkbox</option>
+                    <option value="counter">🔢 Counter</option>
+                    <option value="timer">⏱ Timer</option>
+                </select>
+                
+                <input type="number" id="habit-target-input" placeholder="Target..." style="width: 80px; font-size: 11px; display:none;">
+                <span id="habit-unit-label" style="font-size:11px; color:#888; align-self:center; display:none;">mins</span>
+            </div>
+        
             <select id="habit-goal-select" style="width:100%; font-size: 11px; padding: 4px; color:#aaa; border-color:#333; background:#1a1a1a;">
                 <option value="">(Optional) Link to a Life Goal...</option>
             </select>
