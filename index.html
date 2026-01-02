@@ -2830,7 +2830,7 @@
     // --- STORAGE & PERSISTENCE ---
     function saveToStorage() { 
         // 1. Serialize Data ONCE
-        const data = { nodes, archivedNodes, inbox, lifeGoals, notes, habits, githubToken, gistId }; 
+        const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId }; 
         const rawString = JSON.stringify(data); 
         
         // 2. Save to Browser Storage
