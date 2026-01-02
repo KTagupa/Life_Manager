@@ -513,6 +513,61 @@
         .goal-children { margin-left: 10px; padding-left: 10px; border-left: 1px solid #333; margin-top: 4px; }
         .goal-children.hidden { display: none; }
 
+        /* --- HABITS PANEL --- */
+        #habits-panel {
+            width: 350px;
+            background: #112019;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 46; /* Slightly above goals */
+            position: absolute;
+            left: 0;
+            top: 60px;
+            bottom: 0;
+            transition: transform 0.3s ease;
+            box-shadow: 4px 0 10px rgba(0,0,0,0.2);
+        }
+        #habits-panel.hidden { transform: translateX(-100%); }
+        
+        .habit-item {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+        .habit-item:hover { background: rgba(255,255,255,0.06); border-color: #333; }
+        .habit-item.done-today { border-color: var(--ready-color); background: rgba(16, 185, 129, 0.05); }
+        
+        .habit-checkbox {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #555;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            color: transparent;
+        }
+        .habit-checkbox:hover { border-color: var(--ready-color); }
+        .habit-checkbox.checked { background: var(--ready-color); border-color: var(--ready-color); color: #000; }
+        
+        .habit-details { flex-grow: 1; }
+        .habit-title { font-weight: 600; font-size: 14px; color: #eee; }
+        .habit-meta { font-size: 11px; color: #888; display: flex; gap: 8px; margin-top: 2px; }
+        .habit-streak { color: var(--accent); font-family: monospace; }
+        .habit-goal-link { color: #aaa; font-style: italic; }
+        
+        .habit-actions { opacity: 0; transition: opacity 0.2s; }
+        .habit-item:hover .habit-actions { opacity: 1; }
+        
         /* --- MAIN LAYOUT --- */
         #graph-container {
             flex-grow: 1;
@@ -673,6 +728,7 @@
         <div id="toolbar-content">
             <button class="btn btn-primary" onclick="addNode()">+ New Task</button>
             <button class="btn" onclick="toggleGoals()">🎯 Life Goals</button>
+            <button class="btn" onclick="toggleHabits()">✅ Habits</button>
             <button class="btn" onclick="toggleNotesPanel()">📝 Notes</button>
             <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive</button>
             <button class="btn" onclick="fitView()">Recenter / Urgent</button>
@@ -780,6 +836,26 @@
         </div>
     </div>
 
+    <div id="habits-panel" class="hidden">
+        <div class="panel-header-row">
+            <span>✅ Daily Habits</span>
+            <button class="btn" onclick="toggleHabits()">✕</button>
+        </div>
+        
+        <div style="padding: 15px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2);">
+            <div style="display:flex; gap: 5px; margin-bottom: 5px;">
+                <input type="text" id="new-habit-input" placeholder="New habit (e.g. Read 10 mins)..." onkeypress="if(event.key==='Enter') addHabit()">
+                <button class="btn btn-primary" onclick="addHabit()">Add</button>
+            </div>
+            <select id="habit-goal-select" style="width:100%; font-size: 11px; padding: 4px; color:#aaa; border-color:#333; background:#1a1a1a;">
+                <option value="">(Optional) Link to a Life Goal...</option>
+            </select>
+        </div>
+    
+        <div class="panel-list" id="habits-list-container">
+            </div>
+    </div>
+    
     <div id="notes-panel" class="hidden side-panel">
         <div class="panel-header-row" id="notes-header-drag-handle">
             <div style="display:flex; align-items:center; gap:5px;">
@@ -1129,6 +1205,7 @@
     let archivedNodes = [];
     let inbox = []; 
     let lifeGoals = {}; 
+    let habits = []; // Add this line
     let notes = []; 
     let currentGoalYear = new Date().getFullYear();
     let selectedNodeId = null; 
@@ -1700,6 +1777,9 @@
                     { id: 'g2', text: 'Run a Marathon', collapsed: false, children: [] }
                 ]
             }
+        ];
+        habits = [
+            { id: 'h1', title: 'Drink Water', goalId: '', history: {}, created: Date.now() }
         ];
         notes = [
             createNoteObject("Project Ideas", "# My Project\n\n- [ ] Better colors\n- [ ] Mobile support\n\nSee [[Define Goal]] for more context.", null)
@@ -2830,7 +2910,7 @@
     // --- STORAGE & PERSISTENCE ---
     function saveToStorage() { 
         // 1. Serialize Data ONCE
-        const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId }; 
+        const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits };
         const rawString = JSON.stringify(data); 
         
         // 2. Save to Browser Storage
@@ -2877,6 +2957,7 @@
                     nodes = parsed.nodes || []; 
                     inbox = parsed.inbox || []; 
                     lifeGoals = parsed.lifeGoals || {}; 
+                    habits = parsed.habits || [];
                     notes = parsed.notes || []; 
                     archivedNodes = parsed.archivedNodes || [];
                     githubToken = parsed.githubToken || '';
@@ -2920,7 +3001,7 @@
     }
     function promoteInboxToGoal(index) { const item = inbox[index]; if(!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(item.title)); inbox.splice(index, 1); renderInbox(); renderGoals(); const panel = document.getElementById('goals-panel'); if(panel.classList.contains('hidden')) panel.classList.remove('hidden'); saveToStorage(); }
     function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); }
-    function saveData(download = false) { const data = JSON.stringify({nodes, archivedNodes, inbox, lifeGoals, notes}, null, 2); if (download) { const blob = new Blob([data], {type: 'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
+    function saveData(download = false) { const data = JSON.stringify({nodes, archivedNodes, inbox, lifeGoals, notes, habits}, null, 2); if (download) { const blob = new Blob([data], {type: 'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
     function loadFile(input) {
         const file = input.files[0];
         if (!file) return;
@@ -2944,6 +3025,7 @@
                     nodes = parsed.nodes || [];
                     inbox = parsed.inbox || [];
                     lifeGoals = parsed.lifeGoals || {};
+                    habits = parsed.habits || [];
                     notes = parsed.notes || [];
                     archivedNodes = parsed.archivedNodes || [];
                     // Do NOT load tokens from file for security, unless specifically desired
@@ -3033,7 +3115,167 @@
             }
         }
     }
+
+    // --- HABIT TRACKER LOGIC ---
+    function toggleHabits() {
+        const panel = document.getElementById('habits-panel');
+        const goalsPanel = document.getElementById('goals-panel');
+        
+        // Toggle visibility
+        if (panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            goalsPanel.classList.add('hidden'); // Close goals to avoid clutter
+            document.getElementById('archive-panel').classList.add('hidden');
+            document.getElementById('notes-panel').classList.add('hidden');
+            renderHabits();
+            updateHabitGoalSelect(); // Refresh dropdown
+        } else {
+            panel.classList.add('hidden');
+        }
+    }
     
+    function updateHabitGoalSelect() {
+        const select = document.getElementById('habit-goal-select');
+        select.innerHTML = '<option value="">(Optional) Link to a Life Goal...</option>';
+        
+        // Flatten goals for the dropdown
+        if (lifeGoals[currentGoalYear]) {
+            const flatten = (list, depth = 0) => {
+                list.forEach(g => {
+                    const opt = document.createElement('option');
+                    opt.value = g.id;
+                    opt.text = "- ".repeat(depth) + g.text;
+                    select.appendChild(opt);
+                    if (g.children) flatten(g.children, depth + 1);
+                });
+            };
+            flatten(lifeGoals[currentGoalYear]);
+        }
+    }
+    
+    function addHabit() {
+        const input = document.getElementById('new-habit-input');
+        const select = document.getElementById('habit-goal-select');
+        const title = input.value.trim();
+        
+        if (title) {
+            habits.push({
+                id: 'habit_' + Date.now(),
+                title: title,
+                goalId: select.value || null,
+                history: {}, // Map of "YYYY-MM-DD": true
+                created: Date.now()
+            });
+            input.value = '';
+            select.value = '';
+            renderHabits();
+            saveToStorage();
+        }
+    }
+    
+    function deleteHabit(id) {
+        if(confirm("Delete this habit and its history?")) {
+            habits = habits.filter(h => h.id !== id);
+            renderHabits();
+            saveToStorage();
+        }
+    }
+    
+    function toggleHabitDay(id) {
+        const habit = habits.find(h => h.id === id);
+        if (!habit) return;
+        
+        // Get today in local YYYY-MM-DD
+        const today = new Date();
+        const dateStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        
+        if (habit.history[dateStr]) {
+            delete habit.history[dateStr]; // Toggle Off
+        } else {
+            habit.history[dateStr] = true; // Toggle On
+        }
+        
+        renderHabits();
+        saveToStorage();
+    }
+    
+    function calculateStreak(habit) {
+        let streak = 0;
+        const today = new Date();
+        // Check up to 365 days back
+        for (let i = 0; i < 365; i++) {
+            const d = new Date();
+            d.setDate(today.getDate() - i);
+            const dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            
+            if (habit.history[dateStr]) {
+                streak++;
+            } else if (i === 0) {
+                // If today is not done, don't break streak yet, just continue to check yesterday
+                continue; 
+            } else {
+                // Break on missing day (excluding today)
+                break; 
+            }
+        }
+        return streak;
+    }
+    
+    function renderHabits() {
+        const container = document.getElementById('habits-list-container');
+        container.innerHTML = '';
+        
+        if (habits.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No habits tracked yet.</div>';
+            return;
+        }
+        
+        // Get today str
+        const today = new Date();
+        const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    
+        habits.forEach(h => {
+            const isDone = !!h.history[todayStr];
+            const streak = calculateStreak(h);
+            
+            // Resolve goal name if linked
+            let goalName = '';
+            if (h.goalId && lifeGoals[currentGoalYear]) {
+                // Simple recursive search for goal name
+                const findGoal = (list) => {
+                    for(let g of list) {
+                        if (g.id === h.goalId) return g.text;
+                        if (g.children) {
+                            const found = findGoal(g.children);
+                            if(found) return found;
+                        }
+                    }
+                    return null;
+                };
+                const name = findGoal(lifeGoals[currentGoalYear]);
+                if(name) goalName = '🎯 ' + name;
+            }
+    
+            const el = document.createElement('div');
+            el.className = `habit-item ${isDone ? 'done-today' : ''}`;
+            el.innerHTML = `
+                <div class="habit-checkbox ${isDone ? 'checked' : ''}" onclick="toggleHabitDay('${h.id}')">
+                    ${isDone ? '✓' : ''}
+                </div>
+                <div class="habit-details">
+                    <div class="habit-title">${h.title}</div>
+                    <div class="habit-meta">
+                        <span class="habit-streak" title="Current Streak">🔥 ${streak}</span>
+                        <span class="habit-goal-link">${goalName}</span>
+                    </div>
+                </div>
+                <div class="habit-actions">
+                    <button class="btn btn-danger" style="padding: 2px 6px; font-size:10px;" onclick="deleteHabit('${h.id}')">✕</button>
+                </div>
+            `;
+            container.appendChild(el);
+        });
+    }
 </script>
 </body>
 </html>
