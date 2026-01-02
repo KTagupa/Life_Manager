@@ -2576,11 +2576,20 @@
         
             // 2. NEW: Toggle Habits Panel (Option + H)
             // We check for e.altKey because 'Option' on Mac registers as 'Alt' in JavaScript
-            if (e.altKey && e.key.toLowerCase() === 'h') {
-                // Only toggle if we aren't currently typing in a text box
-                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+            if (e.altKey && e.code === 'KeyH') {
+                // Safety check: Don't trigger if we are inside a text input
+                const isTyping = e.target.tagName === 'INPUT' || 
+                                 e.target.tagName === 'TEXTAREA' || 
+                                 e.target.isContentEditable;
+                
+                if (!isTyping) {
                     e.preventDefault();
-                    toggleHabits();
+                    console.log("Habit shortcut triggered!"); // This helps us debug
+                    if (typeof toggleHabits === 'function') {
+                        toggleHabits();
+                    } else {
+                        console.error("The function toggleHabits() is not defined!");
+                    }
                 }
             }
         });
