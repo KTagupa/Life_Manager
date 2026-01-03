@@ -1443,8 +1443,7 @@
     }
 
     async function pushToGist() {
-        // STEP 1: PREPARE DATA
-        // We isolate this to see if your data is corrupted (circular references, etc.)
+        // --- STEP 1: PREPARE DATA ---
         let content;
         try {
             const dataToSave = {
@@ -1453,52 +1452,41 @@
                 inbox: inbox || [],
                 lifeGoals: lifeGoals || {},
                 notes: notes || [],
-                habits: typeof habits !== 'undefined' ? habits : [] // Add this line!
+                habits: typeof habits !== 'undefined' ? habits : []
             };
             content = JSON.stringify(dataToSave, null, 2);
         } catch (e) {
             alert("❌ DATA ERROR: Could not format your data. " + e.message);
-            console.error(e);
             return;
         }
-
-        // STEP 2: PREPARE TOKEN
-        // We aggressively strip ALL whitespace (spaces, newlines, tabs) from anywhere in the string
-        let rawToken = document.getElementById('github-token').value || githubToken || '';
-        let cleanToken = rawToken.replace(/\s+/g, ''); // Removes spaces/newlines from middle too
-
+    
+        // --- STEP 2: PREPARE TOKEN (Safe Access) ---
+        const tokenInput = document.getElementById('github-token');
+        let rawToken = (tokenInput ? tokenInput.value : "") || githubToken || "";
+        let cleanToken = String(rawToken).replace(/\s+/g, ''); 
+    
         if (!cleanToken) {
             alert("❌ TOKEN ERROR: Please enter your GitHub Token.");
             return;
         }
         
-        // Update the global variable and storage with the clean version
         githubToken = cleanToken;
         saveToStorage(); 
-
         setSyncStatus('Connecting to GitHub...');
-
-        // STEP 3: NETWORK REQUEST
+    
+        // --- STEP 3: NETWORK REQUEST ---
+        const files = {};
+        files[GIST_FILENAME] = { content: content };
+    
+        let safeGistId = (gistId && typeof gistId === 'string') ? gistId.trim() : "";
+        let method = safeGistId ? 'PATCH' : 'POST';
+        let url = safeGistId ? `https://api.github.com/gists/${safeGistId}` : 'https://api.github.com/gists';
+    
         try {
-            const files = {};
-            files[GIST_FILENAME] = { content: content };
-
-            let url = 'https://api.github.com/gists';
-            let method = 'POST';
-    
-            // Fix C: Safe String Check
-            // This ensures that even if gistId is null, undefined, or an object, it won't crash the app
-            const safeGistId = (gistId && typeof gistId === 'string') ? gistId.trim() : "";
-    
-            if (safeGistId.length > 5) {
-                url = `https://api.github.com/gists/${safeGistId}`;
-                method = 'PATCH';
-            }
-
-            const response = await fetch(url, {
+            let response = await fetch(url, {
                 method: method,
                 headers: {
-                    'Authorization': `token ${cleanToken}`, // Use the aggressively cleaned token
+                    'Authorization': `Bearer ${cleanToken}`, // Modern standard
                     'Accept': 'application/vnd.github.v3+json',
                     'Content-Type': 'application/json'
                 },
@@ -1508,27 +1496,34 @@
                     files: files
                 })
             });
-
-            if (!response.ok) {
-                // If the server replies, it's not a Type Error, it's an API error
-                const errText = await response.text();
-                throw new Error(`GitHub Rejected (${response.status}): ${errText.substring(0, 100)}`);
+    
+            // HANDLE 404 (Gist deleted on GitHub side)
+            if (response.status === 404 && method === 'PATCH') {
+                console.warn("Gist ID not found. Resetting and creating new Gist...");
+                gistId = ""; 
+                return pushToGist(); // Retry as a POST
             }
-
+    
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({ message: "Unknown Error" }));
+                throw new Error(`GitHub Rejected (${response.status}): ${errData.message}`);
+            }
+    
             const result = await response.json();
             gistId = result.id;
-            document.getElementById('gist-id').value = gistId;
-            saveToStorage();
             
+            // Update UI safely
+            const gistIdInput = document.getElementById('gist-id');
+            if (gistIdInput) gistIdInput.value = gistId;
+            
+            saveToStorage();
             setSyncStatus('Success!');
             showNotification('GitHub Sync Complete!');
-
+    
         } catch (e) {
             console.error("Network Error:", e);
-            
-            // If the error message is EXACTLY "Type error" or "TypeError"
-            if (e.name === 'TypeError' || e.message === 'Type error') {
-                alert("❌ NETWORK BLOCK: The request was blocked by your browser.\n\n1. Check your internet connection.\n2. Turn off AdBlockers/Privacy extensions for this page.\n3. Verify the Token has no spaces.");
+            if (e.name === 'TypeError') {
+                alert("❌ NETWORK BLOCK: Browser blocked the request. Check your connection or AdBlockers.");
             } else {
                 alert("❌ SYNC FAILED: " + e.message);
             }
