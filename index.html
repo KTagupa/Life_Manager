@@ -1443,32 +1443,47 @@
     }
 
     async function pushToGist() {
-        // Ensure we grab the latest value from the input if the variable is empty
-        if (!githubToken) githubToken = document.getElementById('github-token').value.trim();
-        
-        if (!githubToken) {
-            alert("Please enter a GitHub Personal Access Token first.");
+        // 1. Safety Check: Ensure all arrays exist before stringifying
+        const dataToSave = {
+            nodes: nodes || [],
+            archivedNodes: archivedNodes || [],
+            inbox: inbox || [],
+            lifeGoals: lifeGoals || {},
+            notes: notes || [],
+            habits: typeof habits !== 'undefined' ? habits : [] // Prevents TypeError if habits is missing
+        };
+    
+        let content;
+        try {
+            content = JSON.stringify(dataToSave, null, 2);
+        } catch (e) {
+            console.error("JSON Stringify Error:", e);
+            alert("Failed to format data: " + e.message);
             return;
         }
-
+    
+        // 2. Token Check
+        if (!githubToken) githubToken = document.getElementById('github-token').value.trim();
+        if (!githubToken) {
+            alert("Please enter a GitHub Token.");
+            return;
+        }
+    
         setSyncStatus('Pushing to GitHub...');
-        showNotification('Pushing to GitHub...');
-        
-        // Prepare content - ensure it's a clean string
-        const content = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes }, null, 2);
-        const files = {};
-        files[GIST_FILENAME] = { content: content };
-        
+    
         try {
+            const files = {};
+            files[GIST_FILENAME] = { content: content };
+            
+            // Ensure URL is correct: if gistId is empty, it's a POST, otherwise a PATCH
             let url = 'https://api.github.com/gists';
             let method = 'POST';
             
-            // If we have an ID, update existing; otherwise create new
-            if (gistId) {
+            if (gistId && gistId.trim() !== "") {
                 url = `https://api.github.com/gists/${gistId}`;
                 method = 'PATCH';
             }
-            
+    
             const response = await fetch(url, {
                 method: method,
                 headers: {
@@ -1482,25 +1497,23 @@
                     files: files
                 })
             });
-            
-            const data = await response.json();
-
+    
+            const result = await response.json();
+    
             if (!response.ok) {
-                throw new Error(data.message || response.statusText);
+                // This captures the specific GitHub error (like 401 Unauthorized)
+                throw new Error(result.message || response.statusText);
             }
-            
-            // Save the Gist ID if we just created a new one
-            gistId = data.id;
+    
+            gistId = result.id;
             document.getElementById('gist-id').value = gistId;
             saveToStorage();
-            
-            setSyncStatus(`Success! Saved to Gist: ${gistId.substring(0,6)}...`);
+            setSyncStatus('Success!');
             showNotification('GitHub Sync Complete!');
-            
         } catch (e) {
-            console.error(e);
+            console.error("Fetch Error:", e);
             setSyncStatus('Push Failed: ' + e.message, true);
-            alert("GitHub Push Failed: " + e.message + "\nCheck your Token permissions (must have 'gist' scope).");
+            alert("GitHub Push Failed: " + e.message);
         }
     }
 
