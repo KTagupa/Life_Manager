@@ -1453,7 +1453,7 @@
                 inbox: inbox || [],
                 lifeGoals: lifeGoals || {},
                 notes: notes || [],
-                habits: typeof habits !== 'undefined' ? habits : []
+                habits: typeof habits !== 'undefined' ? habits : [] // Add this line!
             };
             content = JSON.stringify(dataToSave, null, 2);
         } catch (e) {
@@ -1485,10 +1485,13 @@
 
             let url = 'https://api.github.com/gists';
             let method = 'POST';
-
-            // Ensure gistId is a valid string before using it
-            if (gistId && typeof gistId === 'string' && gistId.trim().length > 5) {
-                url = `https://api.github.com/gists/${gistId.trim()}`;
+    
+            // Fix C: Safe String Check
+            // This ensures that even if gistId is null, undefined, or an object, it won't crash the app
+            const safeGistId = (gistId && typeof gistId === 'string') ? gistId.trim() : "";
+    
+            if (safeGistId.length > 5) {
+                url = `https://api.github.com/gists/${safeGistId}`;
                 method = 'PATCH';
             }
 
@@ -1544,7 +1547,6 @@
         setSyncStatus('Connecting to GitHub...');
         
         try {
-            // 1. If we don't have an ID, we must search for the file
             if (!gistId) {
                 const listResp = await fetch('https://api.github.com/gists', {
                     headers: { 
@@ -1552,25 +1554,18 @@
                         'Accept': 'application/vnd.github.v3+json'
                     }
                 });
-
                 const gists = await listResp.json();
-
-                // ERROR CHECK: If API returns an error object instead of an array
-                if (!Array.isArray(gists)) {
-                    throw new Error(gists.message || "Failed to list Gists");
-                }
+                if (!Array.isArray(gists)) throw new Error(gists.message || "Failed to list Gists");
 
                 const found = gists.find(g => g.files && g.files[GIST_FILENAME]);
                 if (found) {
                     gistId = found.id;
                     document.getElementById('gist-id').value = gistId;
-                    setSyncStatus('Found Gist. Downloading...');
                 } else {
-                    throw new Error("No Gist found containing '" + GIST_FILENAME + "'. Try pushing first.");
+                    throw new Error("No Gist found. Try pushing first.");
                 }
             }
             
-            // 2. Fetch the specific Gist content
             const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
                 headers: { 'Authorization': `token ${githubToken}` }
             });
@@ -1578,23 +1573,20 @@
             const data = await resp.json();
             if (!resp.ok) throw new Error(data.message || "Fetch failed");
 
-            // 3. Parse the content
-            if (!data.files[GIST_FILENAME]) throw new Error("Gist found, but file is missing.");
+            if (!data.files[GIST_FILENAME]) throw new Error("File missing in Gist.");
             
-            // Use the raw_url to fetch content if truncated (files > 1MB)
-            // But usually 'content' is present for standard text files
-            const fileContent = data.files[GIST_FILENAME].content;
-            const parsed = JSON.parse(fileContent);
+            const parsed = JSON.parse(data.files[GIST_FILENAME].content);
             
-            // 4. Update Application State
+            // --- UPDATE STATE (Now including Habits) ---
             if (parsed.nodes) nodes = parsed.nodes;
             if (parsed.archivedNodes) archivedNodes = parsed.archivedNodes;
             if (parsed.inbox) inbox = parsed.inbox;
             if (parsed.lifeGoals) lifeGoals = parsed.lifeGoals;
             if (parsed.notes) notes = parsed.notes;
+            if (parsed.habits) habits = parsed.habits; // Added this line
             
-            // 5. Sanitize logic (restore missing arrays if file was old)
-            nodes.forEach(n => { if(!n.dependencies) n.dependencies = []; });
+            // Run sanitization to prevent crashes
+            sanitizeLoadedData();
             
             saveToStorage();
             updateCalculations();
@@ -1602,13 +1594,13 @@
             renderInbox();
             renderGoals();
             
-            setSyncStatus('Pull Complete! Data updated.');
-            showNotification('GitHub Pull Complete!');
+            setSyncStatus('Pull Complete!');
+            showNotification('GitHub Sync Successful!');
             
         } catch (e) {
             console.error(e);
             setSyncStatus('Pull Failed: ' + e.message, true);
-            alert("GitHub Pull Failed: " + e.message);
+            alert("Sync Error: " + e.message);
         }
     }
 
@@ -1708,6 +1700,13 @@
 
         // 5. Life Goals (Existing)
         goals: lifeGoals[currentGoalYear] || []
+
+        // 6. Habits (NEW)
+        currentHabits: habits.map(h => ({ 
+            title: h.title, 
+            streak: calculateStreak(h), 
+            doneToday: getHabitValue(h, getHabitDateKey(0)) >= (h.target || 1)
+        })),
     };
 
     const systemPrompt = `
@@ -3060,8 +3059,10 @@
         if (data) {
             try {
                 const parsed = JSON.parse(data);
-                if (Array.isArray(parsed)) { nodes = parsed; inbox = []; lifeGoals = {}; notes = []; archivedNodes = []; } 
-                else { 
+                // Handle legacy array format or new object format
+                if (Array.isArray(parsed)) { 
+                    nodes = parsed; 
+                } else { 
                     nodes = parsed.nodes || []; 
                     inbox = parsed.inbox || []; 
                     lifeGoals = parsed.lifeGoals || {}; 
@@ -3071,18 +3072,36 @@
                     githubToken = parsed.githubToken || '';
                     gistId = parsed.gistId || '';
                 }
-                const sanitize = (list) => {
-                    list.forEach(n => {
-                        if (!n.dependencies) n.dependencies = []; if (n.parentIds) { n.dependencies = n.parentIds.map(pid => ({id: pid, type: 'hard'})); delete n.parentIds; }
-                        if (!n.subtasks) n.subtasks = []; if (!n.dueDate) n.dueDate = ''; if (n.syncDurationDate === undefined) n.syncDurationDate = true; 
-                        if (n.isManualUrgent === undefined) n.isManualUrgent = false; if (n.timeLogs === undefined) n.timeLogs = []; if (n.activeTimerStart === undefined) n.activeTimerStart = null; 
-                        if (n.completedDate === undefined) { if (n.completed) n.completedDate = Date.now(); else n.completedDate = null; }
-                        if (n.externalLink === undefined) n.externalLink = '';
-                    });
-                };
-                sanitize(nodes); sanitize(archivedNodes);
-            } catch (e) { console.error("Save data corrupted", e); }
+
+                // CALL THE CLEANER HERE
+                sanitizeLoadedData();
+
+            } catch (e) { 
+                console.error("Save data corrupted", e); 
+            }
         }
+    }
+
+    function sanitizeLoadedData() {
+        const sanitizeTask = (n) => {
+            if (!n.dependencies) n.dependencies = [];
+            if (!n.subtasks) n.subtasks = [];
+            if (!n.dueDate) n.dueDate = '';
+            if (n.syncDurationDate === undefined) n.syncDurationDate = true; 
+            if (n.isManualUrgent === undefined) n.isManualUrgent = false;
+            if (n.timeLogs === undefined) n.timeLogs = [];
+            if (n.externalLink === undefined) n.externalLink = null;
+        };
+
+        nodes.forEach(sanitizeTask);
+        archivedNodes.forEach(sanitizeTask);
+
+        if (!Array.isArray(habits)) habits = [];
+        habits.forEach(h => {
+            if (!h.history) h.history = {};
+            if (h.activeTimerStart === undefined) h.activeTimerStart = null;
+            if (!h.type) h.type = 'checkbox';
+        });
     }
     
     function toggleInbox() { const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) { panel.classList.remove('hidden'); setTimeout(() => document.getElementById('inbox-input').focus(), 100); } else { panel.classList.add('hidden'); } }
