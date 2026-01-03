@@ -1443,56 +1443,59 @@
     }
 
     async function pushToGist() {
-        // 1. Safety Check: Ensure all arrays exist before stringifying
-        const dataToSave = {
-            nodes: nodes || [],
-            archivedNodes: archivedNodes || [],
-            inbox: inbox || [],
-            lifeGoals: lifeGoals || {},
-            notes: notes || [],
-            habits: typeof habits !== 'undefined' ? habits : [] 
-        };
-     
+        // STEP 1: PREPARE DATA
+        // We isolate this to see if your data is corrupted (circular references, etc.)
         let content;
         try {
+            const dataToSave = {
+                nodes: nodes || [],
+                archivedNodes: archivedNodes || [],
+                inbox: inbox || [],
+                lifeGoals: lifeGoals || {},
+                notes: notes || [],
+                habits: typeof habits !== 'undefined' ? habits : []
+            };
             content = JSON.stringify(dataToSave, null, 2);
         } catch (e) {
-            console.error("JSON Stringify Error:", e);
-            alert("Failed to format data: " + e.message);
+            alert("❌ DATA ERROR: Could not format your data. " + e.message);
+            console.error(e);
             return;
         }
-     
-        // 2. Token Check & SANITIZATION (Fixes the TypeError)
-        if (!githubToken) githubToken = document.getElementById('github-token').value;
-        
-        // Remove spaces and invisible characters that cause Fetch Header TypeErrors
-        if (githubToken) githubToken = githubToken.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
 
-        if (!githubToken) {
-            alert("Please enter a GitHub Token.");
+        // STEP 2: PREPARE TOKEN
+        // We aggressively strip ALL whitespace (spaces, newlines, tabs) from anywhere in the string
+        let rawToken = document.getElementById('github-token').value || githubToken || '';
+        let cleanToken = rawToken.replace(/\s+/g, ''); // Removes spaces/newlines from middle too
+
+        if (!cleanToken) {
+            alert("❌ TOKEN ERROR: Please enter your GitHub Token.");
             return;
         }
-     
-        setSyncStatus('Pushing to GitHub...');
-     
+        
+        // Update the global variable and storage with the clean version
+        githubToken = cleanToken;
+        saveToStorage(); 
+
+        setSyncStatus('Connecting to GitHub...');
+
+        // STEP 3: NETWORK REQUEST
         try {
             const files = {};
             files[GIST_FILENAME] = { content: content };
-            
-            // Ensure URL is correct: if gistId is empty, it's a POST, otherwise a PATCH
+
             let url = 'https://api.github.com/gists';
             let method = 'POST';
-            
-            // Clean Gist ID to prevent URL TypeErrors
-            if (gistId && typeof gistId === 'string' && gistId.trim() !== "") {
+
+            // Ensure gistId is a valid string before using it
+            if (gistId && typeof gistId === 'string' && gistId.trim().length > 5) {
                 url = `https://api.github.com/gists/${gistId.trim()}`;
                 method = 'PATCH';
             }
-     
+
             const response = await fetch(url, {
                 method: method,
                 headers: {
-                    'Authorization': `token ${githubToken}`,
+                    'Authorization': `token ${cleanToken}`, // Use the aggressively cleaned token
                     'Accept': 'application/vnd.github.v3+json',
                     'Content-Type': 'application/json'
                 },
@@ -1502,29 +1505,31 @@
                     files: files
                 })
             });
-     
-            // Robust Error Handling: Check response BEFORE parsing JSON
+
             if (!response.ok) {
+                // If the server replies, it's not a Type Error, it's an API error
                 const errText = await response.text();
-                try {
-                    const errJson = JSON.parse(errText);
-                    throw new Error(errJson.message || response.statusText);
-                } catch (parseErr) {
-                    // If response wasn't JSON (e.g. 404 HTML page), throw text
-                    throw new Error(`GitHub Error (${response.status}): ${errText.substring(0, 100)}...`);
-                }
+                throw new Error(`GitHub Rejected (${response.status}): ${errText.substring(0, 100)}`);
             }
-     
+
             const result = await response.json();
             gistId = result.id;
             document.getElementById('gist-id').value = gistId;
             saveToStorage();
+            
             setSyncStatus('Success!');
             showNotification('GitHub Sync Complete!');
+
         } catch (e) {
-            console.error("Sync Error:", e);
-            setSyncStatus('Push Failed: ' + e.message, true);
-            alert("GitHub Push Failed: " + e.message);
+            console.error("Network Error:", e);
+            
+            // If the error message is EXACTLY "Type error" or "TypeError"
+            if (e.name === 'TypeError' || e.message === 'Type error') {
+                alert("❌ NETWORK BLOCK: The request was blocked by your browser.\n\n1. Check your internet connection.\n2. Turn off AdBlockers/Privacy extensions for this page.\n3. Verify the Token has no spaces.");
+            } else {
+                alert("❌ SYNC FAILED: " + e.message);
+            }
+            setSyncStatus('Failed', true);
         }
     }
 
