@@ -1699,7 +1699,7 @@
         notes: notes.map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 300) })),
 
         // 5. Life Goals (Existing)
-        goals: lifeGoals[currentGoalYear] || []
+        goals: lifeGoals[currentGoalYear] || [],
 
         // 6. Habits (NEW)
         currentHabits: habits.map(h => ({ 
