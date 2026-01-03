@@ -1450,9 +1450,9 @@
             inbox: inbox || [],
             lifeGoals: lifeGoals || {},
             notes: notes || [],
-            habits: typeof habits !== 'undefined' ? habits : [] // Prevents TypeError if habits is missing
+            habits: typeof habits !== 'undefined' ? habits : [] 
         };
-    
+     
         let content;
         try {
             content = JSON.stringify(dataToSave, null, 2);
@@ -1461,16 +1461,20 @@
             alert("Failed to format data: " + e.message);
             return;
         }
-    
-        // 2. Token Check
-        if (!githubToken) githubToken = document.getElementById('github-token').value.trim();
+     
+        // 2. Token Check & SANITIZATION (Fixes the TypeError)
+        if (!githubToken) githubToken = document.getElementById('github-token').value;
+        
+        // Remove spaces and invisible characters that cause Fetch Header TypeErrors
+        if (githubToken) githubToken = githubToken.trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+
         if (!githubToken) {
             alert("Please enter a GitHub Token.");
             return;
         }
-    
+     
         setSyncStatus('Pushing to GitHub...');
-    
+     
         try {
             const files = {};
             files[GIST_FILENAME] = { content: content };
@@ -1479,11 +1483,12 @@
             let url = 'https://api.github.com/gists';
             let method = 'POST';
             
-            if (gistId && gistId.trim() !== "") {
-                url = `https://api.github.com/gists/${gistId}`;
+            // Clean Gist ID to prevent URL TypeErrors
+            if (gistId && typeof gistId === 'string' && gistId.trim() !== "") {
+                url = `https://api.github.com/gists/${gistId.trim()}`;
                 method = 'PATCH';
             }
-    
+     
             const response = await fetch(url, {
                 method: method,
                 headers: {
@@ -1497,21 +1502,27 @@
                     files: files
                 })
             });
-    
-            const result = await response.json();
-    
+     
+            // Robust Error Handling: Check response BEFORE parsing JSON
             if (!response.ok) {
-                // This captures the specific GitHub error (like 401 Unauthorized)
-                throw new Error(result.message || response.statusText);
+                const errText = await response.text();
+                try {
+                    const errJson = JSON.parse(errText);
+                    throw new Error(errJson.message || response.statusText);
+                } catch (parseErr) {
+                    // If response wasn't JSON (e.g. 404 HTML page), throw text
+                    throw new Error(`GitHub Error (${response.status}): ${errText.substring(0, 100)}...`);
+                }
             }
-    
+     
+            const result = await response.json();
             gistId = result.id;
             document.getElementById('gist-id').value = gistId;
             saveToStorage();
             setSyncStatus('Success!');
             showNotification('GitHub Sync Complete!');
         } catch (e) {
-            console.error("Fetch Error:", e);
+            console.error("Sync Error:", e);
             setSyncStatus('Push Failed: ' + e.message, true);
             alert("GitHub Push Failed: " + e.message);
         }
