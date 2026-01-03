@@ -1706,7 +1706,7 @@
             title: h.title, 
             streak: calculateStreak(h), 
             doneToday: getHabitValue(h, getHabitDateKey(0)) >= (h.target || 1)
-        })),
+        }))
     };
 
     const systemPrompt = `
@@ -3564,6 +3564,7 @@
                 container.appendChild(el);
             });
         }
+    }
 </script>
 </body>
 </html>
