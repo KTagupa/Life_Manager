@@ -1167,8 +1167,8 @@
   // --- UTILITIES FOR LINKS ---
     function linkify(text) {
         if (!text) return '';
-        // Updated regex to include obsidian protocol explicitly
-        const urlRegex = /(\b(https?|ftp|file|obsidian):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+        // Optimized regex for web and local app protocols
+        const urlRegex = /(\b(https?|ftp|file|obsidian|notion|vscode):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
         return text.replace(urlRegex, function(url) {
             return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: underline;" onclick="event.stopPropagation()">${url}</a>`;
         });
@@ -2226,40 +2226,75 @@
         }
     }
 
-    // MARKDOWN ENGINE
+    // IMPROVED MARKDOWN ENGINE (Obsidian Style)
     function renderMarkdown(text) {
-        if(!text) return '';
-        let html = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-        html = html.replace(/\*\*(.*?)\*\*/gim, '<b>$1</b>');
-        html = html.replace(/\*(.*?)\*/gim, '<i>$1</i>');
-        html = html.replace(/^- \[ \] (.*$)/gim, '<li class="chk-list-item"><span class="chk-box">⬜</span> <span>$1</span></li>');
-        html = html.replace(/^- \[x\] (.*$)/gim, '<li class="chk-list-item"><span class="chk-box">✅</span> <span style="text-decoration:line-through; color:#666;">$1</span></li>');
-        html = html.replace(/^- (?!\[)(.*$)/gim, '<ul><li>$1</li></ul>');
-        html = html.replace(/<\/ul>\n<ul>/g, ''); 
-        html = html.replace(/\[\[(.*?)\]\]/g, (match, title) => {
-            const cleanTitle = title.replace(/^Note: /, ''); // Handle "Note: " prefix
-            const target = nodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) || 
-                           archivedNodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) ||
-                           notes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase());
+        if (!text) return '';
+    
+        // 1. Handle [[WikiLinks]] before marked processes it
+        let processedText = text.replace(/\[\[(.*?)\]\]/g, (match, title) => {
+            const cleanTitle = title.replace(/^Note: /, '').trim();
             
-            if(target) {
-                // Determine type for jump
-                if (target.body !== undefined) {
-                    // It's a note
-                    return `<span class="wiki-link" style="color:var(--accent); cursor:pointer; text-decoration:underline;" onclick="openNoteEditor('${target.id}')">${title}</span>`;
-                } else {
-                    // It's a task
-                    return `<span class="wiki-link" style="color:var(--ready-color); cursor:pointer; text-decoration:underline;" onclick="jumpToTask('${target.id}')">${title}</span>`;
-                }
+            // Search across Notes, Active Tasks, and Archived Tasks
+            const target = notes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) || 
+                           nodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) || 
+                           archivedNodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase());
+    
+            if (target) {
+                const isNote = target.body !== undefined;
+                const color = isNote ? 'var(--accent)' : 'var(--ready-color)';
+                const icon = isNote ? '📝 ' : '🎯 ';
+                const action = isNote ? `openNoteEditor('${target.id}')` : `jumpToTask('${target.id}')`;
+                
+                return `<span class="wiki-link" style="color:${color}; cursor:pointer; text-decoration:underline;" onclick="${action}">${icon}${title}</span>`;
             } else {
-                return `<span style="color:#666; font-style:italic;">${title} (missing)</span>`;
+                return `<span style="color:#666; font-style:italic;">[[${title}]] (uncreated)</span>`;
             }
         });
-        html = html.replace(/\n/g, '<br>');
+    
+        // 2. Use the 'marked' library for standard MD
+        let html = marked.parse(processedText);
+    
+        // 3. Add Backlinks Section
+        const backlinks = getBacklinks(currentEditingNoteId);
+        if (backlinks.length > 0) {
+            html += `<div style="margin-top:40px; padding-top:20px; border-top:1px solid #333;">
+                        <h4 style="color:#666; font-size:12px; letter-spacing:1px;">BACKLINKS (MENTIONS)</h4>
+                        ${backlinks.map(b => `
+                            <div class="note-card" style="padding:8px; margin-bottom:5px; font-size:12px;" onclick="${b.action}">
+                                <div style="color:var(--text-muted); font-size:10px;">${b.type}</div>
+                                <b>${b.title}</b>
+                            </div>
+                        `).join('')}
+                     </div>`;
+        }
+    
         return html;
+    }
+    
+    // Logic to find bi-directional links
+    function getBacklinks(noteId) {
+        if (!noteId) return [];
+        const currentNote = notes.find(n => n.id === noteId);
+        if (!currentNote) return [];
+    
+        const results = [];
+        const title = currentNote.title.toLowerCase();
+    
+        // Search in other notes
+        notes.forEach(n => {
+            if (n.id !== noteId && n.body.toLowerCase().includes(`[[${title}]]`)) {
+                results.push({ title: n.title, type: 'NOTE', action: `openNoteEditor('${n.id}')` });
+            }
+        });
+    
+        // Search in task descriptions
+        nodes.forEach(n => {
+            if (n.description && n.description.toLowerCase().includes(`[[${title}]]`)) {
+                results.push({ title: n.title, type: 'TASK', action: `jumpToTask('${n.id}')` });
+            }
+        });
+    
+        return results;
     }
 
     function setNoteMode(mode) {
@@ -3088,7 +3123,18 @@
 
         panel.innerHTML = `
             ${isArchived ? '<div style="background:#333; color:#aaa; padding:8px; border-radius:4px; margin-bottom:10px; font-size:12px; text-align:center;">🔒 This task is archived. Uncheck "Completed" to restore.</div>' : ''}
-            <div class="form-group"><label>Title ${titleLink ? `<a href="${titleLink}" target="_blank" style="text-decoration:none; margin-left:5px;">🔗 Open Link</a>` : ''}</label><input type="text" value="${node.title}" oninput="updateNodeField('title', this.value)"></div>
+            
+            <div class="form-group">
+                <label>
+                    Title ${titleLink ? `<a href="${titleLink}" target="_blank" style="text-decoration:none; margin-left:5px;">🔗 Open Link</a>` : ''}
+                    <button class="btn" style="padding:2px 8px; font-size:10px; margin-left:10px; border-color: var(--accent); color: var(--accent);" 
+                            onclick="navigator.clipboard.writeText('[[${node.title}]]'); showNotification('Link copied to clipboard')">
+                        📋 Copy Wiki-link
+                    </button>
+                </label>
+                <input type="text" value="${node.title}" oninput="updateNodeField('title', this.value)">
+            </div>
+            
             <div class="form-group" style="display:flex; gap:10px"><div style="flex:1"><label>Duration (Est. Days)</label><input type="number" value="${node.duration}" min="1" onchange="updateNodeField('duration', parseInt(this.value))"></div><div style="flex:1"><label>Status</label><button class="btn ${node.completed ? 'btn-primary' : ''}" style="width:100%" onclick="toggleCompletion()">${node.completed ? 'Completed' : 'Active'}</button></div></div>
             <div class="form-group" style="display:flex; align-items:center; gap:5px; margin-bottom: 10px;"><input type="checkbox" id="sync-toggle" ${node.syncDurationDate ? 'checked' : ''} onchange="updateNodeField('syncDurationDate', this.checked)" style="width:auto;"><label for="sync-toggle" style="margin:0; cursor:pointer; font-size:12px; color:var(--text-muted)">Link Duration & Due Date</label></div>
             <div class="form-group"><label>Due Date (Optional)</label><input type="date" value="${node.dueDate || ''}" onchange="updateNodeField('dueDate', this.value)"></div>
