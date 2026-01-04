@@ -2764,7 +2764,17 @@
             const timerBtnIcon = isActive ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M6 6h12v12H6z"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>';
             const timerBtnClass = isActive ? 'node-timer-control stop running' : 'node-timer-control play';
             
-            el.innerHTML = `<div class="${timerBtnClass}" onclick="handleNodeTimerClick(event, '${node.id}')" title="${isActive ? 'Stop Timer' : 'Start Timer'}">${timerBtnIcon}</div><div class="node-header"><span>${icon} ${node.title}</span></div><div class="node-meta">${badgesHtml}</div>${totalSubs > 0 ? `<div class="progress-container"><div class="progress-bar" style="width: ${progress}%"></div></div>` : ''}`;
+            // Add event.stopPropagation() inside the onclick string
+            el.innerHTML = `
+                <div class="${timerBtnClass}" 
+                     onclick="event.stopPropagation(); handleNodeTimerClick(event, '${node.id}')" 
+                     title="${isActive ? 'Stop Timer' : 'Start Timer'}">
+                    ${timerBtnIcon}
+                </div>
+                <div class="node-header"><span>${icon} ${node.title}</span></div>
+                <div class="node-meta">${badgesHtml}</div>
+                ${totalSubs > 0 ? `<div class="progress-container"><div class="progress-bar" style="width: ${progress}%"></div></div>` : ''}
+            `;
             
             el.onmousedown = (e) => startNodeDrag(e, node.id); 
             container.appendChild(el);
@@ -3003,6 +3013,7 @@
     }
 
     function startNodeDrag(e, id) { 
+        if (e.target.closest('.node-timer-control')) return;
         e.stopPropagation(); 
         if (e.shiftKey) {
             if (selectedIds.has(id)) {
