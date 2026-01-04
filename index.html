@@ -32,48 +32,75 @@
             --ai-accent: #8b5cf6;
         }
 
-        /* --- FOCUS HUD STYLES --- */
+        /* --- UPDATED DUAL HUD STYLES --- */
         #focus-hud {
             position: fixed;
             top: 0;
             left: 50%;
             transform: translateX(-50%);
             z-index: 2000;
-            background: rgba(21, 38, 29, 0.95);
+            background: rgba(12, 24, 18, 0.98);
             border: 1px solid var(--border);
             border-top: none;
             border-bottom-left-radius: 12px;
             border-bottom-right-radius: 12px;
-            padding: 8px 20px;
+            padding: 10px 20px;
             display: flex;
-            align-items: center;
-            gap: 20px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            transition: background 0.5s, border-color 0.5s;
-            pointer-events: auto;
-            min-width: 300px;
-            visibility: hidden; /* Hidden by default until a task is scheduled */
+            flex-direction: column; 
+            gap: 5px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            min-width: 350px;
+            visibility: hidden;
+            transition: all 0.3s ease;
         }
 
         #focus-hud.active { visibility: visible; }
         
-        #focus-hud.overtime {
-            background: rgba(153, 27, 27, 0.95); /* Deep Red */
-            border-color: #ef4444;
-            animation: pulse-red 2s infinite;
+        .hud-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
         }
 
-        @keyframes pulse-red {
-            0% { box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2); }
-            50% { box-shadow: 0 4px 25px rgba(239, 68, 68, 0.5); }
-            100% { box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2); }
-        }
-
-        .hud-task-name { font-weight: 800; color: #fff; font-size: 14px; cursor: pointer; }
-        .hud-timer { font-family: monospace; font-size: 16px; color: var(--accent); }
-        .overtime .hud-timer { color: #fff; }
+        .hud-label { font-size: 9px; font-weight: bold; color: var(--accent); letter-spacing: 1px; }
+        .hud-task-info { display: flex; flex-direction: column; flex: 1; }
+        .hud-task-name { color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .hud-task-name:hover { text-decoration: underline; }
         
-        .hud-controls { display: flex; gap: 8px; }
+        .hud-row.should-be {
+            border-top: 1px solid #333;
+            padding-top: 5px;
+            margin-top: 5px;
+            opacity: 0.8;
+        }
+        .should-be .hud-label { color: var(--critical-path); }
+        
+        .hud-row.overtime {
+            background: rgba(153, 27, 27, 0.4);
+            border-radius: 4px;
+            padding: 2px 5px;
+        }
+
+        /* --- AGENDA PANEL STYLES --- */
+        .agenda-slot {
+            display: flex;
+            gap: 10px;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border-left: 3px solid var(--accent);
+            margin-bottom: 8px;
+            border-radius: 4px;
+        }
+        .agenda-slot.current {
+            background: rgba(59, 130, 246, 0.1);
+            border-left-color: var(--ready-color);
+        }
+        .agenda-time { font-family: monospace; font-size: 11px; color: #888; min-width: 65px; }
+        .agenda-info { flex-grow: 1; }
+        .agenda-task-title { font-size: 13px; font-weight: bold; color: #eee; }
+        .agenda-actions { display: flex; gap: 5px; margin-top: 5px; opacity: 0.6; }
+        .agenda-slot:hover .agenda-actions { opacity: 1; }
 
         * { box-sizing: border-box; }
 
@@ -813,16 +840,27 @@
 </head>
 <body>
     <div id="focus-hud">
-        <div class="hud-controls">
-            <button id="hud-play-btn" class="btn-timer" style="width: 32px; height: 32px; border-radius: 50%; padding: 0;" onclick="toggleFocusTimer()">
-                ▶
-            </button>
+        <div id="hud-doing-row" class="hud-row" style="display: none;">
+            <div class="hud-task-info">
+                <span class="hud-label">CURRENTLY DOING</span>
+                <span class="hud-task-name" id="hud-doing-title" onclick="focusHUDTask('doing')">---</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span class="hud-timer" id="hud-doing-time" style="color:var(--ready-color); font-family:monospace;">00:00</span>
+                <button class="btn-timer stop" style="width:28px; height:28px; border-radius:50%; padding:0;" onclick="toggleFocusTimer('doing')">🛑</button>
+            </div>
         </div>
-        <div style="display: flex; flex-direction: column;">
-            <span class="hud-task-name" id="hud-task-title" onclick="focusCurrentScheduledTask()">No Active Schedule</span>
-            <span style="font-size: 10px; color: #888;" id="hud-status-text">Up Next: --</span>
+
+        <div id="hud-should-row" class="hud-row should-be" style="display: none;">
+            <div class="hud-task-info">
+                <span class="hud-label">SHOULD BE DOING</span>
+                <span class="hud-task-name" id="hud-should-title" onclick="focusHUDTask('should')">---</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span id="hud-should-interval" style="font-size:10px; color:#888; font-family:monospace;">00:00 - 00:00</span>
+                <button class="btn-timer" style="width:28px; height:28px; border-radius:50%; padding:0; background:var(--accent);" onclick="toggleFocusTimer('should')">▶</button>
+            </div>
         </div>
-        <div class="hud-timer" id="hud-countdown">00:00</div>
     </div>
     
     <div id="toolbar" class="collapsed">
@@ -831,6 +869,7 @@
             <button class="btn btn-primary" onclick="addNode()">+ New Task</button>
             <button class="btn" onclick="toggleGoals()">🎯 Life Goals</button>
             <button class="btn" onclick="toggleHabits()">✅ Habits</button>
+            <button class="btn" onclick="toggleAgenda()">📅 Agenda</button>
             <button class="btn" onclick="toggleNotesPanel()">📝 Notes</button>
             <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive</button>
             <button class="btn" onclick="fitView()">Recenter / Urgent</button>
@@ -988,6 +1027,21 @@
         <div style="padding: 10px; border-top: 1px solid #333;">
             <button class="btn btn-primary" style="width:100%" onclick="createNewNote()">+ Create Independent Note</button>
         </div>
+    </div>
+
+    <div id="agenda-panel" class="hidden side-panel">
+        <div class="panel-header-row">
+            <span>📅 Daily Agenda</span>
+            <button class="btn" onclick="toggleAgenda()">✕</button>
+        </div>
+        <div style="padding: 15px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border);">
+            <div style="font-size: 11px; color: #888; margin-bottom: 10px;">
+                Plan for: <span id="agenda-date-display"></span>
+            </div>
+            <button class="btn btn-primary" style="width: 100%;" onclick="addQuickSlot()">+ Block Current Task (30m)</button>
+        </div>
+        <div class="panel-list" id="agenda-list-container">
+            </div>
     </div>
 
     <div id="note-editor" class="hidden">
@@ -3292,7 +3346,6 @@
     
     function tickTimers() {
         const now = Date.now();
-        const currentTimeString = new Date().toISOString(); // For schedule comparison
 
         // 1. Existing Task Timers Logic
         nodes.forEach(node => {
@@ -3306,7 +3359,7 @@
             }
         });
 
-        // 2. FOCUS HUD LOGIC
+        // 2. UPDATED DUAL HUD LOGIC
         updateFocusHUD(now);
 
         // 3. Habit Timers
@@ -3318,54 +3371,131 @@
 
     function updateFocusHUD(now) {
         const hud = document.getElementById('focus-hud');
-        const countdownEl = document.getElementById('hud-countdown');
-        const titleEl = document.getElementById('hud-task-title');
-        const statusEl = document.getElementById('hud-status-text');
-        const playBtn = document.getElementById('hud-play-btn');
+        const doingRow = document.getElementById('hud-doing-row');
+        const shouldRow = document.getElementById('hud-should-row');
 
-        // Find if any task is scheduled for "NOW"
+        // Identify "Doing" (Which task has an active timer?)
+        const activeTask = nodes.find(n => n.activeTimerStart) || archivedNodes.find(n => n.activeTimerStart);
+
+        // Identify "Should Be" (What does the agenda say for right now?)
         const currentSlot = agenda.find(slot => {
             const start = new Date(slot.start).getTime();
             const end = new Date(slot.end).getTime();
             return now >= start && now <= end;
         });
 
-        if (currentSlot) {
-            hud.classList.add('active');
-            const task = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
-            const endTime = new Date(currentSlot.end).getTime();
-            const remaining = endTime - now;
+        let hudActive = false;
 
-            titleEl.innerText = task ? task.title : "Unknown Task";
-            
-            // Timer Handling
-            if (task && task.activeTimerStart) {
-                playBtn.innerHTML = '🛑';
-                playBtn.classList.add('running');
-                
-                // Red Zone Check
-                if (remaining < 0) {
-                    hud.classList.add('overtime');
-                    countdownEl.innerText = "+" + formatTime(Math.abs(remaining));
-                    statusEl.innerText = "OVERTIME";
-                } else {
-                    hud.classList.remove('overtime');
-                    countdownEl.innerText = formatTime(remaining);
-                    statusEl.innerText = "Target: " + new Date(currentSlot.end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                }
-            } else {
-                playBtn.innerHTML = '▶';
-                playBtn.classList.remove('running');
-                hud.classList.remove('overtime');
-                countdownEl.innerText = formatTime(remaining);
-                statusEl.innerText = "Scheduled (Not Started)";
+        // --- Render "Doing" Row ---
+        if (activeTask) {
+            hudActive = true;
+            doingRow.style.display = 'flex';
+            document.getElementById('hud-doing-title').innerText = activeTask.title;
+            document.getElementById('hud-doing-time').innerText = formatTime(getTotalTime(activeTask));
+            hud.dataset.doingTaskId = activeTask.id;
+
+            // Check if this task is also the scheduled one
+            if (currentSlot && activeTask.id === currentSlot.taskId) {
+                doingRow.classList.remove('overtime'); // Normal
+            } else if (currentSlot && activeTask.id !== currentSlot.taskId) {
+                // You are doing something, but the schedule says do something else
             }
-            
-            hud.dataset.currentTaskId = currentSlot.taskId;
         } else {
-            hud.classList.remove('active');
-            hud.classList.remove('overtime');
+            doingRow.style.display = 'none';
         }
+
+        // --- Render "Should Be" Row ---
+        // Only show if it's DIFFERENT from what we are currently doing
+        if (currentSlot && (!activeTask || activeTask.id !== currentSlot.taskId)) {
+            hudActive = true;
+            shouldRow.style.display = 'flex';
+            const scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
+            document.getElementById('hud-should-title').innerText = scheduledTask ? scheduledTask.title : "Unscheduled Block";
+            
+            const startStr = new Date(currentSlot.start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const endStr = new Date(currentSlot.end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            document.getElementById('hud-should-interval').innerText = `${startStr} - ${endStr}`;
+            
+            hud.dataset.shouldTaskId = currentSlot.taskId;
+        } else {
+            shouldRow.style.display = 'none';
+        }
+
+        if (hudActive) hud.classList.add('active');
+        else hud.classList.remove('active');
+    }
+
+    function toggleFocusTimer(type) {
+        const hud = document.getElementById('focus-hud');
+        const taskId = (type === 'doing') ? hud.dataset.doingTaskId : hud.dataset.shouldTaskId;
+        if (taskId) toggleTimer(taskId);
+    }
+
+    function focusHUDTask(type) {
+        const hud = document.getElementById('focus-hud');
+        const taskId = (type === 'doing') ? hud.dataset.doingTaskId : hud.dataset.shouldTaskId;
+        if (taskId) jumpToTask(taskId);
+    }
+
+    // --- AGENDA PANEL FUNCTIONS ---
+    function toggleAgenda() {
+        const panel = document.getElementById('agenda-panel');
+        const others = ['notes-panel', 'archive-panel', 'goals-panel', 'habits-panel', 'ai-panel'];
+        if (panel.classList.contains('hidden')) {
+            others.forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.classList.add('hidden');
+            });
+            panel.classList.remove('hidden');
+            renderAgenda();
+        } else {
+            panel.classList.add('hidden');
+        }
+    }
+
+    function renderAgenda() {
+        const container = document.getElementById('agenda-list-container');
+        document.getElementById('agenda-date-display').innerText = new Date().toLocaleDateString();
+        container.innerHTML = '';
+        if (agenda.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No agenda set.</div>';
+            return;
+        }
+        agenda.sort((a, b) => new Date(a.start) - new Date(b.start));
+        const now = Date.now();
+        agenda.forEach((slot, index) => {
+            const task = nodes.find(n => n.id === slot.taskId) || archivedNodes.find(n => n.id === slot.taskId);
+            const isCurrent = now >= new Date(slot.start).getTime() && now <= new Date(slot.end).getTime();
+            const el = document.createElement('div');
+            el.className = `agenda-slot ${isCurrent ? 'current' : ''}`;
+            el.innerHTML = `
+                <div class="agenda-time">${new Date(slot.start).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}<br>${new Date(slot.end).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+                <div class="agenda-info">
+                    <div class="agenda-task-title">${task ? task.title : 'Deleted Task'}</div>
+                    <div class="agenda-actions">
+                        <button class="btn" style="padding:2px 5px; font-size:10px" onclick="jumpToTask('${slot.taskId}')">🎯 View</button>
+                        <button class="btn btn-danger" style="padding:2px 5px; font-size:10px" onclick="deleteAgendaSlot(${index})">✕</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(el);
+        });
+    }
+
+    function addQuickSlot() {
+        if (!selectedNodeId) { alert("Select a task first."); return; }
+        const now = new Date();
+        agenda.push({
+            taskId: selectedNodeId,
+            start: now.toISOString(),
+            end: new Date(now.getTime() + 30 * 60000).toISOString()
+        });
+        renderAgenda(); saveToStorage();
+    }
+
+    function deleteAgendaSlot(index) {
+        agenda.splice(index, 1);
+        renderAgenda(); saveToStorage();
     }
 
     function toggleFocusTimer() {
