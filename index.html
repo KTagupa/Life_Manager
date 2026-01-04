@@ -126,11 +126,11 @@
             left: 10px;
             z-index: 100;
             display: flex;
+            flex-direction: column; /* Changed to column for vertical alignment */
             align-items: flex-start;
             transition: all 0.3s ease;
             pointer-events: none;
         }
-
         #menu-btn {
             width: 40px;
             height: 40px;
@@ -157,29 +157,30 @@
 
         #toolbar-content {
             display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
+            flex-direction: column; /* Stack buttons vertically */
+            gap: 8px;
             background: var(--panel-bg);
             padding: 10px;
             border-radius: 8px;
             border: 1px solid var(--border);
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            margin-left: 10px; 
+            margin-left: 0;         /* Removed side margin */
+            margin-top: 10px;      /* Added top margin to space from ☰ button */
             opacity: 1;
-            transform: translateX(0) scale(1);
+            transform: translateY(0) scale(1); /* Changed to Y for vertical slide */
             transform-origin: top left;
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             pointer-events: auto;
-            max-width: calc(100vw - 70px);
+            width: 200px;          /* Set a fixed width for the vertical list */
         }
         
         #toolbar.collapsed #toolbar-content {
             opacity: 0;
-            transform: translateX(-20px) scale(0.9);
+            transform: translateY(-20px) scale(0.9); /* Slides up behind button */
             pointer-events: none;
             position: absolute;
-            left: 40px;
-            display: none; /* Add this to stop the Tab key from finding buttons */
+            top: 40px; /* Positioned relative to the menu button */
+            display: none;
         }
 
         #inspector {
