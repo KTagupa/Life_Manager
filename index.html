@@ -1802,8 +1802,39 @@
         const msg = document.createElement('div');
         msg.className = `ai-msg ${role}`;
         
-        // USES MARKED.JS TO PARSE EVERYTHING (Tables, Bold, Italic, etc.)
-        msg.innerHTML = marked.parse(text); 
+        // 1. Check for Schedule Data
+        let cleanText = text;
+        let scheduleJson = null;
+        if (text.includes('[SCHEDULE_DATA]')) {
+            const parts = text.split('[SCHEDULE_DATA]');
+            const dataParts = parts[1].split('[/SCHEDULE_DATA]');
+            scheduleJson = dataParts[0].trim();
+            cleanText = parts[0] + dataParts[1]; // Remove JSON from visible text
+        }
+
+        msg.innerHTML = marked.parse(cleanText); 
+
+        // 2. If schedule found, add the "Push" button
+        if (scheduleJson && role === 'bot') {
+            const pushBtn = document.createElement('button');
+            pushBtn.className = 'btn btn-primary';
+            pushBtn.style.marginTop = '10px';
+            pushBtn.style.width = '100%';
+            pushBtn.style.background = 'var(--ready-color)';
+            pushBtn.innerText = '📅 Apply to My Agenda';
+            pushBtn.onclick = () => {
+                try {
+                    const newSlots = JSON.parse(scheduleJson);
+                    agenda = [...agenda, ...newSlots];
+                    saveToStorage();
+                    renderAgenda();
+                    showNotification("Agenda Updated!");
+                    pushBtn.innerText = '✅ Applied';
+                    pushBtn.disabled = true;
+                } catch(e) { alert("Schedule Format Error"); }
+            };
+            msg.appendChild(pushBtn);
+        }
         
         history.appendChild(msg);
         history.scrollTop = history.scrollHeight;
@@ -1826,48 +1857,54 @@
 
     // --- EXPANDED CONTEXT BUNDLE ---
     const appState = {
-        // 1. Active Tasks (Existing)
-        activeTasks: nodes.map(n => ({ 
+        // Current Time Context
+        currentTime: new Date().toLocaleString(),
+        
+        // Existing Schedule (so AI avoids conflicts)
+        currentAgenda: agenda.map(slot => {
+            const t = nodes.find(n => n.id === slot.taskId);
+            return { task: t ? t.title : 'Unknown', start: slot.start, end: slot.end };
+        }),
+
+        activeTasks: nodes.filter(n => !n.completed).map(n => ({ 
+            id: n.id,
             title: n.title, 
             due: n.dueDate, 
             urgent: n.isManualUrgent, 
-            completed: n.completed,
-            link: n.externalLink,
-            progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : 'N/A'
+            progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : '0/0'
         })),
         
-        // 2. Inbox / Ideas (NEW)
         inboxIdeas: inbox.map(i => i.title),
-
-        // 3. Archived Tasks (NEW - helps AI see what you've already finished)
-        archivedTasks: archivedNodes.map(n => ({ title: n.title, completedOn: n.completedDate })),
-
-        // 4. Notes (Increased snippet length for better context)
         notes: notes.map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 300) })),
-
-        // 5. Life Goals (Existing)
         goals: lifeGoals[currentGoalYear] || [],
-
-        // 6. Habits (NEW)
-        currentHabits: habits.map(h => ({ 
-            title: h.title, 
-            streak: calculateStreak(h), 
-            doneToday: getHabitValue(h, getHabitDateKey(0)) >= (h.target || 1)
-        }))
+        habits: habits.map(h => ({ title: h.title, streak: calculateStreak(h) }))
     };
 
     const systemPrompt = `
-        You are a strategic Project Management Assistant. 
-        The user is using "Urgency Flow" to manage tasks via a dependency graph.
+        You are a strategic Project Management Assistant for "Urgency Flow," a productivity app based on a dependency graph.
         
         CONTEXT DATA: ${JSON.stringify(appState)}
         
-        GOAL: Analyze active tasks, ideas in the inbox, and archived history.
-        - If the user asks for a summary, look at everything.
-        - If an idea in the 'inboxIdeas' seems high-priority based on their goals, suggest promoting it.
-        - Identify bottlenecks where active tasks are stalled compared to archived velocity.
+        GOAL:
+        Analyze the user's active tasks, inbox ideas, and archived history to provide strategic insights.
+        - SUMMARIZATION: If the user asks for a summary, analyze the entire state (Active, Inbox, Goals, and Archive).
+        - MOMENTUM: If an idea in 'inboxIdeas' aligns with 'goals', suggest promoting it to a task immediately.
+        - BOTTLENECKS: Identify where active tasks are stalled compared to the velocity of archived tasks.
+        - SCHEDULING: When asked to plan a day or afternoon, create a structured timeline.
         
-        Be concise. Use bolding for emphasis. Use Markdown for lists.
+        SCHEDULING RULES:
+        1. Use 30-90 minute blocks based on task complexity.
+        2. Insert 15-minute breaks after deep-work sessions.
+        3. Present the schedule as a Markdown table first.
+        4. DATA INTEGRATION: For every schedule you propose, you MUST append a JSON block at the end of your response using these tags so the system can "Push" it to the Agenda:
+           [SCHEDULE_DATA]
+           [{"taskId": "task_id_here", "start": "ISO_STRING", "end": "ISO_STRING"}]
+           [/SCHEDULE_DATA]
+
+        STYLE:
+        - Be concise and strategic.
+        - Use **bolding** for emphasis.
+        - Use Markdown for lists and tables.
     `;
 
     const payload = {
