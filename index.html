@@ -834,7 +834,46 @@
         body.eco-mode .node-timer-control {
             display: none !important;
         }
+
+        /* --- CALENDAR PANEL --- */
+        #calendar-panel {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(12, 24, 18, 0.98); z-index: 160;
+            display: flex; flex-direction: column; padding: 20px;
+        }
+        #calendar-panel.hidden { display: none; }
         
+        .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .cal-controls { display: flex; gap: 10px; align-items: center; }
+        .cal-title { font-size: 18px; font-weight: bold; color: #eee; min-width: 200px; text-align: center; }
+        
+        .cal-view-container { flex-grow: 1; overflow: hidden; position: relative; background: #111; border: 1px solid #333; border-radius: 4px; }
+        
+        /* DAY VIEW */
+        .cal-day-view { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; display: flex; }
+        .cal-time-labels { width: 50px; flex-shrink: 0; border-right: 1px solid #333; background: #1a1a1a; }
+        .cal-hour-label { height: 60px; font-size: 10px; color: #666; padding: 5px; text-align: right; border-bottom: 1px solid #222; }
+        .cal-day-col { flex-grow: 1; position: relative; background: radial-gradient(#222 1px, transparent 1px); background-size: 20px 20px; }
+        .cal-event {
+            position: absolute; left: 5px; right: 5px;
+            background: rgba(59, 130, 246, 0.2); border-left: 3px solid var(--accent);
+            border-radius: 4px; padding: 4px; font-size: 11px; overflow: hidden;
+            cursor: pointer; transition: z-index 0.2s;
+        }
+        .cal-event:hover { z-index: 10; background: rgba(59, 130, 246, 0.4); }
+        
+        /* WEEK VIEW */
+        .cal-week-view { display: flex; height: 100%; }
+        .cal-week-col { flex: 1; border-right: 1px solid #333; position: relative; display: flex; flex-direction: column; }
+        .cal-week-header { padding: 5px; text-align: center; background: #222; border-bottom: 1px solid #333; font-size: 12px; height: 30px; }
+        .cal-week-body { flex-grow: 1; position: relative; overflow: hidden; } /* Simplified: no scroll per col */
+        
+        /* MONTH VIEW */
+        .cal-month-view { display: grid; grid-template-columns: repeat(7, 1fr); height: 100%; grid-auto-rows: 1fr; }
+        .cal-month-cell { border: 1px solid #222; padding: 5px; display: flex; flex-direction: column; gap: 2px; }
+        .cal-month-cell.dim { opacity: 0.3; }
+        .cal-month-date { font-size: 11px; color: #888; margin-bottom: 2px; }
+        .cal-dot { width: 100%; height: 4px; background: var(--ready-color); border-radius: 2px; opacity: 0.6; }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -867,6 +906,7 @@
     <div id="toolbar" class="collapsed">
         <button id="menu-btn" onclick="toggleMenu()">☰</button>
         <div id="toolbar-content">
+            <button class="btn" onclick="toggleCalendar()">📅 Calendar</button>
             <button class="btn btn-primary" onclick="addNode()">+ New Task</button>
             <button class="btn" onclick="toggleGoals()">🎯 Life Goals</button>
             <button class="btn" onclick="toggleHabits()">✅ Habits</button>
@@ -1128,6 +1168,24 @@
             <button class="btn" onclick="toggleHeatmap()">Close</button>
         </div>
         <div id="heatmap-container" class="heatmap-grid" style="display: block;">
+            </div>
+    </div>
+
+    <div id="calendar-panel" class="hidden">
+        <div class="cal-header">
+            <div class="cal-controls">
+                <button class="btn" onclick="changeCalDate(-1)">&lt;</button>
+                <button class="btn" onclick="setCalView('day')">Day</button>
+                <button class="btn" onclick="setCalView('week')">Week</button>
+                <button class="btn" onclick="setCalView('month')">Month</button>
+                <button class="btn" onclick="changeCalDate(1)">&gt;</button>
+            </div>
+            <div id="cal-title" class="cal-title">January 2026</div>
+            <div class="cal-controls">
+                <button class="btn" onclick="toggleCalendar()">Close</button>
+            </div>
+        </div>
+        <div id="cal-container" class="cal-view-container">
             </div>
     </div>
 
@@ -3260,6 +3318,198 @@
             }
             monthDiv.appendChild(grid); container.appendChild(monthDiv);
         });
+    }
+
+    // --- CALENDAR LOGIC ---
+    let calendarView = 'day'; // day, week, month
+    let calendarDate = new Date();
+
+    function toggleCalendar() {
+        const panel = document.getElementById('calendar-panel');
+        if (panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            renderCalendar();
+        } else {
+            panel.classList.add('hidden');
+        }
+    }
+
+    function setCalView(view) {
+        calendarView = view;
+        renderCalendar();
+    }
+
+    function changeCalDate(delta) {
+        if (calendarView === 'day') calendarDate.setDate(calendarDate.getDate() + delta);
+        else if (calendarView === 'week') calendarDate.setDate(calendarDate.getDate() + (delta * 7));
+        else if (calendarView === 'month') calendarDate.setMonth(calendarDate.getMonth() + delta);
+        renderCalendar();
+    }
+
+    function renderCalendar() {
+        const container = document.getElementById('cal-container');
+        const title = document.getElementById('cal-title');
+        container.innerHTML = '';
+
+        // Collect all time logs
+        const allLogs = [];
+        [...nodes, ...archivedNodes].forEach(n => {
+            // Logs stored in array
+            if(n.timeLogs) {
+                n.timeLogs.forEach(l => allLogs.push({ ...l, title: n.title, taskId: n.id }));
+            }
+            // Active timer?
+            if(n.activeTimerStart) {
+                allLogs.push({ start: n.activeTimerStart, end: Date.now(), title: n.title, taskId: n.id, active: true });
+            }
+        });
+
+        if (calendarView === 'day') {
+            title.innerText = calendarDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            
+            const view = document.createElement('div'); view.className = 'cal-day-view';
+            
+            // Labels Column
+            const labels = document.createElement('div'); labels.className = 'cal-time-labels';
+            for(let i=0; i<24; i++) {
+                const l = document.createElement('div'); l.className = 'cal-hour-label'; l.innerText = `${i}:00`;
+                labels.appendChild(l);
+            }
+            view.appendChild(labels);
+            
+            // Content Column
+            const col = document.createElement('div'); col.className = 'cal-day-col';
+            
+            // Filter logs for this day
+            const dayStart = new Date(calendarDate); dayStart.setHours(0,0,0,0);
+            const dayEnd = new Date(calendarDate); dayEnd.setHours(23,59,59,999);
+            
+            allLogs.forEach(log => {
+                const ls = new Date(log.start);
+                const le = new Date(log.end);
+                
+                // Check overlap
+                if (ls < dayEnd && le > dayStart) {
+                    const top = (ls.getHours() * 60) + ls.getMinutes();
+                    // Duration in minutes
+                    let dur = (Math.min(le, dayEnd) - Math.max(ls, dayStart)) / 60000;
+                    if (dur < 15) dur = 15; // Minimum height visibility
+                    
+                    const el = document.createElement('div'); el.className = 'cal-event';
+                    el.style.top = top + 'px';
+                    el.style.height = dur + 'px';
+                    el.style.background = log.active ? 'rgba(16, 185, 129, 0.2)' : '';
+                    el.style.borderColor = log.active ? 'var(--ready-color)' : '';
+                    el.innerHTML = `<b>${log.title}</b><br>${ls.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} - ${le.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`;
+                    el.onclick = () => { toggleCalendar(); jumpToTask(log.taskId); };
+                    col.appendChild(el);
+                }
+            });
+            view.appendChild(col);
+            
+            // Scroll to 8am default
+            setTimeout(() => view.scrollTop = 480, 0); 
+            container.appendChild(view);
+
+        } else if (calendarView === 'week') {
+            const startOfWeek = new Date(calendarDate);
+            startOfWeek.setDate(calendarDate.getDate() - calendarDate.getDay()); // Sunday
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 6);
+            
+            title.innerText = `${startOfWeek.toLocaleDateString()} - ${endOfWeek.toLocaleDateString()}`;
+
+            const view = document.createElement('div'); view.className = 'cal-week-view';
+            
+            for(let i=0; i<7; i++) {
+                const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i);
+                const dStart = new Date(d); dStart.setHours(0,0,0,0);
+                const dEnd = new Date(d); dEnd.setHours(23,59,59,999);
+                
+                const col = document.createElement('div'); col.className = 'cal-week-col';
+                col.innerHTML = `<div class="cal-week-header">${d.toLocaleDateString(undefined, {weekday:'short', day:'numeric'})}</div>`;
+                
+                const body = document.createElement('div'); body.className = 'cal-week-body';
+                
+                // Simple viz for week: just blocks, simplified
+                allLogs.forEach(log => {
+                    const ls = new Date(log.start);
+                    const le = new Date(log.end);
+                    if (ls < dEnd && le > dStart) {
+                         // Scale 24h to 100% height
+                         const startMins = (ls.getHours() * 60) + ls.getMinutes();
+                         const durMins = (Math.min(le, dEnd) - Math.max(ls, dStart)) / 60000;
+                         
+                         const topPct = (startMins / 1440) * 100;
+                         const hPct = (durMins / 1440) * 100;
+                         
+                         const blk = document.createElement('div');
+                         blk.style.position = 'absolute';
+                         blk.style.left = '2px'; blk.style.right = '2px';
+                         blk.style.top = topPct + '%';
+                         blk.style.height = Math.max(hPct, 1) + '%'; // Min 1% height
+                         blk.style.background = 'var(--accent)';
+                         blk.style.opacity = '0.5';
+                         blk.title = `${log.title} (${Math.round(durMins)}m)`;
+                         body.appendChild(blk);
+                    }
+                });
+                
+                col.appendChild(body);
+                view.appendChild(col);
+            }
+            container.appendChild(view);
+
+        } else if (calendarView === 'month') {
+            title.innerText = calendarDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+            
+            const view = document.createElement('div'); view.className = 'cal-month-view';
+            const y = calendarDate.getFullYear(); const m = calendarDate.getMonth();
+            const firstDay = new Date(y, m, 1);
+            const startDay = new Date(firstDay); startDay.setDate(1 - firstDay.getDay()); // Fill start
+            
+            // 42 cells (6 rows)
+            for(let i=0; i<42; i++) {
+                const d = new Date(startDay); d.setDate(startDay.getDate() + i);
+                const isCurrentMonth = d.getMonth() === m;
+                
+                const cell = document.createElement('div'); 
+                cell.className = `cal-month-cell ${!isCurrentMonth ? 'dim' : ''}`;
+                cell.innerHTML = `<div class="cal-month-date">${d.getDate()}</div>`;
+                
+                // Aggregate Total Time
+                const dStart = new Date(d); dStart.setHours(0,0,0,0);
+                const dEnd = new Date(d); dEnd.setHours(23,59,59,999);
+                let totalDur = 0;
+                
+                allLogs.forEach(log => {
+                    const ls = new Date(log.start);
+                    const le = new Date(log.end);
+                    if (ls < dEnd && le > dStart) {
+                         totalDur += (Math.min(le, dEnd) - Math.max(ls, dStart));
+                    }
+                });
+                
+                // Render "Density Bar"
+                if(totalDur > 0) {
+                    const hrs = totalDur / (1000 * 60 * 60);
+                    const bar = document.createElement('div');
+                    bar.className = 'cal-dot';
+                    // Opacity based on hours (max 8h for full opacity)
+                    bar.style.opacity = Math.min(1, 0.2 + (hrs / 8)); 
+                    bar.title = `${hrs.toFixed(1)} hrs`;
+                    cell.appendChild(bar);
+                    
+                    const txt = document.createElement('div');
+                    txt.style.fontSize = '9px'; txt.style.color = '#666';
+                    txt.innerText = `${hrs.toFixed(1)}h`;
+                    cell.appendChild(txt);
+                }
+                
+                view.appendChild(cell);
+            }
+            container.appendChild(view);
+        }
     }
 
     // --- STORAGE & PERSISTENCE ---
