@@ -3535,20 +3535,6 @@
         agenda.splice(index, 1);
         renderAgenda(); saveToStorage();
     }
-
-    function toggleFocusTimer() {
-        const hud = document.getElementById('focus-hud');
-        if (hud.dataset.currentTaskId) {
-            toggleTimer(hud.dataset.currentTaskId);
-        }
-    }
-
-    function focusCurrentScheduledTask() {
-        const hud = document.getElementById('focus-hud');
-        if (hud.dataset.currentTaskId) {
-            jumpToTask(hud.dataset.currentTaskId);
-        }
-    }
     
     // Replace your existing updateHealthMonitor with this one
     let lastHealthUpdateTime = 0;
