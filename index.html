@@ -32,6 +32,49 @@
             --ai-accent: #8b5cf6;
         }
 
+        /* --- FOCUS HUD STYLES --- */
+        #focus-hud {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            background: rgba(21, 38, 29, 0.95);
+            border: 1px solid var(--border);
+            border-top: none;
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+            padding: 8px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: background 0.5s, border-color 0.5s;
+            pointer-events: auto;
+            min-width: 300px;
+            visibility: hidden; /* Hidden by default until a task is scheduled */
+        }
+
+        #focus-hud.active { visibility: visible; }
+        
+        #focus-hud.overtime {
+            background: rgba(153, 27, 27, 0.95); /* Deep Red */
+            border-color: #ef4444;
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2); }
+            50% { box-shadow: 0 4px 25px rgba(239, 68, 68, 0.5); }
+            100% { box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2); }
+        }
+
+        .hud-task-name { font-weight: 800; color: #fff; font-size: 14px; cursor: pointer; }
+        .hud-timer { font-family: monospace; font-size: 16px; color: var(--accent); }
+        .overtime .hud-timer { color: #fff; }
+        
+        .hud-controls { display: flex; gap: 8px; }
+
         * { box-sizing: border-box; }
 
         body {
@@ -769,7 +812,19 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
-
+    <div id="focus-hud">
+        <div class="hud-controls">
+            <button id="hud-play-btn" class="btn-timer" style="width: 32px; height: 32px; border-radius: 50%; padding: 0;" onclick="toggleFocusTimer()">
+                ▶
+            </button>
+        </div>
+        <div style="display: flex; flex-direction: column;">
+            <span class="hud-task-name" id="hud-task-title" onclick="focusCurrentScheduledTask()">No Active Schedule</span>
+            <span style="font-size: 10px; color: #888;" id="hud-status-text">Up Next: --</span>
+        </div>
+        <div class="hud-timer" id="hud-countdown">00:00</div>
+    </div>
+    
     <div id="toolbar" class="collapsed">
         <button id="menu-btn" onclick="toggleMenu()">☰</button>
         <div id="toolbar-content">
@@ -1266,6 +1321,7 @@
 
     // --- STATE MANAGEMENT ---
     let nodes = [];
+    let agenda = []; // Stores { taskId, start, end }
     let archivedNodes = [];
     let inbox = []; 
     let lifeGoals = {}; 
@@ -3054,7 +3110,7 @@
     // --- STORAGE & PERSISTENCE ---
     function saveToStorage() { 
         // 1. Serialize Data ONCE
-        const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits };
+        const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits, agenda };
         const rawString = JSON.stringify(data); 
         
         // 2. Save to Browser Storage
@@ -3105,6 +3161,7 @@
                     lifeGoals = parsed.lifeGoals || {}; 
                     habits = parsed.habits || [];
                     notes = parsed.notes || []; 
+                    agenda = parsed.agenda || [];
                     archivedNodes = parsed.archivedNodes || [];
                     githubToken = parsed.githubToken || '';
                     gistId = parsed.gistId || '';
@@ -3234,22 +3291,94 @@
     }
     
     function tickTimers() {
-        // 1. Existing Task Timers
+        const now = Date.now();
+        const currentTimeString = new Date().toISOString(); // For schedule comparison
+
+        // 1. Existing Task Timers Logic
         nodes.forEach(node => {
             if (node.activeTimerStart) {
                 const badge = document.querySelector(`.time-badge[data-node-id="${node.id}"]`);
                 if (badge) { badge.innerHTML = `🔴 ${formatTime(getTotalTime(node))}`; }
                 if (selectedNodeId === node.id) { 
                     const btnText = document.getElementById('timer-btn-text'); 
-                    if (btnText) btnText.innerText = `Stop Timer (${formatTime(Date.now() - node.activeTimerStart)})`; 
+                    if (btnText) btnText.innerText = `Stop Timer (${formatTime(now - node.activeTimerStart)})`; 
                 }
             }
         });
-    
-        // 2. NEW: Habit Timers
+
+        // 2. FOCUS HUD LOGIC
+        updateFocusHUD(now);
+
+        // 3. Habit Timers
         const hasRunningHabit = habits.some(h => h.activeTimerStart);
         if (hasRunningHabit && !document.getElementById('habits-panel').classList.contains('hidden')) {
             renderHabits();
+        }
+    }
+
+    function updateFocusHUD(now) {
+        const hud = document.getElementById('focus-hud');
+        const countdownEl = document.getElementById('hud-countdown');
+        const titleEl = document.getElementById('hud-task-title');
+        const statusEl = document.getElementById('hud-status-text');
+        const playBtn = document.getElementById('hud-play-btn');
+
+        // Find if any task is scheduled for "NOW"
+        const currentSlot = agenda.find(slot => {
+            const start = new Date(slot.start).getTime();
+            const end = new Date(slot.end).getTime();
+            return now >= start && now <= end;
+        });
+
+        if (currentSlot) {
+            hud.classList.add('active');
+            const task = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
+            const endTime = new Date(currentSlot.end).getTime();
+            const remaining = endTime - now;
+
+            titleEl.innerText = task ? task.title : "Unknown Task";
+            
+            // Timer Handling
+            if (task && task.activeTimerStart) {
+                playBtn.innerHTML = '🛑';
+                playBtn.classList.add('running');
+                
+                // Red Zone Check
+                if (remaining < 0) {
+                    hud.classList.add('overtime');
+                    countdownEl.innerText = "+" + formatTime(Math.abs(remaining));
+                    statusEl.innerText = "OVERTIME";
+                } else {
+                    hud.classList.remove('overtime');
+                    countdownEl.innerText = formatTime(remaining);
+                    statusEl.innerText = "Target: " + new Date(currentSlot.end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                }
+            } else {
+                playBtn.innerHTML = '▶';
+                playBtn.classList.remove('running');
+                hud.classList.remove('overtime');
+                countdownEl.innerText = formatTime(remaining);
+                statusEl.innerText = "Scheduled (Not Started)";
+            }
+            
+            hud.dataset.currentTaskId = currentSlot.taskId;
+        } else {
+            hud.classList.remove('active');
+            hud.classList.remove('overtime');
+        }
+    }
+
+    function toggleFocusTimer() {
+        const hud = document.getElementById('focus-hud');
+        if (hud.dataset.currentTaskId) {
+            toggleTimer(hud.dataset.currentTaskId);
+        }
+    }
+
+    function focusCurrentScheduledTask() {
+        const hud = document.getElementById('focus-hud');
+        if (hud.dataset.currentTaskId) {
+            jumpToTask(hud.dataset.currentTaskId);
         }
     }
     
