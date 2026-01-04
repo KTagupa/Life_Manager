@@ -1605,7 +1605,8 @@
                 inbox: inbox || [],
                 lifeGoals: lifeGoals || {},
                 notes: notes || [],
-                habits: typeof habits !== 'undefined' ? habits : []
+                habits: typeof habits !== 'undefined' ? habits : [],
+                agenda: agenda || []
             };
             content = JSON.stringify(dataToSave, null, 2);
         } catch (e) {
@@ -1732,6 +1733,7 @@
             if (parsed.lifeGoals) lifeGoals = parsed.lifeGoals;
             if (parsed.notes) notes = parsed.notes;
             if (parsed.habits) habits = parsed.habits; // Added this line
+            if (parsed.agenda) agenda = parsed.agenda;
             
             // Run sanitization to prevent crashes
             sanitizeLoadedData();
@@ -3297,7 +3299,7 @@
         }
         
         // 6. Trigger Toast Notification
-        showNotification(); 
+        showNotification(`Sync Ready (${percent}%)`);
     }
     
     function loadFromStorage() {
