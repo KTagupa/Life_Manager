@@ -2826,31 +2826,35 @@
         const selectionRect = document.getElementById('selection-rect');
 
         document.addEventListener('keydown', (e) => {
-            // 1. Existing Sync Shortcut
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                e.preventDefault();
-                pushToGist();
-            }
+        // 1. Always check for Save (regardless of typing)
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            pushToGist();
+            return; // Exit early
+        }
+    
+        // 2. Define typing check once
+        const isTyping = e.target.tagName === 'INPUT' || 
+                         e.target.tagName === 'TEXTAREA' || 
+                         e.target.isContentEditable;
         
-            // 2. NEW: Toggle Habits Panel (Option + H)
-            // We check for e.altKey because 'Option' on Mac registers as 'Alt' in JavaScript
-            if (e.altKey && e.code === 'KeyH') {
-                // Safety check: Don't trigger if we are inside a text input
-                const isTyping = e.target.tagName === 'INPUT' || 
-                                 e.target.tagName === 'TEXTAREA' || 
-                                 e.target.isContentEditable;
-                
-                if (!isTyping) {
-                    e.preventDefault();
-                    console.log("Habit shortcut triggered!"); // This helps us debug
-                    if (typeof toggleHabits === 'function') {
-                        toggleHabits();
-                    } else {
-                        console.error("The function toggleHabits() is not defined!");
-                    }
-                }
+        if (isTyping) return; // If typing, don't run any of the shortcuts below
+    
+        // 3. Shortcuts (Option + Key)
+        if (e.altKey) {
+            if (e.code === 'KeyH') {
+                e.preventDefault();
+                toggleHabits();
             }
-        });
+            if (e.code === 'KeyA') {
+                e.preventDefault();
+                toggleAgenda();
+                showNotification(document.getElementById('agenda-panel').classList.contains('hidden') ? "Agenda Closed" : "Agenda Opened");
+            }
+            // Easy to add more here!
+            // if (e.code === 'KeyN') toggleNotesPanel(); 
+        }
+    });
         
         document.addEventListener('mousedown', (e) => {
             const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
