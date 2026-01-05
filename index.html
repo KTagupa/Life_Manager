@@ -422,12 +422,16 @@
         #note-preview-pane {
             color: #d1d5db;
             overflow-y: auto;
-            display: none; /* Hidden by default */
+            /* REMOVED display: none; because HTML has class="hidden" */
         }
         
         /* Visibility Toggles */
         #note-body-input.hidden { display: none; }
-        #note-preview-pane.visible { display: block; }
+        
+        /* ADDED: Ensure preview hides when it has the hidden class */
+        #note-preview-pane.hidden { display: none; } 
+        
+        /* REMOVED: .visible class logic is not used by your JS */
         
         /* AI CHAT STYLES (Bottom Left) */
         #fab-ai {
