@@ -265,6 +265,243 @@
             transform: translateX(100%);
         }
 
+        /* Inspector Components */
+        .inspector-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: rgba(30, 41, 59, 0.6);
+            border-radius: 99px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }
+
+        .urgency-switch {
+            display: flex;
+            background: #020617;
+            border-radius: 6px;
+            padding: 2px;
+            border: 1px solid #1e293b;
+        }
+
+        .urgency-option {
+            padding: 4px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+
+        .urgency-option.active {
+            color: white;
+            background: #334155;
+        }
+
+        .urgency-option.active.urgent-active {
+            background: #e11d48;
+            box-shadow: 0 0 10px rgba(225, 29, 72, 0.4);
+        }
+
+        .urgency-option.active.standard-active {
+            background: #059669;
+            box-shadow: 0 0 10px rgba(5, 150, 105, 0.4);
+        }
+
+        .inspector-title-wrapper {
+            margin-top: 16px;
+        }
+
+        .inspector-title-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1.3;
+            outline: none;
+            padding: 0;
+            font-family: inherit;
+        }
+
+        .inspector-title-input::placeholder {
+            color: #334155;
+        }
+
+        .field-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+
+        .field-box {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 10px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .field-box:hover {
+            border-color: #334155;
+            background: rgba(30, 41, 59, 0.6);
+        }
+
+        .field-box.active {
+            border-color: #059669;
+            background: rgba(5, 150, 105, 0.1);
+        }
+
+        .subtask-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.3);
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        .subtask-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background: #1e293b;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .subtask-row:hover {
+            background: #334155;
+        }
+
+        .subtask-check {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #475569;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-size: 12px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .subtask-check.checked {
+            background: #94a3b8;
+            border-color: #94a3b8;
+        }
+
+        .st-input {
+            background: transparent;
+            border: none;
+            color: #cbd5e1;
+            font-size: 13px;
+            flex-grow: 1;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .st-input.done {
+            text-decoration: line-through;
+            color: #64748b;
+            opacity: 0.7;
+        }
+
+        .add-subtask-btn {
+            font-size: 11px;
+            color: #f43f5e;
+            font-weight: 700;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            text-align: right;
+            padding: 4px;
+            transition: opacity 0.2s;
+        }
+
+        .add-subtask-btn:hover {
+            opacity: 0.8;
+        }
+
+        .linked-note-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .linked-note-item:hover {
+            border-color: #475569;
+        }
+
+        .footer-icon-btn {
+            background: transparent;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .footer-icon-btn:hover {
+            background: #1e293b;
+            border-color: #475569;
+        }
+
+        .session-btn {
+            background: #e11d48;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .session-btn:hover {
+            background: #be123c;
+        }
+
+        .session-btn.standard {
+            background: #059669;
+        }
+
+        .session-btn.standard:hover {
+            background: #047857;
+        }
+
         .side-panel {
             width: 380px;
             background: #1a1a1a;
@@ -429,9 +666,9 @@
         /* --- HEALTH DASHBOARD --- */
         #health-dashboard {
             position: fixed;
-            bottom: 10px;
-            right: 100px;
-            /* Positioned to the left of the Inbox FAB */
+            bottom: 20px;
+            left: 155px;
+            /* Positioned next to AI and Inbox buttons */
             background: rgba(12, 24, 18, 0.9);
             backdrop-filter: blur(4px);
             border: 1px solid var(--border);
@@ -625,8 +862,8 @@
         /* AI CHAT STYLES (Bottom Left) */
         #fab-ai {
             position: fixed;
-            bottom: 30px;
-            left: 30px;
+            bottom: 20px;
+            left: 20px;
             width: 60px;
             height: 60px;
             border-radius: 50%;
@@ -666,8 +903,8 @@
 
         #ai-panel {
             position: fixed;
-            bottom: 100px;
-            left: 30px;
+            bottom: 90px;
+            left: 20px;
             width: 350px;
             height: 500px;
             max-height: 60vh;
@@ -1670,14 +1907,15 @@
 
         #fab-inbox {
             position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
+            bottom: 25px;
+            left: 95px;
+            /* Positioned next to AI button */
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
             background: var(--accent);
             color: white;
-            font-size: 30px;
+            font-size: 28px;
             border: none;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
             cursor: pointer;
@@ -1695,8 +1933,8 @@
 
         #inbox-panel {
             position: fixed;
-            bottom: 100px;
-            right: 30px;
+            bottom: 90px;
+            left: 20px;
             width: 320px;
             background: var(--panel-bg);
             border: 1px solid var(--border);
@@ -1705,7 +1943,7 @@
             flex-direction: column;
             box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
             z-index: 99;
-            transform-origin: bottom right;
+            transform-origin: bottom left;
             transition: transform 0.2s ease, opacity 0.2s ease;
         }
 
@@ -2538,11 +2776,7 @@
     </div>
 
     <div id="inspector" class="hidden">
-        <div class="panel-header">
-            <span id="insp-title">Task Details</span>
-            <button class="btn" onclick="deselectNode()">✕</button>
-        </div>
-        <div class="panel-content" id="insp-content">
+        <div id="insp-content" style="display:flex; flex-direction:column; height:100%;">
         </div>
     </div>
 
@@ -4117,7 +4351,7 @@
                 <div class="note-card-title">${note.isPinned ? '📌 ' : ''}${note.title || '(Untitled)'}</div>
                 <div class="note-card-preview">${plainText}...</div>
                 <div style="margin-top:5px;">${tagsHtml}</div>
-                <div class="note-card-meta"><span>${new Date(note.timestamp).toLocaleDateString()}</span></div>
+                <div class="note-card-meta"><span>${new Date(note.timestamp || Date.now()).toLocaleDateString()}</span></div>
             `;
                 el.onclick = () => openNoteEditor(note.id);
                 container.appendChild(el);
@@ -4845,67 +5079,211 @@
 
         // --- INSPECTOR Logic ---
         function updateInspector() {
-            const panel = document.getElementById('insp-content'); if (!selectedNodeId) return;
+            const panel = document.getElementById('insp-content');
+            if (!selectedNodeId) return;
+
             let node = nodes.find(n => n.id === selectedNodeId);
             let isArchived = false;
-            if (!node) { node = archivedNodes.find(n => n.id === selectedNodeId); isArchived = true; }
+            if (!node) {
+                node = archivedNodes.find(n => n.id === selectedNodeId);
+                isArchived = true;
+            }
             if (!node) return;
 
             const isRunning = !!node.activeTimerStart;
             const linkedNotes = notes.filter(n => n.taskId === node.id);
-            const titleLink = extractLink(node.title);
+            const isUrgent = node.isManualUrgent;
 
-            panel.innerHTML = `
-            ${isArchived ? '<div style="background:#333; color:#aaa; padding:8px; border-radius:4px; margin-bottom:10px; font-size:12px; text-align:center;">🔒 This task is archived. Uncheck "Completed" to restore.</div>' : ''}
-            
-            <div class="form-group">
-                <label>
-                    Title ${titleLink ? `<a href="${titleLink}" target="_blank" style="text-decoration:none; margin-left:5px;">🔗 Open Link</a>` : ''}
-                    <button class="btn" style="padding:2px 8px; font-size:10px; margin-left:10px; border-color: var(--accent); color: var(--accent);" 
-                            onclick="navigator.clipboard.writeText('[[${node.title}]]'); showNotification('Link copied to clipboard')">
-                        📋 Copy Wiki-link
-                    </button>
-                </label>
-                <input type="text" value="${node.title}" oninput="updateNodeField('title', this.value)">
-            </div>
-            
-            <div class="form-group" style="display:flex; gap:10px"><div style="flex:1"><label>Duration (Est. Days)</label><input type="number" value="${node.duration}" min="1" onchange="updateNodeField('duration', parseInt(this.value))"></div><div style="flex:1"><label>Status</label><button class="btn ${node.completed ? 'btn-primary' : ''}" style="width:100%" onclick="toggleCompletion()">${node.completed ? 'Completed' : 'Active'}</button></div></div>
-            <div class="form-group" style="display:flex; align-items:center; gap:5px; margin-bottom: 10px;"><input type="checkbox" id="sync-toggle" ${node.syncDurationDate ? 'checked' : ''} onchange="updateNodeField('syncDurationDate', this.checked)" style="width:auto;"><label for="sync-toggle" style="margin:0; cursor:pointer; font-size:12px; color:var(--text-muted)">Link Duration & Due Date</label></div>
-            <div class="form-group"><label>Due Date (Optional)</label><input type="date" value="${node.dueDate || ''}" onchange="updateNodeField('dueDate', this.value)"></div>
-            <div class="form-group">
-                <label>External Link (Obsidian, Drive, etc)</label>
-                <div style="display:flex; gap:5px;">
-                    <input type="text" value="${node.externalLink || ''}" placeholder="Paste URL here..." onchange="updateNodeField('externalLink', this.value)">
-                    ${node.externalLink ? `<a href="${node.externalLink}" target="_blank" class="btn" style="width:40px; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="Open Link">🔗</a>` : ''}
-                </div>
-            </div>
-            <div class="form-group" style="display:flex; gap:10px;">
-                <button class="btn btn-urgent ${node.isManualUrgent ? 'active' : ''}" style="flex:1" onclick="toggleUrgency()">${node.isManualUrgent ? '🔥 Urgent' : '🔥 Mark Urgent'}</button>
-                <button class="btn btn-not-urgent ${node.isManualNotUrgent ? 'active' : ''}" style="flex:1" onclick="toggleNotUrgent()">${node.isManualNotUrgent ? '❄️ Not Urgent' : '❄️ Mark Normal'}</button>
-            </div>
-            <div class="form-group"><label>Dependencies</label><div id="dep-list">${node.dependencies.map(d => { const parent = nodes.find(n => n.id === d.id) || archivedNodes.find(n => n.id === d.id); return `<div class="dep-item"><span>${parent ? parent.title : 'Unknown'}</span><div class="dep-controls"><span class="toggle-soft ${d.type === 'soft' ? 'active' : ''}" onclick="toggleDepType('${d.id}')">${d.type === 'soft' ? 'Soft' : 'Hard'}</span><span style="cursor:pointer; color:#ef4444" onclick="removeDependency('${d.id}')">✕</span></div></div>`; }).join('')}</div><select id="add-dep-select" onchange="addDependency(this.value)" style="margin-top:5px"><option value="">+ Add Dependency...</option>${nodes.filter(n => n.id !== node.id && !node.dependencies.some(d => d.id === n.id)).map(n => `<option value="${n.id}">${n.title}</option>`).join('')}</select></div>
-            <div class="form-group"><label>Subtasks</label><div id="subtask-list">${node.subtasks.map((st, idx) => {
-                const subLink = extractLink(st.text);
-                return `<div class="subtask-item"><input type="checkbox" ${st.done ? 'checked' : ''} onchange="toggleSubtask(${idx})"><input type="text" value="${st.text}" onchange="updateSubtaskText(${idx}, this.value)" style="border:none; background:transparent; width:100%; color: inherit">${subLink ? `<a href="${subLink}" target="_blank" style="text-decoration:none; margin-right:5px; font-size:12px;">🔗</a>` : ''}<span onclick="removeSubtask(${idx})" style="cursor:pointer; color:#666">✕</span></div>`;
-            }).join('')}</div><button class="btn" style="width:100%; margin-top:5px" onclick="addSubtask()">+ Add Subtask</button></div>
-            
-            <div class="form-group" style="border: 1px solid #333; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.1);">
-                <label>Linked Notes</label>
-                <div style="margin-bottom:5px;">
-                    ${linkedNotes.length === 0 ? '<span style="color:#666; font-size:11px;">No linked notes</span>' : ''}
-                    ${linkedNotes.map(note => `
-                        <div class="note-card" style="padding:6px; margin-bottom:4px;" onclick="openNoteEditor('${note.id}')">
-                            <div class="note-card-title" style="font-size:12px;">${note.title || '(Untitled)'}</div>
+            // --- HEADER ---
+            const headerHtml = `
+                <div style="padding: 20px 20px 16px 20px; border-bottom: 1px solid #1e293b;">
+                    <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:16px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div class="inspector-badge">
+                                # TASK INSPECTOR
+                            </div>
+                            <button onclick="closeInspector()" style="background:transparent; border:none; color:#64748b; cursor:pointer; font-size:18px; line-height:1;">✕</button>
                         </div>
-                    `).join('')}
-                </div>
-                <button class="btn" style="width:100%" onclick="createNewNote('${node.id}')">+ Add Note</button>
-            </div>
+                        
+                        <div class="urgency-switch">
+                            <div class="urgency-option ${!isUrgent ? 'active standard-active' : ''}" onclick="setUrgency(false)">Standard</div>
+                            <div class="urgency-option ${isUrgent ? 'active urgent-active' : ''}" onclick="setUrgency(true)">Urgent</div>
+                        </div>
+                    </div>
 
-            <hr style="border-color:#333; margin: 20px 0;">
-            <div style="display:flex; gap:10px; margin-bottom: 20px;"><button class="btn" style="flex:1; border-color:var(--accent); color:var(--accent);" onclick="demoteToInbox()">⬇ Move to Inbox</button><button class="btn btn-danger" style="flex:1" onclick="deleteSelectedNode()">Delete</button></div>
-            <div class="form-group" style="border: 1px solid #333; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.2);"><label>Time Tracking</label><button class="btn-timer ${isRunning ? 'running' : ''}" onclick="toggleTimer()"><span id="timer-btn-text">${isRunning ? 'Stop Timer' : 'Start Timer'}</span></button></div>
-        `;
+                    <div class="inspector-title-wrapper">
+                        <input type="text" class="inspector-title-input" value="${node.title}" placeholder="Task Title..." oninput="updateNodeField('title', this.value)">
+                    </div>
+                </div>`;
+
+            // --- CONTENT FIELDS ---
+            // 1. Duration & Status Row
+            const durationStatusHtml = `
+                <div style="display:flex; gap:12px; margin-bottom:16px;">
+                    <div style="flex:1;">
+                        <label class="field-label">⏱ DURATION</label>
+                        <div class="field-box">
+                            <input type="number" value="${node.duration}" min="1" 
+                                style="background:transparent; border:none; color:white; width:60px; font-weight:600; font-family:inherit; outline:none;" 
+                                onchange="updateNodeField('duration', parseInt(this.value))">
+                            <span style="font-size:11px; color:#64748b;">Days</span>
+                        </div>
+                    </div>
+                    <div style="flex:1;">
+                        <label class="field-label">✓ STATUS</label>
+                        <div class="field-box ${node.completed ? 'active' : ''}" style="cursor:pointer;" onclick="toggleCompletion()">
+                            <span style="font-weight:600; font-size:13px; color:${node.completed ? '#10b981' : '#e2e8f0'}">${node.completed ? 'Completed' : 'Active'}</span>
+                            <span style="font-size:18px;">${node.completed ? '✓' : '○'}</span>
+                        </div>
+                    </div>
+                </div>`;
+
+            // 2. Due Date
+            const dueDateHtml = `
+                <div style="margin-bottom:16px;">
+                    <label class="field-label">📅 DUE DATE</label>
+                    <div class="field-box" style="padding: 8px 12px;">
+                        <input type="date" value="${node.dueDate || ''}" 
+                            style="background:transparent; border:none; color:white; width:100%; font-family:inherit; font-size:13px; outline:none;" 
+                            onchange="updateNodeField('dueDate', this.value)">
+                    </div>
+                </div>`;
+
+            // 3. Subtasks
+            const subtasksHtml = `
+                <div style="margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <label class="field-label">SUBTASKS</label>
+                        <button class="add-subtask-btn" onclick="addSubtask()">+ ADD SUBTASK</button>
+                    </div>
+                    
+                    <div class="subtask-list">
+                        ${node.subtasks.map((st, idx) => `
+                        <div class="subtask-row">
+                            <div class="subtask-check ${st.done ? 'checked' : ''}" onclick="toggleSubtask(${idx})">
+                                ${st.done ? '✓' : ''}
+                            </div>
+                            <input type="text" class="st-input ${st.done ? 'done' : ''}" value="${st.text}" 
+                                onchange="updateSubtaskText(${idx}, this.value)">
+                            <button onclick="removeSubtask(${idx})" style="background:transparent; border:none; color:#475569; cursor:pointer; font-size:14px;">✕</button>
+                        </div>
+                        `).join('')}
+                        ${node.subtasks.length === 0 ? '<div style="font-size:11px; color:#475569; padding:12px; text-align:center;">No subtasks</div>' : ''}
+                    </div>
+                </div>`;
+
+            // 4. Linked Notes
+            const linkedNotesHtml = `
+                <div style="margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <label class="field-label">LINKED NOTES</label>
+                        <button class="add-subtask-btn" style="color:#3b82f6;" onclick="createNewNote('${node.id}')">+ NEW NOTE</button>
+                    </div>
+                    
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        ${linkedNotes.map(n => `
+                            <div class="linked-note-item" onclick="openNoteEditor('${n.id}')">
+                                <div style="width:28px; height:28px; background:rgba(59,130,246,0.1); border-radius:6px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                                    📄
+                                </div>
+                                <div style="flex-grow:1; overflow:hidden;">
+                                    <div style="font-size:13px; font-weight:600; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                        ${n.title || 'Untitled Note'}
+                                    </div>
+                                    <div style="font-size:10px; color:#64748b;">${new Date(n.timestamp || Date.now()).toLocaleDateString()}</div>
+                                </div>
+                                <span style="color:#475569;">›</span>
+                            </div>
+                        `).join('')}
+                        ${linkedNotes.length === 0 ? `
+                        <div class="linked-note-item" style="border-style:dashed; justify-content:center; color:#475569; cursor:pointer;" onclick="createNewNote('${node.id}')">
+                             <span style="font-size:12px;">+ Create Project Document</span>
+                        </div>` : ''}
+                    </div>
+                </div>`;
+
+            // 5. Dependencies
+            const dependenciesHtml = `
+                <div style="margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <label class="field-label">DEPENDENCIES</label>
+                        <button class="add-subtask-btn" style="color:#10b981;" onclick="document.getElementById('dep-select').style.display='block';">+ ADD DEPENDENCY</button>
+                    </div>
+                    
+                     <div style="display:none; margin-bottom:8px;" id="dep-select">
+                        <select style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:white; border-radius:6px; outline:none; font-size:12px;" 
+                            onchange="addDependency(this.value); this.style.display='none'; this.value='';">
+                            <option value="">Select Task...</option>
+                            ${nodes.filter(n => n.id !== node.id && !node.dependencies.some(d => d.id === n.id)).map(n => `<option value='${n.id}'>${n.title}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        ${node.dependencies.map(d => {
+                const p = nodes.find(x => x.id === d.id) || archivedNodes.find(x => x.id === d.id);
+                if (!p) return '';
+                return `
+                            <div class="linked-note-item" style="padding:10px 12px;">
+                                <div style="width:6px; height:6px; border-radius:50%; background:${d.type === 'hard' ? '#ef4444' : '#f59e0b'}; margin-right:8px; flex-shrink:0;"></div>
+                                <span style="font-size:12px; color:#cbd5e1; flex-grow:1;">${p.title}</span>
+                                <span style="font-size:10px; color:#64748b; cursor:pointer; margin-right:8px; padding:2px 6px; background:#1e293b; border-radius:4px;" onclick="toggleDepType('${d.id}')">${d.type}</span>
+                                <span style="cursor:pointer; color:#ef4444; font-size:14px;" onclick="removeDependency('${d.id}')">✕</span>
+                            </div>`;
+            }).join('')}
+                        
+                         ${node.dependencies.length === 0 ?
+                    `<div style="text-align:center; padding:12px; border:1px dashed #334155; border-radius:8px; color:#475569; font-size:11px;">
+                            No blockers linked yet.
+                          </div>` : ''}
+                    </div>
+                </div>`;
+
+            // --- FOOTER ---
+            const footerHtml = `
+                <div style="padding: 16px 20px; background: #020617; border-top: 1px solid #1e293b; display: flex; align-items: center; justify-content: space-between; gap:12px;">
+                    <div style="display:flex; gap:8px;">
+                        <button class="footer-icon-btn" onclick="deleteSelectedNode()" title="Delete Task">
+                            🗑
+                        </button>
+                        <button class="footer-icon-btn" onclick="demoteToInbox()" title="Move to Inbox">
+                            📥
+                        </button>
+                    </div>
+
+                    <button class="session-btn ${isUrgent ? '' : 'standard'}" onclick="toggleTimer()" style="flex:1;">
+                        ${isRunning ? '⏸' : '▶'} ${isRunning ? 'Stop Session' : 'Start Session'}
+                    </button>
+                </div>`;
+
+            // --- ASSEMBLE ---
+            panel.innerHTML = `
+                ${headerHtml}
+                <div style="padding: 16px 20px; overflow-y: auto; flex-grow:1;">
+                    ${durationStatusHtml}
+                    ${dueDateHtml}
+                    ${subtasksHtml}
+                    ${linkedNotesHtml}
+                    ${dependenciesHtml}
+                </div>
+                ${footerHtml}
+            `;
+        }
+
+        function setUrgency(urgent) {
+            const node = nodes.find(n => n.id === selectedNodeId);
+            if (node) {
+                if (urgent) {
+                    node.isManualUrgent = true;
+                    node.isManualNotUrgent = false;
+                } else {
+                    node.isManualUrgent = false;
+                    node.isManualNotUrgent = false;
+                }
+                updateCalculations();
+                render();
+                updateInspector();
+                saveToStorage();
+            }
         }
 
         function updateNodeField(field, value) {
@@ -4949,7 +5327,8 @@
         function removeDependency(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies = node.dependencies.filter(d => d.id !== parentId); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function toggleDepType(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function addSubtask() { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks.push({ text: 'New Step', done: false }); render(); updateInspector(); saveToStorage(); } }
-        function toggleSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks[index].done = !node.subtasks[index].done; render(); saveToStorage(); } }
+        function toggleSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks[index].done = !node.subtasks[index].done; render(); updateInspector(); saveToStorage(); } }
+        function closeInspector() { selectedNodeId = null; document.getElementById('inspector').classList.add('hidden'); render(); }
         function updateSubtaskText(index, val) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks[index].text = val; saveToStorage(); }
         function removeSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks.splice(index, 1); render(); updateInspector(); saveToStorage(); }
 
