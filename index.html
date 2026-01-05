@@ -1856,6 +1856,16 @@
     }
     
     async function pushToGist() {
+        // NEW: Stop any active task timers before pushing to ensure a static "snapshot"
+        nodes.forEach(n => {
+            if (n.activeTimerStart) {
+                const now = Date.now();
+                const dur = now - Number(n.activeTimerStart);
+                n.timeLogs.push({ start: n.activeTimerStart, end: now, duration: dur });
+                n.activeTimerStart = null;
+            }
+        });
+        
         // --- STEP 1: PREPARE DATA ---
         let content;
         try {
@@ -2897,12 +2907,21 @@
     }
     
     function getTotalTime(node) {
-        // 1. Sum up all completed sessions in timeLogs
-        let total = (node.timeLogs || []).reduce((acc, log) => acc + (log.duration || 0), 0);
+        if (!node) return 0;
         
-        // 2. If a timer is currently running, add the live duration
+        // 1. Sum up all completed sessions, ensuring they are treated as Numbers
+        let total = (node.timeLogs || []).reduce((acc, log) => {
+            return acc + (Number(log.duration) || 0);
+        }, 0);
+        
+        // 2. Add current session if running, ensuring Number types
         if (node.activeTimerStart) {
-            total += (Date.now() - Number(node.activeTimerStart));
+            const start = Number(node.activeTimerStart);
+            const now = Date.now();
+            // Prevent negative time if system clocks are slightly out of sync
+            if (now > start) {
+                total += (now - start);
+            }
         }
         
         return total;
@@ -3809,17 +3828,36 @@
             if (!n.dueDate) n.dueDate = '';
             if (n.syncDurationDate === undefined) n.syncDurationDate = true; 
             if (n.isManualUrgent === undefined) n.isManualUrgent = false;
+            
+            // --- IMPROVED TIME TRACKING SANITIZATION ---
+            // Ensure timeLogs exist and convert all values to proper Numbers
             if (n.timeLogs === undefined) n.timeLogs = [];
+            n.timeLogs = n.timeLogs.map(log => ({
+                start: Number(log.start),
+                end: Number(log.end),
+                duration: Number(log.duration)
+            }));
+    
+            // Handle active timer conversion to Number
+            if (n.activeTimerStart !== undefined && n.activeTimerStart !== null) {
+                n.activeTimerStart = Number(n.activeTimerStart);
+            } else {
+                n.activeTimerStart = null;
+            }
+            
             if (n.externalLink === undefined) n.externalLink = null;
         };
-
+    
+        // Run task cleanup
         nodes.forEach(sanitizeTask);
         archivedNodes.forEach(sanitizeTask);
-
+    
+        // --- PRESERVE HABITS CLEANUP ---
         if (!Array.isArray(habits)) habits = [];
         habits.forEach(h => {
             if (!h.history) h.history = {};
             if (h.activeTimerStart === undefined) h.activeTimerStart = null;
+            if (h.activeTimerStart !== null) h.activeTimerStart = Number(h.activeTimerStart);
             if (!h.type) h.type = 'checkbox';
         });
     }
