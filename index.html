@@ -1248,13 +1248,13 @@
     async function toggleFloatingWindow() {
         const video = document.getElementById('pip-stream-source');
         
-        // 1. If already open, close it
+        // 1. If already in PiP, close it
         if (document.pictureInPictureElement) {
-            await document.exitPictureInPicture();
+            document.exitPictureInPicture();
             return;
         }
     
-        // 2. Setup Canvas if it doesn't exist
+        // 2. Immediate Setup (No awaits before the request)
         if (!pipCanvas) {
             pipCanvas = document.createElement('canvas');
             pipCanvas.width = 600; 
@@ -1262,100 +1262,93 @@
             pipCtx = pipCanvas.getContext('2d');
         }
     
-        // 3. "Kickstart" the canvas with a background color 
-        // Safari often rejects PiP if the first frame is empty/black
+        // 3. Draw a placeholder frame immediately
         pipCtx.fillStyle = '#0c1812';
         pipCtx.fillRect(0, 0, pipCanvas.width, pipCanvas.height);
     
-        // 4. Link stream to video
-        const stream = pipCanvas.captureStream(10); 
-        video.srcObject = stream;
-    
-        // 5. Safari Hack: Video must be "playing" and have "metadata" to trigger PiP
-        video.setAttribute('playsinline', true);
-        video.muted = true;
+        // 4. Capture and Play
+        if (!video.srcObject) {
+            video.srcObject = pipCanvas.captureStream(10);
+        }
         
-        try {
-            await video.play(); // Start the internal stream
-            
-            // Brief toggle of controls - helps Safari 17+ recognize the stream
-            video.controls = true; 
-            await video.requestPictureInPicture();
-            video.controls = false; 
-    
-            updatePip(); // Start the drawing loop
-        } catch (e) {
-            console.error("PiP failed:", e);
-            alert("Safari blocked the pop-out. Please try clicking the 🚀 again.");
-        }
-    
-        // The inner drawing loop remains the same
-        function updatePip() {
-            if (!document.pictureInPictureElement) return;
-            
-            const now = Date.now();
-            const activeTask = nodes.find(n => n.activeTimerStart) || archivedNodes.find(n => n.activeTimerStart);
-            const currentSlot = agenda.find(slot => {
-                const start = new Date(slot.start).getTime();
-                const end = new Date(slot.end).getTime();
-                return now >= start && now <= end;
+        // 5. THE CRITICAL SEQUENCE FOR SAFARI
+        // We play and request in the same execution "tick"
+        video.play().then(() => {
+            video.requestPictureInPicture().then(() => {
+                updatePipLoop(); // Start drawing once successful
+            }).catch(err => {
+                console.error("PiP Denied:", err);
+                alert("Safari is blocking the pop-out. Try starting a task timer first, then click 🚀.");
             });
+        });
+    }
     
-            // Background
-            pipCtx.fillStyle = '#0c1812'; 
-            pipCtx.fillRect(0, 0, pipCanvas.width, pipCanvas.height);
-            
-            // --- DOING SECTION ---
-            pipCtx.fillStyle = '#3b82f6';
-            pipCtx.font = 'bold 24px Inter, sans-serif';
-            pipCtx.fillText("DOING", 40, 50);
+    // Separate the loop to keep the trigger function "lean"
+    function updatePipLoop() {
+        if (!document.pictureInPictureElement) return;
+        
+        const now = Date.now();
+        const activeTask = nodes.find(n => n.activeTimerStart) || archivedNodes.find(n => n.activeTimerStart);
+        const currentSlot = agenda.find(slot => {
+            const start = new Date(slot.start).getTime();
+            const end = new Date(slot.end).getTime();
+            return now >= start && now <= end;
+        });
     
-            if (activeTask) {
-                pipCtx.fillStyle = '#ffffff';
-                pipCtx.font = '500 36px Inter, sans-serif';
-                const title = activeTask.title.length > 25 ? activeTask.title.substring(0, 22) + "..." : activeTask.title;
-                pipCtx.fillText(title, 40, 100);
-                pipCtx.fillStyle = '#10b981';
-                pipCtx.font = 'bold 60px monospace';
-                pipCtx.fillText(formatTime(getTotalTime(activeTask)), 40, 170);
-            } else {
-                pipCtx.fillStyle = '#444';
-                pipCtx.font = 'italic 32px Inter, sans-serif';
-                pipCtx.fillText("No active timer", 40, 110);
-            }
+        // Background
+        pipCtx.fillStyle = '#0c1812'; 
+        pipCtx.fillRect(0, 0, pipCanvas.width, pipCanvas.height);
+        
+        // DOING SECTION
+        pipCtx.fillStyle = '#3b82f6';
+        pipCtx.font = 'bold 24px Inter, sans-serif';
+        pipCtx.fillText("DOING", 40, 50);
     
-            // Divider
-            pipCtx.strokeStyle = '#333';
-            pipCtx.lineWidth = 2;
-            pipCtx.beginPath();
-            pipCtx.moveTo(40, 210);
-            pipCtx.lineTo(560, 210);
-            pipCtx.stroke();
-    
-            // --- SCHEDULED SECTION ---
-            pipCtx.fillStyle = '#ffd700';
-            pipCtx.font = 'bold 24px Inter, sans-serif';
-            pipCtx.fillText("SCHEDULED", 40, 260);
-    
-            if (currentSlot) {
-                const scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
-                pipCtx.fillStyle = '#ffffff';
-                pipCtx.font = '500 36px Inter, sans-serif';
-                const sTitle = (scheduledTask ? scheduledTask.title : "Unscheduled");
-                pipCtx.fillText(sTitle.length > 25 ? sTitle.substring(0, 22) + "..." : sTitle, 40, 310);
-                pipCtx.fillStyle = '#888';
-                pipCtx.font = '30px monospace';
-                const startStr = new Date(currentSlot.start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                const endStr = new Date(currentSlot.end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                pipCtx.fillText(`${startStr} - ${endStr}`, 40, 360);
-            } else {
-                pipCtx.fillStyle = '#444';
-                pipCtx.font = 'italic 32px Inter, sans-serif';
-                pipCtx.fillText("Nothing scheduled", 40, 320);
-            }
-    
-            requestAnimationFrame(updatePip);
+        if (activeTask) {
+            pipCtx.fillStyle = '#ffffff';
+            pipCtx.font = '500 36px Inter, sans-serif';
+            const title = activeTask.title.length > 25 ? activeTask.title.substring(0, 22) + "..." : activeTask.title;
+            pipCtx.fillText(title, 40, 100);
+            pipCtx.fillStyle = '#10b981';
+            pipCtx.font = 'bold 60px monospace';
+            pipCtx.fillText(formatTime(getTotalTime(activeTask)), 40, 170);
+        } else {
+            pipCtx.fillStyle = '#444';
+            pipCtx.font = 'italic 32px Inter, sans-serif';
+            pipCtx.fillText("No active timer", 40, 110);
         }
+    
+        // Divider
+        pipCtx.strokeStyle = '#333';
+        pipCtx.lineWidth = 2;
+        pipCtx.beginPath();
+        pipCtx.moveTo(40, 210);
+        pipCtx.lineTo(560, 210);
+        pipCtx.stroke();
+    
+        // SCHEDULED SECTION
+        pipCtx.fillStyle = '#ffd700';
+        pipCtx.font = 'bold 24px Inter, sans-serif';
+        pipCtx.fillText("SCHEDULED", 40, 260);
+    
+        if (currentSlot) {
+            const scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
+            pipCtx.fillStyle = '#ffffff';
+            pipCtx.font = '500 36px Inter, sans-serif';
+            const sTitle = (scheduledTask ? scheduledTask.title : "Unscheduled");
+            pipCtx.fillText(sTitle.length > 25 ? sTitle.substring(0, 22) + "..." : sTitle, 40, 310);
+            pipCtx.fillStyle = '#888';
+            pipCtx.font = '30px monospace';
+            const startStr = new Date(currentSlot.start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const endStr = new Date(currentSlot.end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            pipCtx.fillText(`${startStr} - ${endStr}`, 40, 360);
+        } else {
+            pipCtx.fillStyle = '#444';
+            pipCtx.font = 'italic 32px Inter, sans-serif';
+            pipCtx.fillText("Nothing scheduled", 40, 320);
+        }
+    
+        requestAnimationFrame(updatePipLoop);
     }
     
     async function playAudioFeedback(type) {
