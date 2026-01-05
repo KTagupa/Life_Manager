@@ -3746,11 +3746,24 @@
                     title: n.title,
                     due: n.dueDate,
                     urgent: n.isManualUrgent,
-                    progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : '0/0'
+                    progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : '0/0',
+                    // NEW: Give the AI awareness of what this task blocks
+                    blocks: nodes.filter(other => other.dependencies.some(d => d.id === n.id)).map(other => other.title),
+                    // NEW: Give awareness of what blocks this task
+                    blockedBy: n.dependencies.map(d => {
+                        const dep = nodes.find(x => x.id === d.id);
+                        return dep ? dep.title : 'Unknown';
+                    }),
+                    // Total time spent today (if applicable)
+                    timeToday: n.timeLogs ? n.timeLogs.reduce((acc, log) => {
+                        const logDate = new Date(log.start).toLocaleDateString();
+                        if (logDate === new Date().toLocaleDateString()) return acc + log.duration;
+                        return acc;
+                    }, 0) : 0
                 })),
 
                 inboxIdeas: inbox.map(i => i.title),
-                notes: notes.map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 300) })),
+                notes: notes.map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 500) })), // Increased snippet
                 goals: lifeGoals[currentGoalYear] || [],
                 habits: habits.map(h => ({ title: h.title, streak: calculateStreak(h) }))
             };
