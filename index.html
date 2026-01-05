@@ -395,20 +395,39 @@
             display: flex;
         }
 
-        #note-body-input { 
-            flex-grow: 1; width: 100%; height: 100%;
-            background: #1a1a1a; border: none; color: #ddd; padding: 10px; resize: none; 
-            font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; line-height: 1.5; 
-        }
-        #note-body-input:focus { outline: none; }
-        #note-body-input.hidden { display: none; }
-
+        /* Shared styles to prevent the "jump" when switching modes */
+        #note-body-input, 
         #note-preview-pane {
-            flex-grow: 1; width: 100%; height: 100%;
-            background: #1a1a1a; color: #ccc; padding: 15px; 
-            overflow-y: auto; font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.6;
+            flex-grow: 1;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            border: none;
+            outline: none;
+            box-sizing: border-box;
+            padding: 30px; /* Uniform padding */
+            font-family: 'Inter', sans-serif; /* Same font for both */
+            font-size: 15px; /* Same size for both */
+            line-height: 1.7; /* Same spacing for both */
         }
-        #note-preview-pane.hidden { display: none; }
+        
+        /* Specific to the Editor */
+        #note-body-input {
+            color: #ddd;
+            resize: none;
+            display: block; /* Default state */
+        }
+        
+        /* Specific to the View Mode */
+        #note-preview-pane {
+            color: #d1d5db;
+            overflow-y: auto;
+            display: none; /* Hidden by default */
+        }
+        
+        /* Visibility Toggles */
+        #note-body-input.hidden { display: none; }
+        #note-preview-pane.visible { display: block; }
         
         /* AI CHAT STYLES (Bottom Left) */
         #fab-ai {
@@ -883,6 +902,69 @@
             width: 300px;
             height: 160px;
             z-index: -1;
+        }
+
+        /* --- ENHANCED MARKDOWN ELEMENT STYLING --- */
+        
+        /* This styles the Headers created by # ## ### */
+        #note-preview-pane h1, #note-preview-pane h2, #note-preview-pane h3 {
+            color: #fff;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            border-bottom: 1px solid #333;
+            padding-bottom: 0.2em;
+        }
+        
+        /* This fixes the indentation of bullet and numbered lists */
+        #note-preview-pane ul, #note-preview-pane ol {
+            padding-left: 1.5em;
+            margin-bottom: 1em;
+        }
+        
+        #note-preview-pane li {
+            margin-bottom: 0.4em;
+        }
+        
+        /* This styles checkboxes from [ ] or [x] */
+        #note-preview-pane input[type="checkbox"] {
+            margin-right: 8px;
+            accent-color: var(--ready-color);
+        }
+        
+        /* This styles the > Quote blocks */
+        #note-preview-pane blockquote {
+            margin: 1em 0;
+            padding: 0.5em 1em;
+            color: #9ca3af;
+            border-left: 4px solid var(--accent);
+            background: rgba(59, 130, 246, 0.05);
+        }
+        
+        /* This styles code blocks (using triple backticks) */
+        #note-preview-pane pre {
+            background: #000;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #333;
+            overflow-x: auto;
+        }
+        
+        /* This styles inline code (using single backticks) */
+        #note-preview-pane code {
+            font-family: 'Monaco', 'Consolas', monospace;
+            background: rgba(255,255,255,0.1);
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        
+        /* This styles the [[WikiLinks]] */
+        .wiki-link {
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+        .wiki-link:hover {
+            opacity: 0.8;
         }
     </style>
 
@@ -2500,28 +2582,31 @@
     function renderMarkdown(text) {
         if (!text) return '';
     
-        // 1. Handle [[WikiLinks]] before marked processes it
+        // Configure marked to handle single line breaks
+        marked.setOptions({
+            breaks: true,
+            gfm: true // GitHub Flavored Markdown
+        });
+    
+        // 1. Handle [[WikiLinks]] (Existing logic)
         let processedText = text.replace(/\[\[(.*?)\]\]/g, (match, title) => {
             const cleanTitle = title.replace(/^Note: /, '').trim();
-            
-            // Search across Notes, Active Tasks, and Archived Tasks
             const target = notes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) || 
                            nodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) || 
+                           archivedNodes.find(n => n.id === cleanTitle) || // Added ID fallback
                            archivedNodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase());
     
             if (target) {
                 const isNote = target.body !== undefined;
                 const color = isNote ? 'var(--accent)' : 'var(--ready-color)';
-                const icon = isNote ? '📝 ' : '🎯 ';
                 const action = isNote ? `openNoteEditor('${target.id}')` : `jumpToTask('${target.id}')`;
-                
-                return `<span class="wiki-link" style="color:${color}; cursor:pointer; text-decoration:underline;" onclick="${action}">${icon}${title}</span>`;
+                return `<span class="wiki-link" style="color:${color}; cursor:pointer; text-decoration:underline;" onclick="${action}">${title}</span>`;
             } else {
-                return `<span style="color:#666; font-style:italic;">[[${title}]] (uncreated)</span>`;
+                return `<span style="color:#666; font-style:italic;">[[${title}]]</span>`;
             }
         });
     
-        // 2. Use the 'marked' library for standard MD
+        // 2. Parse Markdown
         let html = marked.parse(processedText);
     
         // 3. Add Backlinks Section
