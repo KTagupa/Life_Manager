@@ -1463,12 +1463,14 @@
 
         .node.critical {
             border-color: var(--critical-path);
-            box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+            background: linear-gradient(145deg, #2d2d2d, #3d3410);
         }
 
         .node.critical-urgent {
             border-color: #ff4d4d;
-            box-shadow: 0 0 15px rgba(255, 77, 77, 0.4);
+            box-shadow: 0 0 20px rgba(255, 77, 77, 0.5);
+            background: linear-gradient(145deg, #2d2d2d, #4d1515);
         }
 
         .node.blocked {
@@ -4548,11 +4550,11 @@
             const getDescendants = (id, visited = new Set()) => { let count = 0; nodes.forEach(n => { if (n.dependencies.some(d => d.id === id) && !visited.has(n.id)) { visited.add(n.id); count += 1 + getDescendants(n.id, visited); } }); return count; };
             nodes.forEach(n => { n._downstreamWeight = getDescendants(n.id); });
             let changed = true; let iterations = 0;
-            while (changed && iterations < nodes.length + 2) { changed = false; nodes.forEach(n => { let maxPrevEF = 0; n.dependencies.forEach(dep => { const parent = nodes.find(p => p.id === dep.id); if (parent && parent._earliestFinish > maxPrevEF) maxPrevEF = parent._earliestFinish; }); const effDuration = n.completed ? 0 : (n.duration || 1); const newES = maxPrevEF; const newEF = newES + effDuration; if (n._earliestStart !== newES || n._earliestFinish !== newEF) { n._earliestStart = newES; n._earliestFinish = newEF; changed = true; } }); iterations++; }
+            while (changed && iterations < nodes.length + 2) { changed = false; nodes.forEach(n => { let maxPrevEF = 0; n.dependencies.filter(d => d.type === 'hard').forEach(dep => { const parent = nodes.find(p => p.id === dep.id); if (parent && parent._earliestFinish > maxPrevEF) maxPrevEF = parent._earliestFinish; }); const effDuration = n.completed ? 0 : (n.duration || 1); const newES = maxPrevEF; const newEF = newES + effDuration; if (n._earliestStart !== newES || n._earliestFinish !== newEF) { n._earliestStart = newES; n._earliestFinish = newEF; changed = true; } }); iterations++; }
             const projectDuration = Math.max(...nodes.map(n => n._earliestFinish), 0);
             changed = true; iterations = 0; nodes.forEach(n => n._latestFinish = Infinity);
-            while (changed && iterations < nodes.length + 2) { changed = false; nodes.forEach(n => { const children = nodes.filter(c => c.dependencies.some(d => d.id === n.id)); let derivedLF = Infinity; if (children.length === 0) derivedLF = projectDuration; else { const minChildLS = Math.min(...children.map(c => { const cDur = c.completed ? 0 : (c.duration || 1); return c._latestFinish - cDur; })); derivedLF = minChildLS; } if (n.dueDate) { const daysUntilDue = getDaysFromToday(n.dueDate); if (daysUntilDue < derivedLF) derivedLF = daysUntilDue; } if (n._latestFinish !== derivedLF) { n._latestFinish = derivedLF; changed = true; } }); iterations++; }
-            const propagateUrgency = (id) => { const children = nodes.filter(c => c.dependencies.some(d => d.id === id)); children.forEach(child => { if (!child._isManualUrgentPath) { child._isManualUrgentPath = true; propagateUrgency(child.id); } }); };
+            while (changed && iterations < nodes.length + 2) { changed = false; nodes.forEach(n => { const children = nodes.filter(c => c.dependencies.some(d => d.id === n.id && d.type === 'hard')); let derivedLF = Infinity; if (children.length === 0) derivedLF = projectDuration; else { const minChildLS = Math.min(...children.map(c => { const cDur = c.completed ? 0 : (c.duration || 1); return c._latestFinish - cDur; })); derivedLF = minChildLS; } if (n.dueDate) { const daysUntilDue = getDaysFromToday(n.dueDate); if (daysUntilDue < derivedLF) derivedLF = daysUntilDue; } if (n._latestFinish !== derivedLF) { n._latestFinish = derivedLF; changed = true; } }); iterations++; }
+            const propagateUrgency = (id) => { const children = nodes.filter(c => c.dependencies.some(d => d.id === id && d.type === 'hard')); children.forEach(child => { if (!child._isManualUrgentPath) { child._isManualUrgentPath = true; propagateUrgency(child.id); } }); };
             nodes.forEach(n => { if (n.isManualUrgent) { n._isManualUrgentPath = true; propagateUrgency(n.id); } });
             nodes.forEach(n => {
                 const slack = n._latestFinish - n._earliestFinish;
@@ -5341,7 +5343,7 @@
         function toggleDepType(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function addSubtask() { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks.push({ text: 'New Step', done: false }); render(); updateInspector(); saveToStorage(); } }
         function toggleSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks[index].done = !node.subtasks[index].done; render(); updateInspector(); saveToStorage(); } }
-        function closeInspector() { selectedNodeId = null; document.getElementById('inspector').classList.add('hidden'); render(); }
+        function closeInspector() { selectedNodeId = null; selectedIds.clear(); document.getElementById('inspector').classList.add('hidden'); render(); }
         function updateSubtaskText(index, val) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks[index].text = val; saveToStorage(); }
         function removeSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks.splice(index, 1); render(); updateInspector(); saveToStorage(); }
 
