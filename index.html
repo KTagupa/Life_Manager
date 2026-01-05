@@ -1463,14 +1463,12 @@
 
         .node.critical {
             border-color: var(--critical-path);
-            box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
-            background: linear-gradient(145deg, #2d2d2d, #3d3410);
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
         }
 
         .node.critical-urgent {
             border-color: #ff4d4d;
-            box-shadow: 0 0 20px rgba(255, 77, 77, 0.5);
-            background: linear-gradient(145deg, #2d2d2d, #4d1515);
+            box-shadow: 0 0 15px rgba(255, 77, 77, 0.4);
         }
 
         .node.blocked {
@@ -5343,7 +5341,7 @@
         function toggleDepType(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function addSubtask() { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks.push({ text: 'New Step', done: false }); render(); updateInspector(); saveToStorage(); } }
         function toggleSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks[index].done = !node.subtasks[index].done; render(); updateInspector(); saveToStorage(); } }
-        function closeInspector() { selectedNodeId = null; selectedIds.clear(); document.getElementById('inspector').classList.add('hidden'); render(); }
+        function closeInspector() { selectedNodeId = null; document.getElementById('inspector').classList.add('hidden'); render(); }
         function updateSubtaskText(index, val) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks[index].text = val; saveToStorage(); }
         function removeSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks.splice(index, 1); render(); updateInspector(); saveToStorage(); }
 
