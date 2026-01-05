@@ -1449,6 +1449,17 @@
             color: white;
         }
 
+        .btn-not-urgent {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: #3b82f6;
+            color: #3b82f6;
+        }
+
+        .btn-not-urgent.active {
+            background: #3b82f6;
+            color: white;
+        }
+
         .btn-timer {
             width: 100%;
             padding: 10px;
@@ -3636,6 +3647,7 @@
                 completed: false,
                 completedDate: null,
                 isManualUrgent: false,
+                isManualNotUrgent: false,
                 dependencies: [],
                 subtasks: [],
                 activeTimerStart: null,
@@ -4295,7 +4307,23 @@
             while (changed && iterations < nodes.length + 2) { changed = false; nodes.forEach(n => { const children = nodes.filter(c => c.dependencies.some(d => d.id === n.id)); let derivedLF = Infinity; if (children.length === 0) derivedLF = projectDuration; else { const minChildLS = Math.min(...children.map(c => { const cDur = c.completed ? 0 : (c.duration || 1); return c._latestFinish - cDur; })); derivedLF = minChildLS; } if (n.dueDate) { const daysUntilDue = getDaysFromToday(n.dueDate); if (daysUntilDue < derivedLF) derivedLF = daysUntilDue; } if (n._latestFinish !== derivedLF) { n._latestFinish = derivedLF; changed = true; } }); iterations++; }
             const propagateUrgency = (id) => { const children = nodes.filter(c => c.dependencies.some(d => d.id === id)); children.forEach(child => { if (!child._isManualUrgentPath) { child._isManualUrgentPath = true; propagateUrgency(child.id); } }); };
             nodes.forEach(n => { if (n.isManualUrgent) { n._isManualUrgentPath = true; propagateUrgency(n.id); } });
-            nodes.forEach(n => { const slack = n._latestFinish - n._earliestFinish; if (n.completed) { n._isCritical = false; n._isUrgent = false; } else { if (n._isManualUrgentPath) { n._isUrgent = true; n._isCritical = true; } else if (slack < 0) { n._isUrgent = true; n._isCritical = true; } else if (slack === 0) { n._isCritical = true; } } });
+            nodes.forEach(n => {
+                const slack = n._latestFinish - n._earliestFinish;
+                if (n.completed || n.isManualNotUrgent) {
+                    n._isCritical = false;
+                    n._isUrgent = false;
+                } else {
+                    if (n._isManualUrgentPath) {
+                        n._isUrgent = true;
+                        n._isCritical = true;
+                    } else if (slack < 0) {
+                        n._isUrgent = true;
+                        n._isCritical = true;
+                    } else if (slack === 0) {
+                        n._isCritical = true;
+                    }
+                }
+            });
         }
 
         function getTotalTime(node) {
@@ -4851,7 +4879,10 @@
                     ${node.externalLink ? `<a href="${node.externalLink}" target="_blank" class="btn" style="width:40px; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="Open Link">🔗</a>` : ''}
                 </div>
             </div>
-            <div class="form-group"><button class="btn btn-urgent ${node.isManualUrgent ? 'active' : ''}" style="width:100%" onclick="toggleUrgency()">${node.isManualUrgent ? '🔥 Marked as Urgent' : '🔥 Mark as Urgent'}</button></div>
+            <div class="form-group" style="display:flex; gap:10px;">
+                <button class="btn btn-urgent ${node.isManualUrgent ? 'active' : ''}" style="flex:1" onclick="toggleUrgency()">${node.isManualUrgent ? '🔥 Urgent' : '🔥 Mark Urgent'}</button>
+                <button class="btn btn-not-urgent ${node.isManualNotUrgent ? 'active' : ''}" style="flex:1" onclick="toggleNotUrgent()">${node.isManualNotUrgent ? '❄️ Not Urgent' : '❄️ Mark Normal'}</button>
+            </div>
             <div class="form-group"><label>Dependencies</label><div id="dep-list">${node.dependencies.map(d => { const parent = nodes.find(n => n.id === d.id) || archivedNodes.find(n => n.id === d.id); return `<div class="dep-item"><span>${parent ? parent.title : 'Unknown'}</span><div class="dep-controls"><span class="toggle-soft ${d.type === 'soft' ? 'active' : ''}" onclick="toggleDepType('${d.id}')">${d.type === 'soft' ? 'Soft' : 'Hard'}</span><span style="cursor:pointer; color:#ef4444" onclick="removeDependency('${d.id}')">✕</span></div></div>`; }).join('')}</div><select id="add-dep-select" onchange="addDependency(this.value)" style="margin-top:5px"><option value="">+ Add Dependency...</option>${nodes.filter(n => n.id !== node.id && !node.dependencies.some(d => d.id === n.id)).map(n => `<option value="${n.id}">${n.title}</option>`).join('')}</select></div>
             <div class="form-group"><label>Subtasks</label><div id="subtask-list">${node.subtasks.map((st, idx) => {
                 const subLink = extractLink(st.text);
@@ -4912,7 +4943,8 @@
             }
         }
 
-        function toggleUrgency() { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.isManualUrgent = !node.isManualUrgent; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+        function toggleUrgency() { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.isManualUrgent = !node.isManualUrgent; if (node.isManualUrgent) node.isManualNotUrgent = false; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+        function toggleNotUrgent() { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.isManualNotUrgent = !node.isManualNotUrgent; if (node.isManualNotUrgent) node.isManualUrgent = false; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function addDependency(parentId) { if (!parentId) return; const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies.push({ id: parentId, type: 'hard' }); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function removeDependency(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies = node.dependencies.filter(d => d.id !== parentId); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function toggleDepType(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
