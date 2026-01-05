@@ -1859,7 +1859,8 @@
         // --- STEP 1: PREPARE DATA ---
         let content;
         try {
-            const dataToSave = {
+            // We define appState here so it can be used for both Sync and AI context
+            const appState = {
                 nodes: nodes || [],
                 archivedNodes: archivedNodes || [],
                 inbox: inbox || [],
@@ -1868,13 +1869,13 @@
                 habits: typeof habits !== 'undefined' ? habits : [],
                 agenda: agenda || []
             };
-            content = JSON.stringify(dataToSave, null, 2);
+            content = JSON.stringify(appState, null, 2);
         } catch (e) {
             alert("❌ DATA ERROR: Could not format your data. " + e.message);
             return;
         }
     
-        // --- STEP 2: PREPARE TOKEN (Safe Access) ---
+        // --- STEP 2: PREPARE TOKEN ---
         const tokenInput = document.getElementById('github-token');
         let rawToken = (tokenInput ? tokenInput.value : "") || githubToken || "";
         let cleanToken = String(rawToken).replace(/\s+/g, ''); 
@@ -1900,7 +1901,7 @@
             let response = await fetch(url, {
                 method: method,
                 headers: {
-                    'Authorization': `Bearer ${cleanToken}`, // Modern standard
+                    'Authorization': `Bearer ${cleanToken}`,
                     'Accept': 'application/vnd.github.v3+json',
                     'Content-Type': 'application/json'
                 },
@@ -1911,11 +1912,9 @@
                 })
             });
     
-            // HANDLE 404 (Gist deleted on GitHub side)
             if (response.status === 404 && method === 'PATCH') {
-                console.warn("Gist ID not found. Resetting and creating new Gist...");
                 gistId = ""; 
-                return pushToGist(); // Retry as a POST
+                return pushToGist(); 
             }
     
             if (!response.ok) {
@@ -1926,7 +1925,6 @@
             const result = await response.json();
             gistId = result.id;
             
-            // Update UI safely
             const gistIdInput = document.getElementById('gist-id');
             if (gistIdInput) gistIdInput.value = gistId;
             
@@ -1936,26 +1934,23 @@
     
         } catch (e) {
             console.error("Network Error:", e);
-            if (e.name === 'TypeError') {
-                alert("❌ NETWORK BLOCK: Browser blocked the request. Check your connection or AdBlockers.");
-            } else {
-                alert("❌ SYNC FAILED: " + e.message);
-            }
             setSyncStatus('Failed', true);
+            alert("❌ SYNC FAILED: " + e.message);
         }
     }
 
     async function pullFromGist() {
         if (!githubToken) githubToken = document.getElementById('github-token').value.trim();
-
+    
         if (!githubToken) {
             alert("Please enter a GitHub Personal Access Token first.");
             return;
         }
-
+    
         setSyncStatus('Connecting to GitHub...');
         
         try {
+            // 1. Find the Gist if ID is missing
             if (!gistId) {
                 const listResp = await fetch('https://api.github.com/gists', {
                     headers: { 
@@ -1965,50 +1960,53 @@
                 });
                 const gists = await listResp.json();
                 if (!Array.isArray(gists)) throw new Error(gists.message || "Failed to list Gists");
-
+    
                 const found = gists.find(g => g.files && g.files[GIST_FILENAME]);
                 if (found) {
                     gistId = found.id;
                     document.getElementById('gist-id').value = gistId;
                 } else {
-                    throw new Error("No Gist found. Try pushing first.");
+                    throw new Error("No Gist found with your data file. Try pushing first.");
                 }
             }
             
+            // 2. Fetch the specific Gist
             const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
                 headers: { 'Authorization': `token ${githubToken}` }
             });
             
             const data = await resp.json();
             if (!resp.ok) throw new Error(data.message || "Fetch failed");
-
-            if (!data.files[GIST_FILENAME]) throw new Error("File missing in Gist.");
+    
+            if (!data.files[GIST_FILENAME]) throw new Error("Target data file missing in Gist.");
             
-            const parsed = JSON.parse(data.files[GIST_FILENAME].content);
+            // 3. Parse the appState from the Gist
+            const appState = JSON.parse(data.files[GIST_FILENAME].content);
             
-            // --- UPDATE STATE (Now including Habits) ---
-            if (parsed.nodes) nodes = parsed.nodes;
-            if (parsed.archivedNodes) archivedNodes = parsed.archivedNodes;
-            if (parsed.inbox) inbox = parsed.inbox;
-            if (parsed.lifeGoals) lifeGoals = parsed.lifeGoals;
-            if (parsed.notes) notes = parsed.notes;
-            if (parsed.habits) habits = parsed.habits; // Added this line
-            if (parsed.agenda) agenda = parsed.agenda;
+            // 4. Map the appState back to local variables
+            // Using logical OR (||) ensures we don't overwrite with nulls
+            nodes = appState.nodes || [];
+            archivedNodes = appState.archivedNodes || [];
+            inbox = appState.inbox || [];
+            lifeGoals = appState.lifeGoals || {};
+            notes = appState.notes || [];
+            habits = appState.habits || []; 
+            agenda = appState.agenda || [];
             
-            // Run sanitization to prevent crashes
-            sanitizeLoadedData();
+            // 5. Cleanup & UI Refresh
+            sanitizeLoadedData(); // Fixes missing properties in old data
             
-            saveToStorage();
-            updateCalculations();
-            render();
-            renderInbox();
-            renderGoals();
+            saveToStorage();      // Sync localstorage with pulled data
+            updateCalculations(); // Recalculate critical path/urgency
+            render();             // Redraw the graph
+            renderInbox();        // Update fab inbox list
+            renderGoals();        // Update goals panel
             
             setSyncStatus('Pull Complete!');
             showNotification('GitHub Sync Successful!');
             
         } catch (e) {
-            console.error(e);
+            console.error("Pull Error:", e);
             setSyncStatus('Pull Failed: ' + e.message, true);
             alert("Sync Error: " + e.message);
         }
@@ -2899,8 +2897,14 @@
     }
     
     function getTotalTime(node) {
-        let total = node.timeLogs.reduce((acc, log) => acc + log.duration, 0);
-        if (node.activeTimerStart) total += (Date.now() - node.activeTimerStart);
+        // 1. Sum up all completed sessions in timeLogs
+        let total = (node.timeLogs || []).reduce((acc, log) => acc + (log.duration || 0), 0);
+        
+        // 2. If a timer is currently running, add the live duration
+        if (node.activeTimerStart) {
+            total += (Date.now() - Number(node.activeTimerStart));
+        }
+        
         return total;
     }
     function formatTime(ms) {
