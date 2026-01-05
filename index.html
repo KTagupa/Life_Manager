@@ -874,6 +874,16 @@
         .cal-month-cell.dim { opacity: 0.3; }
         .cal-month-date { font-size: 11px; color: #888; margin-bottom: 2px; }
         .cal-dot { width: 100%; height: 4px; background: var(--ready-color); border-radius: 2px; opacity: 0.6; }
+
+        /* Hidden video element for PiP streaming */
+        #pip-stream-source {
+            position: fixed;
+            pointer-events: none;
+            opacity: 0;
+            width: 300px;
+            height: 160px;
+            z-index: -1;
+        }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -887,9 +897,12 @@
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
                 <span class="hud-timer" id="hud-doing-time" style="color:var(--ready-color); font-family:monospace;">00:00</span>
+                <button class="btn" onclick="toggleFloatingWindow()" title="Float on Screen" style="padding: 2px 8px; font-size: 14px;">🚀</button> 
                 <button class="btn-timer stop" style="width:28px; height:28px; border-radius:50%; padding:0;" onclick="toggleFocusTimer('doing')">🛑</button>
             </div>
         </div>
+        
+        <video id="pip-stream-source" autoplay muted playsinline></video>
 
         <div id="hud-should-row" class="hud-row should-be" style="display: none;">
             <div class="hud-task-info">
@@ -1229,6 +1242,106 @@
     // --- AUDIO ENGINE (Web Audio API) ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
+    let pipCanvas = null;
+    let pipCtx = null;
+    
+    async function toggleFloatingWindow() {
+        const video = document.getElementById('pip-stream-source');
+        
+        if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+            return;
+        }
+    
+        if (!pipCanvas) {
+            pipCanvas = document.createElement('canvas');
+            pipCanvas.width = 600; // High DPI for crisp text
+            pipCanvas.height = 400; // Tall enough for stacked info
+            pipCtx = pipCanvas.getContext('2d');
+        }
+    
+        const stream = pipCanvas.captureStream(10); 
+        video.srcObject = stream;
+    
+        const updatePip = () => {
+            if (!document.pictureInPictureElement) return;
+            
+            const now = Date.now();
+            // Identify Current and Scheduled tasks
+            const activeTask = nodes.find(n => n.activeTimerStart) || archivedNodes.find(n => n.activeTimerStart);
+            const currentSlot = agenda.find(slot => {
+                const start = new Date(slot.start).getTime();
+                const end = new Date(slot.end).getTime();
+                return now >= start && now <= end;
+            });
+    
+            // Background
+            pipCtx.fillStyle = '#0c1812'; 
+            pipCtx.fillRect(0, 0, pipCanvas.width, pipCanvas.height);
+            
+            // --- SECTION 1: DOING ---
+            pipCtx.fillStyle = '#3b82f6';
+            pipCtx.font = 'bold 24px Inter, sans-serif';
+            pipCtx.fillText("DOING", 40, 50);
+    
+            if (activeTask) {
+                pipCtx.fillStyle = '#ffffff';
+                pipCtx.font = '500 36px Inter, sans-serif';
+                const title = activeTask.title.length > 25 ? activeTask.title.substring(0, 22) + "..." : activeTask.title;
+                pipCtx.fillText(title, 40, 100);
+    
+                pipCtx.fillStyle = '#10b981';
+                pipCtx.font = 'bold 60px monospace';
+                pipCtx.fillText(formatTime(getTotalTime(activeTask)), 40, 170);
+            } else {
+                pipCtx.fillStyle = '#444';
+                pipCtx.font = 'italic 32px Inter, sans-serif';
+                pipCtx.fillText("No active timer", 40, 110);
+            }
+    
+            // Divider
+            pipCtx.strokeStyle = '#333';
+            pipCtx.beginPath();
+            pipCtx.moveTo(40, 200);
+            pipCtx.lineTo(560, 200);
+            pipCtx.stroke();
+    
+            // --- SECTION 2: SHOULD BE ---
+            pipCtx.fillStyle = '#ffd700';
+            pipCtx.font = 'bold 24px Inter, sans-serif';
+            pipCtx.fillText("SCHEDULED", 40, 250);
+    
+            if (currentSlot) {
+                const scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
+                pipCtx.fillStyle = '#ffffff';
+                pipCtx.font = '500 36px Inter, sans-serif';
+                const sTitle = (scheduledTask ? scheduledTask.title : "Unscheduled");
+                pipCtx.fillText(sTitle.length > 25 ? sTitle.substring(0, 22) + "..." : sTitle, 40, 300);
+    
+                pipCtx.fillStyle = '#888';
+                pipCtx.font = '30px monospace';
+                const startStr = new Date(currentSlot.start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const endStr = new Date(currentSlot.end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                pipCtx.fillText(`${startStr} - ${endStr}`, 40, 350);
+            } else {
+                pipCtx.fillStyle = '#444';
+                pipCtx.font = 'italic 32px Inter, sans-serif';
+                pipCtx.fillText("Nothing scheduled", 40, 310);
+            }
+    
+            requestAnimationFrame(updatePip);
+        };
+    
+        video.onloadedmetadata = async () => {
+            try {
+                await video.requestPictureInPicture();
+                updatePip();
+            } catch (e) {
+                console.error(e);
+            }
+        };
+    }
+    
     async function playAudioFeedback(type) {
         // Wakes up the audio context on first interaction
         if (audioCtx.state === 'suspended') {
