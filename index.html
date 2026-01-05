@@ -1221,17 +1221,22 @@
 <script>
     // --- AUDIO ENGINE (Web Audio API) ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    function playAudioFeedback(type) {
+
+    async function playAudioFeedback(type) {
+        // Wakes up the audio context on first interaction
+        if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+        }
+
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-    
+
         const now = audioCtx.currentTime;
-    
+
         switch(type) {
-            case 'timer-start': // Quick rising beep
+            case 'timer-start':
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(440, now);
                 osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
@@ -1240,8 +1245,8 @@
                 osc.start(now);
                 osc.stop(now + 0.1);
                 break;
-    
-            case 'timer-stop': // Quick falling beep
+
+            case 'timer-stop':
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(880, now);
                 osc.frequency.exponentialRampToValueAtTime(440, now + 0.1);
@@ -1250,21 +1255,21 @@
                 osc.start(now);
                 osc.stop(now + 0.1);
                 break;
-    
-            case 'agenda-start': // Bright "Ding"
+
+            case 'agenda-start':
                 osc.type = 'triangle';
-                osc.frequency.setValueAtTime(523.25, now); // C5
-                osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.5); // C6
+                osc.frequency.setValueAtTime(523.25, now); 
+                osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.5);
                 gain.gain.setValueAtTime(0.2, now);
                 gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
                 osc.start(now);
                 osc.stop(now + 0.5);
                 break;
-    
-            case 'agenda-stop': // Soft "Two-tone completion"
+
+            case 'agenda-stop':
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(659.25, now); // E5
-                osc.frequency.setValueAtTime(523.25, now + 0.2); // C5
+                osc.frequency.setValueAtTime(659.25, now);
+                osc.frequency.setValueAtTime(523.25, now + 0.2);
                 gain.gain.setValueAtTime(0.15, now);
                 gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
                 osc.start(now);
