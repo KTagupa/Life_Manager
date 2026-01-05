@@ -2237,23 +2237,23 @@
     <div id="toolbar" class="collapsed">
         <button id="menu-btn" onclick="toggleMenu()">☰</button>
         <div id="toolbar-content">
-            <button class="btn btn-primary" onclick="addNode()">+ New Task</button>
-            <button class="btn" onclick="toggleGoals()">🎯 Life Goals</button>
-            <button class="btn" onclick="toggleHabits()">✅ Habits</button>
-            <button class="btn" onclick="toggleAgenda()">📅 Agenda</button>
-            <button class="btn" onclick="toggleNotesPanel()">📝 Notes</button>
-            <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive</button>
-            <button class="btn" onclick="fitView()">Recenter / Urgent</button>
-            <button class="btn" onclick="autoArrangeGraph()">🪄 Declutter</button>
-            <button class="btn" onclick="toggleHeatmap()">📅 Heatmap</button>
-            <button class="btn" onclick="toggleCalendar()">📅 Calendar</button>
+            <button class="btn btn-primary" onclick="addNode()">+ New Task (Optn+T)</button>
+            <button class="btn" onclick="toggleGoals()">🎯 Life Goals (Optn+G)</button>
+            <button class="btn" onclick="toggleHabits()">✅ Habits (Optn+H)</button>
+            <button class="btn" onclick="toggleAgenda()">📅 Agenda (Optn+A)</button>
+            <button class="btn" onclick="toggleNotesPanel()">📝 Knowledge Base (Optn+N)</button>
+            <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive (Optn+X)</button>
+            <button class="btn" onclick="fitView()">Recenter / Urgent (Optn+R)</button>
+            <button class="btn" onclick="autoArrangeGraph()">🪄 Declutter (Optn+D)</button>
+            <button class="btn" onclick="toggleHeatmap()">📅 Heatmap (Optn+M)</button>
+            <button class="btn" onclick="toggleCalendar()">📅 Calendar (Optn+C)</button>
             <button class="btn" style="border-color: var(--accent); color: var(--accent);"
-                onclick="toggleSyncPanel()">☁️ Sync</button>
-            <button class="btn" onclick="saveData(true)">Save</button>
-            <button class="btn" onclick="document.getElementById('file-input').click()">Load</button>
-            <button class="btn btn-danger" onclick="clearData()">Reset</button>
+                onclick="toggleSyncPanel()">☁️ Sync (Optn+S)</button>
+            <button class="btn" onclick="saveData(true)">Save (Optn+V)</button>
+            <button class="btn" onclick="document.getElementById('file-input').click()">Load (Optn+L)</button>
+            <button class="btn btn-danger" onclick="clearData()">Reset (Optn+K)</button>
             <button class="btn" id="eco-toggle-btn" onclick="toggleEcoMode()">🚀 Mode: <span
-                    id="eco-status">Turbo</span></button>
+                    id="eco-status">Turbo</span> (Optn+E)</button>
         </div>
     </div>
 
@@ -4534,17 +4534,27 @@
 
                 // 3. Shortcuts (Option + Key)
                 if (e.altKey) {
-                    if (e.code === 'KeyH') {
-                        e.preventDefault();
-                        toggleHabits();
+                    e.preventDefault();
+                    switch (e.code) {
+                        case 'KeyT': addNode(); break;
+                        case 'KeyG': toggleGoals(); break;
+                        case 'KeyH': toggleHabits(); break;
+                        case 'KeyA':
+                            toggleAgenda();
+                            showNotification(document.getElementById('agenda-panel').classList.contains('hidden') ? "Agenda Closed" : "Agenda Opened");
+                            break;
+                        case 'KeyN': toggleNotesPanel(); break;
+                        case 'KeyX': toggleArchivePanel(); break;
+                        case 'KeyR': fitView(); break;
+                        case 'KeyD': autoArrangeGraph(); break;
+                        case 'KeyM': toggleHeatmap(); break;
+                        case 'KeyC': toggleCalendar(); break;
+                        case 'KeyS': toggleSyncPanel(); break;
+                        case 'KeyV': saveData(true); break;
+                        case 'KeyL': document.getElementById('file-input').click(); break;
+                        case 'KeyK': clearData(); break;
+                        case 'KeyE': toggleEcoMode(); break;
                     }
-                    if (e.code === 'KeyA') {
-                        e.preventDefault();
-                        toggleAgenda();
-                        showNotification(document.getElementById('agenda-panel').classList.contains('hidden') ? "Agenda Closed" : "Agenda Opened");
-                    }
-                    // Easy to add more here!
-                    // if (e.code === 'KeyN') toggleNotesPanel(); 
                 }
             });
 
