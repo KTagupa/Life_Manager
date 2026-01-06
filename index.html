@@ -1929,24 +1929,22 @@
         }
 
         #btn-finance-link {
-            position: fixed;
-            bottom: 25px;
-            right: 25px;
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background: #10b981;
             color: white;
-            font-size: 24px;
-            border: none;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            font-size: 18px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             cursor: pointer;
-            z-index: 3000;
+            z-index: 101;
             display: flex;
             align-items: center;
             justify-content: center;
             text-decoration: none;
             transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+            pointer-events: auto;
         }
 
         #btn-finance-link:hover {
@@ -2557,7 +2555,10 @@
     </div>
 
     <div id="toolbar" class="collapsed">
-        <button id="menu-btn" onclick="toggleMenu()">☰</button>
+        <div style="display: flex; gap: 8px;">
+            <button id="menu-btn" onclick="toggleMenu()">☰</button>
+            <a href="finance.html" id="btn-finance-link" title="Go to Finance">💰</a>
+        </div>
         <div id="toolbar-content">
             <button class="btn btn-primary" onclick="addNode()">+ New Task (Optn+T)</button>
             <button class="btn" onclick="toggleGoals()">🎯 Life Goals (Optn+G)</button>
@@ -2929,7 +2930,7 @@
 
     <div id="notification">State Saved</div>
 
-    <a href="finance.html" id="btn-finance-link" title="Go to Finance">💰</a>
+
 
     <script>
         // --- AUDIO ENGINE (Web Audio API) ---
