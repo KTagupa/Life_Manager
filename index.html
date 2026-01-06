@@ -2472,6 +2472,50 @@
             color: var(--critical-path);
             margin-left: 5px;
         }
+
+        /* AI Toolbar Styles */
+        #ai-text-toolbar {
+            position: fixed;
+            z-index: 2100;
+            background: #111;
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 4px;
+            display: flex;
+            gap: 4px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
+            transition: opacity 0.2s, transform 0.2s;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+        }
+
+        #ai-text-toolbar.visible {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        .ai-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: #eee;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .ai-btn:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.4);
+            color: white;
+        }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -2731,6 +2775,15 @@
         </div>
         <div class="panel-list" id="agenda-list-container">
         </div>
+    </div>
+
+    <div id="ai-text-toolbar">
+        <button class="ai-btn" onclick="applyAI('grammar')">
+            <span>✨</span> Grammar
+        </button>
+        <button class="ai-btn" onclick="applyAI('clarity')">
+            <span>👓</span> Clarity
+        </button>
     </div>
 
     <div id="note-editor" class="hidden">
@@ -6445,6 +6498,128 @@
                 container.appendChild(el);
             });
         }
+        // --- AI TEXT INTEGRATION ---
+        const noteInput = document.getElementById('note-body-input');
+        const aiToolbar = document.getElementById('ai-text-toolbar');
+
+        if (noteInput && aiToolbar) {
+            noteInput.addEventListener('mouseup', handleNoteSelection);
+            // Hide on keyup (typing) to avoid annoying popups while editing
+            noteInput.addEventListener('keyup', () => {
+                const start = noteInput.selectionStart;
+                const end = noteInput.selectionEnd;
+                // Only hide if selection collapsed
+                if (start === end) aiToolbar.classList.remove('visible');
+            });
+        }
+
+        function handleNoteSelection(e) {
+            const start = noteInput.selectionStart;
+            const end = noteInput.selectionEnd;
+
+            if (start !== end) {
+                // We have a selection
+                // Position toolbar near mouse
+                const x = e.clientX;
+                const y = e.clientY;
+
+                aiToolbar.style.left = `${x - 50}px`; // Center align approx
+                aiToolbar.style.top = `${y - 50}px`; // Above cursor
+                aiToolbar.classList.add('visible');
+            } else {
+                aiToolbar.classList.remove('visible');
+            }
+        }
+
+        document.addEventListener('mousedown', (e) => {
+            // Hide AI toolbar if clicking outside
+            if (aiToolbar && aiToolbar.classList.contains('visible')) {
+                if (!aiToolbar.contains(e.target) && e.target !== noteInput) {
+                    aiToolbar.classList.remove('visible');
+                }
+            }
+        });
+
+        async function applyAI(mode) {
+            const start = noteInput.selectionStart;
+            const end = noteInput.selectionEnd;
+            const selectedText = noteInput.value.substring(start, end);
+
+            if (!selectedText) return;
+
+            // 1. Get API Key
+            let apiKey = localStorage.getItem('openai_api_key');
+            if (!apiKey) {
+                apiKey = prompt("To use AI features, please enter your OpenAI API Key (starts with sk-). It will be saved securely in your browser's Local Storage.");
+                if (apiKey && apiKey.startsWith('sk-')) {
+                    localStorage.setItem('openai_api_key', apiKey);
+                } else {
+                    alert("Valid API key required for AI features.");
+                    return;
+                }
+            }
+
+            // Show loading state
+            const originalBtnText = event.currentTarget.innerHTML;
+            event.currentTarget.innerHTML = '<span>⏳</span> Processing...';
+            event.currentTarget.style.cursor = 'wait';
+
+            const systemPrompt = mode === 'grammar'
+                ? "Fix grammar and spelling in the following text. Return ONLY the corrected text. Preserve formatting."
+                : "Rewrite the following text to include improve clarity and flow. Return ONLY the rewritten text. Preserve formatting.";
+
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-3.5-turbo",
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            { role: "user", content: selectedText }
+                        ],
+                        temperature: 0.3
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error.message);
+                }
+
+                const result = data.choices[0].message.content;
+
+                // Replace text
+                const before = noteInput.value.substring(0, start);
+                const after = noteInput.value.substring(end);
+
+                noteInput.value = before + result + after;
+
+                // Save
+                saveCurrentNote(); // Ensure function exists
+
+                // Update selection to new text length
+                // noteInput.setSelectionRange(start, start + result.length); // Optional: keep selection
+
+            } catch (err) {
+                alert("AI Error: " + err.message);
+                // If auth error, maybe clear key
+                if (err.message.includes('401') || err.message.includes('key')) {
+                    localStorage.removeItem('openai_api_key');
+                }
+            } finally {
+                // Reset button
+                // Need to re-query button or use closures, but simplest is just hiding toolbar
+                aiToolbar.classList.remove('visible');
+                // Could reset button text if we kept the toolbar open
+                // event.target.innerHTML = originalBtnText; // naive
+            }
+        }
+
         document.addEventListener('mousedown', (e) => {
             const inspector = document.getElementById('inspector');
             if (inspector && !inspector.classList.contains('hidden')) {
