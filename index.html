@@ -2812,6 +2812,8 @@
             <div class="editor-tools-group">
                 <button class="tool-btn" style="color:var(--critical-path)" onclick="createTaskFromSelection()"
                     title="Convert Selection to Linked Task">✨ Task</button>
+                <button class="tool-btn" style="color:#8b5cf6;" onclick="showNoteTaskPicker()"
+                    title="Link Note to Existing Task">🔗 Link</button>
             </div>
 
             <div class="editor-tools-group">
@@ -2822,24 +2824,22 @@
 
         <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()">
 
-        <div id="note-linked-tasks"
-            style="padding: 4px 10px; background: rgba(0,0,0,0.2); border-bottom: 1px solid #333; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 30px;">
-            <span style="font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Linked
-                Tasks:</span>
+        <div id="note-linked-tasks-inline"
+            style="padding: 0 10px 10px; display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.05);">
             <div id="note-tasks-list" style="display: flex; flex-wrap: wrap; gap: 4px;"></div>
-            <button onclick="showNoteTaskPicker()"
-                style="background: none; border: 1px dashed #444; color: #888; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 10px;">+
-                Link Task</button>
             <div id="note-task-picker" class="hidden"
-                style="position: absolute; top: 80px; left: 10px; right: 10px; background: #1a1a1a; border: 1px solid #444; border-radius: 4px; padding: 8px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
-                <select id="note-task-select"
-                    style="width: 100%; background: #000; color: #ccc; border: 1px solid #333; padding: 4px; font-size: 12px;"
-                    onchange="linkTaskToNote(this.value); this.parentElement.classList.add('hidden');">
-                    <option value="">Choose task...</option>
-                </select>
-                <div style="text-align: right; margin-top: 4px;"><button
+                style="position: absolute; top: 120px; left: 10px; right: 10px; background: #1a1a1a; border: 1px solid var(--accent); border-radius: 8px; padding: 12px; z-index: 1000; box-shadow: 0 10px 40px rgba(0,0,0,0.9);">
+                <div
+                    style="font-size: 11px; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    Search Task to Link</div>
+                <input type="text" id="note-task-search" placeholder="Search tasks..."
+                    style="margin-bottom: 8px; padding: 6px; background: #000; border: 1px solid #333; color: white; width: 100%; font-size: 12px;"
+                    oninput="filterNoteTaskPicker(this.value)">
+                <div id="note-task-picker-list"
+                    style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;"></div>
+                <div style="text-align: right; margin-top: 8px;"><button
                         onclick="this.parentElement.parentElement.classList.add('hidden')"
-                        style="background: none; border: none; color: #666; font-size: 10px; cursor: pointer;">Cancel</button>
+                        style="background: none; border: none; color: #666; font-size: 11px; cursor: pointer;">Cancel</button>
                 </div>
             </div>
         </div>
@@ -4765,41 +4765,54 @@
 
         function showNoteTaskPicker() {
             const picker = document.getElementById('note-task-picker');
-            const select = document.getElementById('note-task-select');
-            if (!picker || !select || !currentEditingNoteId) return;
+            const searchInput = document.getElementById('note-task-search');
+            if (!picker || !currentEditingNoteId) return;
+
+            picker.classList.remove('hidden');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+            filterNoteTaskPicker('');
+        }
+
+        function filterNoteTaskPicker(query) {
+            const list = document.getElementById('note-task-picker-list');
+            if (!list || !currentEditingNoteId) return;
 
             const note = notes.find(n => n.id === currentEditingNoteId);
             if (!note) return;
 
-            picker.classList.remove('hidden');
-
-            select.innerHTML = '<option value="">Choose task...</option>';
-
-            // Ensure nodes and archivedNodes are defined and combined safely
+            list.innerHTML = '';
             const allTasks = [...(nodes || []), ...(archivedNodes || [])];
+            const q = query.toLowerCase();
 
-            const sortedNodes = allTasks.sort((a, b) => {
-                const titleA = a.title || "";
-                const titleB = b.title || "";
-                return titleA.localeCompare(titleB);
-            });
+            const filtered = allTasks.filter(t =>
+                (t.title || "").toLowerCase().includes(q) &&
+                !(note.taskIds && note.taskIds.includes(t.id))
+            ).sort((a, b) => (a.title || "").localeCompare(b.title || ""));
 
-            if (sortedNodes.length === 0) {
-                const opt = document.createElement('option');
-                opt.disabled = true;
-                opt.innerText = "No tasks found";
-                select.appendChild(opt);
+            if (filtered.length === 0) {
+                list.innerHTML = '<div style="color:#666; font-size:11px; padding:10px; text-align:center;">No tasks found</div>';
                 return;
             }
 
-            sortedNodes.forEach(n => {
-                // Skip if already linked
-                if (note.taskIds && note.taskIds.includes(n.id)) return;
-
-                const opt = document.createElement('option');
-                opt.value = n.id;
-                opt.innerText = n.title || "Untitled Task";
-                select.appendChild(opt);
+            filtered.forEach(t => {
+                const item = document.createElement('div');
+                item.style.padding = '8px';
+                item.style.cursor = 'pointer';
+                item.style.fontSize = '12px';
+                item.style.color = '#ccc';
+                item.style.borderRadius = '4px';
+                item.style.transition = 'background 0.2s';
+                item.innerText = t.title || "Untitled Task";
+                item.onmouseover = () => item.style.background = 'rgba(255,255,255,0.1)';
+                item.onmouseout = () => item.style.background = 'transparent';
+                item.onclick = () => {
+                    linkTaskToNote(t.id);
+                    document.getElementById('note-task-picker').classList.add('hidden');
+                };
+                list.appendChild(item);
             });
         }
 
