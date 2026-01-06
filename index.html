@@ -2822,6 +2822,28 @@
 
         <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()">
 
+        <div id="note-linked-tasks"
+            style="padding: 4px 10px; background: rgba(0,0,0,0.2); border-bottom: 1px solid #333; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 30px;">
+            <span style="font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Linked
+                Tasks:</span>
+            <div id="note-tasks-list" style="display: flex; flex-wrap: wrap; gap: 4px;"></div>
+            <button onclick="showNoteTaskPicker()"
+                style="background: none; border: 1px dashed #444; color: #888; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 10px;">+
+                Link Task</button>
+            <div id="note-task-picker" class="hidden"
+                style="position: absolute; top: 80px; left: 10px; right: 10px; background: #1a1a1a; border: 1px solid #444; border-radius: 4px; padding: 8px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                <select id="note-task-select"
+                    style="width: 100%; background: #000; color: #ccc; border: 1px solid #333; padding: 4px; font-size: 12px;"
+                    onchange="linkTaskToNote(this.value); this.parentElement.classList.add('hidden');">
+                    <option value="">Choose task...</option>
+                </select>
+                <div style="text-align: right; margin-top: 4px;"><button
+                        onclick="this.parentElement.parentElement.classList.add('hidden')"
+                        style="background: none; border: none; color: #666; font-size: 10px; cursor: pointer;">Cancel</button>
+                </div>
+            </div>
+        </div>
+
         <div class="editor-content-area">
             <textarea id="note-body-input"
                 placeholder="Type your note here... Select text to convert to Tasks or Sub-notes."
@@ -4078,7 +4100,7 @@
                 id: 'note_' + Date.now() + Math.random().toString(36).substr(2, 5),
                 title: title || "New Note",
                 body: body,
-                taskId: taskId,
+                taskIds: taskId ? [taskId] : [],
                 isPinned: false,
                 timestamp: Date.now()
             };
@@ -4521,8 +4543,11 @@
 
                 const plainText = note.body.replace(/[#*\[\]]/g, '').substring(0, 80);
 
+                const linkedCount = (note.taskIds || []).length;
+                const linkIndicator = linkedCount > 0 ? `<span style="font-size:10px; color:#3b82f6; margin-left:6px;">🔗 ${linkedCount}</span>` : '';
+
                 el.innerHTML = `
-                <div class="note-card-title">${note.isPinned ? '📌 ' : ''}${note.title || '(Untitled)'}</div>
+                <div class="note-card-title">${note.isPinned ? '📌 ' : ''}${note.title || '(Untitled)'}${linkIndicator}</div>
                 <div class="note-card-preview">${plainText}...</div>
                 <div style="margin-top:5px;">${tagsHtml}</div>
                 <div class="note-card-meta"><span>${new Date(note.timestamp || Date.now()).toLocaleDateString()}</span></div>
@@ -4586,6 +4611,9 @@
             // Reset to Edit mode by default
             setNoteMode('edit');
 
+            // Render linked tasks
+            renderNoteLinkedTasks();
+
             // Focus the body for immediate typing
             setTimeout(() => {
                 document.getElementById('note-body-input').focus();
@@ -4647,6 +4675,99 @@
 
                 // Force update inspector if the deleted note was linked to the active task
                 if (selectedNodeId) updateInspector();
+            }
+        }
+
+        function renderNoteLinkedTasks() {
+            const list = document.getElementById('note-tasks-list');
+            if (!list || !currentEditingNoteId) return;
+            const note = notes.find(n => n.id === currentEditingNoteId);
+            if (!note) return;
+
+            list.innerHTML = '';
+            (note.taskIds || []).forEach(tid => {
+                const task = nodes.find(n => n.id === tid) || archivedNodes.find(n => n.id === tid);
+                if (!task) return;
+
+                const tag = document.createElement('div');
+                tag.style.background = 'var(--panel-bg)';
+                tag.style.border = '1px solid #444';
+                tag.style.borderRadius = '4px';
+                tag.style.padding = '2px 6px';
+                tag.style.fontSize = '10px';
+                tag.style.display = 'flex';
+                tag.style.alignItems = 'center';
+                tag.style.gap = '4px';
+
+                const title = document.createElement('span');
+                title.innerText = task.title;
+                title.style.cursor = 'pointer';
+                title.onclick = () => { closeNoteEditor(); jumpToTask(tid); };
+
+                const remove = document.createElement('span');
+                remove.innerText = '✕';
+                remove.style.cursor = 'pointer';
+                remove.style.color = '#888';
+                remove.onclick = (e) => { e.stopPropagation(); unlinkTaskFromNote(tid); };
+
+                tag.appendChild(title);
+                tag.appendChild(remove);
+                list.appendChild(tag);
+            });
+        }
+
+        function showNoteTaskPicker() {
+            const picker = document.getElementById('note-task-picker');
+            const select = document.getElementById('note-task-select');
+            if (!picker || !select || !currentEditingNoteId) return;
+
+            const note = notes.find(n => n.id === currentEditingNoteId);
+            picker.classList.remove('hidden');
+
+            select.innerHTML = '<option value="">Choose task...</option>';
+            const sortedNodes = [...nodes, ...archivedNodes].sort((a, b) => a.title.localeCompare(b.title));
+            sortedNodes.forEach(n => {
+                if (note.taskIds && note.taskIds.includes(n.id)) return;
+                const opt = document.createElement('option');
+                opt.value = n.id;
+                opt.innerText = n.title;
+                select.appendChild(opt);
+            });
+        }
+
+        function linkTaskToNote(taskId) {
+            if (!taskId || !currentEditingNoteId) return;
+            const note = notes.find(n => n.id === currentEditingNoteId);
+            if (!note) return;
+            if (!note.taskIds) note.taskIds = [];
+            if (!note.taskIds.includes(taskId)) {
+                note.taskIds.push(taskId);
+                saveToStorage();
+                renderNoteLinkedTasks();
+                if (selectedNodeId === taskId) updateInspector();
+            }
+        }
+
+        function unlinkTaskFromNote(taskId) {
+            if (!currentEditingNoteId) return;
+            const note = notes.find(n => n.id === currentEditingNoteId);
+            if (!note) return;
+            note.taskIds = (note.taskIds || []).filter(id => id !== taskId);
+            saveToStorage();
+            renderNoteLinkedTasks();
+            if (selectedNodeId === taskId) updateInspector();
+        }
+
+        function linkNoteToTask(noteId, taskId) {
+            if (!noteId || !taskId) return;
+            const note = notes.find(n => n.id === noteId);
+            if (!note) return;
+            if (!note.taskIds) note.taskIds = [];
+            if (!note.taskIds.includes(taskId)) {
+                note.taskIds.push(taskId);
+                saveToStorage();
+                updateInspector();
+                showNotification("Note Linked to Task");
             }
         }
 
@@ -5266,7 +5387,7 @@
             if (!node) return;
 
             const isRunning = !!node.activeTimerStart;
-            const linkedNotes = notes.filter(n => n.taskId === node.id);
+            const linkedNotes = notes.filter(n => n.taskIds && n.taskIds.includes(node.id));
             const isUrgent = node.isManualUrgent;
 
             // --- HEADER ---
@@ -5372,7 +5493,18 @@
                 <div style="margin-bottom:16px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <label class="field-label">LINKED NOTES</label>
-                        <button class="add-subtask-btn" style="color:#3b82f6;" onclick="createNewNote('${node.id}')">+ NEW NOTE</button>
+                        <div style="display:flex; gap:4px;">
+                            <button class="add-subtask-btn" style="color:#3b82f6;" onclick="createNewNote('${node.id}')">+ NEW</button>
+                            <button class="add-subtask-btn" style="color:#8b5cf6;" onclick="document.getElementById('note-link-select-wrap').style.display='block';">+ LINK</button>
+                        </div>
+                    </div>
+                    
+                    <div id="note-link-select-wrap" style="display:none; margin-bottom:8px;">
+                        <select style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:white; border-radius:6px; outline:none; font-size:12px;" 
+                            onchange="linkNoteToTask(this.value, '${node.id}'); this.parentElement.style.display='none'; this.value='';">
+                            <option value="">Select Note...</option>
+                            ${notes.filter(n => !n.taskIds || !n.taskIds.includes(node.id)).sort((a, b) => (a.title || '').localeCompare(b.title || '')).map(n => `<option value='${n.id}'>${n.title || 'Untitled Note'}</option>`).join('')}
+                        </select>
                     </div>
                     
                     <div style="display:flex; flex-direction:column; gap:8px;">
@@ -5857,13 +5989,16 @@
                     // Handle legacy array format or new object format
                     if (Array.isArray(parsed)) {
                         nodes = parsed;
+                        inbox = [];
+                        lifeGoals = {};
+                        notes = [];
+                        archivedNodes = [];
                     } else {
                         nodes = parsed.nodes || [];
                         inbox = parsed.inbox || [];
                         lifeGoals = parsed.lifeGoals || {};
                         habits = parsed.habits || [];
                         notes = parsed.notes || [];
-                        agenda = parsed.agenda || [];
                         archivedNodes = parsed.archivedNodes || [];
                         githubToken = parsed.githubToken || '';
                         gistId = parsed.gistId || '';
@@ -5909,6 +6044,18 @@
             nodes.forEach(sanitizeTask);
             archivedNodes.forEach(sanitizeTask);
 
+            // --- NOTES CLEANUP (Many-to-Many Linkage) ---
+            if (!Array.isArray(notes)) notes = [];
+            notes.forEach(note => {
+                if (note.taskId !== undefined) {
+                    if (!note.taskIds) note.taskIds = note.taskId ? [note.taskId] : [];
+                    else if (note.taskId && !note.taskIds.includes(note.taskId)) {
+                        note.taskIds.push(note.taskId);
+                    }
+                    delete note.taskId;
+                }
+                if (!note.taskIds) note.taskIds = [];
+            });
             // --- PRESERVE HABITS CLEANUP ---
             if (!Array.isArray(habits)) habits = [];
             habits.forEach(h => {
