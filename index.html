@@ -5331,7 +5331,8 @@
                             </div>
                             <input type="text" class="st-input ${st.done ? 'done' : ''}" value="${st.text}" 
                                 onchange="updateSubtaskText(${idx}, this.value)">
-                            <button onclick="removeSubtask(${idx})" style="background:transparent; border:none; color:#475569; cursor:pointer; font-size:14px;">✕</button>
+                            <button onclick="promoteSubtaskToNode(${idx})" style="background:transparent; border:none; color:#10b981; cursor:pointer; font-size:14px;" title="Promote to Dependency Task">⬆</button>
+                            <button onclick="removeSubtask(${idx})" style="background:transparent; border:none; color:#475569; cursor:pointer; font-size:14px;" title="Remove Subtask">✕</button>
                         </div>
                         `).join('')}
                         ${node.subtasks.length === 0 ? '<div style="font-size:11px; color:#475569; padding:12px; text-align:center;">No subtasks</div>' : ''}
@@ -5414,11 +5415,25 @@
                         <button class="footer-icon-btn" onclick="demoteToInbox()" title="Move to Inbox">
                             📥
                         </button>
+                        <button class="footer-icon-btn" onclick="document.getElementById('parent-picker').style.display='block';" title="Convert to Subtask of...">
+                            📎
+                        </button>
                     </div>
 
                     <button class="session-btn ${isUrgent ? '' : 'standard'}" onclick="toggleTimer()" style="flex:1;">
                         ${isRunning ? '⏸' : '▶'} ${isRunning ? 'Stop Session' : 'Start Session'}
                     </button>
+                </div>
+                <div id="parent-picker" style="display:none; position:absolute; bottom:60px; left:20px; right:20px; background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px; z-index:100; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);">
+                    <div style="font-size:11px; color:#94a3b8; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                        MOVE TO PARENT AS SUBTASK
+                        <span style="cursor:pointer;" onclick="this.parentElement.parentElement.style.display='none'">✕</span>
+                    </div>
+                    <select style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:white; border-radius:6px; outline:none; font-size:12px;" 
+                        onchange="demoteNodeToSubtask(this.value); this.parentElement.style.display='none'; this.value='';">
+                        <option value="">Select Parent Task...</option>
+                        ${nodes.filter(n => n.id !== node.id).map(n => `<option value='${n.id}'>${n.title}</option>`).join('')}
+                    </select>
                 </div>`;
 
             // --- ASSEMBLE ---
@@ -5497,6 +5512,40 @@
         function closeInspector() { selectedNodeId = null; selectedIds.clear(); document.getElementById('inspector').classList.add('hidden'); render(); }
         function updateSubtaskText(index, val) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks[index].text = val; saveToStorage(); }
         function removeSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks.splice(index, 1); render(); updateInspector(); saveToStorage(); }
+
+        function promoteSubtaskToNode(index) {
+            const parentNode = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
+            if (!parentNode) return;
+            const subtask = parentNode.subtasks[index];
+            parentNode.subtasks.splice(index, 1);
+            const newNode = createNode(parentNode.x + 220, parentNode.y, subtask.text);
+            newNode.completed = subtask.done;
+            if (newNode.completed) newNode.completedDate = Date.now();
+            nodes.push(newNode);
+            parentNode.dependencies.push({ id: newNode.id, type: 'hard' });
+            updateCalculations();
+            render();
+            updateInspector();
+            saveToStorage();
+        }
+
+        function demoteNodeToSubtask(parentId) {
+            if (!parentId) return;
+            const targetId = selectedNodeId;
+            const targetNode = nodes.find(n => n.id === targetId);
+            if (!targetNode) return;
+            const parentNode = nodes.find(n => n.id === parentId);
+            if (!parentNode) return;
+            parentNode.subtasks.push({ text: targetNode.title, done: targetNode.completed });
+            nodes = nodes.filter(n => n.id !== targetId);
+            archivedNodes = archivedNodes.filter(n => n.id !== targetId);
+            nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== targetId); });
+            selectNode(parentNode.id);
+            updateCalculations();
+            render();
+            updateInspector();
+            saveToStorage();
+        }
 
         function deleteSelectedNode() {
             if (!selectedNodeId) return;
