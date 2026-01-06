@@ -6445,6 +6445,18 @@
                 container.appendChild(el);
             });
         }
+        document.addEventListener('mousedown', (e) => {
+            const inspector = document.getElementById('inspector');
+            if (inspector && !inspector.classList.contains('hidden')) {
+                if (inspector.contains(e.target) ||
+                    e.target.closest('.node') ||
+                    e.target.closest('.node-timer-control') ||
+                    e.target.closest('#selection-menu')) {
+                    return;
+                }
+                deselectNode();
+            }
+        });
     </script>
 </body>
 
