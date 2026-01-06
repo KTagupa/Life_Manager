@@ -3047,106 +3047,110 @@
 
         // --- TIMELINE / GANTT HYBRID LAYOUT ---
         function autoArrangeGraph() {
-            if (!confirm("Run Smart De-clutter? (Aligns nodes in dependency layers: Completed < Active Heads < Downstream)")) return;
+            if (!confirm("Run Smart De-clutter? (Urgency Rows + Time-Bucket Columns)")) return;
             updateCalculations();
 
             const COMPLETED_X = 100;
-            const ACTIVE_START_X = 350;
-            const COL_GAP = 250;
-            const ROW_GAP = 130;
+            const START_X = 400;
+            const COL_WIDTH = 250;
+            const ROW_HEIGHT = 160;
 
-            const positions = new Map(); // id -> {x, y}
-
-            // 1. Completed Nodes (Left Column)
-            const completedNodes = nodes.filter(n => n.completed);
-            completedNodes.forEach((n, i) => {
-                positions.set(n.id, { x: COMPLETED_X, y: 100 + (i * ROW_GAP) });
-            });
-
-            // 2. Active Nodes - Layered Rank Calculation
             const activeNodes = nodes.filter(n => !n.completed);
-            const ranks = new Map(); // id -> rank
 
-            // Initial Rank: Active nodes with no active 'hard' parents are Rank 0
-            activeNodes.forEach(n => {
-                const activeHardParents = n.dependencies
+            // 1. HELPERS
+            const getDaysFromNow = (dateStr) => {
+                if (!dateStr) return 999999; // Far future
+                const d = new Date(dateStr);
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                return Math.ceil((d - now) / (1000 * 60 * 60 * 24));
+            };
+
+            // 2. HORIZONTAL: Calculate Time-Buckets (Columns)
+            // Get all unique due-date-days and sort them to form columns
+            const uniqueDays = Array.from(new Set(activeNodes.map(n => getDaysFromNow(n.dueDate)))).sort((a, b) => a - b);
+            const getColForDays = (days) => {
+                // If the node has active parents, it MUST be at least 1 column after its latest parent
+                // We'll handle this in a second pass if needed, but for now we follow the user's date-rule.
+                return uniqueDays.indexOf(days);
+            };
+
+            // 3. VERTICAL: Identify Paths & Rows
+            // Identify heads (nodes with no active parents)
+            const activeHeads = activeNodes.filter(n => {
+                const parents = n.dependencies
                     .filter(d => d.type === 'hard')
                     .map(d => nodes.find(p => p.id === d.id))
                     .filter(p => p && !p.completed);
+                return parents.length === 0;
+            });
 
-                if (activeHardParents.length === 0) {
-                    ranks.set(n.id, 0);
+            // Sort Heads by Urgency (Urgent flag first, then downstream weight)
+            activeHeads.sort((a, b) => {
+                if (a._isUrgent && !b._isUrgent) return -1;
+                if (!a._isUrgent && b._isUrgent) return 1;
+                return b._downstreamWeight - a._downstreamWeight;
+            });
+
+            const positions = new Map(); // id -> {x, y}
+            const processed = new Set();
+            let currentRow = 0;
+
+            // Function to recursively place children on the same "lane"
+            const placeInLane = (nodeId, rowIdx, colOffset = 0) => {
+                if (processed.has(nodeId)) return;
+                const node = nodes.find(n => n.id === nodeId);
+                if (!node || node.completed) return;
+
+                const days = getDaysFromNow(node.dueDate);
+                let colIdx = getColForDays(days);
+
+                // Ensure child is ALWAYS to the right of parents
+                // (Optional: overrides pure date-logic if date is missing or sooner than parent)
+                if (colIdx <= colOffset && colIdx !== -1) {
+                    // colIdx = colOffset + 1; // Un-comment to force "Parent -> Child" visual order even if dates overlap
+                }
+
+                positions.set(nodeId, {
+                    x: START_X + (colIdx * COL_WIDTH),
+                    y: 100 + (rowIdx * ROW_HEIGHT)
+                });
+                processed.add(nodeId);
+
+                // Find active children and try to stay on this row
+                const children = nodes.filter(n =>
+                    !n.completed &&
+                    n.dependencies.some(d => d.id === nodeId && d.type === 'hard')
+                ).sort((a, b) => getDaysFromNow(a.dueDate) - getDaysFromNow(b.dueDate));
+
+                children.forEach(child => placeInLane(child.id, rowIdx, colIdx));
+            };
+
+            // 4. EXECUTE PLACEMENT
+            // Place heads first
+            activeHeads.forEach(head => {
+                if (!processed.has(head.id)) {
+                    placeInLane(head.id, currentRow);
+                    currentRow++;
                 }
             });
 
-            // Iteratively propagate ranks to children
-            let changed = true;
-            let iter = 0;
-            while (changed && iter < activeNodes.length + 5) {
-                changed = false;
-                activeNodes.forEach(n => {
-                    const activeHardParents = n.dependencies
-                        .filter(d => d.type === 'hard')
-                        .map(d => nodes.find(p => p.id === d.id))
-                        .filter(p => p && !p.completed);
-
-                    if (activeHardParents.length > 0) {
-                        const parentRanks = activeHardParents.map(p => ranks.get(p.id)).filter(r => r !== undefined);
-                        // Only set rank if all active hard parents have a rank
-                        if (parentRanks.length === activeHardParents.length) {
-                            const newRank = Math.max(...parentRanks) + 1;
-                            if (ranks.get(n.id) !== newRank) {
-                                ranks.set(n.id, newRank);
-                                changed = true;
-                            }
-                        }
-                    }
-                });
-                iter++;
-            }
-
-            // Catch any nodes that didn't get a rank (e.g. cycles)
+            // Place any missed nodes (islands/orphans)
             activeNodes.forEach(n => {
-                if (ranks.get(n.id) === undefined) ranks.set(n.id, 0);
+                if (!processed.has(n.id)) {
+                    placeInLane(n.id, currentRow);
+                    currentRow++;
+                }
             });
 
-            // 3. Assign Coordinates based on Ranks
-            const rankGroups = {};
+            // 5. Place Completed Nodes (Stacked on left)
+            nodes.filter(n => n.completed).forEach((n, i) => {
+                n.x = COMPLETED_X;
+                n.y = 100 + (i * 100);
+            });
+
+            // Apply positions
             activeNodes.forEach(n => {
-                const r = ranks.get(n.id);
-                if (!rankGroups[r]) rankGroups[r] = [];
-                rankGroups[r].push(n);
-            });
-
-            // Iterate through ranks to set positions
-            Object.keys(rankGroups).sort((a, b) => a - b).forEach(rStr => {
-                const r = parseInt(rStr);
-                const group = rankGroups[r];
-
-                // Sort purely for vertical distribution
-                // (Attempt to sort by average parent Y to reduce line crossings)
-                group.sort((a, b) => {
-                    const getAvgParentY = (node) => {
-                        const pY = node.dependencies
-                            .map(d => positions.get(d.id))
-                            .filter(p => p)
-                            .map(p => p.y);
-                        if (pY.length === 0) return 0;
-                        return pY.reduce((sum, y) => sum + y, 0) / pY.length;
-                    };
-                    return getAvgParentY(a) - getAvgParentY(b);
-                });
-
-                group.forEach((n, i) => {
-                    positions.set(n.id, {
-                        x: ACTIVE_START_X + (r * COL_GAP),
-                        y: 100 + (i * ROW_GAP)
-                    });
-                });
-            });
-
-            // 4. Apply calculated positions to the node objects
-            nodes.forEach(n => {
                 const pos = positions.get(n.id);
                 if (pos) {
                     n.x = pos.x;
@@ -3157,7 +3161,7 @@
             render();
             saveToStorage();
             fitView();
-            showNotification("Smart Layered Layout Applied");
+            showNotification("Timeline Swimlane Applied");
         }
 
         // --- STATE MANAGEMENT ---
