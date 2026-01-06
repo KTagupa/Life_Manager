@@ -3187,7 +3187,11 @@
                     });
                 });
 
-                const minDue = Math.min(...comp.filter(n => n.dueDate).map(n => new Date(n.dueDate).getTime()));
+                // FIXED: Baseline date only considers INCOMPLETE tasks to prevent "Historical Drift"
+                const activeNodesWithDates = comp.filter(n => !n.completed && n.dueDate);
+                const minDue = activeNodesWithDates.length > 0
+                    ? Math.min(...activeNodesWithDates.map(n => new Date(n.dueDate).getTime()))
+                    : NaN;
 
                 // Assign positions
                 let maxNodesInCompRow = 0;
@@ -3198,9 +3202,10 @@
                     maxNodesInCompRow = Math.max(maxNodesInCompRow, list.length);
                     list.forEach((n, idx) => {
                         let tx = ACTIVE_START_X + (rank * COL_GAP);
-                        // Timeline nudge for active nodes
+                        // Timeline nudge (Only apply to future-dated active tasks)
                         if (rank >= 0 && n.dueDate && !isNaN(minDue)) {
-                            const days = (new Date(n.dueDate).getTime() - minDue) / (1000 * 60 * 60 * 24);
+                            const diff = new Date(n.dueDate).getTime() - minDue;
+                            const days = diff / (1000 * 60 * 60 * 24);
                             if (days > 0) tx += Math.min(COL_GAP * 0.4, days * TIME_SCALE);
                         }
                         n.x = tx;
