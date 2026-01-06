@@ -4381,7 +4381,25 @@
             if (mode === 'view') {
                 editor.classList.add('hidden');
                 preview.classList.remove('hidden');
-                preview.innerHTML = renderMarkdown(editor.value);
+                let markdownContent = renderMarkdown(editor.value);
+
+                // Append linked tasks to preview if any
+                const note = notes.find(n => n.id === currentEditingNoteId);
+                if (note && note.taskIds && note.taskIds.length > 0) {
+                    let tasksHtml = '<div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 10px;">';
+                    tasksHtml += '<div style="font-size: 11px; color: #666; margin-bottom: 8px; text-transform: uppercase;">Related Tasks</div>';
+                    tasksHtml += '<div style="display: flex; flex-wrap: wrap; gap: 6px;">';
+                    note.taskIds.forEach(tid => {
+                        const task = nodes.find(n => n.id === tid) || archivedNodes.find(n => n.id === tid);
+                        if (task) {
+                            tasksHtml += `<div onclick="closeNoteEditor(); jumpToTask('${tid}')" style="background: rgba(59,130,246,0.1); border: 1px solid #2563eb; color: #60a5fa; padding: 4px 10px; border-radius: 20px; font-size: 11px; cursor: pointer;">${task.title}</div>`;
+                        }
+                    });
+                    tasksHtml += '</div></div>';
+                    markdownContent += tasksHtml;
+                }
+
+                preview.innerHTML = markdownContent;
                 btnEdit.classList.remove('active');
                 btnView.classList.add('active');
             } else {
@@ -4448,6 +4466,18 @@
                 const before = text.substring(0, noteSelectionRange.start);
                 const after = text.substring(noteSelectionRange.end);
                 textarea.value = before + replacement + after;
+
+                // Link new task to current note
+                if (currentEditingNoteId) {
+                    const note = notes.find(n => n.id === currentEditingNoteId);
+                    if (note) {
+                        if (!note.taskIds) note.taskIds = [];
+                        if (!note.taskIds.includes(newNode.id)) {
+                            note.taskIds.push(newNode.id);
+                            renderNoteLinkedTasks();
+                        }
+                    }
+                }
                 saveCurrentNote();
             }
 
@@ -4472,11 +4502,11 @@
             let title = currentSelectionText;
             if (title.length > 30) title = title.substring(0, 30) + "...";
 
-            // Link parent ID if we are editing a note linked to a task
-            let parentTaskID = null; // Variable defined here
+            // Link parent task(s) if we are editing a note linked to tasks
+            let parentTaskIDs = [];
             if (currentEditingNoteId && currentSelectionSource === 'note') {
                 const currentNote = notes.find(n => n.id === currentEditingNoteId);
-                if (currentNote) parentTaskID = currentNote.taskId; // Logic fixed
+                if (currentNote && currentNote.taskIds) parentTaskIDs = [...currentNote.taskIds];
             }
 
             let originText = "";
@@ -4486,8 +4516,16 @@
                 originText = `**From:** AI Chat\n\n`;
             }
 
-            // Use parentTaskID correctly here
-            const newNote = createNoteObject(title, `${originText}${currentSelectionText}`, parentTaskID);
+            if (currentSelectionSource === 'node' && selectedNodeId) {
+                const p = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
+                if (p) {
+                    originText = `**From Task:** [[${p.title}]]\n\n`;
+                    if (!parentTaskIDs.includes(selectedNodeId)) parentTaskIDs.push(selectedNodeId);
+                }
+            }
+
+            const newNote = createNoteObject(title, `${originText}${currentSelectionText}`);
+            newNote.taskIds = parentTaskIDs;
             notes.push(newNote);
 
             // Only replace text if source is note
@@ -4690,24 +4728,33 @@
                 if (!task) return;
 
                 const tag = document.createElement('div');
-                tag.style.background = 'var(--panel-bg)';
-                tag.style.border = '1px solid #444';
-                tag.style.borderRadius = '4px';
-                tag.style.padding = '2px 6px';
+                tag.style.background = 'rgba(59, 130, 246, 0.1)';
+                tag.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+                tag.style.color = '#60a5fa';
+                tag.style.borderRadius = '12px';
+                tag.style.padding = '2px 10px';
                 tag.style.fontSize = '10px';
                 tag.style.display = 'flex';
                 tag.style.alignItems = 'center';
-                tag.style.gap = '4px';
+                tag.style.gap = '6px';
+                tag.style.transition = 'all 0.2s';
+                tag.onmouseover = () => { tag.style.background = 'rgba(59, 130, 246, 0.2)'; tag.style.borderColor = 'rgba(59, 130, 246, 0.5)'; };
+                tag.onmouseout = () => { tag.style.background = 'rgba(59, 130, 246, 0.1)'; tag.style.borderColor = 'rgba(59, 130, 246, 0.3)'; };
 
                 const title = document.createElement('span');
                 title.innerText = task.title;
                 title.style.cursor = 'pointer';
+                title.title = "Jump to Task";
                 title.onclick = () => { closeNoteEditor(); jumpToTask(tid); };
 
                 const remove = document.createElement('span');
                 remove.innerText = '✕';
                 remove.style.cursor = 'pointer';
-                remove.style.color = '#888';
+                remove.style.color = '#475569';
+                remove.style.fontSize = '12px';
+                remove.title = "Unlink Task";
+                remove.onmouseover = () => remove.style.color = '#ef4444';
+                remove.onmouseout = () => remove.style.color = '#475569';
                 remove.onclick = (e) => { e.stopPropagation(); unlinkTaskFromNote(tid); };
 
                 tag.appendChild(title);
@@ -4722,15 +4769,36 @@
             if (!picker || !select || !currentEditingNoteId) return;
 
             const note = notes.find(n => n.id === currentEditingNoteId);
+            if (!note) return;
+
             picker.classList.remove('hidden');
 
             select.innerHTML = '<option value="">Choose task...</option>';
-            const sortedNodes = [...nodes, ...archivedNodes].sort((a, b) => a.title.localeCompare(b.title));
+
+            // Ensure nodes and archivedNodes are defined and combined safely
+            const allTasks = [...(nodes || []), ...(archivedNodes || [])];
+
+            const sortedNodes = allTasks.sort((a, b) => {
+                const titleA = a.title || "";
+                const titleB = b.title || "";
+                return titleA.localeCompare(titleB);
+            });
+
+            if (sortedNodes.length === 0) {
+                const opt = document.createElement('option');
+                opt.disabled = true;
+                opt.innerText = "No tasks found";
+                select.appendChild(opt);
+                return;
+            }
+
             sortedNodes.forEach(n => {
+                // Skip if already linked
                 if (note.taskIds && note.taskIds.includes(n.id)) return;
+
                 const opt = document.createElement('option');
                 opt.value = n.id;
-                opt.innerText = n.title;
+                opt.innerText = n.title || "Untitled Task";
                 select.appendChild(opt);
             });
         }
