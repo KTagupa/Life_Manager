@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FinanceFlow | Life Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore-compat.js"></script>
@@ -16,11 +18,23 @@
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        .card-hover:hover { transform: translateY(-2px); transition: all 0.3s ease; }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+
+        .card-hover:hover {
+            transform: translateY(-2px);
+            transition: all 0.3s ease;
+        }
     </style>
 </head>
+
 <body class="bg-slate-50 min-h-screen pb-10">
 
     <!-- Navigation -->
@@ -33,11 +47,18 @@
                 <span>FinanceFlow</span>
             </div>
             <div class="flex items-center gap-4">
-                <button onclick="toggleCurrency()" id="currency-toggle" class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs font-bold text-slate-600 transition-all border border-slate-200">
+                <button onclick="toggleCurrency()" id="currency-toggle"
+                    class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs font-bold text-slate-600 transition-all border border-slate-200">
                     <i data-lucide="refresh-cw" class="w-3 h-3"></i>
                     <span id="active-currency">PHP (₱)</span>
                 </button>
-                <a href="index.html" class="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-medium transition-all group">
+                <button onclick="toggleModal('budget-modal')"
+                    class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 rounded-full text-xs font-bold text-emerald-600 transition-all border border-emerald-200">
+                    <i data-lucide="target" class="w-3 h-3"></i>
+                    <span>Budgets</span>
+                </button>
+                <a href="index.html"
+                    class="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-medium transition-all group">
                     <i data-lucide="layout-list" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
                     <span class="hidden sm:inline">Life Manager</span>
                 </a>
@@ -46,34 +67,40 @@
     </nav>
 
     <!-- Master Key Entry Overlay -->
-    <div id="auth-overlay" class="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4">
+    <div id="auth-overlay"
+        class="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center border border-white/20">
-            <div class="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-inner">
+            <div
+                class="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-inner">
                 <i data-lucide="shield-check" class="w-10 h-10"></i>
             </div>
             <h2 class="text-2xl font-bold text-slate-800 mb-2">Vault Locked</h2>
-            <p class="text-slate-500 text-sm mb-8">Data is encrypted locally. Enter your <strong>Master Key</strong> to decrypt and sync across devices.</p>
-            
+            <p class="text-slate-500 text-sm mb-8">Data is encrypted locally. Enter your <strong>Master Key</strong> to
+                decrypt and sync across devices.</p>
+
             <div class="relative mb-4">
-                <input type="password" id="master-key-input" placeholder="Enter your secret key..." 
-                       class="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-100 rounded-2xl text-lg focus:border-indigo-500 focus:ring-0 outline-none transition-all">
+                <input type="password" id="master-key-input" placeholder="Enter your secret key..."
+                    class="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-100 rounded-2xl text-lg focus:border-indigo-500 focus:ring-0 outline-none transition-all">
                 <i data-lucide="key" class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
             </div>
-            
-            <button onclick="unlockApp()" id="unlock-btn" class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-2">
+
+            <button onclick="unlockApp()" id="unlock-btn"
+                class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-2">
                 <span>Unlock Vault</span>
                 <i data-lucide="chevron-right" class="w-5 h-5"></i>
             </button>
-            <p id="auth-status" class="mt-6 text-xs font-semibold uppercase tracking-widest text-slate-400">System Ready</p>
+            <p id="auth-status" class="mt-6 text-xs font-semibold uppercase tracking-widest text-slate-400">System Ready
+            </p>
         </div>
     </div>
 
     <!-- Main Content -->
     <main class="max-w-6xl mx-auto p-4 md:p-6 space-y-6 opacity-0 transition-opacity duration-700" id="main-content">
-        
+
         <!-- Summary Dashboard -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-100 text-white relative overflow-hidden card-hover">
+            <div
+                class="bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-100 text-white relative overflow-hidden card-hover">
                 <p class="text-indigo-100 text-sm font-medium mb-1">Total Balance</p>
                 <h3 class="text-3xl font-bold" id="balance-display">₱0.00</h3>
             </div>
@@ -92,24 +119,45 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
+
             <!-- Left: Transactions & Tools -->
             <div class="lg:col-span-8 space-y-6">
+                <!-- Filters -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 flex items-center gap-4">
+                    <div class="flex items-center gap-2 text-slate-500">
+                        <i data-lucide="calendar" class="w-5 h-5"></i>
+                        <span class="font-bold text-sm">Filter:</span>
+                    </div>
+                    <select id="filter-month" onchange="applyFilters()"
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500">
+                        <!-- Populated by JS -->
+                    </select>
+                    <select id="filter-year" onchange="applyFilters()"
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500">
+                        <!-- Populated by JS -->
+                    </select>
+                    <button onclick="resetFilters()"
+                        class="text-xs font-bold text-indigo-500 hover:text-indigo-700 ml-auto">Reset</button>
+                </div>
+
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="p-6 border-b border-slate-100 flex items-center justify-between">
                         <div class="flex items-center gap-4">
                             <h2 class="text-xl font-bold text-slate-800">Recent Movements</h2>
-                            <button onclick="exportToCSV()" class="text-xs font-bold text-indigo-500 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors">
+                            <button onclick="exportToCSV()"
+                                class="text-xs font-bold text-indigo-500 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors">
                                 <i data-lucide="download" class="w-3 h-3 inline mr-1"></i> Export CSV
                             </button>
                         </div>
                         <div class="flex gap-2">
-                             <button onclick="toggleModal('transaction-modal')" class="p-2 bg-indigo-600 text-white rounded-lg">
+                            <button onclick="openTransactionModal()"
+                                class="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
                                 <i data-lucide="plus" class="w-5 h-5"></i>
                             </button>
                         </div>
                     </div>
-                    <div id="transaction-list" class="divide-y divide-slate-50 max-h-[500px] overflow-y-auto custom-scrollbar">
+                    <div id="transaction-list"
+                        class="divide-y divide-slate-50 max-h-[500px] overflow-y-auto custom-scrollbar">
                         <div class="p-10 text-center text-slate-400">Decrypting vault...</div>
                     </div>
                 </div>
@@ -120,36 +168,51 @@
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="font-bold text-slate-800">Upcoming Bills</h2>
-                        <button onclick="toggleModal('bill-modal')" class="text-indigo-600"><i data-lucide="plus" class="w-5 h-5"></i></button>
+                        <button onclick="openBillModal()" class="text-indigo-600"><i data-lucide="plus"
+                                class="w-5 h-5"></i></button>
                     </div>
                     <div id="bill-list" class="space-y-3"></div>
                 </div>
 
-                <div class="bg-slate-900 rounded-3xl p-6 text-white shadow-xl">
-                    <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                        <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-400"></i>
+                <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
+                        <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-600"></i>
                         Spend Breakdown
                     </h2>
-                    <div id="category-bars" class="space-y-4">
-                        <p class="text-xs text-slate-500 italic">Add categories to transactions to see data.</p>
+                    <div class="relative h-64 w-full mb-6">
+                        <canvas id="spendChart"></canvas>
+                    </div>
+
+                    <div class="border-t border-slate-100 pt-4">
+                        <h3 class="text-sm font-bold text-slate-500 mb-3">Budget Adherence</h3>
+                        <div id="budget-breakdown" class="space-y-4">
+                            <!-- Populated by JS -->
+                            <p class="text-xs text-slate-400 italic text-center">Set budgets to see progress.</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Modal: Add Transaction -->
-    <div id="transaction-modal" class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <!-- Modal: Add/Edit Transaction -->
+    <div id="transaction-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
-            <h3 class="text-2xl font-bold text-slate-800 mb-6">New Entry</h3>
+            <h3 class="text-2xl font-bold text-slate-800 mb-6" id="t-modal-title">New Entry</h3>
             <div class="space-y-4">
+                <input type="hidden" id="t-id">
                 <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border">
-                    <button onclick="setTType('expense')" id="btn-expense" class="py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm">Expense</button>
-                    <button onclick="setTType('income')" id="btn-income" class="py-2 rounded-xl font-bold text-slate-400">Income</button>
+                    <button onclick="setTType('expense')" id="btn-expense"
+                        class="py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm">Expense</button>
+                    <button onclick="setTType('income')" id="btn-income"
+                        class="py-2 rounded-xl font-bold text-slate-400">Income</button>
                     <input type="hidden" id="t-type" value="expense">
                 </div>
-                <input type="text" id="t-desc" placeholder="Description (e.g. Lunch)" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
-                <input type="number" id="t-amount" placeholder="Amount (₱)" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
+                <input type="text" id="t-desc" placeholder="Description (e.g. Lunch)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
+                <input type="number" id="t-amount" placeholder="Amount (₱)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
                 <select id="t-category" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
                     <option value="Food">🍔 Food</option>
                     <option value="Transport">🚗 Transport</option>
@@ -160,43 +223,71 @@
                     <option value="Others">📦 Others</option>
                 </select>
                 <div class="flex gap-3 pt-4">
-                    <button onclick="toggleModal('transaction-modal')" class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold">Cancel</button>
-                    <button onclick="saveTransaction()" class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">Save</button>
+                    <button onclick="toggleModal('transaction-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold">Cancel</button>
+                    <button onclick="saveTransaction()"
+                        class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold">Save</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Modal: Add Bill -->
-    <div id="bill-modal" class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <!-- Modal: Add/Edit Bill -->
+    <div id="bill-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
-            <h3 class="text-2xl font-bold text-slate-800 mb-6">Add Bill</h3>
+            <h3 class="text-2xl font-bold text-slate-800 mb-6" id="b-modal-title">Add Bill</h3>
+            <input type="hidden" id="b-id">
             <div class="space-y-4">
-                <input type="text" id="b-name" placeholder="Bill Name (e.g. Meralco)" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                <input type="text" id="b-name" placeholder="Bill Name (e.g. Meralco)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
                 <div class="grid grid-cols-2 gap-4">
-                    <input type="number" id="b-day" placeholder="Day (1-31)" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
-                    <input type="number" id="b-amount" placeholder="Estimate (₱)" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                    <input type="number" id="b-day" placeholder="Day (1-31)"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                    <input type="number" id="b-amount" placeholder="Estimate (₱)"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
                 </div>
                 <div class="flex gap-3 pt-4">
-                    <button onclick="toggleModal('bill-modal')" class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold">Cancel</button>
-                    <button onclick="saveBill()" class="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold">Set Reminder</button>
+                    <button onclick="toggleModal('bill-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold">Cancel</button>
+                    <button onclick="saveBill()" class="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold">Set
+                        Reminder</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Budget Settings -->
+    <div id="budget-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h3 class="text-2xl font-bold text-slate-800 mb-6">Budget Settings</h3>
+            <p class="text-xs text-slate-500 mb-4">Set monthly limits for categories.</p>
+            <div id="budget-inputs" class="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar mb-4">
+                <!-- Populated via JS -->
+                <div class="text-center text-slate-400 py-4">Loading categories...</div>
+            </div>
+            <div class="flex gap-3 pt-4">
+                <button onclick="toggleModal('budget-modal')"
+                    class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold">Close</button>
+                <button onclick="saveBudgets()" class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold">Save
+                    Budgets</button>
             </div>
         </div>
     </div>
 
     <script>
-        // --- 1. REPLACE THIS CONFIG WITH YOURS FROM FIREBASE CONSOLE ---
+        // --- CONFIG ---
         const firebaseConfig = {
-          apiKey: "AIzaSyC9nhH90Zkz9M4k-eRki3weqr_OyuRVhTw",
-          authDomain: "life-manager-with-finance.firebaseapp.com",
-          projectId: "life-manager-with-finance",
-          storageBucket: "life-manager-with-finance.firebasestorage.app",
-          messagingSenderId: "278187395464",
-          appId: "1:278187395464:web:5667404572487ebb06523d"
+            apiKey: "AIzaSyC9nhH90Zkz9M4k-eRki3weqr_OyuRVhTw",
+            authDomain: "life-manager-with-finance.firebaseapp.com",
+            projectId: "life-manager-with-finance",
+            storageBucket: "life-manager-with-finance.firebasestorage.app",
+            messagingSenderId: "278187395464",
+            appId: "1:278187395464:web:5667404572487ebb06523d"
         };
-        
-        // --- DATA & SYNC INIT ---
+
+
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const auth = firebase.auth();
@@ -205,9 +296,11 @@
         let masterKey = null;
         let cryptoKey = null;
         let activeCurrency = 'PHP';
-        let phpToUsdRate = 0.018; 
+        let phpToUsdRate = 0.018;
         let rawTransactions = [];
         let rawBills = [];
+        let budgets = {};
+        let spendChart = null;
 
         // --- CRYPTO HELPER (AES-GCM) ---
         async function deriveKey(password, salt) {
@@ -234,22 +327,23 @@
             } catch (e) { return null; }
         }
 
-        // --- AUTH & SYNC ---
+        // --- AUTH & INIT ---
         async function unlockApp() {
             const input = document.getElementById('master-key-input').value;
             if (input.length < 4) { alert("Key too short."); return; }
             masterKey = input;
             cryptoKey = await deriveKey(masterKey, new TextEncoder().encode("finance-flow-salt-v3"));
-            
-            // Fetch live rates
+
             try {
                 const r = await fetch('https://api.exchangerate-api.com/v4/latest/PHP');
                 const d = await r.json();
                 phpToUsdRate = d.rates.USD;
-            } catch(e) {}
+            } catch (e) { }
 
             document.getElementById('auth-overlay').classList.add('hidden');
             document.getElementById('main-content').classList.remove('opacity-0');
+            initFilters();
+            initChart();
             startListeners();
         }
 
@@ -259,100 +353,326 @@
                 const userRef = db.collection('artifacts').doc(appId).collection('users').doc(uid);
 
                 userRef.collection('transactions').onSnapshot(s => {
-                    rawTransactions = []; s.forEach(d => rawTransactions.push({id: d.id, ...d.data()}));
-                    renderTransactions(rawTransactions);
+                    rawTransactions = [];
+                    s.forEach(d => rawTransactions.push({ id: d.id, ...d.data() }));
+                    loadAndRender();
                 });
 
                 userRef.collection('bills').onSnapshot(s => {
-                    rawBills = []; s.forEach(d => rawBills.push({id: d.id, ...d.data()}));
+                    rawBills = []; s.forEach(d => rawBills.push({ id: d.id, ...d.data() }));
                     renderBills(rawBills);
+                });
+
+                userRef.collection('budgets').doc('categories').onSnapshot(async d => {
+                    if (d.exists) {
+                        const data = d.data();
+                        // Decrypt budgets if encrypted, or store plain if not sensative (but let's encrypt for consistency)
+                        if (data.data) {
+                            budgets = await decryptData(data.data) || {};
+                        }
+                    }
+                    loadAndRender(); // Re-render to show budget bars
                 });
             });
         }
 
-        // --- BUSINESS LOGIC ---
+        // --- CHART & FILTERS ---
+        function initFilters() {
+            const mSel = document.getElementById('filter-month');
+            const ySel = document.getElementById('filter-year');
+            const months = ["All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+            mSel.innerHTML = months.map((m, i) => `<option value="${i === 0 ? 'all' : i}">${m}</option>`).join('');
+
+            // Year: Current +/- 5
+            const curY = new Date().getFullYear();
+            let ops = `<option value="all">All Years</option>`;
+            for (let i = curY - 2; i <= curY + 2; i++) ops += `<option value="${i}" ${i === curY ? 'selected' : ''}>${i}</option>`;
+            ySel.innerHTML = ops;
+
+            // Set current month default
+            mSel.value = new Date().getMonth() + 1;
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('spendChart').getContext('2d');
+            spendChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: [
+                            '#4f46e5', '#059669', '#e11d48', '#d97706', '#8b5cf6', '#db2777', '#2563eb'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true, font: { size: 10 } } }
+                    },
+                    cutout: '70%'
+                }
+            });
+        }
+
+        async function loadAndRender() {
+            // Decrypt all first
+            const decrypted = (await Promise.all(rawTransactions.map(async i => {
+                const d = await decryptData(i.data);
+                return d ? { ...d, id: i.id } : null;
+            }))).filter(x => x).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            // Store cleanly for usage
+            window.allDecryptedTransactions = decrypted;
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const m = document.getElementById('filter-month').value;
+            const y = document.getElementById('filter-year').value;
+
+            let filtered = window.allDecryptedTransactions || [];
+
+            if (y !== 'all') {
+                filtered = filtered.filter(t => new Date(t.date).getFullYear() == y);
+            }
+            if (m !== 'all') {
+                filtered = filtered.filter(t => (new Date(t.date).getMonth() + 1) == m);
+            }
+
+            renderTransactions(filtered);
+            updateChart(filtered);
+            renderBudgets(filtered);
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-month').value = new Date().getMonth() + 1;
+            document.getElementById('filter-year').value = new Date().getFullYear();
+            applyFilters();
+        }
+
+        function updateChart(items) {
+            if (!spendChart) return;
+
+            const cats = {};
+            items.filter(i => i.type === 'expense').forEach(i => {
+                cats[i.category] = (cats[i.category] || 0) + i.amt;
+            });
+
+            spendChart.data.labels = Object.keys(cats);
+            spendChart.data.datasets[0].data = Object.values(cats);
+            spendChart.update();
+        }
+
+        function renderBudgets(items) {
+            const container = document.getElementById('budget-breakdown');
+            // Check if we have any budgets set
+            const hasBudgets = Object.values(budgets).some(v => v > 0);
+            if (!hasBudgets) {
+                container.innerHTML = '<p class="text-xs text-slate-400 italic text-center">Set budgets to see progress.</p>';
+                return;
+            }
+
+            // Calculate actuals
+            const actuals = {};
+            items.filter(i => i.type === 'expense').forEach(i => {
+                actuals[i.category] = (actuals[i.category] || 0) + i.amt;
+            });
+
+            container.innerHTML = '';
+            Object.entries(budgets).forEach(([cat, limit]) => {
+                if (!limit) return;
+                const spent = actuals[cat] || 0;
+                const pct = Math.min((spent / limit) * 100, 100);
+                const isOver = spent > limit;
+
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <div class="flex justify-between text-xs font-bold mb-1">
+                        <span class="text-slate-600">${cat}</span>
+                        <span class="${isOver ? 'text-rose-500' : 'text-slate-400'}">${fmt(spent)} / ${fmt(limit)}</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full transition-all duration-500 ${isOver ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${pct}%"></div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // --- CRUD LOGIC ---
+        function openTransactionModal(id = null) {
+            const modal = document.getElementById('transaction-modal');
+            const title = document.getElementById('t-modal-title');
+            const tId = document.getElementById('t-id');
+            const desc = document.getElementById('t-desc');
+            const amt = document.getElementById('t-amount');
+            const cat = document.getElementById('t-category');
+
+            if (id) {
+                // Edit Mode
+                const item = window.allDecryptedTransactions.find(t => t.id === id);
+                if (!item) return;
+
+                title.innerText = "Edit Transaction";
+                tId.value = id;
+                desc.value = item.desc;
+                amt.value = item.amt;
+                cat.value = item.category;
+                setTType(item.type);
+            } else {
+                // Add Mode
+                title.innerText = "New Transaction";
+                tId.value = "";
+                desc.value = "";
+                amt.value = "";
+                cat.value = "Food";
+                setTType('expense');
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function openBillModal(id = null) {
+            const modal = document.getElementById('bill-modal');
+            const title = document.getElementById('b-modal-title');
+            const bId = document.getElementById('b-id');
+            const name = document.getElementById('b-name');
+            const day = document.getElementById('b-day');
+            const amt = document.getElementById('b-amount');
+
+            // Logic to find bill if ID is passed needs simple lookup on rawbills + decryption, 
+            // but for now let's just use the rendered list data if possible or re-decrypt.
+            // Simplest: just fetch from rawBills and decrypt on click since list is small.
+            if (id) {
+                const raw = rawBills.find(b => b.id === id);
+                if (raw) {
+                    decryptData(raw.data).then(d => {
+                        title.innerText = "Edit Bill";
+                        bId.value = id;
+                        name.value = d.name;
+                        day.value = d.day;
+                        amt.value = d.amt;
+                        modal.classList.remove('hidden');
+                    });
+                    return;
+                }
+            }
+
+            title.innerText = "Add Bill";
+            bId.value = "";
+            name.value = "";
+            day.value = "";
+            amt.value = "";
+            modal.classList.remove('hidden');
+        }
+
         async function saveTransaction() {
+            const id = document.getElementById('t-id').value;
             const desc = document.getElementById('t-desc').value;
             const amt = parseFloat(document.getElementById('t-amount').value);
             const type = document.getElementById('t-type').value;
             const category = document.getElementById('t-category').value;
-            if(!desc || isNaN(amt)) return;
 
-            const encrypted = await encryptData({ desc, amt, type, category, date: new Date().toISOString() });
-            await db.collection('artifacts').doc(appId).collection('users').doc(auth.currentUser.uid).collection('transactions').add({
-                data: encrypted, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            if (!desc || isNaN(amt)) return;
+
+            // Preserve original date if editing, else new date
+            let date = new Date().toISOString();
+            if (id) {
+                const existing = window.allDecryptedTransactions.find(t => t.id === id);
+                if (existing) date = existing.date;
+            }
+
+            const encrypted = await encryptData({ desc, amt, type, category, date });
+            const col = db.collection('artifacts').doc(appId).collection('users').doc(auth.currentUser.uid).collection('transactions');
+
+            if (id) {
+                await col.doc(id).update({ data: encrypted });
+            } else {
+                await col.add({ data: encrypted, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+            }
             toggleModal('transaction-modal');
-            document.getElementById('t-desc').value = ''; document.getElementById('t-amount').value = '';
         }
 
         async function saveBill() {
+            const id = document.getElementById('b-id').value;
             const name = document.getElementById('b-name').value;
             const day = parseInt(document.getElementById('b-day').value);
             const amt = parseFloat(document.getElementById('b-amount').value);
-            if(!name || isNaN(day)) return;
+            if (!name || isNaN(day)) return;
 
             const encrypted = await encryptData({ name, day, amt });
-            await db.collection('artifacts').doc(appId).collection('users').doc(auth.currentUser.uid).collection('bills').add({
-                data: encrypted, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            const col = db.collection('artifacts').doc(appId).collection('users').doc(auth.currentUser.uid).collection('bills');
+
+            if (id) {
+                await col.doc(id).update({ data: encrypted });
+            } else {
+                await col.add({ data: encrypted, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+            }
             toggleModal('bill-modal');
         }
 
+        async function saveBudgets() {
+            const inputs = document.querySelectorAll('.budget-input');
+            const newBudgets = {};
+            inputs.forEach(inp => {
+                const cat = inp.dataset.cat;
+                const val = parseFloat(inp.value);
+                if (val > 0) newBudgets[cat] = val;
+            });
+
+            const encrypted = await encryptData(newBudgets);
+            await db.collection('artifacts').doc(appId).collection('users').doc(auth.currentUser.uid).collection('budgets').doc('categories').set({
+                data: encrypted
+            });
+            toggleModal('budget-modal');
+        }
+
         async function deleteItem(col, id) {
+            if (!confirm("Are you sure?")) return;
             await db.collection('artifacts').doc(appId).collection('users').doc(auth.currentUser.uid).collection(col).doc(id).delete();
         }
 
-        function toggleCurrency() {
-            activeCurrency = activeCurrency === 'PHP' ? 'USD' : 'PHP';
-            document.getElementById('active-currency').innerText = activeCurrency + (activeCurrency === 'PHP' ? ' (₱)' : ' ($)');
-            renderTransactions(rawTransactions);
-            renderBills(rawBills);
-        }
-
-        function fmt(val) {
-            const c = activeCurrency === 'USD' ? val * phpToUsdRate : val;
-            const s = activeCurrency === 'USD' ? '$' : '₱';
-            return s + c.toLocaleString(undefined, { minimumFractionDigits: 2 });
-        }
-
         // --- RENDERERS ---
-        async function renderTransactions(items) {
+        function renderTransactions(items) {
             const list = document.getElementById('transaction-list');
-            const catContainer = document.getElementById('category-bars');
             let bal = 0, inc = 0, exp = 0;
-            let categories = {};
+            let catExp = {};
 
-            const decrypted = (await Promise.all(items.map(async i => {
-                const d = await decryptData(i.data);
-                return d ? {...d, id: i.id} : null;
-            }))).filter(x => x).sort((a,b) => new Date(b.date) - new Date(a.date));
+            list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No transactions found.</div>';
 
-            list.innerHTML = decrypted.length ? '' : '<div class="p-10 text-center text-slate-400">Vault empty.</div>';
-            
-            decrypted.forEach(i => {
+            items.forEach(i => {
                 const isInc = i.type === 'income';
-                if(isInc) { inc += i.amt; bal += i.amt; } 
-                else { 
-                    exp += i.amt; bal -= i.amt; 
-                    categories[i.category] = (categories[i.category] || 0) + i.amt;
+                if (isInc) { inc += i.amt; bal += i.amt; }
+                else {
+                    exp += i.amt; bal -= i.amt;
+                    catExp[i.category] = (catExp[i.category] || 0) + i.amt;
                 }
 
                 const div = document.createElement('div');
-                div.className = "p-4 flex items-center justify-between group hover:bg-slate-50";
+                div.className = "p-4 flex items-center justify-between group hover:bg-slate-50 transition-colors cursor-pointer";
+                // Click to edit (but exclude delete button)
+                div.onclick = (e) => {
+                    if (e.target.closest('button')) return;
+                    openTransactionModal(i.id);
+                };
+
                 div.innerHTML = `
                     <div class="flex items-center gap-4">
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${isInc ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">
-                            ${i.category ? i.category.substring(0,2).toUpperCase() : '??'}
+                            ${i.category ? i.category.substring(0, 2).toUpperCase() : '??'}
                         </div>
                         <div>
                             <p class="font-bold text-slate-800">${i.desc}</p>
-                            <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${i.category || 'No Category'}</p>
+                            <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${new Date(i.date).toLocaleDateString()} • ${i.category}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-4">
                         <p class="font-bold ${isInc ? 'text-emerald-600' : 'text-rose-600'}">${isInc ? '+' : '-'}${fmt(i.amt)}</p>
-                        <button onclick="deleteItem('transactions', '${i.id}')" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        <button onclick="deleteItem('transactions', '${i.id}')" class="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </div>`;
                 list.appendChild(div);
             });
@@ -362,19 +682,20 @@
             document.getElementById('expense-display').innerText = fmt(exp);
             document.getElementById('savings-rate-display').innerText = inc > 0 ? Math.round(((inc - exp) / inc) * 100) + '%' : '0%';
 
-            // Render categories
-            catContainer.innerHTML = '';
-            Object.entries(categories).forEach(([name, amt]) => {
-                const pct = Math.round((amt / exp) * 100);
-                const div = document.createElement('div');
-                div.innerHTML = `
-                    <div class="flex justify-between text-xs mb-1 opacity-70"><span>${name}</span><span>${pct}%</span></div>
-                    <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden"><div class="h-full bg-indigo-400" style="width: ${pct}%"></div></div>`;
-                catContainer.appendChild(div);
-            });
+            // Populate Budget Inputs if empty
+            const bDiv = document.getElementById('budget-inputs');
+            if (bDiv.innerText.includes('Loading')) {
+                const categories = ["Food", "Transport", "Bills", "Savings", "Entertainment", "Salary", "Others"];
+                bDiv.innerHTML = categories.map(c => `
+                    <div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border">
+                        <label class="text-sm font-bold text-slate-600 w-1/3">${c}</label>
+                        <input type="number" data-cat="${c}" value="${budgets[c] || ''}" placeholder="Limit" class="budget-input w-full bg-white border rounded-lg px-3 py-1 text-sm outline-none focus:border-emerald-500">
+                    </div>
+                `).join('');
+            }
 
+            // Re-render Budget Progress Bars (Optional: can inject into Category Breakdown under chart or separate modal)
             lucide.createIcons();
-            window.lastDecrypted = decrypted; // for CSV export
         }
 
         async function renderBills(items) {
@@ -382,30 +703,31 @@
             list.innerHTML = '';
             const decrypted = (await Promise.all(items.map(async i => {
                 const d = await decryptData(i.data);
-                return d ? {...d, id: i.id} : null;
+                return d ? { ...d, id: i.id } : null;
             }))).filter(x => x);
 
             decrypted.forEach(b => {
                 const div = document.createElement('div');
-                div.className = "p-3 bg-slate-50 rounded-2xl flex justify-between border items-center";
-                div.innerHTML = `<div><p class="text-xs font-bold text-slate-400 uppercase">Day ${b.day}</p><p class="font-bold text-slate-800">${b.name}</p></div><div class="flex items-center gap-3"><span class="font-bold text-slate-500">${fmt(b.amt)}</span><button onclick="deleteItem('bills', '${b.id}')" class="text-slate-300"><i data-lucide="x-circle" class="w-4 h-4"></i></button></div>`;
+                div.className = "p-3 bg-slate-50 rounded-2xl flex justify-between border items-center group hover:border-indigo-300 cursor-pointer transition-colors";
+                div.onclick = (e) => { if (!e.target.closest('button')) openBillModal(b.id); };
+
+                div.innerHTML = `<div><p class="text-xs font-bold text-slate-400 uppercase">Day ${b.day}</p><p class="font-bold text-slate-800">${b.name}</p></div><div class="flex items-center gap-3"><span class="font-bold text-slate-500">${fmt(b.amt)}</span><button onclick="deleteItem('bills', '${b.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button></div>`;
                 list.appendChild(div);
             });
             lucide.createIcons();
         }
 
-        function exportToCSV() {
-            if (!window.lastDecrypted || window.lastDecrypted.length === 0) return;
-            let csv = "Date,Description,Category,Type,Amount\n";
-            window.lastDecrypted.forEach(i => {
-                csv += `${new Date(i.date).toLocaleDateString()},"${i.desc}",${i.category},${i.type},${i.amt}\n`;
-            });
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.setAttribute('href', url);
-            a.setAttribute('download', `finance_backup_${new Date().toISOString().split('T')[0]}.csv`);
-            a.click();
+        function toggleCurrency() {
+            activeCurrency = activeCurrency === 'PHP' ? 'USD' : 'PHP';
+            document.getElementById('active-currency').innerText = activeCurrency + (activeCurrency === 'PHP' ? ' (₱)' : ' ($)');
+            loadAndRender(); // Re-render triggers format update
+            renderBills(rawBills);
+        }
+
+        function fmt(val) {
+            const c = activeCurrency === 'USD' ? val * phpToUsdRate : val;
+            const s = activeCurrency === 'USD' ? '$' : '₱';
+            return s + c.toLocaleString(undefined, { minimumFractionDigits: 2 });
         }
 
         function setTType(t) {
@@ -417,7 +739,22 @@
         }
 
         function toggleModal(id) { document.getElementById(id).classList.toggle('hidden'); }
+        function exportToCSV() {
+            if (!window.allDecryptedTransactions || window.allDecryptedTransactions.length === 0) return;
+            let csv = "Date,Description,Category,Type,Amount\n";
+            window.allDecryptedTransactions.forEach(i => {
+                csv += `${new Date(i.date).toLocaleDateString()},"${i.desc}",${i.category},${i.type},${i.amt}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', `finance_backup_${new Date().toISOString().split('T')[0]}.csv`);
+            a.click();
+        }
+
         window.onload = () => lucide.createIcons();
     </script>
 </body>
+
 </html>
