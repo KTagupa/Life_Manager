@@ -1928,6 +1928,33 @@
             transition: transform 0.2s, background 0.2s;
         }
 
+        #btn-finance-link {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #10b981;
+            color: white;
+            font-size: 24px;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            cursor: pointer;
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+
+        #btn-finance-link:hover {
+            transform: scale(1.1);
+            background: #059669;
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+        }
+
         #fab-inbox:hover {
             transform: scale(1.1);
             background: var(--accent-hover);
@@ -2843,6 +2870,8 @@
     </div>
 
     <div id="notification">State Saved</div>
+
+    <a href="finance.html" id="btn-finance-link" title="Go to Finance">💰</a>
 
     <script>
         // --- AUDIO ENGINE (Web Audio API) ---
