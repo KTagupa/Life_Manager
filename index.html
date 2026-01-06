@@ -2920,6 +2920,11 @@
             <span class="health-label">Sync</span>
             <span class="health-val" id="hd-sync">Ready</span>
         </div>
+        <div class="health-row" title="Last automated offline backup (8PM daily)">
+            <span class="health-label">Backup</span>
+            <span class="health-val" id="backup-timestamp"
+                style="font-size: 10px; color: var(--ready-color);">None</span>
+        </div>
     </div>
 
     <div id="notification">State Saved</div>
@@ -3388,6 +3393,10 @@
 
             setInterval(tickTimers, 1000);
             setInterval(checkAutoArchive, 60000);
+
+            // --- AUTOMATED BACKUP STARTUP ---
+            updateBackupStatusUI();
+            setInterval(checkAutomatedBackup, 60000);
         });
 
         // --- TOOLBAR LOGIC ---
@@ -5982,19 +5991,25 @@
             }
         }
 
-        // --- AUTOMATED BACKUP ---
-        let lastAutoBackupDate = localStorage.getItem('lastAutoBackupDate') || '';
+        // --- UPDATED BACKUP LOGIC ---
+        function updateBackupStatusUI() {
+            const lastDate = localStorage.getItem('lastAutoBackupDate');
+            const displayElement = document.getElementById('backup-timestamp');
+            if (displayElement) {
+                displayElement.innerText = lastDate || "No backup recorded yet";
+            }
+        }
+
         function checkAutomatedBackup() {
             const now = new Date();
             const dateStr = now.toDateString();
             const hours = now.getHours();
 
-            // Trigger precisely at 8:00 PM (20:00)
-            if (hours === 20 && lastAutoBackupDate !== dateStr) {
-                console.log("Triggering automated 8PM backup...");
-                saveData(true);
-                lastAutoBackupDate = dateStr;
+            // Trigger if it's 8PM (20:00) or later AND we haven't backed up today
+            if (hours >= 20 && localStorage.getItem('lastAutoBackupDate') !== dateStr) {
+                saveData(true); // Trigger the download
                 localStorage.setItem('lastAutoBackupDate', dateStr);
+                updateBackupStatusUI();
                 showNotification("Daily 8PM Offline Backup Triggered");
             }
         }
@@ -6022,9 +6037,6 @@
             if (hasRunningHabit && !document.getElementById('habits-panel').classList.contains('hidden')) {
                 renderHabits();
             }
-
-            // 4. Automated Daily Backup Check
-            checkAutomatedBackup();
         }
 
         function updateFocusHUD(now) {
