@@ -2812,6 +2812,8 @@
             <div class="editor-tools-group">
                 <button class="tool-btn" style="color:var(--critical-path)" onclick="createTaskFromSelection()"
                     title="Convert Selection to Linked Task">✨ Task</button>
+                <button class="tool-btn" style="color:#8b5cf6;" onclick="showNoteTaskPicker()"
+                    title="Link Note to Existing Task">🔗 Link</button>
             </div>
 
             <div class="editor-tools-group">
@@ -2820,17 +2822,34 @@
             </div>
         </div>
 
-        <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()">
+        <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()"
+            onkeydown="if(event.key==='Escape'){ const p = document.getElementById('note-task-picker'); if(!p.classList.contains('hidden')){ p.classList.add('hidden'); event.stopPropagation(); } }">
 
         <div id="note-linked-tasks-inline"
             style="padding: 0 10px 10px; display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.05);">
             <div id="note-tasks-list" style="display: flex; flex-wrap: wrap; gap: 4px;"></div>
+            <div id="note-task-picker" class="hidden"
+                style="margin: 0 10px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--accent); border-radius: 8px; padding: 12px; box-shadow: inset 0 0 10px rgba(0,0,0,0.5);">
+                <div
+                    style="font-size: 11px; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between;">
+                    <span>Search Task to Link</span>
+                    <button onclick="document.getElementById('note-task-picker').classList.add('hidden')"
+                        style="background: none; border: none; color: #666; font-size: 11px; cursor: pointer;">Cancel</button>
+                </div>
+                <input type="text" id="note-task-search" placeholder="Type to search tasks..."
+                    style="margin-bottom: 8px; padding: 8px; background: #000; border: 1px solid #333; color: white; width: 100%; font-size: 12px; border-radius: 4px;"
+                    oninput="filterNoteTaskPicker(this.value)"
+                    onkeydown="if(event.key==='Escape'){ document.getElementById('note-task-picker').classList.add('hidden'); event.stopPropagation(); }">
+                <div id="note-task-picker-list"
+                    style="max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;"></div>
+            </div>
         </div>
 
         <div class="editor-content-area">
             <textarea id="note-body-input"
                 placeholder="Type your note here... Select text to convert to Tasks or Sub-notes."
-                oninput="saveCurrentNote()"></textarea>
+                oninput="saveCurrentNote()"
+                onkeydown="if(event.key==='Escape'){ const p = document.getElementById('note-task-picker'); if(!p.classList.contains('hidden')){ p.classList.add('hidden'); event.stopPropagation(); } }"></textarea>
             <div id="note-preview-pane" class="hidden"></div>
         </div>
     </div>
@@ -4746,6 +4765,59 @@
             });
         }
 
+        function showNoteTaskPicker() {
+            const picker = document.getElementById('note-task-picker');
+            const searchInput = document.getElementById('note-task-search');
+            if (!picker || !currentEditingNoteId) return;
+
+            picker.classList.remove('hidden');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+            filterNoteTaskPicker('');
+        }
+
+        function filterNoteTaskPicker(query) {
+            const list = document.getElementById('note-task-picker-list');
+            if (!list || !currentEditingNoteId) return;
+
+            const note = notes.find(n => n.id === currentEditingNoteId);
+            if (!note) return;
+
+            list.innerHTML = '';
+            const allTasks = [...(nodes || []), ...(archivedNodes || [])];
+            const q = query.toLowerCase();
+
+            const filtered = allTasks.filter(t =>
+                (t.title || "").toLowerCase().includes(q) &&
+                !(note.taskIds && note.taskIds.includes(t.id))
+            ).sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<div style="color:#666; font-size:11px; padding:10px; text-align:center;">No tasks found</div>';
+                return;
+            }
+
+            filtered.forEach(t => {
+                const item = document.createElement('div');
+                item.style.padding = '8px';
+                item.style.cursor = 'pointer';
+                item.style.fontSize = '12px';
+                item.style.color = '#ccc';
+                item.style.borderRadius = '4px';
+                item.style.transition = 'background 0.2s';
+                item.innerText = t.title || "Untitled Task";
+                item.onmouseover = () => item.style.background = 'rgba(255,255,255,0.1)';
+                item.onmouseout = () => item.style.background = 'transparent';
+                item.onclick = () => {
+                    linkTaskToNote(t.id);
+                    document.getElementById('note-task-picker').classList.add('hidden');
+                };
+                list.appendChild(item);
+            });
+        }
+
         function linkTaskToNote(taskId) {
             if (!taskId || !currentEditingNoteId) return;
             const note = notes.find(n => n.id === currentEditingNoteId);
@@ -5099,6 +5171,14 @@
                     e.target.tagName === 'TEXTAREA' ||
                     e.target.isContentEditable;
 
+                if (e.key === 'Escape') {
+                    const picker = document.getElementById('note-task-picker');
+                    if (picker && !picker.classList.contains('hidden')) {
+                        picker.classList.add('hidden');
+                        return;
+                    }
+                }
+
                 if (isTyping) return; // If typing, don't run any of the shortcuts below
 
                 // 3. Shortcuts (Option + Key)
@@ -5144,6 +5224,15 @@
                 const selMenu = document.getElementById('selection-menu');
                 if (!selMenu.contains(e.target) && e.target.id !== 'note-body-input') {
                     selMenu.style.display = 'none';
+                }
+
+                // Hide note task picker on outside click
+                const noteTaskPicker = document.getElementById('note-task-picker');
+                if (noteTaskPicker && !noteTaskPicker.classList.contains('hidden')) {
+                    const linkBtn = document.querySelector('button[onclick="showNoteTaskPicker()"]');
+                    if (!noteTaskPicker.contains(e.target) && (!linkBtn || !linkBtn.contains(e.target))) {
+                        noteTaskPicker.classList.add('hidden');
+                    }
                 }
             });
 
@@ -5275,7 +5364,12 @@
                 }
             }, { passive: false });
 
-        });
+            container.addEventListener('touchend', (e) => {
+                if (isDragging) { isDragging = false; saveToStorage(); }
+                if (e.touches.length < 2) initialPinchDist = null;
+                if (e.touches.length === 0) isPanning = false;
+            });
+        }
 
         function closeAllSidePanels() {
             const tb = document.getElementById('toolbar');
