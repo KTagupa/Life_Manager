@@ -8,9 +8,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.1.0/firebase-auth-compat.js"></script>
 
     <style>
         .glass-morphism {
@@ -278,21 +275,7 @@
 
     <script>
         // --- CONFIG ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyC9nhH90Zkz9M4k-eRki3weqr_OyuRVhTw",
-            authDomain: "life-manager-with-finance.firebaseapp.com",
-            projectId: "life-manager-with-finance",
-            storageBucket: "life-manager-with-finance.firebasestorage.app",
-            messagingSenderId: "278187395464",
-            appId: "1:278187395464:web:5667404572487ebb06523d"
-        };
-
-
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        const auth = firebase.auth();
         const appId = 'personal-finance-sync-v1';
-
         let masterKey = null;
         let cryptoKey = null;
         let activeCurrency = 'PHP';
@@ -301,6 +284,18 @@
         let rawBills = [];
         let budgets = {};
         let spendChart = null;
+
+        // --- MOCK DB (LocalStorage) ---
+        const DB_KEY = 'finance_flow_encrypted_v1';
+
+        function getDB() {
+            const str = localStorage.getItem(DB_KEY);
+            return str ? JSON.parse(str) : { transactions: [], bills: [], budgets: { data: null } };
+        }
+
+        function saveDB(db) {
+            localStorage.setItem(DB_KEY, JSON.stringify(db));
+        }
 
         // --- CRYPTO HELPER (AES-GCM) ---
         async function deriveKey(password, salt) {
@@ -321,16 +316,23 @@
 
         async function decryptData(encryptedObj) {
             try {
+                if (!encryptedObj || !encryptedObj.iv || !encryptedObj.content) return null;
                 const dec = new TextDecoder();
                 const decrypted = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(encryptedObj.iv) }, cryptoKey, new Uint8Array(encryptedObj.content));
                 return JSON.parse(dec.decode(decrypted));
-            } catch (e) { return null; }
+            } catch (e) { console.error("Decrypt fail", e); return null; }
         }
 
         // --- AUTH & INIT ---
         async function unlockApp() {
             const input = document.getElementById('master-key-input').value;
-            if (input.length < 4) { alert("Key too short."); return; }
+            if (input.length < 1) { alert("Please enter a key."); return; }
+
+            document.getElementById('auth-status').innerText = "Decrypting...";
+
+            // Artificial delay to feel "secure" and let UI update
+            await new Promise(r => setTimeout(r, 500));
+
             masterKey = input;
             cryptoKey = await deriveKey(masterKey, new TextEncoder().encode("finance-flow-salt-v3"));
 
@@ -338,42 +340,34 @@
                 const r = await fetch('https://api.exchangerate-api.com/v4/latest/PHP');
                 const d = await r.json();
                 phpToUsdRate = d.rates.USD;
-            } catch (e) { }
+            } catch (e) { console.log("Offline mode: Using default exchange rate"); }
 
             document.getElementById('auth-overlay').classList.add('hidden');
             document.getElementById('main-content').classList.remove('opacity-0');
+
             initFilters();
             initChart();
-            startListeners();
+            loadFromStorage();
         }
 
-        function startListeners() {
-            auth.signInAnonymously().then(() => {
-                const uid = auth.currentUser.uid;
-                const userRef = db.collection('artifacts').doc(appId).collection('users').doc(uid);
+        async function loadFromStorage() {
+            const db = getDB();
 
-                userRef.collection('transactions').onSnapshot(s => {
-                    rawTransactions = [];
-                    s.forEach(d => rawTransactions.push({ id: d.id, ...d.data() }));
-                    loadAndRender();
-                });
+            // 1. Transactions
+            rawTransactions = db.transactions || [];
+            await loadAndRender();
 
-                userRef.collection('bills').onSnapshot(s => {
-                    rawBills = []; s.forEach(d => rawBills.push({ id: d.id, ...d.data() }));
-                    renderBills(rawBills);
-                });
+            // 2. Bills
+            rawBills = db.bills || [];
+            await renderBills(rawBills);
 
-                userRef.collection('budgets').doc('categories').onSnapshot(async d => {
-                    if (d.exists) {
-                        const data = d.data();
-                        // Decrypt budgets if encrypted, or store plain if not sensative (but let's encrypt for consistency)
-                        if (data.data) {
-                            budgets = await decryptData(data.data) || {};
-                        }
-                    }
-                    loadAndRender(); // Re-render to show budget bars
-                });
-            });
+            // 3. Budgets
+            if (db.budgets && db.budgets.data) {
+                budgets = await decryptData(db.budgets.data) || {};
+            } else {
+                budgets = {};
+            }
+            renderBudgets(window.allDecryptedTransactions || []); // Render initial budget bars
         }
 
         // --- CHART & FILTERS ---
@@ -536,7 +530,7 @@
             modal.classList.remove('hidden');
         }
 
-        function openBillModal(id = null) {
+        async function openBillModal(id = null) {
             const modal = document.getElementById('bill-modal');
             const title = document.getElementById('b-modal-title');
             const bId = document.getElementById('b-id');
@@ -544,21 +538,19 @@
             const day = document.getElementById('b-day');
             const amt = document.getElementById('b-amount');
 
-            // Logic to find bill if ID is passed needs simple lookup on rawbills + decryption, 
-            // but for now let's just use the rendered list data if possible or re-decrypt.
-            // Simplest: just fetch from rawBills and decrypt on click since list is small.
             if (id) {
                 const raw = rawBills.find(b => b.id === id);
                 if (raw) {
-                    decryptData(raw.data).then(d => {
+                    const d = await decryptData(raw.data);
+                    if (d) {
                         title.innerText = "Edit Bill";
                         bId.value = id;
                         name.value = d.name;
                         day.value = d.day;
                         amt.value = d.amt;
                         modal.classList.remove('hidden');
-                    });
-                    return;
+                        return;
+                    }
                 }
             }
 
@@ -587,14 +579,24 @@
             }
 
             const encrypted = await encryptData({ desc, amt, type, category, date });
-            const col = db.collection('artifacts').doc(appId).collection('users').doc(auth.currentUser.uid).collection('transactions');
 
+            const db = getDB();
             if (id) {
-                await col.doc(id).update({ data: encrypted });
+                const idx = db.transactions.findIndex(t => t.id === id);
+                if (idx !== -1) db.transactions[idx] = { id, data: encrypted, lastModified: Date.now() };
             } else {
-                await col.add({ data: encrypted, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+                db.transactions.push({
+                    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                    data: encrypted,
+                    createdAt: Date.now()
+                });
             }
+            saveDB(db);
+
+            // Reload
+            rawTransactions = db.transactions;
             toggleModal('transaction-modal');
+            loadAndRender();
         }
 
         async function saveBill() {
@@ -605,14 +607,22 @@
             if (!name || isNaN(day)) return;
 
             const encrypted = await encryptData({ name, day, amt });
-            const col = db.collection('artifacts').doc(appId).collection('users').doc(auth.currentUser.uid).collection('bills');
 
+            const db = getDB();
             if (id) {
-                await col.doc(id).update({ data: encrypted });
+                const idx = db.bills.findIndex(b => b.id === id);
+                if (idx !== -1) db.bills[idx] = { id, data: encrypted };
             } else {
-                await col.add({ data: encrypted, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+                db.bills.push({
+                    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                    data: encrypted
+                });
             }
+            saveDB(db);
+
+            rawBills = db.bills;
             toggleModal('bill-modal');
+            renderBills(rawBills);
         }
 
         async function saveBudgets() {
@@ -625,15 +635,31 @@
             });
 
             const encrypted = await encryptData(newBudgets);
-            await db.collection('artifacts').doc(appId).collection('users').doc(auth.currentUser.uid).collection('budgets').doc('categories').set({
-                data: encrypted
-            });
+
+            const db = getDB();
+            db.budgets = { data: encrypted };
+            saveDB(db);
+
+            budgets = newBudgets;
             toggleModal('budget-modal');
+            loadAndRender(); // Update bars
         }
 
         async function deleteItem(col, id) {
             if (!confirm("Are you sure?")) return;
-            await db.collection('artifacts').doc(appId).collection('users').doc(auth.currentUser.uid).collection(col).doc(id).delete();
+            const db = getDB();
+
+            if (col === 'transactions') {
+                db.transactions = db.transactions.filter(t => t.id !== id);
+                rawTransactions = db.transactions;
+                saveDB(db);
+                loadAndRender();
+            } else if (col === 'bills') {
+                db.bills = db.bills.filter(b => b.id !== id);
+                rawBills = db.bills;
+                saveDB(db);
+                renderBills(rawBills);
+            }
         }
 
         // --- RENDERERS ---
