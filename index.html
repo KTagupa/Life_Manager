@@ -3714,6 +3714,33 @@
             }
 
             history.appendChild(msg);
+
+            // 3. Check for Decomposition Data
+            let decompJson = null;
+            if (text.includes('[DECOMPOSITION_DATA]')) {
+                const parts = text.split('[DECOMPOSITION_DATA]');
+                const dataParts = parts[1].split('[/DECOMPOSITION_DATA]');
+                decompJson = dataParts[0].trim();
+            }
+
+            if (decompJson && role === 'bot') {
+                const genBtn = document.createElement('button');
+                genBtn.className = 'btn btn-primary';
+                genBtn.style.marginTop = '10px';
+                genBtn.style.width = '100%';
+                genBtn.style.background = 'var(--ai-accent)';
+                genBtn.innerText = '✨ Generate Project Graph';
+                genBtn.onclick = () => {
+                    try {
+                        const data = JSON.parse(decompJson);
+                        applyDecomposition(data);
+                        genBtn.innerText = '✅ Graph Generated';
+                        genBtn.disabled = true;
+                    } catch (e) { alert("Decomposition Format Error"); }
+                };
+                msg.appendChild(genBtn);
+            }
+
             history.scrollTop = history.scrollHeight;
         }
 
@@ -3790,6 +3817,15 @@
            [SCHEDULE_DATA]
            [{"taskId": "task_id_here", "start": "ISO_STRING", "end": "ISO_STRING"}]
            [/SCHEDULE_DATA]
+           
+        - PROJECT DECOMPOSITION: If the user asks to break down, expand, or decompose a task/goal, provide a structured plan.
+           Present the plan as clear text first, then MUST append a JSON block:
+           [DECOMPOSITION_DATA]
+           [
+             {"tempId": "node1", "title": "First Step", "duration": 1, "dependencies": []},
+             {"tempId": "node2", "title": "Second Step", "duration": 2, "dependencies": ["node1"]}
+           ]
+           [/DECOMPOSITION_DATA]
 
         STYLE:
         - Be concise and strategic.
@@ -3811,6 +3847,53 @@
             } finally {
                 document.getElementById('ai-loading').classList.add('hidden');
             }
+        }
+
+        function decomposeGoal(goal) {
+            document.getElementById('ai-panel').classList.remove('hidden');
+            const prompt = `Break down the goal "${goal.text}" into a detailed project plan with dependencies. Specify durations for each task in days.`;
+            quickPrompt(prompt);
+        }
+
+        function decomposeTask() {
+            const node = nodes.find(n => n.id === selectedNodeId);
+            if (!node) return;
+            document.getElementById('ai-panel').classList.remove('hidden');
+            const prompt = `Decompose the task "${node.title}" into smaller sub-tasks. Maintain the context of any existing dependencies if possible.`;
+            quickPrompt(prompt);
+        }
+
+        function applyDecomposition(data) {
+            if (!data || !Array.isArray(data)) return;
+
+            const idMap = {};
+            const startX = (window.innerWidth / 2 - panX) / scale;
+            const startY = (window.innerHeight / 2 - panY) / scale;
+
+            // 1. Create Nodes
+            data.forEach((item, index) => {
+                const newNode = createNode(startX + (index % 3) * 220, startY + Math.floor(index / 3) * 150, item.title);
+                newNode.duration = item.duration || 1;
+                nodes.push(newNode);
+                idMap[item.tempId] = newNode.id;
+            });
+
+            // 2. Link Dependencies
+            data.forEach(item => {
+                if (item.dependencies && Array.isArray(item.dependencies)) {
+                    const targetNode = nodes.find(n => n.id === idMap[item.tempId]);
+                    item.dependencies.forEach(depId => {
+                        if (idMap[depId]) {
+                            targetNode.dependencies.push({ id: idMap[depId], type: 'hard' });
+                        }
+                    });
+                }
+            });
+
+            updateCalculations();
+            render();
+            saveToStorage();
+            showNotification(`Generated ${data.length} tasks!`);
         }
 
         function cleanAppMemory() {
@@ -4525,6 +4608,7 @@
                     const actions = document.createElement('div'); actions.className = 'goal-actions';
                     if (level < 5) { const addBtn = document.createElement('div'); addBtn.className = 'goal-btn add'; addBtn.innerHTML = '+'; addBtn.title = "Add Subgoal"; addBtn.onclick = (e) => { e.stopPropagation(); addSubGoal(goal); }; actions.appendChild(addBtn); }
                     const moveBtn = document.createElement('div'); moveBtn.className = 'goal-btn move'; moveBtn.innerHTML = '📅'; moveBtn.title = "Move to another year"; moveBtn.onclick = (e) => { e.stopPropagation(); moveGoalYear(goal); }; actions.appendChild(moveBtn);
+                    const decompBtn = document.createElement('div'); decompBtn.className = 'goal-btn move'; decompBtn.innerHTML = '✨'; decompBtn.title = "Decompose with AI"; decompBtn.onclick = (e) => { e.stopPropagation(); decomposeGoal(goal); }; actions.appendChild(decompBtn);
                     const delBtn = document.createElement('div'); delBtn.className = 'goal-btn del'; delBtn.innerHTML = '✕'; delBtn.title = "Delete Goal"; delBtn.onclick = (e) => { e.stopPropagation(); deleteGoal(goal, goalList); }; actions.appendChild(delBtn);
                     content.appendChild(caret); content.appendChild(textSpan); content.appendChild(actions); nodeDiv.appendChild(content);
                     const childrenContainer = document.createElement('div'); childrenContainer.className = 'goal-children ' + (goal.collapsed ? 'hidden' : '');
@@ -5118,6 +5202,7 @@
                                 # TASK INSPECTOR
                             </div>
                             <button onclick="closeInspector()" style="background:transparent; border:none; color:#64748b; cursor:pointer; font-size:18px; line-height:1;">✕</button>
+                            <button onclick="decomposeTask()" style="background:transparent; border:none; color:#8b5cf6; cursor:pointer; font-size:16px; line-height:1; padding:0; margin-left:8px;" title="Decompose with AI">✨</button>
                         </div>
                         
                         <div class="urgency-switch">
