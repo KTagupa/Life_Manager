@@ -5982,6 +5982,23 @@
             }
         }
 
+        // --- AUTOMATED BACKUP ---
+        let lastAutoBackupDate = localStorage.getItem('lastAutoBackupDate') || '';
+        function checkAutomatedBackup() {
+            const now = new Date();
+            const dateStr = now.toDateString();
+            const hours = now.getHours();
+
+            // Trigger precisely at 8:00 PM (20:00)
+            if (hours === 20 && lastAutoBackupDate !== dateStr) {
+                console.log("Triggering automated 8PM backup...");
+                saveData(true);
+                lastAutoBackupDate = dateStr;
+                localStorage.setItem('lastAutoBackupDate', dateStr);
+                showNotification("Daily 8PM Offline Backup Triggered");
+            }
+        }
+
         function tickTimers() {
             const now = Date.now();
 
@@ -6005,6 +6022,9 @@
             if (hasRunningHabit && !document.getElementById('habits-panel').classList.contains('hidden')) {
                 renderHabits();
             }
+
+            // 4. Automated Daily Backup Check
+            checkAutomatedBackup();
         }
 
         function updateFocusHUD(now) {
