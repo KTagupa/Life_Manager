@@ -5325,7 +5325,25 @@
                     </div>
                 </div>`;
 
-            // 3. Subtasks
+            // 3. External Link
+            const externalLinkHtml = `
+                <div style="margin-bottom:16px;">
+                    <label class="field-label">🔗 EXTERNAL LINK</label>
+                    <div style="display:flex; gap:8px;">
+                        <div class="field-box" style="padding: 8px 12px; flex:1;">
+                            <input type="text" value="${node.externalLink || ''}" 
+                                placeholder="https://..."
+                                style="background:transparent; border:none; color:white; width:100%; font-family:inherit; font-size:13px; outline:none;" 
+                                onchange="updateNodeField('externalLink', this.value)">
+                        </div>
+                        ${node.externalLink ? `
+                        <a href="${node.externalLink}" target="_blank" class="field-box" style="padding: 0; width:36px; height:36px; display:flex; align-items:center; justify-content:center; text-decoration:none; color:#3b82f6;">
+                            ↗
+                        </a>` : ''}
+                    </div>
+                </div>`;
+
+            // 4. Subtasks
             const subtasksHtml = `
                 <div style="margin-bottom:16px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -5349,7 +5367,7 @@
                     </div>
                 </div>`;
 
-            // 4. Linked Notes
+            // 5. Linked Notes
             const linkedNotesHtml = `
                 <div style="margin-bottom:16px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -5379,7 +5397,7 @@
                     </div>
                 </div>`;
 
-            // 5. Dependencies
+            // 6. Dependencies
             const dependenciesHtml = `
                 <div style="margin-bottom:16px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -5452,6 +5470,7 @@
                 <div style="padding: 16px 20px; overflow-y: auto; flex-grow:1;">
                     ${durationStatusHtml}
                     ${dueDateHtml}
+                    ${externalLinkHtml}
                     ${subtasksHtml}
                     ${linkedNotesHtml}
                     ${dependenciesHtml}
