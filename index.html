@@ -3054,8 +3054,7 @@
 
             const COL_GAP = 280;           // Standard horizontal gap
             const ROW_GAP = 180;           // Standard vertical gap
-            const SHIFT_X = 350;           // Start X for active flows
-            const COMPLETED_X = 100;       // Left-aligned column for terminal completed tasks
+            const ACTIVE_START_X = 400;    // Standard alignment for first active nodes
             const TIME_SCALE = 15;         // Subtle timeline expansion (px per day)
 
             const processedIds = new Set();
@@ -3124,27 +3123,27 @@
                 const nodeRanks = new Map();
                 const memoRank = new Map();
 
-                // Recursive function to find node rank (depth from the earliest root in component)
-                function getRank(nodeId) {
+                // Logical Rank: Depth relative to the first ACTIVE node in a chain
+                function getLogicalRank(nodeId) {
                     if (memoRank.has(nodeId)) return memoRank.get(nodeId);
 
                     const node = comp.find(n => n.id === nodeId);
                     if (!node) return 0;
 
-                    const parents = node.dependencies
+                    // Active parents are those which are NOT completed
+                    const activeParents = node.dependencies
                         .filter(d => d.type === 'hard')
                         .map(d => comp.find(p => p.id === d.id))
-                        .filter(p => p);
+                        .filter(p => p && !p.completed);
 
-                    if (parents.length === 0) {
+                    if (node.completed || activeParents.length === 0) {
                         memoRank.set(nodeId, 0);
                         return 0;
                     }
 
-                    // Rank = Max parent rank + 1
                     let maxP = -1;
-                    parents.forEach(p => {
-                        maxP = Math.max(maxP, getRank(p.id));
+                    activeParents.forEach(p => {
+                        maxP = Math.max(maxP, getLogicalRank(p.id));
                     });
                     const rank = maxP + 1;
                     memoRank.set(nodeId, rank);
@@ -3152,9 +3151,9 @@
                 }
 
                 // Initial ranking
-                comp.forEach(n => getRank(n.id));
+                comp.forEach(n => getLogicalRank(n.id));
 
-                // Identify "Terminal Completed" tasks (completed with no active successors)
+                // Final Rank Assignment (handles completed tasks specifically)
                 comp.forEach(n => {
                     let rank = memoRank.get(n.id);
                     if (n.completed) {
@@ -3162,7 +3161,9 @@
                             !other.completed &&
                             other.dependencies.some(d => d.id === n.id)
                         );
-                        if (!hasActiveSuccessor) rank = -1; // Special column
+                        // Column -1 for completed predecessors, -2 for terminal ones
+                        if (hasActiveSuccessor) rank = -1;
+                        else rank = -2;
                     }
                     nodeRanks.set(n.id, rank);
                 });
@@ -3175,45 +3176,39 @@
                     rankGroups.get(r).push(n);
                 });
 
-                // Vertical Sorting within each column
+                // Vertical Sorting
                 rankGroups.forEach(list => {
                     list.sort((a, b) => {
-                        // Keep manual urgent items at the top
                         if (a.isManualUrgent && !b.isManualUrgent) return -1;
                         if (!a.isManualUrgent && b.isManualUrgent) return 1;
-
-                        // Then by due date
                         const dA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
                         const dB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
                         return dA - dB;
                     });
                 });
 
-                // Baseline date for timeline-logic within this component
                 const minDue = Math.min(...comp.filter(n => n.dueDate).map(n => new Date(n.dueDate).getTime()));
 
                 // Assign positions
                 let maxNodesInCompRow = 0;
-                rankGroups.forEach((list, rank) => {
+                const sortedRanks = Array.from(rankGroups.keys()).sort((a, b) => a - b);
+
+                sortedRanks.forEach(rank => {
+                    const list = rankGroups.get(rank);
                     maxNodesInCompRow = Math.max(maxNodesInCompRow, list.length);
                     list.forEach((n, idx) => {
-                        if (rank === -1) {
-                            n.x = COMPLETED_X;
-                        } else {
-                            let tx = SHIFT_X + (rank * COL_GAP);
-                            // Timeline shift (subtle stretch based on date)
-                            if (n.dueDate && !isNaN(minDue)) {
-                                const days = (new Date(n.dueDate).getTime() - minDue) / (1000 * 60 * 60 * 24);
-                                if (days > 0) tx += Math.min(COL_GAP * 0.4, days * TIME_SCALE);
-                            }
-                            n.x = tx;
+                        let tx = ACTIVE_START_X + (rank * COL_GAP);
+                        // Timeline nudge for active nodes
+                        if (rank >= 0 && n.dueDate && !isNaN(minDue)) {
+                            const days = (new Date(n.dueDate).getTime() - minDue) / (1000 * 60 * 60 * 24);
+                            if (days > 0) tx += Math.min(COL_GAP * 0.4, days * TIME_SCALE);
                         }
+                        n.x = tx;
                         n.y = currentY + (idx * ROW_GAP);
                     });
                 });
 
-                // Advance currentY for the next component
-                currentY += (maxNodesInCompRow * ROW_GAP) + 80;
+                currentY += (maxNodesInCompRow * ROW_GAP) + 120;
             });
 
             render();
