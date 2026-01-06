@@ -5169,6 +5169,14 @@
                     e.target.tagName === 'TEXTAREA' ||
                     e.target.isContentEditable;
 
+                if (e.key === 'Escape') {
+                    const picker = document.getElementById('note-task-picker');
+                    if (picker && !picker.classList.contains('hidden')) {
+                        picker.classList.add('hidden');
+                        return;
+                    }
+                }
+
                 if (isTyping) return; // If typing, don't run any of the shortcuts below
 
                 // 3. Shortcuts (Option + Key)
@@ -5214,6 +5222,15 @@
                 const selMenu = document.getElementById('selection-menu');
                 if (!selMenu.contains(e.target) && e.target.id !== 'note-body-input') {
                     selMenu.style.display = 'none';
+                }
+
+                // Hide note task picker on outside click
+                const noteTaskPicker = document.getElementById('note-task-picker');
+                const linkBtn = document.querySelector('button[onclick="showNoteTaskPicker()"]');
+                if (noteTaskPicker && !noteTaskPicker.classList.contains('hidden')) {
+                    if (!noteTaskPicker.contains(e.target) && e.target !== linkBtn && !linkBtn?.contains(e.target)) {
+                        noteTaskPicker.classList.add('hidden');
+                    }
                 }
             });
 
