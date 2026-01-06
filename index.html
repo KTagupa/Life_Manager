@@ -1980,6 +1980,32 @@
             pointer-events: none;
         }
 
+        #note-task-picker.hidden {
+            display: none !important;
+        }
+
+        #note-task-picker {
+            position: fixed;
+            bottom: 90px;
+            left: 20px;
+            width: 320px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+            z-index: 99;
+            transform-origin: bottom left;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+
+        #note-task-picker.hidden {
+            transform: scale(0.9);
+            opacity: 0;
+            pointer-events: none;
+        }
+
         .inbox-header {
             padding: 12px 15px;
             background: rgba(0, 0, 0, 0.2);
