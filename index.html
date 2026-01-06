@@ -5381,7 +5381,7 @@
                         <select style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:white; border-radius:6px; outline:none; font-size:12px;" 
                             onchange="addDependency(this.value); this.style.display='none'; this.value='';">
                             <option value="">Select Task...</option>
-                            ${nodes.filter(n => n.id !== node.id && !node.dependencies.some(d => d.id === n.id)).map(n => `<option value='${n.id}'>${n.title}</option>`).join('')}
+                            ${nodes.filter(n => n.id !== node.id && !node.dependencies.some(d => d.id === n.id)).sort((a, b) => a.title.localeCompare(b.title)).map(n => `<option value='${n.id}'>${n.title}</option>`).join('')}
                         </select>
                     </div>
 
@@ -5432,7 +5432,7 @@
                     <select style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:white; border-radius:6px; outline:none; font-size:12px;" 
                         onchange="demoteNodeToSubtask(this.value); this.parentElement.style.display='none'; this.value='';">
                         <option value="">Select Parent Task...</option>
-                        ${nodes.filter(n => n.id !== node.id).map(n => `<option value='${n.id}'>${n.title}</option>`).join('')}
+                        ${nodes.filter(n => n.id !== node.id).sort((a, b) => a.title.localeCompare(b.title)).map(n => `<option value='${n.id}'>${n.title}</option>`).join('')}
                     </select>
                 </div>`;
 
