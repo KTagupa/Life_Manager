@@ -1405,6 +1405,7 @@
             height: 100%;
             pointer-events: none;
             z-index: 1;
+            overflow: visible !important;
         }
 
         path {
@@ -1418,9 +1419,8 @@
         }
 
         path.critical {
-            stroke: var(--critical-path) !important;
             stroke-width: 3;
-            filter: drop-shadow(0 0 3px var(--critical-path));
+            filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.4));
         }
 
         /* SELECTION BOX */
@@ -4748,6 +4748,11 @@
             container.innerHTML = '';
             svg.innerHTML = '';
 
+            // Ensure arrow marker exists at the start
+            const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            defs.innerHTML = `<marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#666"/></marker>`;
+            svg.appendChild(defs);
+
             // --- Render Connections (Lines) ---
             nodes.forEach(node => {
                 node.dependencies.forEach(dep => {
@@ -4793,12 +4798,7 @@
                 });
             });
 
-            // Ensure arrow marker exists
-            if (!document.getElementById('arrow')) {
-                const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-                defs.innerHTML = `<marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#666"/></marker>`;
-                svg.appendChild(defs);
-            }
+            // --- Nodes render follows ---
 
             // --- Render Nodes ---
             nodes.forEach(node => {
