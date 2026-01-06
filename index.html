@@ -2822,7 +2822,8 @@
             </div>
         </div>
 
-        <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()">
+        <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()"
+            onkeydown="if(event.key==='Escape'){ const p = document.getElementById('note-task-picker'); if(!p.classList.contains('hidden')){ p.classList.add('hidden'); event.stopPropagation(); } }">
 
         <div id="note-linked-tasks-inline"
             style="padding: 0 10px 10px; display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.05);">
@@ -2834,7 +2835,8 @@
                     Search Task to Link</div>
                 <input type="text" id="note-task-search" placeholder="Search tasks..."
                     style="margin-bottom: 8px; padding: 6px; background: #000; border: 1px solid #333; color: white; width: 100%; font-size: 12px;"
-                    oninput="filterNoteTaskPicker(this.value)">
+                    oninput="filterNoteTaskPicker(this.value)"
+                    onkeydown="if(event.key==='Escape'){ document.getElementById('note-task-picker').classList.add('hidden'); event.stopPropagation(); }">
                 <div id="note-task-picker-list"
                     style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;"></div>
                 <div style="text-align: right; margin-top: 8px;"><button
@@ -2847,7 +2849,8 @@
         <div class="editor-content-area">
             <textarea id="note-body-input"
                 placeholder="Type your note here... Select text to convert to Tasks or Sub-notes."
-                oninput="saveCurrentNote()"></textarea>
+                oninput="saveCurrentNote()"
+                onkeydown="if(event.key==='Escape'){ const p = document.getElementById('note-task-picker'); if(!p.classList.contains('hidden')){ p.classList.add('hidden'); event.stopPropagation(); } }"></textarea>
             <div id="note-preview-pane" class="hidden"></div>
         </div>
     </div>
@@ -5226,9 +5229,9 @@
 
                 // Hide note task picker on outside click
                 const noteTaskPicker = document.getElementById('note-task-picker');
-                const linkBtn = document.querySelector('button[onclick="showNoteTaskPicker()"]');
                 if (noteTaskPicker && !noteTaskPicker.classList.contains('hidden')) {
-                    if (!noteTaskPicker.contains(e.target) && e.target !== linkBtn && !linkBtn?.contains(e.target)) {
+                    const linkBtn = document.querySelector('button[onclick="showNoteTaskPicker()"]');
+                    if (!noteTaskPicker.contains(e.target) && (!linkBtn || !linkBtn.contains(e.target))) {
                         noteTaskPicker.classList.add('hidden');
                     }
                 }
