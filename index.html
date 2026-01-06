@@ -6547,16 +6547,85 @@
 
             if (!selectedText) return;
 
-            // 1. Get API Key
-            let apiKey = localStorage.getItem('openai_api_key');
-            if (!apiKey) {
-                apiKey = prompt("To use AI features, please enter your OpenAI API Key (starts with sk-). It will be saved securely in your browser's Local Storage.");
-                if (apiKey && apiKey.startsWith('sk-')) {
-                    localStorage.setItem('openai_api_key', apiKey);
-                } else {
-                    alert("Valid API key required for AI features.");
-                    return;
+            // 1. Check for Gemini Key
+            if (!geminiApiKey) {
+                geminiApiKey = localStorage.getItem('urgency_flow_gemini_key');
+            }
+
+            if (!geminiApiKey) {
+                alert("⚠️ Please set your Gemini API Key in the settings (⚙️ icon top-left) to use AI features.");
+                return;
+            }
+
+            // Show loading state
+            const btn = event.currentTarget || document.activeElement;
+            let originalBtnText = "";
+            if (btn) {
+                originalBtnText = btn.innerHTML;
+                btn.innerHTML = '<span>⏳</span> Processing...';
+                btn.style.cursor = 'wait';
+            }
+
+            const systemPrompt = mode === 'grammar'
+                ? "Fix grammar and spelling in the following text. Return ONLY the corrected text. Do not add quotes. Preserve formatting. Text: "
+                : "Rewrite the following text to improve clarity, flow, and professionalism. Return ONLY the rewritten text. Do not add quotes. Preserve formatting. Text: ";
+
+            try {
+                // Use the existing fetchGemini helper function
+                const responseData = await fetchGemini({
+                    contents: [{
+                        parts: [{ text: systemPrompt + selectedText }]
+                    }]
+                });
+
+                if (!responseData.candidates || !responseData.candidates[0] || !responseData.candidates[0].content) {
+                    throw new Error("Invalid response from Gemini AI");
                 }
+
+                let result = responseData.candidates[0].content.parts[0].text;
+
+                // Clean up quotes
+                result = result.trim();
+                // Simple quote cleanup
+                if (result.startsWith('"') && result.endsWith('"') && result.length > 2) {
+                    result = result.slice(1, -1);
+                }
+
+                // Replace text
+                const before = noteInput.value.substring(0, start);
+                const after = noteInput.value.substring(end);
+
+                noteInput.value = before + result + after;
+
+                // Save
+                if (typeof saveCurrentNote === 'function') {
+                    saveCurrentNote();
+                }
+
+            } catch (err) {
+                console.error(err);
+                alert("AI Error: " + err.message);
+            } finally {
+                if (aiToolbar) aiToolbar.classList.remove('visible');
+                if (btn && originalBtnText) btn.innerHTML = originalBtnText;
+            }
+        }
+
+        async function applyAI_OLD_UNUSED(mode) {
+            const start = noteInput.selectionStart;
+            const end = noteInput.selectionEnd;
+            const selectedText = noteInput.value.substring(start, end);
+
+            if (!selectedText) return;
+
+            // 1. Check for Gemini Key
+            if (!geminiApiKey) {
+                geminiApiKey = localStorage.getItem('urgency_flow_gemini_key');
+            }
+
+            if (!geminiApiKey) {
+                alert("⚠️ Please set your Gemini API Key in the settings (⚙️ icon top-left) to use AI features.");
+                return;
             }
 
             // Show loading state
