@@ -6161,6 +6161,8 @@
                         lifeGoals = {};
                         notes = [];
                         archivedNodes = [];
+                        habits = [];
+                        agenda = [];  // ADD THIS LINE
                     } else {
                         nodes = parsed.nodes || [];
                         inbox = parsed.inbox || [];
@@ -6170,6 +6172,7 @@
                         archivedNodes = parsed.archivedNodes || [];
                         githubToken = parsed.githubToken || '';
                         gistId = parsed.gistId || '';
+                        agenda = parsed.agenda || [];
                     }
 
                     // CALL THE CLEANER HERE
@@ -6231,6 +6234,25 @@
                 if (h.activeTimerStart === undefined) h.activeTimerStart = null;
                 if (h.activeTimerStart !== null) h.activeTimerStart = Number(h.activeTimerStart);
                 if (!h.type) h.type = 'checkbox';
+            });
+            if (!Array.isArray(agenda)) agenda = [];
+            // Remove agenda slots for deleted tasks (except inbox items)
+            agenda = agenda.filter(slot => {
+                // Keep inbox temp tasks
+                if (slot.taskId && slot.taskId.startsWith('inbox_temp_')) {
+                    return true;
+                }
+                // Keep if task exists in nodes or archived
+                const taskExists = nodes.some(n => n.id === slot.taskId) || 
+                                  archivedNodes.some(n => n.id === slot.taskId);
+                return taskExists;
+            });
+            
+            // Ensure all agenda items have valid date strings
+            agenda.forEach(slot => {
+                if (!slot.start || !slot.end) {
+                    console.warn('Invalid agenda slot detected:', slot);
+                }
             });
         }
 
@@ -6313,7 +6335,7 @@
             showNotification(`"${item.title}" scheduled for ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
         }
         function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); }
-        function saveData(download = false) { const data = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, habits }, null, 2); if (download) { const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
+        function saveData(download = false) { const data = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, habits, agenda }, null, 2); if (download) { const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
         function loadFile(input) {
             const file = input.files[0];
             if (!file) return;
@@ -6332,6 +6354,8 @@
                         lifeGoals = {};
                         notes = [];
                         archivedNodes = [];
+                        habits = [];
+                        agenda = []; 
                     } else {
                         // Modern support: Wrapper object
                         nodes = parsed.nodes || [];
@@ -6340,6 +6364,7 @@
                         habits = parsed.habits || [];
                         notes = parsed.notes || [];
                         archivedNodes = parsed.archivedNodes || [];
+                        agenda = parsed.agenda || [];
                         // Do NOT load tokens from file for security, unless specifically desired
                     }
 
@@ -6348,6 +6373,7 @@
                     render();
                     renderInbox();
                     renderGoals();
+                    renderAgenda(); 
 
                     // 4. Save to local storage immediately so a refresh keeps the data
                     saveToStorage();
@@ -6362,7 +6388,7 @@
             input.value = '';
             reader.readAsText(file);
         }
-        function clearData() { if (confirm("Are you sure you want to clear all tasks?")) { nodes = []; archivedNodes = []; inbox = []; lifeGoals = {}; notes = []; localStorage.removeItem('urgencyFlowData'); render(); renderInbox(); renderGoals(); deselectNode(); } }
+        function clearData() { if (confirm("Are you sure you want to clear all tasks?")) { nodes = []; archivedNodes = []; inbox = []; lifeGoals = {}; notes = []; habits = []; agenda = []; localStorage.removeItem('urgencyFlowData'); render(); renderInbox(); renderGoals(); renderAgenda(); deselectNode(); } }
 
         function showNotification(msg) {
             const n = document.getElementById('notification');
