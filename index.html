@@ -34,6 +34,9 @@
 
             /* AI Colors */
             --ai-accent: #8b5cf6;
+
+            /* Amber/Yellow for upcoming */
+            --upcoming-color: #fbbf24;
         }
 
         /* --- UPDATED DUAL HUD STYLES --- */
@@ -98,6 +101,17 @@
             padding-top: 5px;
             margin-top: 5px;
             opacity: 0.8;
+        }
+
+        .hud-row.upcoming {
+            border-top: 1px solid #333;
+            padding-top: 5px;
+            margin-top: 5px;
+            opacity: 0.7;
+        }
+
+        .upcoming .hud-label {
+            color: var(--upcoming-color);
         }
 
         .should-be .hud-label {
@@ -2578,6 +2592,18 @@
                     onclick="toggleFocusTimer('should')">▶</button>
             </div>
         </div>
+        
+        <div id="hud-upcoming-row" class="hud-row upcoming" style="display: none;">
+            <div class="hud-task-info">
+                <span class="hud-label">UP NEXT</span>
+                <span class="hud-task-name" id="hud-upcoming-title" onclick="focusHUDTask('upcoming')">---</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span id="hud-upcoming-countdown" style="font-size:11px; color:#fbbf24; font-family:monospace;">in 30m</span>
+                <span id="hud-upcoming-interval" style="font-size:10px; color:#888; font-family:monospace;">00:00 - 00:00</span>
+            </div>
+        </div>
+        
     </div>
 
     <div id="toolbar" class="collapsed">
@@ -6337,30 +6363,36 @@
             const hud = document.getElementById('focus-hud');
             const doingRow = document.getElementById('hud-doing-row');
             const shouldRow = document.getElementById('hud-should-row');
-
+            const upcomingRow = document.getElementById('hud-upcoming-row'); // NEW
+        
             // Identify "Doing" (Which task has an active timer?)
             const activeTask = nodes.find(n => n.activeTimerStart) || archivedNodes.find(n => n.activeTimerStart);
-
+        
             // Identify "Should Be" (What does the agenda say for right now?)
             const currentSlot = agenda.find(slot => {
                 const start = new Date(slot.start).getTime();
                 const end = new Date(slot.end).getTime();
                 return now >= start && now <= end;
             });
-
+        
+            // NEW: Find the next upcoming slot
+            const upcomingSlot = agenda
+                .filter(slot => new Date(slot.start).getTime() > now)
+                .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())[0];
+        
             const currentSlotId = currentSlot ? currentSlot.taskId : null;
-
+        
             if (currentSlotId !== lastKnownAgendaTaskId) {
                 if (currentSlotId) {
-                    playAudioFeedback('agenda-start'); // New slot started
+                    playAudioFeedback('agenda-start');
                 } else if (lastKnownAgendaTaskId) {
-                    playAudioFeedback('agenda-stop'); // Slot ended, nothing next
+                    playAudioFeedback('agenda-stop');
                 }
                 lastKnownAgendaTaskId = currentSlotId;
             }
-
+        
             let hudActive = false;
-
+        
             // --- Render "Doing" Row ---
             if (activeTask) {
                 hudActive = true;
@@ -6368,34 +6400,60 @@
                 document.getElementById('hud-doing-title').innerText = activeTask.title;
                 document.getElementById('hud-doing-time').innerText = formatTime(getTotalTime(activeTask));
                 hud.dataset.doingTaskId = activeTask.id;
-
-                // Check if this task is also the scheduled one
+        
                 if (currentSlot && activeTask.id === currentSlot.taskId) {
-                    doingRow.classList.remove('overtime'); // Normal
-                } else if (currentSlot && activeTask.id !== currentSlot.taskId) {
-                    // You are doing something, but the schedule says do something else
+                    doingRow.classList.remove('overtime');
                 }
             } else {
                 doingRow.style.display = 'none';
             }
-
+        
             // --- Render "Should Be" Row ---
-            // Only show if it's DIFFERENT from what we are currently doing
             if (currentSlot && (!activeTask || activeTask.id !== currentSlot.taskId)) {
                 hudActive = true;
                 shouldRow.style.display = 'flex';
                 const scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
                 document.getElementById('hud-should-title').innerText = scheduledTask ? scheduledTask.title : "Unscheduled Block";
-
+        
                 const startStr = new Date(currentSlot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const endStr = new Date(currentSlot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 document.getElementById('hud-should-interval').innerText = `${startStr} - ${endStr}`;
-
+        
                 hud.dataset.shouldTaskId = currentSlot.taskId;
             } else {
                 shouldRow.style.display = 'none';
             }
-
+        
+            // --- NEW: Render "Upcoming" Row ---
+            if (upcomingSlot) {
+                hudActive = true;
+                upcomingRow.style.display = 'flex';
+                
+                const upcomingTask = nodes.find(n => n.id === upcomingSlot.taskId) || archivedNodes.find(n => n.id === upcomingSlot.taskId);
+                document.getElementById('hud-upcoming-title').innerText = upcomingTask ? upcomingTask.title : "Unscheduled Block";
+        
+                // Calculate minutes until start
+                const startTime = new Date(upcomingSlot.start).getTime();
+                const minutesUntil = Math.round((startTime - now) / 60000);
+                const countdownEl = document.getElementById('hud-upcoming-countdown');
+                
+                if (minutesUntil < 60) {
+                    countdownEl.innerText = `in ${minutesUntil}m`;
+                } else {
+                    const hours = Math.floor(minutesUntil / 60);
+                    const mins = minutesUntil % 60;
+                    countdownEl.innerText = `in ${hours}h ${mins}m`;
+                }
+        
+                const startStr = new Date(upcomingSlot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const endStr = new Date(upcomingSlot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('hud-upcoming-interval').innerText = `${startStr} - ${endStr}`;
+        
+                hud.dataset.upcomingTaskId = upcomingSlot.taskId;
+            } else {
+                upcomingRow.style.display = 'none';
+            }
+        
             if (hudActive) hud.classList.add('active');
             else hud.classList.remove('active');
         }
@@ -6408,7 +6466,11 @@
 
         function focusHUDTask(type) {
             const hud = document.getElementById('focus-hud');
-            const taskId = (type === 'doing') ? hud.dataset.doingTaskId : hud.dataset.shouldTaskId;
+            let taskId;
+            if (type === 'doing') taskId = hud.dataset.doingTaskId;
+            else if (type === 'should') taskId = hud.dataset.shouldTaskId;
+            else if (type === 'upcoming') taskId = hud.dataset.upcomingTaskId; // NEW
+            
             if (taskId) jumpToTask(taskId);
         }
 
