@@ -39,6 +39,145 @@
             --upcoming-color: #fbbf24;
         }
 
+        /* --- NEW PINNED WINDOW --- */
+        #pinned-window {
+            position: fixed;
+            top: 60px;
+            left: 60px;
+            width: 250px;
+            max-height: 80vh;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+            z-index: 105;
+            overflow: hidden;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        
+        #pinned-window.hidden {
+            transform: translateX(-120%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .pinned-header {
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .pinned-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .pinned-node {
+            position: relative;
+            background: var(--node-bg);
+            border: 1px solid var(--node-border);
+            border-radius: 6px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .pinned-node:hover {
+            border-color: var(--accent);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .pinned-node.critical {
+            border-color: var(--critical-path);
+            background: linear-gradient(145deg, #2d2d2d, #3d3410);
+        }
+        
+        .pinned-node.critical-urgent {
+            border-color: #ff4d4d;
+            background: linear-gradient(145deg, #2d2d2d, #4d1515);
+        }
+        
+        .pinned-node.completed {
+            background: #1e3a2f;
+            border-color: #10b981;
+            opacity: 0.7;
+        }
+        
+        .pinned-unpin {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(0, 0, 0, 0.6);
+            border: none;
+            color: #999;
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .pinned-node:hover .pinned-unpin {
+            opacity: 1;
+        }
+        
+        .pinned-unpin:hover {
+            background: var(--blocked-color);
+            color: white;
+        }
+        
+        .pinned-habit {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid transparent;
+            border-radius: 6px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .pinned-habit:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: #333;
+        }
+        
+        .pinned-habit.done-today {
+            border-color: var(--ready-color);
+            background: rgba(16, 185, 129, 0.05);
+        }
+        
+        .pinned-note {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .pinned-note:hover {
+            border-color: var(--accent);
+        }
+        
         /* --- UPDATED DUAL HUD STYLES --- */
         #focus-hud {
             position: fixed;
@@ -2610,6 +2749,12 @@
         <div style="display: flex; gap: 8px;">
             <button id="menu-btn" onclick="toggleMenu()">☰</button>
             <a href="finance.html" id="btn-finance-link" title="Go to Finance">💰</a>
+            <button id="btn-pinned" onclick="togglePinnedWindow()" 
+                    style="width: 40px; height: 40px; border-radius: 50%; background: var(--panel-bg); 
+                    border: 1px solid var(--border); color: var(--text-main); display: flex; 
+                    align-items: center; justify-content: center; font-size: 18px; cursor: pointer; 
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); transition: transform 0.2s, background 0.2s;"
+                    title="Pinned Items">📌</button>
         </div>
         <div id="toolbar-content">
             <button class="btn btn-primary" onclick="addNode()">+ New Task (Optn+T)</button>
@@ -2935,6 +3080,16 @@
         </div>
     </div>
 
+    <div id="pinned-window" class="hidden">
+        <div class="pinned-header">
+            <span>📌 Pinned</span>
+            <button class="btn" onclick="togglePinnedWindow()" style="padding: 2px 6px; font-size: 10px;">✕</button>
+        </div>
+        <div class="pinned-content" id="pinned-content">
+            <!-- Pinned items render here -->
+        </div>
+    </div>
+    
     <div id="inspector" class="hidden">
         <div id="insp-content" style="display:flex; flex-direction:column; height:100%;">
         </div>
@@ -3404,6 +3559,7 @@
         let selectedNodeId = null;
         let selectedIds = new Set();
         let currentEditingNoteId = null;
+        let pinnedItems = []; // {type: 'task'|'note'|'habit', id: string}
         let scale = 1;
         let panX = 0;
         let panY = 0;
@@ -3469,6 +3625,7 @@
             setupInteractions();
             setupPanelDrag();
             setupContextualMenu();
+            renderPinnedWindow();
 
             const aiPanel = document.getElementById('ai-panel');
             const aiHeader = aiPanel.querySelector('.panel-header-row');
@@ -4645,20 +4802,24 @@
                 const el = document.createElement('div');
                 el.className = `note-card ${note.isPinned ? 'pinned-note' : ''}`;
                 if (note.id === currentEditingNoteId) el.classList.add('active');
-
+            
                 const tagsHtml = (note.body.match(/#\w+/g) || [])
                     .map(t => `<span class="note-tag">${t}</span>`).join('');
-
+            
                 const plainText = note.body.replace(/[#*\[\]]/g, '').substring(0, 80);
-
+            
                 const linkedCount = (note.taskIds || []).length;
                 const linkIndicator = linkedCount > 0 ? `<span style="font-size:10px; color:#3b82f6; margin-left:6px;">🔗 ${linkedCount}</span>` : '';
-
+            
+                const pinIcon = isPinned('note', note.id) ? 
+                    `<button class="btn" style="padding:1px 4px; font-size:9px; margin-left:4px; border-color:var(--accent); color:var(--accent);" onclick="event.stopPropagation(); togglePinItem('note', '${note.id}'); renderNotesList();">📌</button>` : 
+                    `<button class="btn" style="padding:1px 4px; font-size:9px; margin-left:4px; opacity:0.3;" onclick="event.stopPropagation(); togglePinItem('note', '${note.id}'); renderNotesList();">📌</button>`;
+            
                 el.innerHTML = `
                 <div class="note-card-title">${note.isPinned ? '📌 ' : ''}${note.title || '(Untitled)'}${linkIndicator}</div>
                 <div class="note-card-preview">${plainText}...</div>
                 <div style="margin-top:5px;">${tagsHtml}</div>
-                <div class="note-card-meta"><span>${new Date(note.timestamp || Date.now()).toLocaleDateString()}</span></div>
+                <div class="note-card-meta"><span>${new Date(note.timestamp || Date.now()).toLocaleDateString()}</span>${pinIcon}</div>
             `;
                 el.onclick = () => openNoteEditor(note.id);
                 container.appendChild(el);
@@ -5737,6 +5898,9 @@
             const footerHtml = `
                 <div style="padding: 16px 20px; background: #020617; border-top: 1px solid #1e293b; display: flex; align-items: center; justify-content: space-between; gap:12px;">
                     <div style="display:flex; gap:8px;">
+                        <button class="footer-icon-btn ${isPinned('task', node.id) ? 'active' : ''}" onclick="togglePinItem('task', '${node.id}')" title="${isPinned('task', node.id) ? 'Unpin Task' : 'Pin Task'}">
+                            📌
+                        </button>
                         <button class="footer-icon-btn" onclick="deleteSelectedNode()" title="Delete Task">
                             🗑
                         </button>
@@ -6112,7 +6276,7 @@
         // --- STORAGE & PERSISTENCE ---
         function saveToStorage() {
             // 1. Serialize Data ONCE
-            const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits, agenda };
+            const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits, agenda, pinnedItems };
             const rawString = JSON.stringify(data);
 
             // 2. Save to Browser Storage
@@ -6173,6 +6337,7 @@
                         githubToken = parsed.githubToken || '';
                         gistId = parsed.gistId || '';
                         agenda = parsed.agenda || [];
+                        pinnedItems = parsed.pinnedItems || [];
                     }
 
                     // CALL THE CLEANER HERE
@@ -6452,6 +6617,19 @@
             const hasRunningHabit = habits.some(h => h.activeTimerStart);
             if (hasRunningHabit && !document.getElementById('habits-panel').classList.contains('hidden')) {
                 renderHabits();
+
+            // Update pinned window if it has running timers
+            const pinnedWindow = document.getElementById('pinned-window');
+            if (pinnedWindow && !pinnedWindow.classList.contains('hidden')) {
+                const hasRunningInPinned = pinnedItems.some(p => {
+                    if (p.type === 'habit') {
+                        const h = habits.find(habit => habit.id === p.id);
+                        return h && h.activeTimerStart;
+                    }
+                    return false;
+                });
+                if (hasRunningInPinned) renderPinnedWindow();
+            }
             }
         }
 
@@ -7041,6 +7219,7 @@
                         </div>
                     </div>
                     <div class="habit-actions">
+                        <button class="btn" style="padding: 2px 6px; font-size:10px; ${isPinned('habit', h.id) ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="togglePinItem('habit', '${h.id}'); renderHabits();">📌</button>
                         <button class="btn btn-danger" style="padding: 2px 6px; font-size:10px;" onclick="deleteHabit('${h.id}')">✕</button>
                     </div>
                 `;
@@ -7236,6 +7415,199 @@
                 // Could reset button text if we kept the toolbar open
                 // event.target.innerHTML = originalBtnText; // naive
             }
+        }
+
+        // --- PINNED WINDOW LOGIC ---
+        function togglePinnedWindow() {
+            const window = document.getElementById('pinned-window');
+            window.classList.toggle('hidden');
+            if (!window.classList.contains('hidden')) {
+                renderPinnedWindow();
+            }
+        }
+        
+        function togglePinItem(type, id) {
+            const index = pinnedItems.findIndex(p => p.type === type && p.id === id);
+            if (index > -1) {
+                pinnedItems.splice(index, 1);
+            } else {
+                pinnedItems.push({type, id});
+            }
+            saveToStorage();
+            renderPinnedWindow();
+            
+            // Update source panels if open
+            if (type === 'habit' && !document.getElementById('habits-panel').classList.contains('hidden')) {
+                renderHabits();
+            }
+        }
+        
+        function isPinned(type, id) {
+            return pinnedItems.some(p => p.type === type && p.id === id);
+        }
+        
+        function renderPinnedWindow() {
+            const container = document.getElementById('pinned-content');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            if (pinnedItems.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:#666; padding:20px; font-size:11px;">No pinned items.<br><br>Pin tasks, notes, or habits from their panels.</div>';
+                return;
+            }
+            
+            pinnedItems.forEach(item => {
+                if (item.type === 'task') {
+                    renderPinnedTask(container, item.id);
+                } else if (item.type === 'note') {
+                    renderPinnedNote(container, item.id);
+                } else if (item.type === 'habit') {
+                    renderPinnedHabit(container, item.id);
+                }
+            });
+        }
+        
+        function renderPinnedTask(container, taskId) {
+            const node = nodes.find(n => n.id === taskId) || archivedNodes.find(n => n.id === taskId);
+            if (!node) {
+                // Task was deleted, remove from pinned
+                pinnedItems = pinnedItems.filter(p => !(p.type === 'task' && p.id === taskId));
+                saveToStorage();
+                return;
+            }
+            
+            const el = document.createElement('div');
+            el.className = 'pinned-node';
+            
+            if (!node.completed) {
+                if (node._isUrgent) el.classList.add('critical-urgent');
+                else if (node._isCritical) el.classList.add('critical');
+            }
+            if (node.completed) el.classList.add('completed');
+            
+            let badgesHtml = '';
+            if (!node.completed) {
+                if (node._isUrgent) badgesHtml += `<span class="badge urgent-badge">URGENT</span>`;
+                else if (node._isCritical) badgesHtml += `<span class="badge critical-badge">CP</span>`;
+            }
+            
+            const totalTime = getTotalTime(node);
+            if (totalTime > 0) {
+                badgesHtml += `<span class="badge time-badge">${formatTime(totalTime)}</span>`;
+            }
+            
+            if (node.dueDate && !node.completed) {
+                const due = new Date(node.dueDate);
+                const dateStr = due.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+                badgesHtml += `<span class="badge date-badge">📅 ${dateStr}</span>`;
+            }
+            
+            const totalSubs = node.subtasks.length;
+            const doneSubs = node.subtasks.filter(s => s.done).length;
+            const progress = totalSubs === 0 ? 0 : (doneSubs / totalSubs) * 100;
+            
+            el.innerHTML = `
+                <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('task', '${taskId}')">✕</button>
+                <div style="font-weight:600; font-size:12px; margin-bottom:4px; color:#eee;">${node.completed ? '✅' : ''} ${node.title}</div>
+                <div style="display:flex; gap:4px; flex-wrap:wrap; font-size:10px; margin-bottom:4px;">${badgesHtml}</div>
+                ${totalSubs > 0 ? `<div class="progress-container" style="height:3px;"><div class="progress-bar" style="width:${progress}%"></div></div>` : ''}
+            `;
+            
+            el.onclick = () => {
+                selectNode(taskId);
+            };
+            
+            container.appendChild(el);
+        }
+        
+        function renderPinnedNote(container, noteId) {
+            const note = notes.find(n => n.id === noteId);
+            if (!note) {
+                pinnedItems = pinnedItems.filter(p => !(p.type === 'note' && p.id === noteId));
+                saveToStorage();
+                return;
+            }
+            
+            const el = document.createElement('div');
+            el.className = 'pinned-note';
+            
+            const preview = note.body.replace(/[#*\[\]]/g, '').substring(0, 50);
+            
+            el.innerHTML = `
+                <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('note', '${noteId}')">✕</button>
+                <div style="font-weight:600; font-size:11px; margin-bottom:3px; color:#eee;">📝 ${note.title || '(Untitled)'}</div>
+                <div style="font-size:10px; color:#888;">${preview}...</div>
+            `;
+            
+            el.onclick = () => {
+                openNoteEditor(noteId);
+            };
+            
+            container.appendChild(el);
+        }
+        
+        function renderPinnedHabit(container, habitId) {
+            const h = habits.find(habit => habit.id === habitId);
+            if (!h) {
+                pinnedItems = pinnedItems.filter(p => !(p.type === 'habit' && p.id === habitId));
+                saveToStorage();
+                return;
+            }
+            
+            const freq = h.frequency || 'daily';
+            const bounds = getPeriodBounds(freq);
+            const val = getSumInPeriod(h, bounds);
+            const target = h.target || 1;
+            const isDone = val >= target;
+            const percent = Math.min(100, (val / target) * 100);
+            
+            if (!h.type) h.type = 'checkbox';
+            
+            let controlsHtml = '';
+            if (h.type === 'checkbox') {
+                controlsHtml = `
+                    <div class="habit-checkbox ${isDone ? 'checked' : ''}" onclick="event.stopPropagation(); toggleHabitDay('${h.id}'); renderPinnedWindow();" style="flex-shrink:0;">
+                        ${isDone ? '✓' : ''}
+                    </div>`;
+            } else if (h.type === 'counter') {
+                controlsHtml = `
+                    <div style="display:flex; gap:3px; align-items:center; flex-shrink:0;">
+                        <button class="habit-btn-small" onclick="event.stopPropagation(); updateHabitCounter('${h.id}', -1); renderPinnedWindow();" style="width:20px; height:20px; font-size:10px;">-</button>
+                        <span style="font-family:monospace; font-size:10px; min-width:30px; text-align:center; color:${isDone ? 'var(--ready-color)' : '#aaa'};">${val}/${Math.floor(target)}</span>
+                        <button class="habit-btn-small" onclick="event.stopPropagation(); updateHabitCounter('${h.id}', 1); renderPinnedWindow();" style="width:20px; height:20px; font-size:10px;">+</button>
+                    </div>`;
+            } else if (h.type === 'timer') {
+                const isRunning = !!h.activeTimerStart;
+                const minsVal = Math.floor(val / 60000);
+                const minsTarget = Math.floor(target / 60000);
+                controlsHtml = `
+                    <div style="display:flex; gap:3px; align-items:center; flex-shrink:0;">
+                        <button class="habit-btn-small" onclick="event.stopPropagation(); toggleHabitTimer('${h.id}'); renderPinnedWindow();" style="width:20px; height:20px; font-size:10px; ${isRunning ? 'border-color:var(--ready-color); color:var(--ready-color);' : ''}">
+                            ${isRunning ? '⏸' : '▶'}
+                        </button>
+                        <span style="font-family:monospace; font-size:10px; color:${isDone ? 'var(--ready-color)' : '#aaa'};">${minsVal}m/${minsTarget}m</span>
+                    </div>`;
+            }
+            
+            const el = document.createElement('div');
+            el.className = `pinned-habit ${isDone ? 'done-today' : ''}`;
+            
+            el.innerHTML = `
+                <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('habit', '${habitId}')">✕</button>
+                ${h.type === 'checkbox' ? controlsHtml : ''}
+                <div style="flex-grow:1; min-width:0;">
+                    <div style="font-weight:600; font-size:11px; color:#eee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${h.title}</div>
+                    ${h.type !== 'checkbox' ? `
+                        <div style="height:3px; background:#333; border-radius:2px; margin-top:3px; overflow:hidden;">
+                            <div style="height:100%; background:${isDone ? 'var(--ready-color)' : 'var(--accent)'}; width:${percent}%; transition:width 0.3s;"></div>
+                        </div>
+                    ` : ''}
+                </div>
+                ${h.type !== 'checkbox' ? controlsHtml : ''}
+            `;
+            
+            container.appendChild(el);
         }
 
         document.addEventListener('mousedown', (e) => {
