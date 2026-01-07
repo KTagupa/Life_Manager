@@ -3115,6 +3115,11 @@
 
             if (currentSlot) {
                 const scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
+                // NEW: Check inbox if not found
+                if (!scheduledTask && currentSlot.taskId.startsWith('inbox_temp_')) {
+                    const inboxItem = inbox.find(item => currentSlot.taskId.includes(item.id.split('_')[1]));
+                    if (inboxItem) scheduledTask = { title: inboxItem.title + ' (Inbox)' };
+                }
                 pipCtx.fillStyle = '#ffffff';
                 pipCtx.font = '500 38px -apple-system';
                 const sTitle = (scheduledTask ? scheduledTask.title : "Unscheduled");
@@ -4328,7 +4333,17 @@
             });
         }
 
-        window.jumpToTask = function (id) {
+       window.jumpToTask = function (id) {
+            // NEW: Check if it's an inbox temp task
+            if (id && id.startsWith('inbox_temp_')) {
+                const inboxPanel = document.getElementById('inbox-panel');
+                if (inboxPanel.classList.contains('hidden')) {
+                    toggleInbox();
+                }
+                showNotification("This task is still in your Inbox");
+                return;
+            }
+            
             let node = nodes.find(n => n.id === id);
             let isArchived = false;
             if (!node) {
@@ -6225,12 +6240,24 @@
             if (inbox.length === 0) { list.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:20px;">No pending tasks</div>'; return; }
             inbox.forEach((item, index) => {
                 const el = document.createElement('div'); el.className = 'inbox-item';
-                el.innerHTML = `<span>${linkify(item.title)}</span><div class="inbox-actions"><span class="inbox-btn promote-btn" onclick="promoteInboxTask(${index})" title="Move to Board">⬆</span><span class="inbox-btn promote-goal-btn" onclick="promoteInboxToGoal(${index})" title="Move to Goals">🎯</span><span class="inbox-btn delete-btn" onclick="deleteInboxTask(${index})" title="Delete">✕</span></div>`;
+                el.innerHTML = `<span>${linkify(item.title)}</span><div class="inbox-actions"><span class="inbox-btn promote-btn" onclick="promoteInboxTask(${index})" title="Move to Board">⬆</span><span class="inbox-btn promote-goal-btn" onclick="promoteInboxToGoal(${index})" title="Move to Goals">🎯</span><span class="inbox-btn" style="color: var(--accent);" onclick="scheduleInboxItem(${index})" title="Add to Agenda">📅</span><span class="inbox-btn delete-btn" onclick="deleteInboxTask(${index})" title="Delete">✕</span></div>`;
                 list.appendChild(el);
             });
         }
         function addToInbox() { const input = document.getElementById('inbox-input'); const val = input.value.trim(); if (val) { inbox.push({ id: 'inbox_' + Date.now(), title: val }); input.value = ''; renderInbox(); saveToStorage(); } }
-        function deleteInboxTask(index) { inbox.splice(index, 1); renderInbox(); saveToStorage(); }
+        function deleteInboxTask(index) {
+            const item = inbox[index];
+            
+            // NEW: Remove any agenda slots for this inbox item
+            agenda = agenda.filter(slot => !slot.taskId.includes(item.id.split('_')[1]));
+            
+            // Remove temp node if exists
+            nodes = nodes.filter(n => !n.id.includes(item.id.split('_')[1]) || !n.isInboxItem);
+            
+            inbox.splice(index, 1);
+            renderInbox();
+            saveToStorage();
+        }
         function promoteInboxTask(index) {
             const item = inbox[index];
             const worldX = (window.innerWidth / 2 - panX) / scale - 90;
@@ -6242,6 +6269,49 @@
             if (!inboxPanel.classList.contains('hidden')) inboxPanel.classList.add('hidden');
         }
         function promoteInboxToGoal(index) { const item = inbox[index]; if (!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(item.title)); inbox.splice(index, 1); renderInbox(); renderGoals(); const panel = document.getElementById('goals-panel'); if (panel.classList.contains('hidden')) panel.classList.remove('hidden'); saveToStorage(); }
+        function scheduleInboxItem(index) {
+            const item = inbox[index];
+            if (!item) return;
+            
+            // Create a temporary task node for the agenda (it stays in inbox)
+            const tempTaskId = 'inbox_temp_' + Date.now();
+            
+            // Create a minimal task object that agenda can reference
+            const tempTask = {
+                id: tempTaskId,
+                title: item.title,
+                completed: false,
+                isInboxItem: true, // Flag to identify it's from inbox
+                inboxIndex: index  // Store original index
+            };
+            
+            // Add to nodes temporarily (it won't be saved to storage)
+            nodes.push(tempTask);
+            
+            // Calculate default time slot (now + 30 minutes)
+            const now = new Date();
+            const start = new Date(now.getTime() + 5 * 60000); // 5 mins from now for testing
+            const end = new Date(start.getTime() + 30 * 60000); // 30 min duration
+            
+            // Add to agenda
+            agenda.push({
+                taskId: tempTaskId,
+                start: start.toISOString(),
+                end: end.toISOString()
+            });
+            
+            saveToStorage();
+            
+            // Open agenda panel to show the new item
+            const agendaPanel = document.getElementById('agenda-panel');
+            if (agendaPanel.classList.contains('hidden')) {
+                toggleAgenda();
+            } else {
+                renderAgenda();
+            }
+            
+            showNotification(`"${item.title}" scheduled for ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+        }
         function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); }
         function saveData(download = false) { const data = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, habits }, null, 2); if (download) { const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
         function loadFile(input) {
@@ -6413,6 +6483,11 @@
                 hudActive = true;
                 shouldRow.style.display = 'flex';
                 const scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
+                // NEW: Check inbox if not found
+                if (!scheduledTask && currentSlot.taskId.startsWith('inbox_temp_')) {
+                    const inboxItem = inbox.find(item => currentSlot.taskId.includes(item.id.split('_')[1]));
+                    if (inboxItem) scheduledTask = { title: inboxItem.title + ' (Inbox)' };
+                }
                 document.getElementById('hud-should-title').innerText = scheduledTask ? scheduledTask.title : "Unscheduled Block";
         
                 const startStr = new Date(currentSlot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -6430,6 +6505,11 @@
                 upcomingRow.style.display = 'flex';
                 
                 const upcomingTask = nodes.find(n => n.id === upcomingSlot.taskId) || archivedNodes.find(n => n.id === upcomingSlot.taskId);
+                // NEW: Check inbox if not found
+                if (!upcomingTask && upcomingSlot.taskId.startsWith('inbox_temp_')) {
+                    const inboxItem = inbox.find(item => upcomingSlot.taskId.includes(item.id.split('_')[1]));
+                    if (inboxItem) upcomingTask = { title: inboxItem.title + ' (Inbox)' };
+                }
                 document.getElementById('hud-upcoming-title').innerText = upcomingTask ? upcomingTask.title : "Unscheduled Block";
         
                 // Calculate minutes until start
@@ -6501,7 +6581,13 @@
             agenda.sort((a, b) => new Date(a.start) - new Date(b.start));
             const now = Date.now();
             agenda.forEach((slot, index) => {
-                const task = nodes.find(n => n.id === slot.taskId) || archivedNodes.find(n => n.id === slot.taskId);
+                let task = nodes.find(n => n.id === slot.taskId) || archivedNodes.find(n => n.id === slot.taskId);
+                if (!task && slot.taskId.startsWith('inbox_temp_')) {
+                    const inboxItem = inbox.find(item => slot.taskId.includes(item.id.split('_')[1]));
+                    if (inboxItem) {
+                        task = { id: slot.taskId, title: inboxItem.title + ' (Inbox)', isInboxItem: true };
+                    }
+                }
                 const isCurrent = now >= new Date(slot.start).getTime() && now <= new Date(slot.end).getTime();
                 const el = document.createElement('div');
                 el.className = `agenda-slot ${isCurrent ? 'current' : ''}`;
