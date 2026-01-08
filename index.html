@@ -2084,6 +2084,7 @@
         #btn-finance-link {
             width: 40px;
             height: 40px;
+            left: 102px;
             border-radius: 50%;
             background: #10b981;
             color: white;
@@ -2098,6 +2099,34 @@
             text-decoration: none;
             transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
             pointer-events: auto;
+        }
+
+        #btn-pinned {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            font-size: 18px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            z-index: 101;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+            pointer-events: auto;
+            position: fixed;
+            top: 10px;
+            left: 152px;
+        }
+        
+        #btn-pinned:hover {
+            transform: scale(1.1);
+            background: var(--accent-hover);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
         }
 
         #btn-finance-link:hover {
@@ -2749,12 +2778,6 @@
         <div style="display: flex; gap: 8px;">
             <button id="menu-btn" onclick="toggleMenu()">☰</button>
             <a href="finance.html" id="btn-finance-link" title="Go to Finance">💰</a>
-            <button id="btn-pinned" onclick="togglePinnedWindow()" 
-                    style="width: 40px; height: 40px; border-radius: 50%; background: var(--panel-bg); 
-                    border: 1px solid var(--border); color: var(--text-main); display: flex; 
-                    align-items: center; justify-content: center; font-size: 18px; cursor: pointer; 
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); transition: transform 0.2s, background 0.2s;"
-                    title="Pinned Items">📌</button>
         </div>
         <div id="toolbar-content">
             <button class="btn btn-primary" onclick="addNode()">+ New Task (Optn+T)</button>
