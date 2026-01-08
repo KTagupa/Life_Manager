@@ -44,7 +44,7 @@
             position: fixed;
             top: 60px;
             left: 60px;
-            width: 250px;
+            width: 320px;
             max-height: 80vh;
             background: var(--panel-bg);
             border: 1px solid var(--border);
@@ -132,9 +132,34 @@
             opacity: 0;
             transition: opacity 0.2s;
         }
+
+        /* ---------- TIMER BUTTON FOR PINNED TASKS ---------- */
+        .pinned-timer-btn {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--ready-color);   /* green */
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 6px;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        .pinned-timer-btn.running {
+            background: #b91c1c;   /* red when timer running */
+        }
+
         
         .pinned-node:hover .pinned-unpin {
             opacity: 1;
+        }
+
+        .pinned-habit:hover .pinned-unpin {
+            opacity: 1;               /* show the ✕ on habit hover */
         }
         
         .pinned-unpin:hover {
@@ -2120,7 +2145,7 @@
             pointer-events: auto;
             position: fixed;
             top: 10px;
-            left: 152px;
+            left: 138px;
         }
         
         #btn-pinned:hover {
@@ -3577,6 +3602,20 @@
         let archivedNodes = [];
         let inbox = [];
         let lifeGoals = {};
+        function getGoalTitleById(id) {
+            if (!id) return null;
+            const search = (list) => {
+                for (const g of list) {
+                    if (g.id === id) return g.text;
+                    if (g.children) {
+                        const sub = search(g.children);
+                        if (sub) return sub;
+                    }
+                }
+                return null;
+            };
+            return search(lifeGoals[currentGoalYear] || []);
+        }
         let habits = []; // Add this line
         let notes = [];
         let currentGoalYear = new Date().getFullYear();
@@ -7524,8 +7563,23 @@
             if (node.dueDate && !node.completed) {
                 const due = new Date(node.dueDate);
                 const dateStr = due.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
-                badgesHtml += `<span class="badge date-badge">📅 ${dateStr}</span>`;
+                const isOverdue = due < today;
+                const style = isOverdue ? 'background:#ef4444; color:white; border-color:#ef4444' : '';
+                badgesHtml += `<span class="badge date-badge" style="${style}">📅 ${dateStr}</span>`;
             }
+
+            // ----- NEW: timer button HTML -----
+            let timerBtnHtml = '';
+            if (!node.completed) {
+                const isRunning = !!node.activeTimerStart;
+                const btnIcon = isRunning ? '⏸' : '▶';
+                timerBtnHtml = `<button class="pinned-timer-btn ${isRunning ? 'running' : ''}"
+                                 onclick="event.stopPropagation(); toggleTimer('${node.id}')"
+                                 title="${isRunning ? 'Stop Timer' : 'Start Timer'}">
+                                 ${btnIcon}
+                             </button>`;
+            }
+
             
             const totalSubs = node.subtasks.length;
             const doneSubs = node.subtasks.filter(s => s.done).length;
@@ -7533,10 +7587,16 @@
             
             el.innerHTML = `
                 <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('task', '${taskId}')">✕</button>
-                <div style="font-weight:600; font-size:12px; margin-bottom:4px; color:#eee;">${node.completed ? '✅' : ''} ${node.title}</div>
-                <div style="display:flex; gap:4px; flex-wrap:wrap; font-size:10px; margin-bottom:4px;">${badgesHtml}</div>
-                ${totalSubs > 0 ? `<div class="progress-container" style="height:3px;"><div class="progress-bar" style="width:${progress}%"></div></div>` : ''}
+                <div style="font-weight:600; font-size:12px; margin-bottom:4px; color:#eee;">
+                    ${node.completed ? '✅' : ''} ${node.title}
+                </div>
+                <div style="display:flex; gap:4px; flex-wrap:wrap; font-size:10px; margin-bottom:4px;">
+                    ${badgesHtml}
+                    ${timerBtnHtml}                /* <-- NEW BUTTON appears here */
+                </div>
+                ${totalSubs > 0 ? `<div class="progress-container"><div class="progress-bar" style="width:${progress}%"></div></div>` : ''}
             `;
+
             
             el.onclick = () => {
                 selectNode(taskId);
@@ -7619,17 +7679,38 @@
             
             el.innerHTML = `
                 <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('habit', '${habitId}')">✕</button>
-                ${h.type === 'checkbox' ? controlsHtml : ''}
+                ${h.type === 'checkbox' ? controlsHtml : ''}               /* unchanged */
+            
                 <div style="flex-grow:1; min-width:0;">
-                    <div style="font-weight:600; font-size:11px; color:#eee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${h.title}</div>
+                    <div style="font-weight:600; font-size:11px; color:#eee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${h.title}
+                    </div>
+            
+                    <!-- ***** NEW: streak ***** -->
+                    <div style="font-size:10px; color:#60a5fa; margin-top:2px;">
+                        🔥 Streak: ${calculateStreak(h)}
+                    </div>
+            
+                    <!-- ***** NEW: linked goal (if any) ***** -->
+                    ${h.goalId ? `<div style="font-size:10px; color:#8b5cf6; margin-top:2px;">
+                            🎯 Goal: ${getGoalTitleById(h.goalId) || '—'}
+                        </div>` : ''}
+            
+                    <!-- ***** NEW: frequency ***** -->
+                    <div style="font-size:10px; color:#a8a29e; margin-top:2px;">
+                        📅 ${h.frequency.charAt(0).toUpperCase() + h.frequency.slice(1)}
+                    </div>
+            
                     ${h.type !== 'checkbox' ? `
                         <div style="height:3px; background:#333; border-radius:2px; margin-top:3px; overflow:hidden;">
-                            <div style="height:100%; background:${isDone ? 'var(--ready-color)' : 'var(--accent)'}; width:${percent}%; transition:width 0.3s;"></div>
+                            <div style="height:100%; background:${isDone ? 'var(--ready-color)' : 'var(--accent)'}; width:${percent}%"></div>
                         </div>
                     ` : ''}
                 </div>
+            
                 ${h.type !== 'checkbox' ? controlsHtml : ''}
             `;
+
             
             container.appendChild(el);
         }
