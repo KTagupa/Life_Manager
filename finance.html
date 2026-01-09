@@ -238,7 +238,7 @@
     </main>
 
     <!-- Modals -->
-    <!-- Transaction Modal -->
+    <!-- [Modals Omitted for Brevity - Same as Previous Version] -->
     <div id="transaction-modal" class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
             <h3 class="text-2xl font-bold text-slate-800 mb-6" id="t-modal-title">New Entry</h3>
@@ -263,7 +263,6 @@
         </div>
     </div>
 
-    <!-- Debt Modal -->
     <div id="debt-modal" class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
             <h3 class="text-2xl font-bold text-slate-800 mb-6">Add Loan</h3>
@@ -278,7 +277,6 @@
         </div>
     </div>
 
-    <!-- Bill Modal -->
     <div id="bill-modal" class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
             <h3 class="text-2xl font-bold text-slate-800 mb-6">Add Bill</h3>
@@ -297,7 +295,6 @@
         </div>
     </div>
 
-    <!-- Crypto Portfolio Modal -->
     <div id="crypto-portfolio-modal" class="fixed inset-0 z-[120] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]">
             <div class="p-6 border-b border-slate-800 flex justify-between items-center">
@@ -327,7 +324,6 @@
         </div>
     </div>
 
-    <!-- Crypto Trade Modal -->
     <div id="crypto-transaction-modal" class="fixed inset-0 z-[130] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
             <button onclick="toggleModal('crypto-transaction-modal')" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -359,7 +355,6 @@
         </div>
     </div>
 
-    <!-- Budgets Modal -->
     <div id="budget-modal" class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
             <h3 class="text-2xl font-bold text-slate-800 mb-6">Monthly Limits</h3>
@@ -377,7 +372,6 @@
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // CONFIG: Replace this block with your Firebase Project Settings
         const firebaseConfig = {
           apiKey: "AIzaSyC9nhH90Zkz9M4k-eRki3weqr_OyuRVhTw",
           authDomain: "life-manager-with-finance.firebaseapp.com",
@@ -483,6 +477,46 @@
                 rawCrypto = data.crypto || [];
                 cryptoPrices = data.crypto_prices || {};
                 if (data.budgets_data) budgets = await decryptData(data.budgets_data) || {};
+                return true;
+            }
+            return false;
+        }
+
+        // --- MIGRATION LOGIC (BRINGING OLD LOCAL DATA TO CLOUD) ---
+        async function migrateLocalData() {
+            // Check if old local storage data exists
+            // Usually stored in keys like 'finance_db' or similar from previous versions
+            const oldLocal = localStorage.getItem('finance-flow-db'); 
+            if (!oldLocal) return;
+
+            try {
+                const data = JSON.parse(oldLocal);
+                // The old format had unencrypted data in arrays
+                // We convert it to the new encrypted format
+                const tEnc = await Promise.all((data.transactions || []).map(async t => ({ 
+                    id: t.id || Math.random().toString(36), 
+                    data: await encryptData(t) 
+                })));
+                const bEnc = await Promise.all((data.bills || []).map(async b => ({ 
+                    id: b.id || Math.random().toString(36), 
+                    data: await encryptData(b) 
+                })));
+                const dEnc = await Promise.all((data.debts || []).map(async d => ({ 
+                    id: d.id || Math.random().toString(36), 
+                    data: await encryptData(d) 
+                })));
+
+                rawTransactions = tEnc;
+                rawBills = bEnc;
+                rawDebts = dEnc;
+                budgets = data.budgets || {};
+
+                await pushToCloud();
+                console.log("Migration successful!");
+                // Optionally clear the old data so we don't try to migrate again
+                // localStorage.removeItem('finance-flow-db'); 
+            } catch (e) {
+                console.warn("Migration failed or data format mismatch:", e);
             }
         }
 
@@ -498,8 +532,16 @@
                 masterKey = input;
                 vaultId = await hashMasterKey(input);
                 cryptoKey = await deriveKey(masterKey, new TextEncoder().encode("finance-flow-salt-v3"));
+                
                 status.innerText = "Syncing Vault...";
-                await pullFromCloud();
+                const cloudExists = await pullFromCloud();
+
+                // MIGRATION STEP:
+                // If cloud is empty, check for old local data to upload
+                if (!cloudExists) {
+                    status.innerText = "Checking for local data...";
+                    await migrateLocalData();
+                }
 
                 document.getElementById('auth-overlay').classList.add('hidden');
                 document.getElementById('main-content').classList.remove('opacity-0');
@@ -512,7 +554,7 @@
             } catch (err) {
                 console.error(err);
                 status.innerText = "Error: " + err.message;
-                alert("Connection Failed: " + err.message + "\n\nTip: Ensure Anonymous Auth is enabled in Firebase Console.");
+                alert("Connection Failed: " + err.message);
             }
         };
 
@@ -602,6 +644,7 @@
             toggleModal('debt-modal');
             await pushToCloud();
             renderDebts(rawDebts);
+            populateBudgetInputs();
         };
 
         window.saveBill = async function() {
@@ -639,6 +682,7 @@
             await loadAndRender();
             renderBills(rawBills);
             renderDebts(rawDebts);
+            if (col === 'crypto') renderCryptoPortfolio();
         };
 
         // --- DASHBOARD UI ---
