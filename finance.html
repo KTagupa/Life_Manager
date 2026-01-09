@@ -54,12 +54,12 @@
                 <span>FinanceFlow</span>
             </div>
             <div class="flex items-center gap-4">
-                <button onclick="toggleCurrency()" id="currency-toggle"
+                <button onclick="window.toggleCurrency()" id="currency-toggle"
                     class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs font-bold text-slate-600 transition-all border border-slate-200">
                     <i data-lucide="refresh-cw" class="w-3 h-3"></i>
                     <span id="active-currency">PHP (₱)</span>
                 </button>
-                <button onclick="toggleModal('budget-modal')"
+                <button onclick="window.toggleModal('budget-modal')"
                     class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 rounded-full text-xs font-bold text-emerald-600 transition-all border border-emerald-200">
                     <i data-lucide="target" class="w-3 h-3"></i>
                     <span class="hidden sm:inline">Budgets</span>
@@ -82,7 +82,7 @@
             </div>
             <h2 class="text-2xl font-bold text-slate-800 mb-2">Vault Locked</h2>
             <p class="text-slate-500 text-sm mb-8">Data is encrypted locally. Enter your <strong>Master Key</strong> to
-                decrypt and sync across devices.</p>
+                decrypt and sync.</p>
 
             <div class="relative mb-4">
                 <input type="password" id="master-key-input" placeholder="Enter your secret key..."
@@ -90,7 +90,7 @@
                 <i data-lucide="key" class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
             </div>
 
-            <button onclick="unlockApp()" id="unlock-btn"
+            <button onclick="window.unlockApp()" id="unlock-btn"
                 class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-2">
                 <span>Unlock Vault</span>
                 <i data-lucide="chevron-right" class="w-5 h-5"></i>
@@ -134,15 +134,15 @@
                         <i data-lucide="calendar" class="w-5 h-5"></i>
                         <span class="font-bold text-sm hidden sm:inline">Filter:</span>
                     </div>
-                    <select id="filter-month" onchange="applyFilters()"
+                    <select id="filter-month" onchange="window.applyFilters()"
                         class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500">
                         <!-- Populated by JS -->
                     </select>
-                    <select id="filter-year" onchange="applyFilters()"
+                    <select id="filter-year" onchange="window.applyFilters()"
                         class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500">
                         <!-- Populated by JS -->
                     </select>
-                    <button onclick="resetFilters()"
+                    <button onclick="window.resetFilters()"
                         class="text-xs font-bold text-indigo-500 hover:text-indigo-700 ml-auto">Reset</button>
                 </div>
 
@@ -150,13 +150,13 @@
                     <div class="p-6 border-b border-slate-100 flex items-center justify-between">
                         <div class="flex items-center gap-4">
                             <h2 class="text-xl font-bold text-slate-800">Recent Movements</h2>
-                            <button onclick="exportToCSV()"
+                            <button onclick="window.exportToCSV()"
                                 class="text-xs font-bold text-indigo-500 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
                                 <i data-lucide="download" class="w-3 h-3 inline mr-1"></i> Export CSV
                             </button>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="openTransactionModal()"
+                            <button onclick="window.openTransactionModal()"
                                 class="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">
                                 <i data-lucide="plus" class="w-5 h-5"></i>
                             </button>
@@ -164,7 +164,7 @@
                     </div>
                     <div id="transaction-list"
                         class="divide-y divide-slate-50 max-h-[500px] overflow-y-auto custom-scrollbar">
-                        <div class="p-10 text-center text-slate-400">Decrypting vault...</div>
+                        <div class="p-10 text-center text-slate-400">Initializing vault connection...</div>
                     </div>
                 </div>
             </div>
@@ -173,7 +173,7 @@
             <div class="lg:col-span-4 space-y-6">
                 
                 <!-- Crypto Portfolio Widget -->
-                <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl p-6 relative overflow-hidden text-white group cursor-pointer" onclick="openCryptoPortfolio()">
+                <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl p-6 relative overflow-hidden text-white group cursor-pointer" onclick="window.openCryptoPortfolio()">
                      <div class="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500 rounded-full blur-[60px] opacity-20 group-hover:opacity-30 transition-opacity"></div>
                      <div class="flex justify-between items-start mb-4 relative z-10">
                         <div class="flex items-center gap-2">
@@ -203,12 +203,12 @@
                             </div>
                             <h2 class="font-bold text-slate-800">Debts to Pay</h2>
                         </div>
-                        <button onclick="openDebtModal()" class="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-3 py-1 rounded-full transition-colors">
+                        <button onclick="window.openDebtModal()" class="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-3 py-1 rounded-full transition-colors">
                             + Add
                         </button>
                     </div>
                     <div id="debt-list" class="space-y-4">
-                        <div class="text-center text-xs text-slate-400 py-2">No debts tracked. Good job!</div>
+                        <div class="text-center text-xs text-slate-400 py-2">No debts tracked.</div>
                     </div>
                 </div>
 
@@ -221,7 +221,7 @@
                             </div>
                             <h2 class="font-bold text-slate-800">Recurring Bills</h2>
                         </div>
-                        <button onclick="openBillModal()" class="text-slate-400 hover:text-indigo-600 transition-colors">
+                        <button onclick="window.openBillModal()" class="text-slate-400 hover:text-indigo-600 transition-colors">
                             <i data-lucide="plus" class="w-5 h-5"></i>
                         </button>
                     </div>
@@ -257,9 +257,9 @@
             <div class="space-y-4">
                 <input type="hidden" id="t-id">
                 <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border">
-                    <button onclick="setTType('expense')" id="btn-expense"
+                    <button onclick="window.setTType('expense')" id="btn-expense"
                         class="py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm">Expense</button>
-                    <button onclick="setTType('income')" id="btn-income"
+                    <button onclick="window.setTType('income')" id="btn-income"
                         class="py-2 rounded-xl font-bold text-slate-400">Income</button>
                     <input type="hidden" id="t-type" value="expense">
                 </div>
@@ -276,9 +276,9 @@
                 </div>
 
                 <div class="flex gap-3 pt-4">
-                    <button onclick="toggleModal('transaction-modal')"
+                    <button onclick="window.toggleModal('transaction-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveTransaction()"
+                    <button onclick="window.saveTransaction()"
                         class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">Save</button>
                 </div>
             </div>
@@ -304,9 +304,9 @@
                     class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-rose-500">
                 
                 <div class="flex gap-3 pt-4">
-                    <button onclick="toggleModal('debt-modal')"
+                    <button onclick="window.toggleModal('debt-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveDebt()"
+                    <button onclick="window.saveDebt()"
                         class="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-200">Track Debt</button>
                 </div>
             </div>
@@ -329,9 +329,9 @@
                         class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
                 </div>
                 <div class="flex gap-3 pt-4">
-                    <button onclick="toggleModal('bill-modal')"
+                    <button onclick="window.toggleModal('bill-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveBill()" class="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200">Set
+                    <button onclick="window.saveBill()" class="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200">Set
                         Reminder</button>
                 </div>
             </div>
@@ -349,10 +349,10 @@
                     <p class="text-slate-400 text-xs mt-1" id="crypto-last-updated">Prices not fetched yet</p>
                 </div>
                 <div class="flex gap-3">
-                    <button id="btn-refresh-crypto" onclick="fetchCryptoPrices()" class="p-2 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded-lg transition-colors border border-slate-700">
+                    <button id="btn-refresh-crypto" onclick="window.fetchCryptoPrices()" class="p-2 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded-lg transition-colors border border-slate-700">
                         <i data-lucide="refresh-cw" class="w-5 h-5"></i>
                     </button>
-                    <button onclick="toggleModal('crypto-portfolio-modal')" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg transition-colors border border-slate-700">
+                    <button onclick="window.toggleModal('crypto-portfolio-modal')" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg transition-colors border border-slate-700">
                         <i data-lucide="x" class="w-5 h-5"></i>
                     </button>
                 </div>
@@ -382,7 +382,7 @@
                 <!-- Holdings List -->
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-bold text-slate-300">Your Holdings</h3>
-                    <button onclick="openCryptoTransaction()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full font-bold transition-colors shadow-lg shadow-indigo-900/20">
+                    <button onclick="window.openCryptoTransaction()" class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full font-bold transition-colors shadow-lg shadow-indigo-900/20">
                         + Record Transaction
                     </button>
                 </div>
@@ -405,15 +405,15 @@
     <!-- Modal: Crypto Transaction -->
     <div id="crypto-transaction-modal" class="fixed inset-0 z-[130] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
-            <button onclick="toggleModal('crypto-transaction-modal')" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600">
+            <button onclick="window.toggleModal('crypto-transaction-modal')" class="absolute top-6 right-6 text-slate-400 hover:text-slate-600">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
             <h3 class="text-2xl font-bold text-slate-800 mb-6">Crypto Transaction</h3>
             
             <div class="space-y-4">
                 <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border">
-                    <button onclick="setCType('buy')" id="btn-c-buy" class="py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm">Buy</button>
-                    <button onclick="setCType('sell')" id="btn-c-sell" class="py-2 rounded-xl font-bold text-slate-400">Sell</button>
+                    <button onclick="window.setCType('buy')" id="btn-c-buy" class="py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm">Buy</button>
+                    <button onclick="window.setCType('sell')" id="btn-c-sell" class="py-2 rounded-xl font-bold text-slate-400">Sell</button>
                     <input type="hidden" id="c-type" value="buy">
                 </div>
 
@@ -422,7 +422,7 @@
                     <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Token Name / ID</label>
                     <div class="flex gap-2">
                         <input type="text" id="c-token-search" placeholder="e.g. bitcoin" class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
-                        <button onclick="searchToken()" class="px-4 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl font-bold text-xs"><i data-lucide="search" class="w-4 h-4"></i></button>
+                        <button onclick="window.searchToken()" class="px-4 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl font-bold text-xs"><i data-lucide="search" class="w-4 h-4"></i></button>
                     </div>
                     <div id="token-search-results" class="hidden absolute top-full left-0 right-0 bg-white border shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto z-10 custom-scrollbar"></div>
                     <input type="hidden" id="c-token-id">
@@ -438,11 +438,11 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Quantity</label>
-                        <input type="number" step="any" id="c-amount" placeholder="0.00" oninput="calcCryptoTotal()" class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                        <input type="number" step="any" id="c-amount" placeholder="0.00" oninput="window.calcCryptoTotal()" class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
                     </div>
                     <div>
                         <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Price per Token (₱)</label>
-                        <input type="number" step="any" id="c-price" placeholder="0.00" oninput="calcCryptoTotal()" class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                        <input type="number" step="any" id="c-price" placeholder="0.00" oninput="window.calcCryptoTotal()" class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
                     </div>
                 </div>
 
@@ -453,7 +453,7 @@
 
                 <input type="text" id="c-notes" placeholder="Notes (Exchange, etc.)" class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-xs">
 
-                <button onclick="saveCryptoTransaction()" class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 mt-2">Record Transaction</button>
+                <button onclick="window.saveCryptoTransaction()" class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 mt-2">Record Transaction</button>
             </div>
         </div>
     </div>
@@ -469,43 +469,124 @@
                 <div class="text-center text-slate-400 py-4">Loading categories...</div>
             </div>
             <div class="flex gap-3 pt-4">
-                <button onclick="toggleModal('budget-modal')"
+                <button onclick="window.toggleModal('budget-modal')"
                     class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Close</button>
-                <button onclick="saveBudgets()" class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save
+                <button onclick="window.saveBudgets()" class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save
                     Budgets</button>
             </div>
         </div>
     </div>
 
-    <script>
+    <!-- Use Type Module for Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, setDoc, deleteDoc, query, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
         // --- CONFIG ---
-        const appId = 'personal-finance-sync-v1';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+          apiKey: "AIzaSyC9nhH90Zkz9M4k-eRki3weqr_OyuRVhTw",
+          authDomain: "life-manager-with-finance.firebaseapp.com",
+          projectId: "life-manager-with-finance",
+          storageBucket: "life-manager-with-finance.firebasestorage.app",
+          messagingSenderId: "278187395464",
+          appId: "1:278187395464:web:5667404572487ebb06523d"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // App Globals
         let masterKey = null;
         let cryptoKey = null;
         let activeCurrency = 'PHP';
         let phpToUsdRate = 0.018;
+        let userId = null;
         
         // Data Containers
         let rawTransactions = [];
         let rawBills = [];
         let rawDebts = [];
         let rawCrypto = [];
-        let cryptoPrices = {}; // { 'bitcoin': { price: 5000000, updated: 123456789 } }
+        let cryptoPrices = {};
         let budgets = {};
         let spendChart = null;
 
         const standardCategories = ["Food", "Transport", "Bills", "Savings", "Entertainment", "Salary", "Others"];
 
-        // --- MOCK DB (LocalStorage) ---
-        const DB_KEY = 'finance_flow_encrypted_v3';
-
-        function getDB() {
-            const str = localStorage.getItem(DB_KEY);
-            return str ? JSON.parse(str) : { transactions: [], bills: [], debts: [], crypto: [], crypto_prices: {}, budgets: { data: null } };
+        // Initialize App & Auth
+        async function initApp() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                // Listen for auth state
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("Connected as:", userId);
+                        setupListeners();
+                    }
+                });
+            } catch (error) {
+                console.error("Auth Failed", error);
+                document.getElementById('auth-status').innerText = "Database Connection Failed";
+            }
         }
+        initApp();
 
-        function saveDB(db) {
-            localStorage.setItem(DB_KEY, JSON.stringify(db));
+        // --- FIRESTORE LISTENERS ---
+        function setupListeners() {
+            if (!userId) return;
+
+            // Paths based on System Rules: /artifacts/{appId}/users/{userId}/{collectionName}
+            
+            // 1. Transactions
+            const txQuery = query(collection(db, 'artifacts', appId, 'users', userId, 'transactions'));
+            onSnapshot(txQuery, (snapshot) => {
+                rawTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                // Trigger re-render if unlocked
+                if (masterKey) loadAndRender();
+            }, (err) => console.error("Tx sync error", err));
+
+            // 2. Bills
+            const billQuery = query(collection(db, 'artifacts', appId, 'users', userId, 'bills'));
+            onSnapshot(billQuery, (snapshot) => {
+                rawBills = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (masterKey) renderBills(rawBills);
+            }, (err) => console.error("Bill sync error", err));
+
+            // 3. Debts
+            const debtQuery = query(collection(db, 'artifacts', appId, 'users', userId, 'debts'));
+            onSnapshot(debtQuery, (snapshot) => {
+                rawDebts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (masterKey) renderDebts(rawDebts);
+            }, (err) => console.error("Debt sync error", err));
+
+            // 4. Crypto
+            const cryptoQuery = query(collection(db, 'artifacts', appId, 'users', userId, 'crypto'));
+            onSnapshot(cryptoQuery, (snapshot) => {
+                rawCrypto = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (masterKey) {
+                    renderCryptoPortfolio();
+                    renderCryptoWidget();
+                }
+            }, (err) => console.error("Crypto sync error", err));
+
+            // 5. Budgets (Single document in settings collection)
+            const settingsQuery = doc(db, 'artifacts', appId, 'users', userId, 'settings', 'budgets');
+            onSnapshot(settingsQuery, async (docSnap) => {
+                if (docSnap.exists() && masterKey) {
+                    const data = docSnap.data().data;
+                    if(data) budgets = await decryptData(data) || {};
+                    renderBudgets(window.allDecryptedTransactions || []);
+                }
+            }, (err) => console.error("Budget sync error", err));
         }
 
         // --- CRYPTO HELPER (AES-GCM) ---
@@ -534,8 +615,9 @@
             } catch (e) { console.error("Decrypt fail", e); return null; }
         }
 
-        // --- AUTH & INIT ---
-        async function unlockApp() {
+        // --- AUTH & INIT UI ---
+        // Attached to window for HTML access
+        window.unlockApp = async function() {
             const input = document.getElementById('master-key-input').value;
             if (input.length < 1) { alert("Please enter a key."); return; }
 
@@ -556,45 +638,27 @@
 
             initFilters();
             initChart();
-            loadFromStorage();
+            
+            // Load crypto price cache from localStorage (public data, no need for encryption/db)
+            const cachedPrices = localStorage.getItem('ff_crypto_price_cache');
+            if(cachedPrices) cryptoPrices = JSON.parse(cachedPrices);
+
+            // Trigger initial render with data already loaded from listeners
+            loadAndRender();
+            renderBills(rawBills);
+            renderDebts(rawDebts);
+            renderCryptoWidget();
+            
+            // Budgets will auto-render via listener once decrypted
         }
 
-        async function loadFromStorage() {
-            const db = getDB();
-
-            rawTransactions = db.transactions || [];
-            await loadAndRender();
-
-            rawBills = db.bills || [];
-            await renderBills(rawBills);
-
-            rawDebts = db.debts || [];
-            await renderDebts(rawDebts);
-
-            // Crypto Loading
-            rawCrypto = db.crypto || [];
-            // We store crypto prices unencrypted usually for cache, but let's assume they are just a plain object in DB for simplicity
-            // If they were encrypted, we'd decrypt here. Let's assume plain for cache speed.
-            cryptoPrices = db.crypto_prices || {};
-            await renderCryptoWidget();
-
-            if (db.budgets && db.budgets.data) {
-                budgets = await decryptData(db.budgets.data) || {};
-            } else {
-                budgets = {};
-            }
-            renderBudgets(window.allDecryptedTransactions || []); 
-        }
-
-        // --- CRYPTO LOGIC & UI ---
-
-        function openCryptoPortfolio() {
+        // --- CRYPTO LOGIC ---
+        window.openCryptoPortfolio = function() {
             document.getElementById('crypto-portfolio-modal').classList.remove('hidden');
             renderCryptoPortfolio();
         }
 
-        function openCryptoTransaction() {
-            // Reset form
+        window.openCryptoTransaction = function() {
             document.getElementById('c-token-search').value = '';
             document.getElementById('c-token-id').value = '';
             document.getElementById('c-amount').value = '';
@@ -602,12 +666,11 @@
             document.getElementById('c-notes').value = '';
             document.getElementById('c-date').value = new Date().toISOString().split('T')[0];
             document.getElementById('c-total-calc').innerText = fmt(0);
-            setCType('buy');
-            
+            window.setCType('buy');
             document.getElementById('crypto-transaction-modal').classList.remove('hidden');
         }
 
-        function setCType(t) {
+        window.setCType = function(t) {
             document.getElementById('c-type').value = t;
             const bB = document.getElementById('btn-c-buy');
             const bS = document.getElementById('btn-c-sell');
@@ -615,7 +678,7 @@
             bS.className = t === 'sell' ? "py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm" : "py-2 rounded-xl font-bold text-slate-400";
         }
 
-        async function searchToken() {
+        window.searchToken = async function() {
             const query = document.getElementById('c-token-search').value;
             if(!query) return;
             const resDiv = document.getElementById('token-search-results');
@@ -642,13 +705,7 @@
                         document.getElementById('c-token-symbol').value = c.symbol;
                         resDiv.classList.add('hidden');
                     };
-                    div.innerHTML = `
-                        <img src="${c.large}" class="w-6 h-6 rounded-full">
-                        <div>
-                            <p class="text-sm font-bold text-slate-700">${c.name}</p>
-                            <p class="text-[10px] text-slate-400 font-bold uppercase">${c.symbol}</p>
-                        </div>
-                    `;
+                    div.innerHTML = `<img src="${c.large}" class="w-6 h-6 rounded-full"><div><p class="text-sm font-bold text-slate-700">${c.name}</p><p class="text-[10px] text-slate-400 font-bold uppercase">${c.symbol}</p></div>`;
                     resDiv.appendChild(div);
                 });
             } catch(e) {
@@ -656,13 +713,14 @@
             }
         }
 
-        function calcCryptoTotal() {
+        window.calcCryptoTotal = function() {
             const amt = parseFloat(document.getElementById('c-amount').value) || 0;
             const prc = parseFloat(document.getElementById('c-price').value) || 0;
             document.getElementById('c-total-calc').innerText = fmt(amt * prc);
         }
 
-        async function saveCryptoTransaction() {
+        window.saveCryptoTransaction = async function() {
+            if(!userId) return;
             const tokenId = document.getElementById('c-token-id').value;
             const tokenSymbol = document.getElementById('c-token-symbol').value;
             const amount = parseFloat(document.getElementById('c-amount').value);
@@ -672,35 +730,20 @@
             const dateVal = document.getElementById('c-date').value;
 
             if(!tokenId || !amount || !price) { alert("Please fill details"); return; }
-            
             const date = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
 
-            // Store transaction
-            const txData = {
-                tokenId, 
-                symbol: tokenSymbol || tokenId, 
-                amount, 
-                price, 
-                total: amount * price, 
-                type, 
-                notes,
-                date: date
-            };
+            const txData = { tokenId, symbol: tokenSymbol || tokenId, amount, price, total: amount * price, type, notes, date: date };
             const encrypted = await encryptData(txData);
             
-            const db = getDB();
-            db.crypto.push({
-                id: Date.now().toString(36),
-                data: encrypted
-            });
-            saveDB(db);
-            
-            rawCrypto = db.crypto;
-            toggleModal('crypto-transaction-modal');
-            renderCryptoWidget(); // Refresh dashboard
-            if(!document.getElementById('crypto-portfolio-modal').classList.contains('hidden')) {
-                renderCryptoPortfolio(); // Refresh modal if open
-            }
+            // Firestore Add
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'crypto'), {
+                    data: encrypted,
+                    createdAt: Date.now()
+                });
+                window.toggleModal('crypto-transaction-modal');
+                // UI updates happen via onSnapshot automatically
+            } catch(e) { console.error(e); alert("Save failed"); }
         }
 
         async function getDecryptedCrypto() {
@@ -708,77 +751,59 @@
                 const d = await decryptData(item.data);
                 return d ? { ...d, id: item.id } : null;
             }));
-            // Sort: oldest first for math, but we return sorted by date (newest first) for display usually
-            // Here we return newest first
             return txs.filter(x => x).sort((a,b) => new Date(b.date) - new Date(a.date));
         }
 
         async function calculateHoldings() {
             const txs = await getDecryptedCrypto();
-            const holdings = {}; // { 'bitcoin': { amount: 0, costBasis: 0, realizedPL: 0, symbol: 'BTC' } }
-
-            // Process oldest first for correct avg cost calculation
-            // txs is Newest->Oldest, so reverse it
+            const holdings = {}; 
             const sorted = [...txs].reverse(); 
 
             sorted.forEach(tx => {
                 if(!holdings[tx.tokenId]) holdings[tx.tokenId] = { amount: 0, totalCost: 0, realizedPL: 0, symbol: tx.symbol };
                 const h = holdings[tx.tokenId];
-
                 if(tx.type === 'buy') {
                     h.amount += tx.amount;
-                    h.totalCost += tx.total; // Add to cost basis
+                    h.totalCost += tx.total;
                 } else {
-                    // Sell logic (Weighted Average Cost)
                     const avgPrice = h.amount > 0 ? (h.totalCost / h.amount) : 0;
                     const costOfSold = avgPrice * tx.amount;
-                    
-                    h.realizedPL += (tx.total - costOfSold); // Proceeds - Cost of those tokens
-                    h.totalCost -= costOfSold; // Remove cost of sold tokens
+                    h.realizedPL += (tx.total - costOfSold);
+                    h.totalCost -= costOfSold;
                     h.amount -= tx.amount;
                 }
             });
-
-            // Cleanup zero balances
             return holdings;
         }
 
-        async function fetchCryptoPrices() {
+        window.fetchCryptoPrices = async function() {
             const holdings = await calculateHoldings();
             const ids = Object.keys(holdings).filter(k => holdings[k].amount > 0.000001);
             const statusEl = document.getElementById('crypto-last-updated');
             
-            if(ids.length === 0) {
-                 if(statusEl) statusEl.innerText = "No assets to track";
-                 return;
-            }
+            if(ids.length === 0) { if(statusEl) statusEl.innerText = "No assets"; return; }
 
-            // FIX: Target the button by ID, then finding the SVG (since Lucide replaces <i> with <svg>)
             const btn = document.getElementById('btn-refresh-crypto');
             const icon = btn ? btn.querySelector('svg') : null;
-            
             if(icon) icon.classList.add('animate-spin');
-            if(statusEl) statusEl.innerText = "Updating prices...";
+            if(statusEl) statusEl.innerText = "Updating...";
 
             try {
-                // Using PHP as base currency since app is PHP-centric
                 const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=php`);
-                if(!res.ok) throw new Error("API Limit or Error");
+                if(!res.ok) throw new Error("API Limit");
                 const data = await res.json();
                 
-                // Update cache
-                const db = getDB();
                 const now = Date.now();
                 Object.keys(data).forEach(id => {
-                    db.crypto_prices[id] = { price: data[id].php, updated: now };
+                    cryptoPrices[id] = { price: data[id].php, updated: now };
                 });
-                saveDB(db);
-                cryptoPrices = db.crypto_prices;
+                // Cache prices locally
+                localStorage.setItem('ff_crypto_price_cache', JSON.stringify(cryptoPrices));
+                
                 renderCryptoPortfolio();
             } catch(e) {
                 console.error(e);
-                if(statusEl) statusEl.innerText = "Update Failed (Rate Limit?)";
-                alert("Could not fetch prices. The free API might be rate-limited. Please try again in a minute.");
+                if(statusEl) statusEl.innerText = "Update Failed";
             } finally {
                 if(icon) icon.classList.remove('animate-spin');
             }
@@ -791,7 +816,7 @@
 
             Object.entries(holdings).forEach(([id, h]) => {
                 if(h.amount <= 0.000001) return;
-                const currentPrice = cryptoPrices[id]?.price || 0; // Use cached price
+                const currentPrice = cryptoPrices[id]?.price || 0; 
                 const val = h.amount * currentPrice;
                 const avgPrice = h.totalCost / h.amount;
                 
@@ -799,7 +824,6 @@
                      totalVal += val;
                      unrealizedPL += (currentPrice - avgPrice) * h.amount;
                 } else {
-                     // Fallback: value at cost if no price
                      totalVal += h.totalCost; 
                 }
             });
@@ -814,27 +838,18 @@
             const holdings = await calculateHoldings();
             const list = document.getElementById('crypto-holdings-list');
             list.innerHTML = '';
-            
             let totalVal = 0, totalInvested = 0, totalRealized = 0, totalUnrealized = 0;
             let lastUpdate = 0;
 
-            // RENDER HOLDINGS
             Object.entries(holdings).forEach(([id, h]) => {
-                if(h.amount <= 0.000001 && Math.abs(h.realizedPL) < 1) return; // Skip empty dust unless there's PL history
-
+                if(h.amount <= 0.000001 && Math.abs(h.realizedPL) < 1) return; 
                 const cache = cryptoPrices[id];
                 const currentPrice = cache?.price || 0;
                 if(cache?.updated > lastUpdate) lastUpdate = cache.updated;
-
                 const value = h.amount * currentPrice;
                 const avgPrice = h.amount > 0 ? h.totalCost / h.amount : 0;
                 const unrealized = currentPrice > 0 ? (value - h.totalCost) : 0;
-
-                if(h.amount > 0.000001) {
-                    totalVal += value;
-                    totalInvested += h.totalCost;
-                    totalUnrealized += unrealized;
-                }
+                if(h.amount > 0.000001) { totalVal += value; totalInvested += h.totalCost; totalUnrealized += unrealized; }
                 totalRealized += h.realizedPL;
 
                 if(h.amount > 0.000001) {
@@ -842,24 +857,17 @@
                     div.className = "bg-slate-800 p-4 rounded-2xl flex items-center justify-between border border-slate-700";
                     div.innerHTML = `
                         <div>
-                            <div class="flex items-center gap-2">
-                                <h4 class="font-bold text-white">${h.symbol.toUpperCase()}</h4>
-                                <span class="text-[10px] bg-slate-700 text-slate-400 px-1.5 rounded">${id}</span>
-                            </div>
+                            <div class="flex items-center gap-2"><h4 class="font-bold text-white">${h.symbol.toUpperCase()}</h4><span class="text-[10px] bg-slate-700 text-slate-400 px-1.5 rounded">${id}</span></div>
                             <p class="text-xs text-slate-400 mt-1">${h.amount.toFixed(4)} tokens @ ${fmt(avgPrice)} avg</p>
                         </div>
                         <div class="text-right">
                             <p class="font-bold text-white">${currentPrice > 0 ? fmt(value) : 'Needs Update'}</p>
-                            <p class="text-xs font-bold ${unrealized >= 0 ? 'text-emerald-500' : 'text-rose-500'}">
-                                ${currentPrice > 0 ? ((unrealized/h.totalCost)*100).toFixed(1) + '%' : '--'}
-                            </p>
-                        </div>
-                    `;
+                            <p class="text-xs font-bold ${unrealized >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${currentPrice > 0 ? ((unrealized/h.totalCost)*100).toFixed(1) + '%' : '--'}</p>
+                        </div>`;
                     list.appendChild(div);
                 }
             });
 
-            // RENDER HISTORY (New)
             const historyList = document.getElementById('crypto-history-list');
             historyList.innerHTML = '';
             const allTxs = await getDecryptedCrypto();
@@ -873,29 +881,17 @@
                      const isBuy = tx.type === 'buy';
                      div.innerHTML = `
                         <div class="flex items-center gap-3">
-                             <div class="w-8 h-8 rounded-full flex items-center justify-center ${isBuy ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400'}">
-                                 <i data-lucide="${isBuy ? 'arrow-down-left' : 'arrow-up-right'}" class="w-4 h-4"></i>
-                             </div>
-                             <div>
-                                 <p class="text-sm font-bold text-slate-300">${isBuy ? 'Bought' : 'Sold'} ${tx.symbol.toUpperCase()}</p>
-                                 <p class="text-[10px] text-slate-500">${new Date(tx.date).toLocaleDateString()} • ${fmt(tx.price)}/token</p>
-                             </div>
+                             <div class="w-8 h-8 rounded-full flex items-center justify-center ${isBuy ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400'}"><i data-lucide="${isBuy ? 'arrow-down-left' : 'arrow-up-right'}" class="w-4 h-4"></i></div>
+                             <div><p class="text-sm font-bold text-slate-300">${isBuy ? 'Bought' : 'Sold'} ${tx.symbol.toUpperCase()}</p><p class="text-[10px] text-slate-500">${new Date(tx.date).toLocaleDateString()} • ${fmt(tx.price)}/token</p></div>
                         </div>
                         <div class="flex items-center gap-3">
-                             <div class="text-right">
-                                 <p class="text-sm font-bold text-slate-300">${fmt(tx.total)}</p>
-                                 <p class="text-[10px] text-slate-500">${tx.amount} tokens</p>
-                             </div>
-                             <button onclick="deleteItem('crypto', '${tx.id}')" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                             </button>
-                        </div>
-                     `;
+                             <div class="text-right"><p class="text-sm font-bold text-slate-300">${fmt(tx.total)}</p><p class="text-[10px] text-slate-500">${tx.amount} tokens</p></div>
+                             <button onclick="window.deleteItem('crypto', '${tx.id}')" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>`;
                      historyList.appendChild(div);
                 });
             }
 
-            // Update Header Stats
             document.getElementById('cp-current-val').innerText = fmt(totalVal);
             document.getElementById('cp-invested').innerText = fmt(totalInvested);
             
@@ -910,27 +906,20 @@
             const timeStr = lastUpdate > 0 ? new Date(lastUpdate).toLocaleTimeString() : 'Never';
             document.getElementById('crypto-last-updated').innerText = `Prices updated: ${timeStr}`;
             
-            // Sync widget too
             renderCryptoWidget();
             lucide.createIcons();
         }
-
 
         // --- CHART & FILTERS ---
         function initFilters() {
             const mSel = document.getElementById('filter-month');
             const ySel = document.getElementById('filter-year');
             const months = ["All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
             mSel.innerHTML = months.map((m, i) => `<option value="${i === 0 ? 'all' : i}">${m}</option>`).join('');
-
-            // Year: Current +/- 5
             const curY = new Date().getFullYear();
             let ops = `<option value="all">All Years</option>`;
             for (let i = curY - 2; i <= curY + 2; i++) ops += `<option value="${i}" ${i === curY ? 'selected' : ''}>${i}</option>`;
             ySel.innerHTML = ops;
-
-            // Set current month default
             mSel.value = new Date().getMonth() + 1;
         }
 
@@ -942,67 +931,51 @@
                     labels: [],
                     datasets: [{
                         data: [],
-                        backgroundColor: [
-                            '#4f46e5', '#059669', '#e11d48', '#d97706', '#8b5cf6', '#db2777', '#2563eb', '#64748b'
-                        ],
+                        backgroundColor: ['#4f46e5', '#059669', '#e11d48', '#d97706', '#8b5cf6', '#db2777', '#2563eb', '#64748b'],
                         borderWidth: 0
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true, font: { size: 10 } } }
-                    },
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true, font: { size: 10 } } } },
                     cutout: '70%'
                 }
             });
         }
 
         async function loadAndRender() {
-            // Decrypt all first
+            if(!masterKey) return;
+            // Decrypt all
             const decrypted = (await Promise.all(rawTransactions.map(async i => {
                 const d = await decryptData(i.data);
                 return d ? { ...d, id: i.id } : null;
             }))).filter(x => x).sort((a, b) => new Date(b.date) - new Date(a.date));
 
-            // Store cleanly for usage
             window.allDecryptedTransactions = decrypted;
-            applyFilters();
+            window.applyFilters();
         }
 
-        function applyFilters() {
+        window.applyFilters = function() {
             const m = document.getElementById('filter-month').value;
             const y = document.getElementById('filter-year').value;
-
             let filtered = window.allDecryptedTransactions || [];
-
-            if (y !== 'all') {
-                filtered = filtered.filter(t => new Date(t.date).getFullYear() == y);
-            }
-            if (m !== 'all') {
-                filtered = filtered.filter(t => (new Date(t.date).getMonth() + 1) == m);
-            }
-
+            if (y !== 'all') filtered = filtered.filter(t => new Date(t.date).getFullYear() == y);
+            if (m !== 'all') filtered = filtered.filter(t => (new Date(t.date).getMonth() + 1) == m);
             renderTransactions(filtered);
             updateChart(filtered);
             renderBudgets(filtered);
         }
 
-        function resetFilters() {
+        window.resetFilters = function() {
             document.getElementById('filter-month').value = new Date().getMonth() + 1;
             document.getElementById('filter-year').value = new Date().getFullYear();
-            applyFilters();
+            window.applyFilters();
         }
 
         function updateChart(items) {
             if (!spendChart) return;
-
             const cats = {};
-            items.filter(i => i.type === 'expense').forEach(i => {
-                cats[i.category] = (cats[i.category] || 0) + i.amt;
-            });
-
+            items.filter(i => i.type === 'expense').forEach(i => { cats[i.category] = (cats[i.category] || 0) + i.amt; });
             spendChart.data.labels = Object.keys(cats);
             spendChart.data.datasets[0].data = Object.values(cats);
             spendChart.update();
@@ -1012,48 +985,26 @@
         function renderTransactions(items) {
             const list = document.getElementById('transaction-list');
             let bal = 0, inc = 0, exp = 0;
-            let catExp = {};
-
             list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No transactions found.</div>';
 
             items.forEach(i => {
                 const isInc = i.type === 'income';
-                if (isInc) { inc += i.amt; bal += i.amt; }
-                else {
-                    exp += i.amt; bal -= i.amt;
-                    catExp[i.category] = (catExp[i.category] || 0) + i.amt;
-                }
-
+                if (isInc) { inc += i.amt; bal += i.amt; } else { exp += i.amt; bal -= i.amt; }
                 const div = document.createElement('div');
                 div.className = "p-4 flex items-center justify-between group hover:bg-slate-50 transition-colors cursor-pointer";
-                div.onclick = (e) => {
-                    if (e.target.closest('button')) return;
-                    openTransactionModal(i.id);
-                };
-
+                div.onclick = (e) => { if (e.target.closest('button')) return; window.openTransactionModal(i.id); };
                 div.innerHTML = `
                     <div class="flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${isInc ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">
-                            ${i.category ? i.category.substring(0, 2).toUpperCase() : '??'}
-                        </div>
-                        <div>
-                            <p class="font-bold text-slate-800">${i.desc}</p>
-                            <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${new Date(i.date).toLocaleDateString()} • ${i.category}</p>
-                        </div>
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${isInc ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">${i.category ? i.category.substring(0, 2).toUpperCase() : '??'}</div>
+                        <div><p class="font-bold text-slate-800">${i.desc}</p><p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${new Date(i.date).toLocaleDateString()} • ${i.category}</p></div>
                     </div>
-                    <div class="flex items-center gap-4">
-                        <p class="font-bold ${isInc ? 'text-emerald-600' : 'text-rose-600'}">${isInc ? '+' : '-'}${fmt(i.amt)}</p>
-                        <button onclick="deleteItem('transactions', '${i.id}')" class="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                    </div>`;
+                    <div class="flex items-center gap-4"><p class="font-bold ${isInc ? 'text-emerald-600' : 'text-rose-600'}">${isInc ? '+' : '-'}${fmt(i.amt)}</p><button onclick="window.deleteItem('transactions', '${i.id}')" class="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div>`;
                 list.appendChild(div);
             });
-
             document.getElementById('balance-display').innerText = fmt(bal);
             document.getElementById('income-display').innerText = fmt(inc);
             document.getElementById('expense-display').innerText = fmt(exp);
             document.getElementById('savings-rate-display').innerText = inc > 0 ? Math.round(((inc - exp) / inc) * 100) + '%' : '0%';
-
-            // Update Budget Inputs UI to include Debt categories if any
             populateBudgetInputs();
             lucide.createIcons();
         }
@@ -1061,51 +1012,25 @@
         async function renderDebts(items) {
             const list = document.getElementById('debt-list');
             list.innerHTML = '';
-
             const decryptedDebts = (await Promise.all(items.map(async i => {
                 const d = await decryptData(i.data);
                 return d ? { ...d, id: i.id } : null;
             }))).filter(x => x);
-            
-            // Store for category usage
             window.allDecryptedDebts = decryptedDebts;
+            if(decryptedDebts.length === 0) { list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No debts tracked. Good job!</div>'; return; }
 
-            if(decryptedDebts.length === 0) {
-                 list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No debts tracked. Good job!</div>';
-                 return;
-            }
-
-            // Calculate paid amounts from transaction history (Expenses with category == Debt Name)
-            // Note: We use all transactions (historical), not just filtered ones, to show true debt progress
             const allTrans = window.allDecryptedTransactions || [];
-            
             decryptedDebts.forEach(d => {
-                // Sum expenses that match debt name
-                const paid = allTrans
-                    .filter(t => t.type === 'expense' && t.category === d.name)
-                    .reduce((acc, curr) => acc + curr.amt, 0);
-                
+                const paid = allTrans.filter(t => t.type === 'expense' && t.category === d.name).reduce((acc, curr) => acc + curr.amt, 0);
                 const pct = Math.min((paid / d.amount) * 100, 100);
                 const remaining = Math.max(d.amount - paid, 0);
-
                 const div = document.createElement('div');
                 div.className = "bg-slate-50 p-3 rounded-2xl border border-slate-100";
                 div.innerHTML = `
-                    <div class="flex justify-between items-center mb-2">
-                        <h4 class="font-bold text-slate-700 text-sm">${d.name}</h4>
-                        <button onclick="deleteItem('debts', '${d.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="x" class="w-3 h-3"></i></button>
-                    </div>
-                    <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
-                        <span>Paid: ${fmt(paid)}</span>
-                        <span>Goal: ${fmt(d.amount)}</span>
-                    </div>
-                    <div class="w-full h-2 bg-white border border-slate-200 rounded-full overflow-hidden mb-1">
-                         <div class="h-full bg-rose-500 transition-all duration-1000" style="width: ${pct}%"></div>
-                    </div>
-                    <div class="text-right text-xs font-bold text-slate-800">
-                        ${fmt(remaining)} left
-                    </div>
-                `;
+                    <div class="flex justify-between items-center mb-2"><h4 class="font-bold text-slate-700 text-sm">${d.name}</h4><button onclick="window.deleteItem('debts', '${d.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="x" class="w-3 h-3"></i></button></div>
+                    <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1"><span>Paid: ${fmt(paid)}</span><span>Goal: ${fmt(d.amount)}</span></div>
+                    <div class="w-full h-2 bg-white border border-slate-200 rounded-full overflow-hidden mb-1"><div class="h-full bg-rose-500 transition-all duration-1000" style="width: ${pct}%"></div></div>
+                    <div class="text-right text-xs font-bold text-slate-800">${fmt(remaining)} left</div>`;
                 list.appendChild(div);
             });
             lucide.createIcons();
@@ -1118,76 +1043,46 @@
                 const d = await decryptData(i.data);
                 return d ? { ...d, id: i.id } : null;
             }))).filter(x => x);
-
-            if(decrypted.length === 0) {
-                 list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No bills set.</div>';
-                 return;
-            }
-
+            if(decrypted.length === 0) { list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No bills set.</div>'; return; }
             decrypted.forEach(b => {
                 const div = document.createElement('div');
                 div.className = "p-3 bg-slate-50 rounded-2xl flex justify-between border items-center group hover:border-indigo-300 cursor-pointer transition-colors";
-                div.onclick = (e) => { if (!e.target.closest('button')) openBillModal(b.id); };
-
-                div.innerHTML = `<div><p class="text-xs font-bold text-slate-400 uppercase">Day ${b.day}</p><p class="font-bold text-slate-800">${b.name}</p></div><div class="flex items-center gap-3"><span class="font-bold text-slate-500">${fmt(b.amt)}</span><button onclick="deleteItem('bills', '${b.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button></div>`;
+                div.onclick = (e) => { if (!e.target.closest('button')) window.openBillModal(b.id); };
+                div.innerHTML = `<div><p class="text-xs font-bold text-slate-400 uppercase">Day ${b.day}</p><p class="font-bold text-slate-800">${b.name}</p></div><div class="flex items-center gap-3"><span class="font-bold text-slate-500">${fmt(b.amt)}</span><button onclick="window.deleteItem('bills', '${b.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button></div>`;
                 list.appendChild(div);
             });
             lucide.createIcons();
         }
-        
+
         function renderBudgets(items) {
             const container = document.getElementById('budget-breakdown');
             const hasBudgets = Object.values(budgets).some(v => v > 0);
-            if (!hasBudgets) {
-                container.innerHTML = '<p class="text-xs text-slate-400 italic text-center">Set budgets to see progress.</p>';
-                return;
-            }
-
+            if (!hasBudgets) { container.innerHTML = '<p class="text-xs text-slate-400 italic text-center">Set budgets to see progress.</p>'; return; }
             const actuals = {};
-            items.filter(i => i.type === 'expense').forEach(i => {
-                actuals[i.category] = (actuals[i.category] || 0) + i.amt;
-            });
-
+            items.filter(i => i.type === 'expense').forEach(i => { actuals[i.category] = (actuals[i.category] || 0) + i.amt; });
             container.innerHTML = '';
             Object.entries(budgets).forEach(([cat, limit]) => {
                 if (!limit) return;
                 const spent = actuals[cat] || 0;
                 const pct = Math.min((spent / limit) * 100, 100);
                 const isOver = spent > limit;
-
                 const div = document.createElement('div');
-                div.innerHTML = `
-                    <div class="flex justify-between text-xs font-bold mb-1">
-                        <span class="text-slate-600">${cat}</span>
-                        <span class="${isOver ? 'text-rose-500' : 'text-slate-400'}">${fmt(spent)} / ${fmt(limit)}</span>
-                    </div>
-                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div class="h-full rounded-full transition-all duration-500 ${isOver ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${pct}%"></div>
-                    </div>
-                `;
+                div.innerHTML = `<div class="flex justify-between text-xs font-bold mb-1"><span class="text-slate-600">${cat}</span><span class="${isOver ? 'text-rose-500' : 'text-slate-400'}">${fmt(spent)} / ${fmt(limit)}</span></div><div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full rounded-full transition-all duration-500 ${isOver ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${pct}%"></div></div>`;
                 container.appendChild(div);
             });
         }
 
-        // --- CRUD LOGIC ---
         function populateCategorySelect(selectEl) {
             selectEl.innerHTML = '';
-            // 1. Standard Categories
             standardCategories.forEach(c => {
                  const op = document.createElement('option');
-                 op.value = c;
-                 op.innerText = (c === 'Salary' || c === 'Savings') ? `💰 ${c}` : c;
+                 op.value = c; op.innerText = (c === 'Salary' || c === 'Savings') ? `💰 ${c}` : c;
                  selectEl.appendChild(op);
             });
-
-            // 2. Debt Categories
             if(window.allDecryptedDebts && window.allDecryptedDebts.length > 0) {
-                const group = document.createElement('optgroup');
-                group.label = "Debts / Loans";
+                const group = document.createElement('optgroup'); group.label = "Debts / Loans";
                 window.allDecryptedDebts.forEach(d => {
-                    const op = document.createElement('option');
-                    op.value = d.name; // Important: Value matches Debt name
-                    op.innerText = `🏦 Pay: ${d.name}`;
+                    const op = document.createElement('option'); op.value = d.name; op.innerText = `🏦 Pay: ${d.name}`;
                     group.appendChild(op);
                 });
                 selectEl.appendChild(group);
@@ -1196,52 +1091,31 @@
 
         function populateBudgetInputs() {
             const bDiv = document.getElementById('budget-inputs');
-            // Re-build input list to include new debts
             const allCats = [...standardCategories];
-            if(window.allDecryptedDebts) {
-                window.allDecryptedDebts.forEach(d => allCats.push(d.name));
-            }
-
-            bDiv.innerHTML = allCats.map(c => `
-                <div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border">
-                    <label class="text-sm font-bold text-slate-600 w-1/3 truncate pr-2">${c}</label>
-                    <input type="number" data-cat="${c}" value="${budgets[c] || ''}" placeholder="Limit" class="budget-input w-full bg-white border rounded-lg px-3 py-1 text-sm outline-none focus:border-emerald-500">
-                </div>
-            `).join('');
+            if(window.allDecryptedDebts) window.allDecryptedDebts.forEach(d => allCats.push(d.name));
+            bDiv.innerHTML = allCats.map(c => `<div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border"><label class="text-sm font-bold text-slate-600 w-1/3 truncate pr-2">${c}</label><input type="number" data-cat="${c}" value="${budgets[c] || ''}" placeholder="Limit" class="budget-input w-full bg-white border rounded-lg px-3 py-1 text-sm outline-none focus:border-emerald-500"></div>`).join('');
         }
 
-        function openTransactionModal(id = null) {
+        window.openTransactionModal = function(id = null) {
             const modal = document.getElementById('transaction-modal');
             const title = document.getElementById('t-modal-title');
             const tId = document.getElementById('t-id');
             const desc = document.getElementById('t-desc');
             const amt = document.getElementById('t-amount');
             const cat = document.getElementById('t-category');
-
-            // Populate categories fresh every time to catch new debts
             populateCategorySelect(cat);
 
             if (id) {
                 const item = window.allDecryptedTransactions.find(t => t.id === id);
                 if (!item) return;
-                title.innerText = "Edit Transaction";
-                tId.value = id;
-                desc.value = item.desc;
-                amt.value = item.amt;
-                cat.value = item.category;
-                setTType(item.type);
+                title.innerText = "Edit Transaction"; tId.value = id; desc.value = item.desc; amt.value = item.amt; cat.value = item.category; window.setTType(item.type);
             } else {
-                title.innerText = "New Transaction";
-                tId.value = "";
-                desc.value = "";
-                amt.value = "";
-                cat.value = "Food";
-                setTType('expense');
+                title.innerText = "New Transaction"; tId.value = ""; desc.value = ""; amt.value = ""; cat.value = "Food"; window.setTType('expense');
             }
             modal.classList.remove('hidden');
         }
 
-        async function openBillModal(id = null) {
+        window.openBillModal = async function(id = null) {
             const modal = document.getElementById('bill-modal');
             const title = document.getElementById('b-modal-title');
             const bId = document.getElementById('b-id');
@@ -1254,38 +1128,27 @@
                 if (raw) {
                     const d = await decryptData(raw.data);
                     if (d) {
-                        title.innerText = "Edit Bill";
-                        bId.value = id;
-                        name.value = d.name;
-                        day.value = d.day;
-                        amt.value = d.amt;
-                        modal.classList.remove('hidden');
-                        return;
+                        title.innerText = "Edit Bill"; bId.value = id; name.value = d.name; day.value = d.day; amt.value = d.amt;
+                        modal.classList.remove('hidden'); return;
                     }
                 }
             }
-
-            title.innerText = "Add Bill";
-            bId.value = "";
-            name.value = "";
-            day.value = "";
-            amt.value = "";
+            title.innerText = "Add Bill"; bId.value = ""; name.value = ""; day.value = ""; amt.value = "";
             modal.classList.remove('hidden');
         }
 
-        function openDebtModal() {
-             document.getElementById('d-name').value = '';
-             document.getElementById('d-amount').value = '';
+        window.openDebtModal = function() {
+             document.getElementById('d-name').value = ''; document.getElementById('d-amount').value = '';
              document.getElementById('debt-modal').classList.remove('hidden');
         }
 
-        async function saveTransaction() {
+        window.saveTransaction = async function() {
+            if(!userId) return;
             const id = document.getElementById('t-id').value;
             const desc = document.getElementById('t-desc').value;
             const amt = parseFloat(document.getElementById('t-amount').value);
             const type = document.getElementById('t-type').value;
             const category = document.getElementById('t-category').value;
-
             if (!desc || isNaN(amt)) return;
 
             let date = new Date().toISOString();
@@ -1293,31 +1156,21 @@
                 const existing = window.allDecryptedTransactions.find(t => t.id === id);
                 if (existing) date = existing.date;
             }
-
             const encrypted = await encryptData({ desc, amt, type, category, date });
 
-            const db = getDB();
-            if (id) {
-                const idx = db.transactions.findIndex(t => t.id === id);
-                if (idx !== -1) db.transactions[idx] = { id, data: encrypted, lastModified: Date.now() };
-            } else {
-                db.transactions.push({
-                    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-                    data: encrypted,
-                    createdAt: Date.now()
-                });
-            }
-            saveDB(db);
-
-            rawTransactions = db.transactions;
-            toggleModal('transaction-modal');
-            await loadAndRender(); // Updates transaction list
-            
-            // Re-render debts because a transaction might have been a payment towards a debt
-            await renderDebts(rawDebts);
+            try {
+                if (id) {
+                    await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'transactions', id), { data: encrypted, lastModified: Date.now() }, { merge: true });
+                } else {
+                    await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'transactions'), { data: encrypted, createdAt: Date.now() });
+                }
+                window.toggleModal('transaction-modal');
+                // loadAndRender() called automatically by listener
+            } catch(e) { console.error(e); alert("Save failed"); }
         }
 
-        async function saveBill() {
+        window.saveBill = async function() {
+            if(!userId) return;
             const id = document.getElementById('b-id').value;
             const name = document.getElementById('b-name').value;
             const day = parseInt(document.getElementById('b-day').value);
@@ -1325,46 +1178,31 @@
             if (!name || isNaN(day)) return;
 
             const encrypted = await encryptData({ name, day, amt });
-
-            const db = getDB();
-            if (id) {
-                const idx = db.bills.findIndex(b => b.id === id);
-                if (idx !== -1) db.bills[idx] = { id, data: encrypted };
-            } else {
-                db.bills.push({
-                    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-                    data: encrypted
-                });
-            }
-            saveDB(db);
-
-            rawBills = db.bills;
-            toggleModal('bill-modal');
-            renderBills(rawBills);
+            try {
+                if (id) {
+                    await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'bills', id), { data: encrypted }, { merge: true });
+                } else {
+                    await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'bills'), { data: encrypted });
+                }
+                window.toggleModal('bill-modal');
+            } catch(e) { console.error(e); alert("Save failed"); }
         }
 
-        async function saveDebt() {
+        window.saveDebt = async function() {
+            if(!userId) return;
             const name = document.getElementById('d-name').value;
             const amount = parseFloat(document.getElementById('d-amount').value);
             if (!name || isNaN(amount)) return;
-
             const encrypted = await encryptData({ name, amount });
-            const db = getDB();
-            db.debts = db.debts || [];
-            db.debts.push({
-                id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-                data: encrypted
-            });
-            saveDB(db);
-
-            rawDebts = db.debts;
-            toggleModal('debt-modal');
-            renderDebts(rawDebts);
-            // Refresh budget inputs to include new debt category
-            populateBudgetInputs();
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'debts'), { data: encrypted });
+                window.toggleModal('debt-modal');
+                populateBudgetInputs();
+            } catch(e) { console.error(e); alert("Save failed"); }
         }
 
-        async function saveBudgets() {
+        window.saveBudgets = async function() {
+            if(!userId) return;
             const inputs = document.querySelectorAll('.budget-input');
             const newBudgets = {};
             inputs.forEach(inp => {
@@ -1372,59 +1210,26 @@
                 const val = parseFloat(inp.value);
                 if (val > 0) newBudgets[cat] = val;
             });
-
             const encrypted = await encryptData(newBudgets);
-
-            const db = getDB();
-            db.budgets = { data: encrypted };
-            saveDB(db);
-
-            budgets = newBudgets;
-            toggleModal('budget-modal');
-            loadAndRender(); 
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'users', userId, 'settings', 'budgets'), { data: encrypted });
+                window.toggleModal('budget-modal');
+            } catch(e) { console.error(e); alert("Save failed"); }
         }
 
-        async function deleteItem(col, id) {
+        window.deleteItem = async function(col, id) {
+            if(!userId) return;
             if (!confirm("Are you sure?")) return;
-            const db = getDB();
-
-            if (col === 'transactions') {
-                db.transactions = db.transactions.filter(t => t.id !== id);
-                rawTransactions = db.transactions;
-                saveDB(db);
-                await loadAndRender();
-                await renderDebts(rawDebts); // Update debt progress if a payment was deleted
-            } else if (col === 'bills') {
-                db.bills = db.bills.filter(b => b.id !== id);
-                rawBills = db.bills;
-                saveDB(db);
-                renderBills(rawBills);
-            } else if (col === 'debts') {
-                db.debts = db.debts.filter(d => d.id !== id);
-                rawDebts = db.debts;
-                saveDB(db);
-                renderDebts(rawDebts);
-                populateBudgetInputs();
-            } else if (col === 'crypto') {
-                db.crypto = db.crypto.filter(c => c.id !== id);
-                rawCrypto = db.crypto;
-                saveDB(db);
-                renderCryptoPortfolio();
-                // re-calc holdings for widget
-                renderCryptoWidget();
-            }
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, col, id));
+            } catch(e) { console.error(e); alert("Delete failed"); }
         }
 
-        function toggleCurrency() {
+        window.toggleCurrency = function() {
             activeCurrency = activeCurrency === 'PHP' ? 'USD' : 'PHP';
             document.getElementById('active-currency').innerText = activeCurrency + (activeCurrency === 'PHP' ? ' (₱)' : ' ($)');
-            loadAndRender(); 
-            renderBills(rawBills);
-            renderDebts(rawDebts);
-            renderCryptoWidget(); // Update crypto summary
-            if(!document.getElementById('crypto-portfolio-modal').classList.contains('hidden')) {
-                renderCryptoPortfolio();
-            }
+            loadAndRender(); renderBills(rawBills); renderDebts(rawDebts); renderCryptoWidget();
+            if(!document.getElementById('crypto-portfolio-modal').classList.contains('hidden')) { renderCryptoPortfolio(); }
         }
 
         function fmt(val) {
@@ -1433,21 +1238,11 @@
             return s + c.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
-        function setTType(t) {
-            document.getElementById('t-type').value = t;
-            const bE = document.getElementById('btn-expense');
-            const bI = document.getElementById('btn-income');
-            bE.className = t === 'expense' ? "py-2 rounded-xl font-bold bg-white shadow-sm text-rose-600" : "py-2 rounded-xl font-bold text-slate-400";
-            bI.className = t === 'income' ? "py-2 rounded-xl font-bold bg-white shadow-sm text-emerald-600" : "py-2 rounded-xl font-bold text-slate-400";
-        }
-
-        function toggleModal(id) { document.getElementById(id).classList.toggle('hidden'); }
-        function exportToCSV() {
+        window.toggleModal = function(id) { document.getElementById(id).classList.toggle('hidden'); }
+        window.exportToCSV = function() {
             if (!window.allDecryptedTransactions || window.allDecryptedTransactions.length === 0) return;
             let csv = "Date,Description,Category,Type,Amount\n";
-            window.allDecryptedTransactions.forEach(i => {
-                csv += `${new Date(i.date).toLocaleDateString()},"${i.desc}",${i.category},${i.type},${i.amt}\n`;
-            });
+            window.allDecryptedTransactions.forEach(i => { csv += `${new Date(i.date).toLocaleDateString()},"${i.desc}",${i.category},${i.type},${i.amt}\n`; });
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
