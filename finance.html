@@ -380,7 +380,14 @@
         import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global Firebase Configuration
-        const firebaseConfig = JSON.parse(__firebase_config);
+        const firebaseConfig = {
+          apiKey: "AIzaSyC9nhH90Zkz9M4k-eRki3weqr_OyuRVhTw",
+          authDomain: "life-manager-with-finance.firebaseapp.com",
+          projectId: "life-manager-with-finance",
+          storageBucket: "life-manager-with-finance.firebasestorage.app",
+          messagingSenderId: "278187395464",
+          appId: "1:278187395464:web:5667404572487ebb06523d"
+        };
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
