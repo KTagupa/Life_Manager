@@ -161,12 +161,12 @@
                         </button>
                     </div>
                     <div id="transaction-list" class="divide-y divide-slate-50 max-h-[500px] overflow-y-auto custom-scrollbar">
-                        <div class="p-10 text-center text-slate-400 italic">Syncing with cloud vault...</div>
+                        <div class="p-10 text-center text-slate-400 italic">Vault Locked.</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right: Bills, Debts & Crypto -->
+            <!-- Right Sidebar -->
             <div class="lg:col-span-4 space-y-6">
                 <!-- Crypto Portfolio -->
                 <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl p-6 relative overflow-hidden text-white group cursor-pointer" onclick="openCryptoPortfolio()">
@@ -237,10 +237,8 @@
         </div>
     </main>
 
-    <!-- Modals (Transaction, Debt, Bill, Crypto Portfolio, Crypto Transaction, Budgets) -->
-    <!-- [MODAL HTML STRUCTURE RETAINED BUT UPDATED WITH IDs] -->
-    
-    <!-- Standard Transaction Modal -->
+    <!-- Modals -->
+    <!-- Transaction Modal -->
     <div id="transaction-modal" class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
             <h3 class="text-2xl font-bold text-slate-800 mb-6" id="t-modal-title">New Entry</h3>
@@ -376,10 +374,10 @@
     <!-- Firebase SDK Modules -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global Firebase Configuration
+        // IMPORTANT: Replace this config with your actual Firebase project settings
         const firebaseConfig = {
           apiKey: "AIzaSyC9nhH90Zkz9M4k-eRki3weqr_OyuRVhTw",
           authDomain: "life-manager-with-finance.firebaseapp.com",
@@ -388,10 +386,11 @@
           messagingSenderId: "278187395464",
           appId: "1:278187395464:web:5667404572487ebb06523d"
         };
+        
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-finance-sync';
+        const appId = 'finance-cloud-vault-v1';
 
         // --- APP STATE ---
         let masterKey = null;
@@ -413,7 +412,7 @@
         // --- HELPER: ENCRYPTION & HASHING ---
         async function hashMasterKey(key) {
             const encoder = new TextEncoder();
-            const data = encoder.encode(key + "ff-salt-v1");
+            const data = encoder.encode(key + "vault-id-salt-v1");
             const hashBuffer = await crypto.subtle.digest('SHA-256', data);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -452,10 +451,9 @@
             syncEl.classList.add('flex');
 
             try {
-                // Mandatory Path: /artifacts/{appId}/public/data/{collectionName}/{docId}
+                // Rule compliant path: /artifacts/{appId}/public/data/vaults/{vaultId}
                 const vaultDoc = doc(db, 'artifacts', appId, 'public', 'data', 'vaults', vaultId);
                 
-                // Encrypt budgets as it's a map
                 const encryptedBudgets = await encryptData(budgets);
 
                 await setDoc(vaultDoc, {
@@ -463,7 +461,7 @@
                     bills: rawBills,
                     debts: rawDebts,
                     crypto: rawCrypto,
-                    crypto_prices: cryptoPrices, // Prices are public market data, stored unencrypted for cache
+                    crypto_prices: cryptoPrices, 
                     budgets_data: encryptedBudgets,
                     lastUpdated: Date.now()
                 });
@@ -500,39 +498,42 @@
             const input = document.getElementById('master-key-input').value;
             if (input.length < 4) { alert("Key must be at least 4 characters."); return; }
 
-            document.getElementById('auth-status').innerText = "Unlocking Vault...";
+            const status = document.getElementById('auth-status');
+            status.innerText = "Connecting to Cloud...";
             
-            // 1. Authenticate with Firebase first
             try {
+                // 1. Authenticate with Firebase
                 await signInAnonymously(auth);
+                
+                // 2. Derive Keys
+                masterKey = input;
+                vaultId = await hashMasterKey(input);
+                cryptoKey = await deriveKey(masterKey, new TextEncoder().encode("finance-flow-salt-v3"));
+
+                // 3. Sync Data
+                status.innerText = "Syncing Vault...";
+                await pullFromCloud();
+
+                // 4. Update UI
+                document.getElementById('auth-overlay').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('opacity-0');
+
+                initFilters();
+                initChart();
+                await loadAndRender();
+                renderBills(rawBills);
+                renderDebts(rawDebts);
+                renderCryptoWidget();
+                populateCategorySelect(document.getElementById('t-category'));
+                populateBudgetInputs();
             } catch (err) {
-                alert("Cloud connection failed. Check your network.");
-                return;
+                console.error(err);
+                status.innerText = "Error: " + err.message;
+                alert("Connection Failed: " + err.message + "\n\nTip: Ensure Anonymous Auth is enabled in Firebase.");
             }
-
-            // 2. Derive deterministic keys and IDs
-            masterKey = input;
-            vaultId = await hashMasterKey(input);
-            cryptoKey = await deriveKey(masterKey, new TextEncoder().encode("finance-flow-salt-v3"));
-
-            // 3. Sync data
-            await pullFromCloud();
-
-            // 4. Update UI
-            document.getElementById('auth-overlay').classList.add('hidden');
-            document.getElementById('main-content').classList.remove('opacity-0');
-
-            initFilters();
-            initChart();
-            await loadAndRender();
-            renderBills(rawBills);
-            renderDebts(rawDebts);
-            renderCryptoWidget();
         };
 
-        // --- CORE APP LOGIC ---
-        // (Maintaining your existing functionality but swapping storage calls)
-
+        // --- CORE LOGIC ---
         async function loadAndRender() {
             const decrypted = (await Promise.all(rawTransactions.map(async i => {
                 const d = await decryptData(i.data);
@@ -634,8 +635,7 @@
         };
 
         window.deleteItem = async function(col, id) {
-            if (!confirm("Remove this entry forever?")) return;
-            
+            if (!confirm("Delete this?")) return;
             if (col === 'transactions') rawTransactions = rawTransactions.filter(t => t.id !== id);
             else if (col === 'bills') rawBills = rawBills.filter(b => b.id !== id);
             else if (col === 'debts') rawDebts = rawDebts.filter(d => d.id !== id);
@@ -648,7 +648,7 @@
             if (col === 'crypto') renderCryptoPortfolio();
         };
 
-        // --- UI & CHARTING ---
+        // --- UI ---
         function initFilters() {
             const mSel = document.getElementById('filter-month');
             const ySel = document.getElementById('filter-year');
@@ -691,7 +691,7 @@
         function renderTransactions(items) {
             const list = document.getElementById('transaction-list');
             let bal = 0, inc = 0, exp = 0;
-            list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No entries for this period.</div>';
+            list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No entries found.</div>';
             items.forEach(i => {
                 const isInc = i.type === 'income';
                 if (isInc) { inc += i.amt; bal += i.amt; }
@@ -718,7 +718,6 @@
             populateCategorySelect(document.getElementById('t-category'));
         }
 
-        // Global formatting function
         window.fmt = function(val) {
             const c = activeCurrency === 'USD' ? val * phpToUsdRate : val;
             const s = activeCurrency === 'USD' ? '$' : '₱';
@@ -736,14 +735,9 @@
             renderCryptoWidget();
         };
 
-        // --- CRYPTO MODULE ---
+        // --- CRYPTO ---
         window.openCryptoPortfolio = function() { toggleModal('crypto-portfolio-modal'); renderCryptoPortfolio(); };
-        window.openCryptoTransaction = function() { 
-            document.getElementById('c-token-search').value = ''; 
-            document.getElementById('c-amount').value = ''; 
-            document.getElementById('c-price').value = '';
-            toggleModal('crypto-transaction-modal'); 
-        };
+        window.openCryptoTransaction = function() { toggleModal('crypto-transaction-modal'); };
 
         window.searchToken = async function() {
             const q = document.getElementById('c-token-search').value;
@@ -812,16 +806,13 @@
             const h = await calculateHoldings();
             const ids = Object.keys(h).filter(k => h[k].amount > 0.000001);
             if (!ids.length) return;
-            const icon = document.querySelector('#btn-refresh-crypto svg');
-            if(icon) icon.classList.add('animate-spin');
             try {
                 const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=php`);
                 const data = await r.json();
                 Object.keys(data).forEach(id => { cryptoPrices[id] = { price: data[id].php, updated: Date.now() }; });
                 await pushToCloud();
                 renderCryptoPortfolio();
-            } catch (e) { alert("API Limit. Try later."); }
-            finally { if(icon) icon.classList.remove('animate-spin'); }
+            } catch (e) { console.error("Crypto refresh failed", e); }
         };
 
         async function renderCryptoWidget() {
@@ -846,23 +837,22 @@
                 div.className = "bg-slate-800 p-4 rounded-2xl flex justify-between border border-slate-700";
                 div.innerHTML = `
                     <div><h4 class="font-bold text-white">${h.symbol.toUpperCase()}</h4><p class="text-[10px] text-slate-400">${h.amount.toFixed(4)} tokens</p></div>
-                    <div class="text-right"><p class="font-bold text-white">${cp > 0 ? fmt(val) : 'Update Price'}</p></div>`;
+                    <div class="text-right"><p class="font-bold text-white">${cp > 0 ? fmt(val) : '---'}</p></div>`;
                 list.appendChild(div);
             });
             renderCryptoWidget();
             lucide.createIcons();
         }
 
-        // --- DEBT & BILL HELPERS ---
+        // --- EXTRAS ---
         async function renderDebts(items) {
             const list = document.getElementById('debt-list');
-            list.innerHTML = items.length ? '' : '<p class="text-xs text-slate-400 text-center">No debts tracked.</p>';
+            list.innerHTML = items.length ? '' : '<p class="text-xs text-slate-400 text-center">No debts.</p>';
             const allDecrypted = (await Promise.all(items.map(async i => {
                 const d = await decryptData(i.data);
                 return d ? { ...d, id: i.id } : null;
             }))).filter(x => x);
             window.allDecryptedDebts = allDecrypted;
-            
             allDecrypted.forEach(d => {
                 const paid = (window.allDecryptedTransactions || []).filter(t => t.category === d.name).reduce((a,b)=>a+b.amt,0);
                 const pct = Math.min((paid/d.amount)*100, 100);
@@ -879,7 +869,7 @@
 
         async function renderBills(items) {
             const list = document.getElementById('bill-list');
-            list.innerHTML = items.length ? '' : '<p class="text-xs text-slate-400 text-center">No bills set.</p>';
+            list.innerHTML = items.length ? '' : '<p class="text-xs text-slate-400 text-center">No bills.</p>';
             const decrypted = (await Promise.all(items.map(async i => {
                 const d = await decryptData(i.data);
                 return d ? { ...d, id: i.id } : null;
