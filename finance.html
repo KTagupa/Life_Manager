@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <style>
         .glass-morphism {
@@ -480,6 +482,20 @@
     <script>
         // --- CONFIG ---
         const appId = 'personal-finance-sync-v1';
+        // Firebase Configuration
+        const firebaseConfig = {
+          apiKey: "AIzaSyA0w6s-PQ4wurNbi4gvvgGbh7b8HfR1P7U",
+          authDomain: "financeflow-vault-fe6d2.firebaseapp.com",
+          projectId: "financeflow-vault-fe6d2",
+          storageBucket: "financeflow-vault-fe6d2.firebasestorage.app",
+          messagingSenderId: "163555840928",
+          appId: "1:163555840928:web:ead72c1ba691a6d002cac5"
+        };
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const firestoreDB = firebase.firestore();
+        
         let masterKey = null;
         let cryptoKey = null;
         let activeCurrency = 'PHP';
@@ -499,14 +515,46 @@
         // --- MOCK DB (LocalStorage) ---
         const DB_KEY = 'finance_flow_encrypted_v3';
 
-        function getDB() {
-            const str = localStorage.getItem(DB_KEY);
-            return str ? JSON.parse(str) : { transactions: [], bills: [], debts: [], crypto: [], crypto_prices: {}, budgets: { data: null } };
+        async function getDB() {
+        // Try Firebase first
+        try {
+            if (masterKey && firestoreDB) {
+                const vaultId = await getVaultId(masterKey);
+                const doc = await firestoreDB.collection('vaults').doc(vaultId).get();
+                
+                if (doc.exists) {
+                    console.log('✅ Loaded from Firebase');
+                    return doc.data().vaultData || { transactions: [], bills: [], debts: [], crypto: [], crypto_prices: {}, budgets: { data: null } };
+                }
+            }
+        } catch (error) {
+            console.error('Firebase load failed, using localStorage:', error);
         }
+        
+        // Fallback to localStorage
+        const str = localStorage.getItem(DB_KEY);
+        return str ? JSON.parse(str) : { transactions: [], bills: [], debts: [], crypto: [], crypto_prices: {}, budgets: { data: null } };
+    }
 
-        function saveDB(db) {
-            localStorage.setItem(DB_KEY, JSON.stringify(db));
+        async function saveDB(db) {
+        // Save to localStorage first (instant backup)
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+        
+        // Then sync to Firebase
+        try {
+            if (masterKey && firestoreDB) {
+                const vaultId = await getVaultId(masterKey);
+                await firestoreDB.collection('vaults').doc(vaultId).set({
+                    vaultData: db,
+                    lastModified: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log('✅ Synced to Firebase');
+            }
+        } catch (error) {
+            console.error('❌ Firebase sync failed:', error);
+            // Don't throw error - data is still saved locally
         }
+    }
 
         // --- CRYPTO HELPER (AES-GCM) ---
         async function deriveKey(password, salt) {
@@ -525,6 +573,18 @@
             return { iv: Array.from(iv), content: Array.from(new Uint8Array(encrypted)) };
         }
 
+        // Generate vault ID from master key
+        async function getVaultId(password) {
+            const enc = new TextEncoder();
+            const hashBuffer = await window.crypto.subtle.digest(
+                'SHA-256',
+                enc.encode(password + 'finance-vault-id-salt-v1')
+            );
+            return Array.from(new Uint8Array(hashBuffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
         async function decryptData(encryptedObj) {
             try {
                 if (!encryptedObj || !encryptedObj.iv || !encryptedObj.content) return null;
@@ -560,7 +620,7 @@
         }
 
         async function loadFromStorage() {
-            const db = getDB();
+            const db = await getDB();
 
             rawTransactions = db.transactions || [];
             await loadAndRender();
@@ -688,12 +748,12 @@
             };
             const encrypted = await encryptData(txData);
             
-            const db = getDB();
+            const db = await getDB();
             db.crypto.push({
                 id: Date.now().toString(36),
                 data: encrypted
             });
-            saveDB(db);
+            await saveDB(db);
             
             rawCrypto = db.crypto;
             toggleModal('crypto-transaction-modal');
@@ -767,12 +827,12 @@
                 const data = await res.json();
                 
                 // Update cache
-                const db = getDB();
+                const db = await getDB();
                 const now = Date.now();
                 Object.keys(data).forEach(id => {
                     db.crypto_prices[id] = { price: data[id].php, updated: now };
                 });
-                saveDB(db);
+                await saveDB(db);
                 cryptoPrices = db.crypto_prices;
                 renderCryptoPortfolio();
             } catch(e) {
@@ -1296,7 +1356,7 @@
 
             const encrypted = await encryptData({ desc, amt, type, category, date });
 
-            const db = getDB();
+            const db = await getDB();
             if (id) {
                 const idx = db.transactions.findIndex(t => t.id === id);
                 if (idx !== -1) db.transactions[idx] = { id, data: encrypted, lastModified: Date.now() };
@@ -1307,7 +1367,7 @@
                     createdAt: Date.now()
                 });
             }
-            saveDB(db);
+            await saveDB(db);
 
             rawTransactions = db.transactions;
             toggleModal('transaction-modal');
@@ -1326,7 +1386,7 @@
 
             const encrypted = await encryptData({ name, day, amt });
 
-            const db = getDB();
+            const db = await getDB();
             if (id) {
                 const idx = db.bills.findIndex(b => b.id === id);
                 if (idx !== -1) db.bills[idx] = { id, data: encrypted };
@@ -1336,7 +1396,7 @@
                     data: encrypted
                 });
             }
-            saveDB(db);
+            await saveDB(db);
 
             rawBills = db.bills;
             toggleModal('bill-modal');
@@ -1349,13 +1409,13 @@
             if (!name || isNaN(amount)) return;
 
             const encrypted = await encryptData({ name, amount });
-            const db = getDB();
+            const db = await getDB();
             db.debts = db.debts || [];
             db.debts.push({
                 id: Date.now().toString(36) + Math.random().toString(36).substr(2),
                 data: encrypted
             });
-            saveDB(db);
+            await saveDB(db);
 
             rawDebts = db.debts;
             toggleModal('debt-modal');
@@ -1375,9 +1435,9 @@
 
             const encrypted = await encryptData(newBudgets);
 
-            const db = getDB();
+            const db = await getDB();
             db.budgets = { data: encrypted };
-            saveDB(db);
+            await saveDB(db);
 
             budgets = newBudgets;
             toggleModal('budget-modal');
@@ -1386,29 +1446,29 @@
 
         async function deleteItem(col, id) {
             if (!confirm("Are you sure?")) return;
-            const db = getDB();
+            const db = await getDB();
 
             if (col === 'transactions') {
                 db.transactions = db.transactions.filter(t => t.id !== id);
                 rawTransactions = db.transactions;
-                saveDB(db);
+                await saveDB(db);
                 await loadAndRender();
                 await renderDebts(rawDebts); // Update debt progress if a payment was deleted
             } else if (col === 'bills') {
                 db.bills = db.bills.filter(b => b.id !== id);
                 rawBills = db.bills;
-                saveDB(db);
+                await saveDB(db);
                 renderBills(rawBills);
             } else if (col === 'debts') {
                 db.debts = db.debts.filter(d => d.id !== id);
                 rawDebts = db.debts;
-                saveDB(db);
+                await saveDB(db);
                 renderDebts(rawDebts);
                 populateBudgetInputs();
             } else if (col === 'crypto') {
                 db.crypto = db.crypto.filter(c => c.id !== id);
                 rawCrypto = db.crypto;
-                saveDB(db);
+                await saveDB(db);
                 renderCryptoPortfolio();
                 // re-calc holdings for widget
                 renderCryptoWidget();
