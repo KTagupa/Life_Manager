@@ -804,9 +804,6 @@
             cryptoKey = await deriveKey(masterKey, new TextEncoder().encode("finance-flow-salt-v3"));
             await updateExchangeRates();
             
-            console.log("Offline mode: Using default exchange rates"); 
-            }
-
             document.getElementById('auth-overlay').classList.add('hidden');
             document.getElementById('main-content').classList.remove('opacity-0');
 
@@ -1475,6 +1472,17 @@
             `).join('');
         }
 
+        function openTransactionModal(id = null) {
+        const modal = document.getElementById('transaction-modal');
+        const title = document.getElementById('t-modal-title');
+        const tId = document.getElementById('t-id');
+        const desc = document.getElementById('t-desc');
+        const amt = document.getElementById('t-amount');
+        const cat = document.getElementById('t-category');
+    
+        // Populate categories fresh every time to catch new debts
+        populateCategorySelect(cat);
+    
         if (id) {
             const item = window.allDecryptedTransactions.find(t => t.id === id);
             if (!item) return;
@@ -1512,6 +1520,7 @@
             document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
         }
         modal.classList.remove('hidden');
+    }
 
         async function openBillModal(id = null) {
             const modal = document.getElementById('bill-modal');
