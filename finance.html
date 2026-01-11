@@ -1499,19 +1499,8 @@
             
             // Default to today
             document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
-        } else {
-            title.innerText = "New Transaction";
-            tId.value = "";
-            desc.value = "";
-            amt.value = "";
-            cat.value = "Food";
-            setTType('expense');
-            
-            // Default to today
-            document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
         }
-            modal.classList.remove('hidden');
-        }
+        modal.classList.remove('hidden');
 
         async function openBillModal(id = null) {
             const modal = document.getElementById('bill-modal');
