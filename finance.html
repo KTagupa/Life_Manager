@@ -297,9 +297,25 @@
                 </div>
                 <input type="text" id="t-desc" placeholder="Description (e.g. Lunch)"
                     class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
-                <input type="number" id="t-amount" placeholder="Amount (₱)"
-                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
-                
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Amount</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="t-amount" placeholder="0.00" step="0.01" 
+                            oninput="updateConversionPreview()"
+                            class="flex-1 p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 font-bold text-slate-700">
+                        <select id="t-currency" onchange="updateConversionPreview()" class="p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-slate-600 w-24">
+                            <option value="PHP">PHP</option>
+                            <option value="USD">USD</option>
+                            <option value="JPY">JPY</option>
+                        </select>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1 ml-2" id="amount-converted-preview"></p>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Date</label>
+                    <input type="date" id="t-date"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 text-slate-700 font-bold">
+                </div>
                 <div>
                     <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Category</label>
                     <select id="t-category" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
@@ -642,7 +658,11 @@
         let masterKey = null;
         let cryptoKey = null;
         let activeCurrency = 'PHP';
-        let phpToUsdRate = 0.018;
+        let exchangeRates = {
+            PHP: 1,
+            USD: 0.018,
+            JPY: 2.6
+        };
         
         // Data Containers
         let rawTransactions = [];
@@ -768,8 +788,13 @@
             try {
                 const r = await fetch('https://api.exchangerate-api.com/v4/latest/PHP');
                 const d = await r.json();
-                phpToUsdRate = d.rates.USD;
-            } catch (e) { console.log("Offline mode: Using default exchange rate"); }
+                exchangeRates.USD = d.rates.USD;
+                exchangeRates.JPY = d.rates.JPY;
+                exchangeRates.PHP = 1;
+                console.log('✅ Exchange rates updated:', exchangeRates);
+            } catch (e) { 
+                console.log("Offline mode: Using default exchange rates"); 
+            }
 
             document.getElementById('auth-overlay').classList.add('hidden');
             document.getElementById('main-content').classList.remove('opacity-0');
@@ -1256,13 +1281,17 @@
                     openTransactionModal(i.id);
                 };
 
+                const currencyBadge = i.originalCurrency && i.originalCurrency !== 'PHP' 
+                    ? `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold">${i.originalCurrency}</span>` 
+                    : '';
+                
                 div.innerHTML = `
                     <div class="flex items-center gap-4">
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${isInc ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">
                             ${i.category ? i.category.substring(0, 2).toUpperCase() : '??'}
                         </div>
                         <div>
-                            <p class="font-bold text-slate-800">${i.desc}</p>
+                            <p class="font-bold text-slate-800">${i.desc} ${currencyBadge}</p>
                             <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${new Date(i.date).toLocaleDateString()} • ${i.category}</p>
                         </div>
                     </div>
@@ -1435,34 +1464,52 @@
             `).join('');
         }
 
-        function openTransactionModal(id = null) {
-            const modal = document.getElementById('transaction-modal');
-            const title = document.getElementById('t-modal-title');
-            const tId = document.getElementById('t-id');
-            const desc = document.getElementById('t-desc');
-            const amt = document.getElementById('t-amount');
-            const cat = document.getElementById('t-category');
-
-            // Populate categories fresh every time to catch new debts
-            populateCategorySelect(cat);
-
-            if (id) {
-                const item = window.allDecryptedTransactions.find(t => t.id === id);
-                if (!item) return;
-                title.innerText = "Edit Transaction";
-                tId.value = id;
-                desc.value = item.desc;
-                amt.value = item.amt;
-                cat.value = item.category;
-                setTType(item.type);
+        if (id) {
+            const item = window.allDecryptedTransactions.find(t => t.id === id);
+            if (!item) return;
+            title.innerText = "Edit Transaction";
+            tId.value = id;
+            desc.value = item.desc;
+            
+            // Show original currency and amount if available
+            if (item.originalCurrency && item.originalAmt) {
+                amt.value = item.originalAmt;
+                document.getElementById('t-currency').value = item.originalCurrency;
             } else {
-                title.innerText = "New Transaction";
-                tId.value = "";
-                desc.value = "";
-                amt.value = "";
-                cat.value = "Food";
-                setTType('expense');
+                amt.value = item.amt;
+                document.getElementById('t-currency').value = 'PHP';
             }
+            
+            cat.value = item.category;
+            setTType(item.type);
+            
+            // Set date from existing transaction
+            const existingDate = new Date(item.date);
+            document.getElementById('t-date').value = existingDate.toISOString().split('T')[0];
+            
+            updateConversionPreview();
+        } else {
+            title.innerText = "New Transaction";
+            tId.value = "";
+            desc.value = "";
+            amt.value = "";
+            document.getElementById('t-currency').value = 'PHP';
+            cat.value = "Food";
+            setTType('expense');
+            
+            // Default to today
+            document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
+        } else {
+            title.innerText = "New Transaction";
+            tId.value = "";
+            desc.value = "";
+            amt.value = "";
+            cat.value = "Food";
+            setTType('expense');
+            
+            // Default to today
+            document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
+        }
             modal.classList.remove('hidden');
         }
 
@@ -1508,18 +1555,28 @@
             const id = document.getElementById('t-id').value;
             const desc = document.getElementById('t-desc').value;
             const amt = parseFloat(document.getElementById('t-amount').value);
+            const currency = document.getElementById('t-currency').value;
             const type = document.getElementById('t-type').value;
             const category = document.getElementById('t-category').value;
 
             if (!desc || isNaN(amt)) return;
 
-            let date = new Date().toISOString();
-            if (id) {
-                const existing = window.allDecryptedTransactions.find(t => t.id === id);
-                if (existing) date = existing.date;
-            }
+            // Use date from date picker
+            const selectedDate = document.getElementById('t-date').value;
+            let date = selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString();
 
-            const encrypted = await encryptData({ desc, amt, type, category, date });
+            // Convert amount to PHP for storage
+            const amtInPHP = convertToDisplayCurrency(amt, currency, 'PHP');
+            
+            const encrypted = await encryptData({ 
+                desc, 
+                amt: amtInPHP,  // Store in PHP
+                originalAmt: amt,  // Store original amount
+                originalCurrency: currency,  // Store original currency
+                type, 
+                category, 
+                date 
+            });
 
             const db = await getDB();
             if (id) {
@@ -1641,8 +1698,18 @@
         }
 
         function toggleCurrency() {
-            activeCurrency = activeCurrency === 'PHP' ? 'USD' : 'PHP';
-            document.getElementById('active-currency').innerText = activeCurrency + (activeCurrency === 'PHP' ? ' (₱)' : ' ($)');
+            // Cycle through PHP → USD → JPY → PHP
+            if (activeCurrency === 'PHP') {
+                activeCurrency = 'USD';
+            } else if (activeCurrency === 'USD') {
+                activeCurrency = 'JPY';
+            } else {
+                activeCurrency = 'PHP';
+            }
+            
+            const symbols = { PHP: '₱', USD: '$', JPY: '¥' };
+            document.getElementById('active-currency').innerText = `${activeCurrency} (${symbols[activeCurrency]})`;
+            
             loadAndRender(); 
             renderBills(rawBills);
             renderDebts(rawDebts);
@@ -1653,17 +1720,56 @@
         }
 
         function fmt(val) {
-            const c = activeCurrency === 'USD' ? val * phpToUsdRate : val;
-            const s = activeCurrency === 'USD' ? '$' : '₱';
-            return s + c.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            // Val is always in PHP, convert to active currency
+            const converted = convertToDisplayCurrency(val, 'PHP', activeCurrency);
+            return formatCurrency(converted, activeCurrency);
         }
 
-        function setTType(t) {
-            document.getElementById('t-type').value = t;
-            const bE = document.getElementById('btn-expense');
-            const bI = document.getElementById('btn-income');
-            bE.className = t === 'expense' ? "py-2 rounded-xl font-bold bg-white shadow-sm text-rose-600" : "py-2 rounded-xl font-bold text-slate-400";
-            bI.className = t === 'income' ? "py-2 rounded-xl font-bold bg-white shadow-sm text-emerald-600" : "py-2 rounded-xl font-bold text-slate-400";
+        // Preview currency conversion
+        function updateConversionPreview() {
+            const amount = parseFloat(document.getElementById('t-amount').value);
+            const currency = document.getElementById('t-currency').value;
+            const preview = document.getElementById('amount-converted-preview');
+            
+            if (!amount || isNaN(amount)) {
+                preview.innerText = '';
+                return;
+            }
+            
+            if (currency === activeCurrency) {
+                preview.innerText = '';
+            } else {
+                const converted = convertToDisplayCurrency(amount, currency, activeCurrency);
+                preview.innerText = `≈ ${formatCurrency(converted, activeCurrency)} in ${activeCurrency}`;
+            }
+        }
+        
+        // Convert from one currency to another
+        function convertToDisplayCurrency(amount, fromCurrency, toCurrency) {
+            if (fromCurrency === toCurrency) return amount;
+            
+            // Convert to PHP first (base currency)
+            let inPHP = amount;
+            if (fromCurrency !== 'PHP') {
+                inPHP = amount / exchangeRates[fromCurrency];
+            }
+            
+            // Then convert to target currency
+            if (toCurrency === 'PHP') {
+                return inPHP;
+            } else {
+                return inPHP * exchangeRates[toCurrency];
+            }
+        }
+        
+        // Format currency with symbol
+        function formatCurrency(amount, currency) {
+            const symbols = { PHP: '₱', USD: '$', JPY: '¥' };
+            const decimals = currency === 'JPY' ? 0 : 2;
+            return symbols[currency] + amount.toLocaleString(undefined, { 
+                minimumFractionDigits: decimals, 
+                maximumFractionDigits: decimals 
+            });
         }
 
         function toggleModal(id) { document.getElementById(id).classList.toggle('hidden'); }
