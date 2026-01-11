@@ -792,30 +792,32 @@
             } catch (e) { console.error("Decrypt fail", e); return null; }
         }
 
-        // --- AUTH & INIT ---
+       // --- AUTH & INIT ---
         async function unlockApp() {
             const input = document.getElementById('master-key-input').value;
             if (input.length < 1) { alert("Please enter a key."); return; }
-
+            
             document.getElementById('auth-status').innerText = "Decrypting...";
             await new Promise(r => setTimeout(r, 500));
-
+            
             masterKey = input;
             cryptoKey = await deriveKey(masterKey, new TextEncoder().encode("finance-flow-salt-v3"));
+            
             await updateExchangeRates();
             
             document.getElementById('auth-overlay').classList.add('hidden');
             document.getElementById('main-content').classList.remove('opacity-0');
-
+            
             initFilters();
             initChart();
-            loadFromStorage();
+            await loadFromStorage();  // ← Added 'await' here
+            
             // Check for auto-backup
             await checkAndPerformAutoBackup();
             
             // Setup hourly check for auto-backup (in case app stays open past 8 PM)
             setInterval(checkAndPerformAutoBackup, 60 * 60 * 1000); // Every hour
-        }
+        }  // ← Make sure this closing brace is here!
 
         async function loadFromStorage() {
             const db = await getDB();
