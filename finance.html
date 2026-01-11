@@ -764,6 +764,24 @@
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join('');
         }
+
+        // Fetch real-time exchange rates
+        async function updateExchangeRates() {
+            try {
+                const r = await fetch('https://api.exchangerate-api.com/v4/latest/PHP');
+                const d = await r.json();
+                exchangeRates.USD = d.rates.USD;
+                exchangeRates.JPY = d.rates.JPY;
+                exchangeRates.PHP = 1;
+                
+                exchangeRates.lastUpdated = Date.now();
+                
+                console.log('✅ Exchange rates updated:', exchangeRates);
+                console.log('📅 Last updated:', new Date(exchangeRates.lastUpdated).toLocaleTimeString());
+            } catch (e) { 
+                console.log("⚠️ Exchange rate update failed. Using cached rates."); 
+            }
+        }
         
         async function decryptData(encryptedObj) {
             try {
@@ -784,16 +802,9 @@
 
             masterKey = input;
             cryptoKey = await deriveKey(masterKey, new TextEncoder().encode("finance-flow-salt-v3"));
-
-            try {
-                const r = await fetch('https://api.exchangerate-api.com/v4/latest/PHP');
-                const d = await r.json();
-                exchangeRates.USD = d.rates.USD;
-                exchangeRates.JPY = d.rates.JPY;
-                exchangeRates.PHP = 1;
-                console.log('✅ Exchange rates updated:', exchangeRates);
-            } catch (e) { 
-                console.log("Offline mode: Using default exchange rates"); 
+            await updateExchangeRates();
+            
+            console.log("Offline mode: Using default exchange rates"); 
             }
 
             document.getElementById('auth-overlay').classList.add('hidden');
