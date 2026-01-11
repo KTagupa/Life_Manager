@@ -1474,6 +1474,20 @@
             `).join('');
         }
 
+        function setTType(t) {
+            document.getElementById('t-type').value = t;
+            const btnExp = document.getElementById('btn-expense');
+            const btnInc = document.getElementById('btn-income');
+        
+            if (t === 'expense') {
+                btnExp.className = "py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm";
+                btnInc.className = "py-2 rounded-xl font-bold text-slate-400";
+            } else {
+                btnInc.className = "py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm";
+                btnExp.className = "py-2 rounded-xl font-bold text-slate-400";
+            }
+        }
+        
         function openTransactionModal(id = null) {
         const modal = document.getElementById('transaction-modal');
         const title = document.getElementById('t-modal-title');
