@@ -3763,8 +3763,8 @@
             </div>
 
             <div class="note-toolbar-group note-edit-only-ui">
-                <button class="note-toolbar-btn" onclick="createTaskFromSelection()" title="Convert Selection to Task"
-                    style="color:var(--critical-path)">
+                <button class="note-toolbar-btn" onclick="createTaskFromBlockSelection()"
+                    title="Convert Selection to Task" style="color:var(--critical-path)">
                     ✨ Task
                 </button>
                 <button class="note-toolbar-btn" onclick="toggleNoteTaskSearch()" title="Link Note to Tasks"
@@ -5796,6 +5796,60 @@
                 document.querySelectorAll('.category-picker').forEach(p => p.style.display = 'none');
             }
         });
+
+        // Create task from selected text in active block
+        function createTaskFromBlockSelection() {
+            if (!activeBlockId || isNoteGlobalViewMode) {
+                showNotification("No active block");
+                return;
+            }
+
+            const textarea = document.getElementById(`editor-${activeBlockId}`);
+            if (!textarea) {
+                showNotification("No text selected");
+                return;
+            }
+
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end).trim();
+
+            if (!selectedText) {
+                showNotification("No text selected");
+                return;
+            }
+
+            // Create the task
+            const worldX = (window.innerWidth / 2 - panX) / scale - 90 + (Math.random() * 40 - 20);
+            const worldY = (window.innerHeight / 2 - panY) / scale - 50 + (Math.random() * 40 - 20);
+            const newNode = createNode(worldX, worldY, selectedText);
+            nodes.push(newNode);
+
+            // Replace selected text with wiki-link
+            const text = textarea.value;
+            const replacement = `[[${selectedText}]]`;
+            textarea.value = text.substring(0, start) + replacement + text.substring(end);
+            updateBlockText(activeBlockId, textarea.value);
+
+            // Link new task to current note
+            if (currentEditingNoteId) {
+                const note = notes.find(n => n.id === currentEditingNoteId);
+                if (note) {
+                    if (!note.taskIds) note.taskIds = [];
+                    if (!note.taskIds.includes(newNode.id)) {
+                        note.taskIds.push(newNode.id);
+                        renderNoteLinkedTasksFooter();
+                    }
+                }
+            }
+
+            triggerNoteSave();
+            updateCalculations();
+            render();
+            saveToStorage();
+
+            showNotification("Task Created: " + selectedText.substring(0, 20) + (selectedText.length > 20 ? "..." : ""));
+        }
 
         // --- END BLOCK-BASED NOTE SYSTEM FUNCTIONS ---
 
