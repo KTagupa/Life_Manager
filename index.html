@@ -37,6 +37,18 @@
 
             /* Amber/Yellow for upcoming */
             --upcoming-color: #fbbf24;
+
+            /* Block Note Category Colors */
+            --cat-1: #f1f5f9;
+            --cat-2: #ffedd5;
+            --cat-3: #fef9c3;
+            --cat-4: #dcfce7;
+            --cat-5: #d1fae5;
+            --cat-6: #e0f2fe;
+            --cat-7: #e0e7ff;
+            --cat-8: #fae8ff;
+            --cat-9: #ffe4e6;
+            --cat-10: #fee2e2;
         }
 
         /* --- NEW PINNED WINDOW --- */
@@ -56,13 +68,13 @@
             overflow: hidden;
             transition: transform 0.3s ease, opacity 0.3s ease;
         }
-        
+
         #pinned-window.hidden {
             transform: translateX(-120%);
             opacity: 0;
             pointer-events: none;
         }
-        
+
         .pinned-header {
             padding: 12px;
             background: rgba(0, 0, 0, 0.3);
@@ -73,7 +85,7 @@
             justify-content: space-between;
             align-items: center;
         }
-        
+
         .pinned-content {
             flex-grow: 1;
             overflow-y: auto;
@@ -82,7 +94,7 @@
             flex-direction: column;
             gap: 8px;
         }
-        
+
         .pinned-node {
             position: relative;
             background: var(--node-bg);
@@ -92,28 +104,28 @@
             cursor: pointer;
             transition: all 0.2s;
         }
-        
+
         .pinned-node:hover {
             border-color: var(--accent);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
-        
+
         .pinned-node.critical {
             border-color: var(--critical-path);
             background: linear-gradient(145deg, #2d2d2d, #3d3410);
         }
-        
+
         .pinned-node.critical-urgent {
             border-color: #ff4d4d;
             background: linear-gradient(145deg, #2d2d2d, #4d1515);
         }
-        
+
         .pinned-node.completed {
             background: #1e3a2f;
             border-color: #10b981;
             opacity: 0.7;
         }
-        
+
         .pinned-unpin {
             position: absolute;
             top: 4px;
@@ -132,16 +144,16 @@
             opacity: 0;
             transition: opacity 0.2s;
         }
-        
+
         .pinned-node:hover .pinned-unpin {
             opacity: 1;
         }
-        
+
         .pinned-unpin:hover {
             background: var(--blocked-color);
             color: white;
         }
-        
+
         .pinned-habit {
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid transparent;
@@ -153,17 +165,17 @@
             transition: all 0.2s;
             position: relative;
         }
-        
+
         .pinned-habit:hover {
             background: rgba(255, 255, 255, 0.06);
             border-color: #333;
         }
-        
+
         .pinned-habit.done-today {
             border-color: var(--ready-color);
             background: rgba(16, 185, 129, 0.05);
         }
-        
+
         .pinned-note {
             background: #2d2d2d;
             border: 1px solid #444;
@@ -173,11 +185,11 @@
             transition: all 0.2s;
             position: relative;
         }
-        
+
         .pinned-note:hover {
             border-color: var(--accent);
         }
-        
+
         /* --- UPDATED DUAL HUD STYLES --- */
         #focus-hud {
             position: fixed;
@@ -806,6 +818,584 @@
             opacity: 0;
             pointer-events: none;
         }
+
+        /* --- BLOCK-BASED NOTE EDITOR STYLES --- */
+        .note-modal-header {
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        #note-title-input {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            font-size: 1.4rem;
+            font-weight: 700;
+            width: 60%;
+            outline: none;
+        }
+
+        #note-title-input::placeholder {
+            color: #64748b;
+        }
+
+        .note-header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .note-header-actions .icon-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .note-header-actions .icon-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--accent);
+        }
+
+        .note-header-actions .icon-btn.danger:hover {
+            color: var(--blocked-color);
+        }
+
+        /* Global Floating Toolbar */
+        .note-global-toolbar {
+            padding: 8px 1.5rem;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        .note-toolbar-group {
+            display: flex;
+            gap: 4px;
+            padding-right: 12px;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .note-toolbar-group:last-child {
+            border-right: none;
+        }
+
+        .note-toolbar-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .note-toolbar-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--accent);
+        }
+
+        .note-toolbar-btn.active-mode {
+            background: var(--accent);
+            color: #0f172a;
+        }
+
+        .note-toolbar-btn i {
+            font-size: 0.9rem;
+        }
+
+        /* Blocks Area */
+        #blocks-container {
+            flex: 1;
+            padding: 2.5rem 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #blocks-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2.5rem;
+            overflow: visible;
+        }
+
+        .note-block {
+            background: var(--cat-1);
+            border-radius: 10px;
+            color: #1e293b;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .note-block.active-block {
+            border-color: var(--accent);
+        }
+
+        /* Add Above Trigger */
+        .add-above-btn {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: var(--text-muted);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.8rem;
+            opacity: 0;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .note-block:hover .add-above-btn {
+            opacity: 1;
+        }
+
+        .add-above-btn:hover {
+            color: var(--accent);
+            background: #000;
+            border-color: var(--accent);
+        }
+
+        .block-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 14px;
+            background: rgba(0, 0, 0, 0.06);
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+        }
+
+        .category-trigger {
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.2s;
+        }
+
+        .category-trigger:hover {
+            color: #000;
+        }
+
+        .block-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .block-controls .note-toolbar-btn {
+            color: #475569;
+            padding: 4px 6px;
+        }
+
+        .block-controls .note-toolbar-btn:hover {
+            background: rgba(0, 0, 0, 0.1);
+            color: #1e293b;
+        }
+
+        .block-editor-area {
+            width: 100%;
+            min-height: 80px;
+            padding: 16px;
+            box-sizing: border-box;
+            border: none;
+            background: transparent;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-size: 1.05rem;
+            resize: none;
+            outline: none;
+            line-height: 1.6;
+            overflow: hidden;
+            display: block;
+            color: #1e293b;
+        }
+
+        .block-preview-area {
+            width: 100%;
+            padding: 16px;
+            min-height: 80px;
+            display: none;
+            box-sizing: border-box;
+            line-height: 1.6;
+            color: #1e293b;
+        }
+
+        .block-preview-area h1,
+        .block-preview-area h2,
+        .block-preview-area h3 {
+            margin-top: 0;
+        }
+
+        .block-preview-area ul,
+        .block-preview-area ol {
+            padding-left: 20px;
+        }
+
+        /* Category Picker List */
+        .category-picker {
+            display: none;
+            position: absolute;
+            top: 35px;
+            left: 0;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            z-index: 100;
+            width: 240px;
+            padding: 5px 0;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .category-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            cursor: pointer;
+            color: #1e293b;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .category-item:hover {
+            background: #f1f5f9;
+        }
+
+        .cat-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .cat-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .rename-cat-btn {
+            color: #94a3b8;
+            font-size: 0.75rem;
+            padding: 4px;
+            border-radius: 4px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: all 0.2s;
+        }
+
+        .rename-cat-btn:hover {
+            color: var(--accent);
+            background: rgba(0, 0, 0, 0.05);
+            opacity: 1;
+        }
+
+        /* Bottom Add Block Button */
+        .note-bottom-actions {
+            padding: 2.5rem 0;
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .add-block-btn-large {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+            border: 2px dashed var(--accent);
+            padding: 14px 40px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+        }
+
+        .add-block-btn-large:hover {
+            background: rgba(59, 130, 246, 0.2);
+            transform: translateY(-2px);
+        }
+
+        /* Task Search Overlay */
+        #note-task-search-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 200;
+            padding: 2rem;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .note-search-window {
+            background: #1e293b;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .note-search-window h3 {
+            margin: 0 0 1rem 0;
+            color: white;
+            font-size: 1.1rem;
+        }
+
+        .note-search-input {
+            width: 100%;
+            padding: 10px 10px 10px 35px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            outline: none;
+            box-sizing: border-box;
+            font-size: 0.95rem;
+        }
+
+        .note-search-input:focus {
+            border-color: var(--accent);
+        }
+
+        #note-search-results-list {
+            margin-top: 1rem;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .note-search-result-item {
+            padding: 12px;
+            cursor: pointer;
+            color: white;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background 0.2s;
+            border-radius: 6px;
+        }
+
+        .note-search-result-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .note-search-result-item strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .note-search-result-item small {
+            color: var(--text-muted);
+        }
+
+        /* Footer Layout */
+        .note-modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .note-footer-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .note-linked-tasks-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .note-linked-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-right: 4px;
+        }
+
+        .note-task-tag {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+            padding: 4px 10px;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .note-task-tag:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .note-task-tag:active {
+            transform: scale(0.95);
+        }
+
+        .note-task-tag .unlink-btn {
+            color: #64748b;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .note-task-tag .unlink-btn:hover {
+            color: var(--blocked-color);
+        }
+
+        .note-footer-status-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .note-status-indicator {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .note-status-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--ready-color);
+            border-radius: 50%;
+        }
+
+        /* Rename Category Modal */
+        #rename-cat-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .rename-window {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            width: 300px;
+            color: #1e293b;
+        }
+
+        .rename-window h3 {
+            margin-top: 0;
+            font-size: 1.1rem;
+        }
+
+        .rename-window input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 0.95rem;
+        }
+
+        .rename-window input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .rename-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .rename-actions button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .rename-actions .cancel-btn {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .rename-actions .cancel-btn:hover {
+            background: #cbd5e1;
+        }
+
+        .rename-actions .save-cat-btn {
+            background: var(--accent);
+            color: white;
+        }
+
+        .rename-actions .save-cat-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        /* View mode hide utility */
+        .note-view-mode-hide {
+            display: none !important;
+        }
+
+        /* --- END BLOCK-BASED NOTE EDITOR STYLES --- */
+
 
         /* Ensure the notes list in the side panel takes full height */
         #notes-list-container {
@@ -2122,7 +2712,7 @@
             top: 10px;
             left: 152px;
         }
-        
+
         #btn-pinned:hover {
             transform: scale(1.1);
             background: var(--accent-hover);
@@ -2150,13 +2740,13 @@
             top: 10px;
             left: 197px;
         }
-        
+
         #btn-task-list:hover {
             transform: scale(1.1);
             background: var(--accent-hover);
             box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
         }
-        
+
         #task-list-window {
             position: fixed;
             top: 60px;
@@ -2173,13 +2763,13 @@
             overflow: hidden;
             transition: transform 0.3s ease, opacity 0.3s ease;
         }
-        
+
         #task-list-window.hidden {
             transform: translateX(-120%);
             opacity: 0;
             pointer-events: none;
         }
-        
+
         .task-list-header {
             padding: 12px;
             background: rgba(0, 0, 0, 0.3);
@@ -2190,7 +2780,7 @@
             justify-content: space-between;
             align-items: center;
         }
-        
+
         .task-list-filters {
             padding: 8px 12px;
             border-bottom: 1px solid var(--border);
@@ -2198,7 +2788,7 @@
             gap: 5px;
             flex-wrap: wrap;
         }
-        
+
         .filter-btn {
             padding: 4px 8px;
             font-size: 10px;
@@ -2209,18 +2799,18 @@
             cursor: pointer;
             transition: all 0.2s;
         }
-        
+
         .filter-btn:hover {
             border-color: var(--accent);
             color: white;
         }
-        
+
         .filter-btn.active {
             background: var(--accent);
             border-color: var(--accent);
             color: white;
         }
-        
+
         .task-list-content {
             flex-grow: 1;
             overflow-y: auto;
@@ -2229,7 +2819,7 @@
             flex-direction: column;
             gap: 6px;
         }
-        
+
         .task-list-item {
             position: relative;
             background: var(--node-bg);
@@ -2240,23 +2830,23 @@
             transition: all 0.2s;
             font-size: 12px;
         }
-        
+
         .task-list-item:hover {
             border-color: var(--accent);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
-        
+
         .task-list-item.completed {
             background: #1e3a2f;
             border-color: #10b981;
             opacity: 0.7;
         }
-        
+
         .task-list-item.urgent {
             border-color: #ff4d4d;
             background: linear-gradient(145deg, #2d2d2d, #4d1515);
         }
-        
+
         .task-list-item.critical {
             border-color: var(--critical-path);
             background: linear-gradient(145deg, #2d2d2d, #3d3410);
@@ -2893,18 +3483,20 @@
                     onclick="toggleFocusTimer('should')">▶</button>
             </div>
         </div>
-        
+
         <div id="hud-upcoming-row" class="hud-row upcoming" style="display: none;">
             <div class="hud-task-info">
                 <span class="hud-label">UP NEXT</span>
                 <span class="hud-task-name" id="hud-upcoming-title" onclick="focusHUDTask('upcoming')">---</span>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
-                <span id="hud-upcoming-countdown" style="font-size:11px; color:#fbbf24; font-family:monospace;">in 30m</span>
-                <span id="hud-upcoming-interval" style="font-size:10px; color:#888; font-family:monospace;">00:00 - 00:00</span>
+                <span id="hud-upcoming-countdown" style="font-size:11px; color:#fbbf24; font-family:monospace;">in
+                    30m</span>
+                <span id="hud-upcoming-interval" style="font-size:10px; color:#888; font-family:monospace;">00:00 -
+                    00:00</span>
             </div>
         </div>
-        
+
     </div>
 
     <div id="toolbar" class="collapsed">
@@ -3143,70 +3735,106 @@
     </div>
 
     <div id="note-editor" class="hidden">
-        <div class="editor-toolbar">
-            <div class="editor-tools-group">
-                <button class="tool-btn active" id="btn-edit-mode" onclick="setNoteMode('edit')"
-                    title="Edit Mode">✏️</button>
-                <button class="tool-btn" id="btn-view-mode" onclick="setNoteMode('view')"
-                    title="Preview Mode (Render Markdown)">👁️</button>
-            </div>
-
-            <div class="editor-tools-group">
-                <button class="tool-btn" onclick="insertTextAtCursor('**', '**')" title="Bold"><b>B</b></button>
-                <button class="tool-btn" onclick="insertTextAtCursor('*', '*')" title="Italic"><i>I</i></button>
-                <button class="tool-btn" onclick="insertTextAtCursor('- [ ] ')" title="Checklist">☑</button>
-                <select id="template-select" onchange="insertTemplate(this.value)"
-                    style="width: auto; padding: 2px; height: 24px; font-size: 11px; background: #333; border:none; color:#ccc;">
-                    <option value="">Templates...</option>
-                    <option value="meeting">Meeting Minutes</option>
-                    <option value="bug">Bug Report</option>
-                    <option value="idea">Idea Scoping</option>
-                </select>
-            </div>
-
-            <div class="editor-tools-group">
-                <button class="tool-btn" style="color:var(--critical-path)" onclick="createTaskFromSelection()"
-                    title="Convert Selection to Linked Task">✨ Task</button>
-                <button class="tool-btn" style="color:#8b5cf6;" onclick="showNoteTaskPicker()"
-                    title="Link Note to Existing Task">🔗 Link</button>
-            </div>
-
-            <div class="editor-tools-group">
-                <button class="tool-btn btn-danger" onclick="deleteCurrentNote()" title="Delete Note">🗑️</button>
-                <button class="tool-btn" onclick="closeNoteEditor()" title="Close">✕</button>
+        <!-- Header -->
+        <div class="note-modal-header">
+            <input type="text" id="note-title-input" placeholder="Note Title..." oninput="saveCurrentNote()">
+            <div class="note-header-actions">
+                <button class="icon-btn" id="pin-note-btn" onclick="toggleCurrentNotePin()" title="Pin Note">📌</button>
+                <button class="icon-btn danger" onclick="deleteCurrentNote()" title="Delete Note">🗑️</button>
+                <button class="icon-btn" onclick="closeNoteEditor()" title="Close">✕</button>
             </div>
         </div>
 
-        <input type="text" id="note-title-input" placeholder="Note Title" oninput="saveCurrentNote()"
-            onkeydown="if(event.key==='Escape'){ const p = document.getElementById('note-task-picker'); if(!p.classList.contains('hidden')){ p.classList.add('hidden'); event.stopPropagation(); } }">
+        <!-- Global Toolbar -->
+        <div class="note-global-toolbar">
+            <div class="note-toolbar-group">
+                <button id="toggle-edit-btn" class="note-toolbar-btn active-mode" onclick="setGlobalViewMode(false)">
+                    ✏️ Edit
+                </button>
+                <button id="toggle-view-btn" class="note-toolbar-btn" onclick="setGlobalViewMode(true)">
+                    👁️ View
+                </button>
+            </div>
 
-        <div id="note-linked-tasks-inline"
-            style="padding: 0 10px 10px; display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-            <div id="note-tasks-list" style="display: flex; flex-wrap: wrap; gap: 4px;"></div>
-            <div id="note-task-picker" class="hidden"
-                style="position: absolute; top: 120px; left: 10px; right: 10px; background: #1a1a1a; border: 1px solid var(--accent); border-radius: 8px; padding: 12px; z-index: 1000; box-shadow: 0 10px 40px rgba(0,0,0,0.9);">
-                <div
-                    style="font-size: 11px; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
-                    Search Task to Link</div>
-                <input type="text" id="note-task-search" placeholder="Search tasks..."
-                    style="margin-bottom: 8px; padding: 6px; background: #000; border: 1px solid #333; color: white; width: 100%; font-size: 12px;"
-                    oninput="filterNoteTaskPicker(this.value)"
-                    onkeydown="if(event.key==='Escape'){ document.getElementById('note-task-picker').classList.add('hidden'); event.stopPropagation(); }">
-                <div id="note-task-picker-list"
-                    style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px;"></div>
-                <div style="text-align: right; margin-top: 8px;"><button
-                        onclick="this.parentElement.parentElement.classList.add('hidden')"
-                        style="background: none; border: none; color: #666; font-size: 11px; cursor: pointer;">Cancel</button>
+            <div class="note-toolbar-group note-edit-only-ui">
+                <button class="note-toolbar-btn" onclick="applyBlockFormat('bold')" title="Bold"><b>B</b></button>
+                <button class="note-toolbar-btn" onclick="applyBlockFormat('italic')" title="Italic"><i>I</i></button>
+                <button class="note-toolbar-btn" onclick="applyBlockFormat('checkbox')" title="Add Checkbox">☑</button>
+            </div>
+
+            <div class="note-toolbar-group note-edit-only-ui">
+                <button class="note-toolbar-btn" onclick="createTaskFromSelection()" title="Convert Selection to Task"
+                    style="color:var(--critical-path)">
+                    ✨ Task
+                </button>
+                <button class="note-toolbar-btn" onclick="toggleNoteTaskSearch()" title="Link Note to Tasks"
+                    style="color:var(--accent)">
+                    🔗 Link Tasks
+                </button>
+            </div>
+        </div>
+
+        <!-- Scrollable Blocks -->
+        <div id="blocks-container">
+            <div id="blocks-list">
+                <!-- Blocks render here dynamically -->
+            </div>
+
+            <div class="note-bottom-actions note-edit-only-ui">
+                <button class="add-block-btn-large" onclick="addNoteBlock()">
+                    + ADD NEW BLOCK
+                </button>
+            </div>
+        </div>
+
+        <!-- Task Search Overlay -->
+        <div id="note-task-search-overlay">
+            <div class="note-search-window">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem">
+                    <h3>Link Note to Task</h3>
+                    <button class="icon-btn" style="color:white" onclick="toggleNoteTaskSearch()">✕</button>
+                </div>
+                <div style="position:relative">
+                    <span style="position:absolute; left:12px; top:10px; color:var(--text-muted)">🔍</span>
+                    <input type="text" id="note-task-search-input" class="note-search-input"
+                        placeholder="Search tasks by name..." oninput="filterNoteTaskSearch(this.value)"
+                        onkeydown="if(event.key==='Escape'){ toggleNoteTaskSearch(); event.stopPropagation(); }">
+                </div>
+                <div id="note-search-results-list">
+                    <!-- Search results render here -->
                 </div>
             </div>
         </div>
 
-        <div class="editor-content-area">
-            <textarea id="note-body-input"
-                placeholder="Type your note here... Select text to convert to Tasks or Sub-notes."
-                oninput="saveCurrentNote()"
-                onkeydown="if(event.key==='Escape'){ const p = document.getElementById('note-task-picker'); if(!p.classList.contains('hidden')){ p.classList.add('hidden'); event.stopPropagation(); } }"></textarea>
-            <div id="note-preview-pane" class="hidden"></div>
+        <!-- Footer -->
+        <div class="note-modal-footer">
+            <div class="note-footer-top">
+                <div class="note-linked-tasks-container" id="note-linked-tasks-list">
+                    <span class="note-linked-label">Linked Tasks:</span>
+                    <!-- Linked task tags render here -->
+                </div>
+                <div class="note-footer-status-group">
+                    <div class="note-status-indicator">
+                        <div class="note-status-dot"></div>
+                        <span id="note-save-status">All changes synced</span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted)">
+                        Last synced: <span id="note-sync-time">Just now</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Rename Modal -->
+    <div id="rename-cat-modal">
+        <div class="rename-window">
+            <h3>Rename Category</h3>
+            <input type="text" id="rename-cat-input" placeholder="Enter new name...">
+            <div class="rename-actions">
+                <button class="cancel-btn" onclick="closeRenameCatModal()">Cancel</button>
+                <button class="save-cat-btn" onclick="saveBlockCategoryRename()">Save</button>
+            </div>
         </div>
     </div>
 
@@ -3265,7 +3893,7 @@
             <!-- Tasks render here -->
         </div>
     </div>
-    
+
     <div id="inspector" class="hidden">
         <div id="insp-content" style="display:flex; flex-direction:column; height:100%;">
         </div>
@@ -3731,6 +4359,17 @@
         let lifeGoals = {};
         let habits = []; // Add this line
         let notes = [];
+        let noteSettings = {
+            categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`)
+        };
+        const noteCategoryColors = [
+            "#f1f5f9", "#ffedd5", "#fef9c3", "#dcfce7", "#d1fae5",
+            "#e0f2fe", "#e0e7ff", "#fae8ff", "#ffe4e6", "#fee2e2"
+        ];
+        let currentNoteBlocks = [];
+        let activeBlockId = null;
+        let isNoteGlobalViewMode = false;
+        let renamingCategoryIndex = -1;
         let currentGoalYear = new Date().getFullYear();
         let selectedNodeId = null;
         let selectedIds = new Set();
@@ -3974,7 +4613,8 @@
                     lifeGoals: lifeGoals || {},
                     notes: notes || [],
                     habits: typeof habits !== 'undefined' ? habits : [],
-                    agenda: agenda || []
+                    agenda: agenda || [],
+                    noteSettings: noteSettings || { categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`) }
                 };
                 content = JSON.stringify(appState, null, 2);
             } catch (e) {
@@ -4099,6 +4739,9 @@
                 notes = appState.notes || [];
                 habits = appState.habits || [];
                 agenda = appState.agenda || [];
+                if (appState.noteSettings && appState.noteSettings.categoryNames) {
+                    noteSettings = appState.noteSettings;
+                }
 
                 // 5. Cleanup & UI Refresh
                 sanitizeLoadedData(); // Fixes missing properties in old data
@@ -4666,7 +5309,7 @@
             });
         }
 
-       window.jumpToTask = function (id) {
+        window.jumpToTask = function (id) {
             // NEW: Check if it's an inbox temp task
             if (id && id.startsWith('inbox_temp_')) {
                 const inboxPanel = document.getElementById('inbox-panel');
@@ -4676,7 +5319,7 @@
                 showNotification("This task is still in your Inbox");
                 return;
             }
-            
+
             let node = nodes.find(n => n.id === id);
             let isArchived = false;
             if (!node) {
@@ -4758,10 +5401,24 @@
             const results = [];
             const title = currentNote.title.toLowerCase();
 
+            // Helper to get searchable text from note body
+            function getNoteBodyText(noteBody) {
+                try {
+                    const blocks = JSON.parse(noteBody);
+                    if (Array.isArray(blocks)) {
+                        return blocks.map(b => b.text || '').join('\n').toLowerCase();
+                    }
+                } catch (e) { /* not JSON */ }
+                return (noteBody || '').toLowerCase();
+            }
+
             // Search in other notes
             notes.forEach(n => {
-                if (n.id !== noteId && n.body.toLowerCase().includes(`[[${title}]]`)) {
-                    results.push({ title: n.title, type: 'NOTE', action: `openNoteEditor('${n.id}')` });
+                if (n.id !== noteId) {
+                    const bodyText = getNoteBodyText(n.body);
+                    if (bodyText.includes(`[[${title}]]`)) {
+                        results.push({ title: n.title, type: 'NOTE', action: `openNoteEditor('${n.id}')` });
+                    }
                 }
             });
 
@@ -4775,75 +5432,372 @@
             return results;
         }
 
-        function setNoteMode(mode) {
-            const editor = document.getElementById('note-body-input');
-            const preview = document.getElementById('note-preview-pane');
-            const btnEdit = document.getElementById('btn-edit-mode');
-            const btnView = document.getElementById('btn-view-mode');
+        // --- BLOCK-BASED NOTE SYSTEM FUNCTIONS ---
 
-            if (mode === 'view') {
-                editor.classList.add('hidden');
-                preview.classList.remove('hidden');
-                let markdownContent = renderMarkdown(editor.value);
+        // Parse note body with legacy migration
+        function parseNoteBody(note) {
+            if (!note || !note.body) return [];
+            try {
+                const parsed = JSON.parse(note.body);
+                if (Array.isArray(parsed)) return parsed;
+            } catch (e) { /* not JSON, legacy note */ }
 
-                // Append linked tasks to preview if any
-                const note = notes.find(n => n.id === currentEditingNoteId);
-                if (note && note.taskIds && note.taskIds.length > 0) {
-                    let tasksHtml = '<div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 10px;">';
-                    tasksHtml += '<div style="font-size: 11px; color: #666; margin-bottom: 8px; text-transform: uppercase;">Related Tasks</div>';
-                    tasksHtml += '<div style="display: flex; flex-wrap: wrap; gap: 6px;">';
-                    note.taskIds.forEach(tid => {
-                        const task = nodes.find(n => n.id === tid) || archivedNodes.find(n => n.id === tid);
-                        if (task) {
-                            tasksHtml += `<div onclick="closeNoteEditor(); jumpToTask('${tid}')" style="background: rgba(59,130,246,0.1); border: 1px solid #2563eb; color: #60a5fa; padding: 4px 10px; border-radius: 20px; font-size: 11px; cursor: pointer;">${task.title}</div>`;
-                        }
-                    });
-                    tasksHtml += '</div></div>';
-                    markdownContent += tasksHtml;
+            // Convert legacy string to single block
+            return [{ id: Date.now() + Math.random(), text: note.body || "", colorIndex: 0, isEditing: true }];
+        }
+
+        // Serialize blocks to JSON for storage
+        function serializeNoteBlocks() {
+            return JSON.stringify(currentNoteBlocks.map(b => ({
+                text: b.text,
+                colorIndex: b.colorIndex,
+                isEditing: b.isEditing
+            })));
+        }
+
+        // Get combined text from all blocks (for backlinks search)
+        function getCombinedBlockText() {
+            return currentNoteBlocks.map(b => b.text).join('\n\n');
+        }
+
+        // Global View/Edit Mode Toggle
+        function setGlobalViewMode(isView) {
+            isNoteGlobalViewMode = isView;
+            document.getElementById('toggle-edit-btn').classList.toggle('active-mode', !isView);
+            document.getElementById('toggle-view-btn').classList.toggle('active-mode', isView);
+            document.querySelectorAll('.note-edit-only-ui').forEach(el => el.classList.toggle('note-view-mode-hide', isView));
+            renderNoteBlocks();
+        }
+
+        // Render all blocks
+        function renderNoteBlocks() {
+            const list = document.getElementById('blocks-list');
+            if (!list) return;
+            list.innerHTML = '';
+
+            currentNoteBlocks.forEach((block, idx) => {
+                const blockDiv = document.createElement('div');
+                const isCurrentBlockEditing = !isNoteGlobalViewMode && block.isEditing;
+
+                blockDiv.className = `note-block ${activeBlockId === block.id && !isNoteGlobalViewMode ? 'active-block' : ''}`;
+                blockDiv.style.backgroundColor = noteCategoryColors[block.colorIndex] || noteCategoryColors[0];
+                blockDiv.onclick = () => { if (!isNoteGlobalViewMode) setActiveBlock(block.id); };
+
+                // Build category picker items
+                let catListHtml = '';
+                noteSettings.categoryNames.forEach((name, cIdx) => {
+                    catListHtml += `
+                        <div class="category-item" onclick="event.stopPropagation(); setBlockColor(${block.id}, ${cIdx})">
+                            <div class="cat-info">
+                                <div class="cat-dot" style="background:${noteCategoryColors[cIdx]}"></div>
+                                <span>${name}</span>
+                            </div>
+                            <button class="rename-cat-btn" onclick="event.stopPropagation(); openRenameCatModal(${cIdx})">✏️</button>
+                        </div>
+                    `;
+                });
+
+                blockDiv.innerHTML = `
+                    <div class="add-above-btn note-edit-only-ui ${isNoteGlobalViewMode ? 'note-view-mode-hide' : ''}" 
+                         onclick="event.stopPropagation(); addNoteBlock('', 0, ${idx})">
+                        +
+                    </div>
+                    <div class="block-toolbar ${isNoteGlobalViewMode ? 'note-view-mode-hide' : ''}">
+                        <div class="category-trigger" onclick="event.stopPropagation(); toggleBlockCategoryPicker(${block.id})">
+                            🏷️ ${noteSettings.categoryNames[block.colorIndex] || 'Category'}
+                        </div>
+                        <div class="category-picker" id="picker-${block.id}">
+                            ${catListHtml}
+                        </div>
+                        <div class="block-controls">
+                            <button class="note-toolbar-btn" onclick="event.stopPropagation(); toggleBlockMode(${block.id})" title="${block.isEditing ? 'View' : 'Edit'}">
+                                ${block.isEditing ? '👁️' : '✏️'}
+                            </button>
+                            <button class="note-toolbar-btn" onclick="event.stopPropagation(); moveNoteBlock(${idx}, -1)" title="Move Up">⬆</button>
+                            <button class="note-toolbar-btn" onclick="event.stopPropagation(); moveNoteBlock(${idx}, 1)" title="Move Down">⬇</button>
+                            <button class="note-toolbar-btn" style="color:var(--blocked-color)" onclick="event.stopPropagation(); deleteNoteBlock(${block.id})" title="Delete Block">🗑️</button>
+                        </div>
+                    </div>
+                    <textarea id="editor-${block.id}" class="block-editor-area" style="display:${isCurrentBlockEditing ? 'block' : 'none'}" 
+                        oninput="updateBlockText(${block.id}, this.value); autoResizeTextarea(this)" 
+                        onfocus="setActiveBlock(${block.id})" 
+                        placeholder="Type something here...">${block.text}</textarea>
+                    <div id="preview-${block.id}" class="block-preview-area" style="display:${isCurrentBlockEditing ? 'none' : 'block'}">${marked.parse(block.text || '_Empty_')}</div>
+                `;
+                list.appendChild(blockDiv);
+
+                // Auto-resize if in editing mode
+                if (isCurrentBlockEditing) {
+                    setTimeout(() => {
+                        const textarea = document.getElementById(`editor-${block.id}`);
+                        if (textarea) autoResizeTextarea(textarea);
+                    }, 10);
                 }
+            });
 
-                preview.innerHTML = markdownContent;
-                btnEdit.classList.remove('active');
-                btnView.classList.add('active');
+            renderNoteLinkedTasksFooter();
+        }
+
+        // Add new block
+        function addNoteBlock(text = "", colorIndex = 0, index = null) {
+            const blockId = Date.now() + Math.random();
+            const newBlock = { id: blockId, text: text, colorIndex: colorIndex, isEditing: true };
+
+            if (index !== null && index >= 0) {
+                currentNoteBlocks.splice(index, 0, newBlock);
             } else {
-                editor.classList.remove('hidden');
-                preview.classList.add('hidden');
-                btnEdit.classList.add('active');
-                btnView.classList.remove('active');
+                currentNoteBlocks.push(newBlock);
+            }
+
+            activeBlockId = blockId;
+            renderNoteBlocks();
+            triggerNoteSave();
+
+            // Focus the new block
+            if (!isNoteGlobalViewMode) {
+                setTimeout(() => {
+                    const el = document.getElementById(`editor-${blockId}`);
+                    if (el) { el.focus(); autoResizeTextarea(el); }
+                }, 50);
             }
         }
 
-        function insertTextAtCursor(prefix, suffix = '') {
-            const textarea = document.getElementById('note-body-input');
-            if (textarea.classList.contains('hidden')) return;
+        // Delete block
+        function deleteNoteBlock(id) {
+            currentNoteBlocks = currentNoteBlocks.filter(b => b.id !== id);
+            if (activeBlockId === id) activeBlockId = null;
+            renderNoteBlocks();
+            triggerNoteSave();
+        }
+
+        // Move block up/down
+        function moveNoteBlock(index, direction) {
+            const newIndex = index + direction;
+            if (newIndex >= 0 && newIndex < currentNoteBlocks.length) {
+                [currentNoteBlocks[index], currentNoteBlocks[newIndex]] = [currentNoteBlocks[newIndex], currentNoteBlocks[index]];
+                renderNoteBlocks();
+                triggerNoteSave();
+            }
+        }
+
+        // Set active block
+        function setActiveBlock(id) {
+            if (isNoteGlobalViewMode) return;
+            activeBlockId = id;
+            document.querySelectorAll('.note-block').forEach(el => el.classList.remove('active-block'));
+            const activeEl = document.querySelector(`.note-block[onclick*="setActiveBlock(${id})"]`);
+            if (activeEl) activeEl.classList.add('active-block');
+        }
+
+        // Update block text
+        function updateBlockText(id, text) {
+            const block = currentNoteBlocks.find(b => b.id === id);
+            if (block) block.text = text;
+            triggerNoteSave();
+        }
+
+        // Toggle individual block mode
+        function toggleBlockMode(id) {
+            const block = currentNoteBlocks.find(b => b.id === id);
+            if (block) block.isEditing = !block.isEditing;
+            renderNoteBlocks();
+        }
+
+        // Set block color
+        function setBlockColor(id, colorIndex) {
+            const block = currentNoteBlocks.find(b => b.id === id);
+            if (block) block.colorIndex = colorIndex;
+            // Close all pickers
+            document.querySelectorAll('.category-picker').forEach(p => p.style.display = 'none');
+            renderNoteBlocks();
+            triggerNoteSave();
+        }
+
+        // Toggle category picker visibility
+        function toggleBlockCategoryPicker(id) {
+            const picker = document.getElementById(`picker-${id}`);
+            const isOpen = picker && picker.style.display === 'block';
+            document.querySelectorAll('.category-picker').forEach(p => p.style.display = 'none');
+            if (picker) picker.style.display = isOpen ? 'none' : 'block';
+        }
+
+        // Auto-resize textarea
+        function autoResizeTextarea(textarea) {
+            if (!textarea) return;
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+        }
+
+        // Category rename modal functions
+        function openRenameCatModal(index) {
+            renamingCategoryIndex = index;
+            document.getElementById('rename-cat-modal').style.display = 'flex';
+            const input = document.getElementById('rename-cat-input');
+            input.value = noteSettings.categoryNames[index];
+            input.focus();
+        }
+
+        function closeRenameCatModal() {
+            document.getElementById('rename-cat-modal').style.display = 'none';
+            renamingCategoryIndex = -1;
+        }
+
+        function saveBlockCategoryRename() {
+            const newName = document.getElementById('rename-cat-input').value.trim();
+            if (newName && renamingCategoryIndex !== -1) {
+                noteSettings.categoryNames[renamingCategoryIndex] = newName;
+                closeRenameCatModal();
+                renderNoteBlocks();
+                triggerNoteSave();
+            }
+        }
+
+        // Apply formatting to active block
+        function applyBlockFormat(type) {
+            if (!activeBlockId || isNoteGlobalViewMode) return;
+            const textarea = document.getElementById(`editor-${activeBlockId}`);
+            if (!textarea) return;
 
             const start = textarea.selectionStart;
             const end = textarea.selectionEnd;
             const text = textarea.value;
-            const selection = text.substring(start, end);
+            const selected = text.substring(start, end);
 
-            const replacement = prefix + selection + suffix;
-            textarea.value = text.substring(0, start) + replacement + text.substring(end);
-
-            textarea.focus();
-            textarea.selectionStart = start + prefix.length;
-            textarea.selectionEnd = start + prefix.length + selection.length;
-
-            saveCurrentNote();
-        }
-
-        function insertTemplate(type) {
-            let content = "";
-            if (type === 'meeting') {
-                content = "\n# Meeting Minutes\n**Date:** " + new Date().toLocaleDateString() + "\n\n### Attendees\n- \n\n### Key Points\n- \n\n### Action Items\n- [ ] ";
-            } else if (type === 'bug') {
-                content = "\n# Bug Report\n\n**Severity:** High/Medium/Low\n\n### Repro Steps\n1. \n2. \n\n### Expected Result\n\n### Actual Result\n";
-            } else if (type === 'idea') {
-                content = "\n# Idea Scoping\n\n### The Problem\n\n### The Solution\n- Feature A\n- Feature B\n\n### Next Steps\n- [ ] Research";
+            let replacement = "";
+            switch (type) {
+                case 'bold': replacement = `**${selected}**`; break;
+                case 'italic': replacement = `*${selected}*`; break;
+                case 'checkbox': replacement = `\n- [ ] ${selected}`; break;
             }
-            if (content) insertTextAtCursor(content);
-            document.getElementById('template-select').value = "";
+
+            textarea.value = text.substring(0, start) + replacement + text.substring(end);
+            updateBlockText(activeBlockId, textarea.value);
+            textarea.focus();
+
+            // Set cursor position
+            const newPos = start + replacement.length;
+            textarea.setSelectionRange(newPos, newPos);
         }
+
+        // Task Search Overlay
+        function toggleNoteTaskSearch() {
+            const overlay = document.getElementById('note-task-search-overlay');
+            const isVisible = overlay.style.display === 'flex';
+            overlay.style.display = isVisible ? 'none' : 'flex';
+            if (!isVisible) {
+                document.getElementById('note-task-search-input').value = '';
+                filterNoteTaskSearch('');
+                document.getElementById('note-task-search-input').focus();
+            }
+        }
+
+        function filterNoteTaskSearch(query) {
+            const list = document.getElementById('note-search-results-list');
+            if (!list || !currentEditingNoteId) return;
+
+            const note = notes.find(n => n.id === currentEditingNoteId);
+            if (!note) return;
+
+            list.innerHTML = '';
+            const allTasks = [...(nodes || []), ...(archivedNodes || [])];
+            const q = query.toLowerCase();
+
+            const filtered = allTasks.filter(t =>
+                (t.title || "").toLowerCase().includes(q) &&
+                !(note.taskIds && note.taskIds.includes(t.id))
+            ).sort((a, b) => (a.title || "").localeCompare(b.title || "")).slice(0, 20);
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<div style="color:#666; font-size:12px; padding:20px; text-align:center;">No matching tasks found</div>';
+                return;
+            }
+
+            filtered.forEach(t => {
+                const item = document.createElement('div');
+                item.className = 'note-search-result-item';
+                item.innerHTML = `<strong>${t.title || "Untitled Task"}</strong><small>${t.completed ? 'Completed' : (t._isUrgent ? 'Urgent' : 'Active')}</small>`;
+                item.onclick = () => {
+                    linkTaskToNoteFromSearch(t.id);
+                    toggleNoteTaskSearch();
+                };
+                list.appendChild(item);
+            });
+        }
+
+        function linkTaskToNoteFromSearch(taskId) {
+            if (!taskId || !currentEditingNoteId) return;
+            const note = notes.find(n => n.id === currentEditingNoteId);
+            if (!note) return;
+            if (!note.taskIds) note.taskIds = [];
+            if (!note.taskIds.includes(taskId)) {
+                note.taskIds.push(taskId);
+                triggerNoteSave();
+                renderNoteLinkedTasksFooter();
+            }
+        }
+
+        function unlinkTaskFromNoteFooter(taskId) {
+            if (!currentEditingNoteId) return;
+            const note = notes.find(n => n.id === currentEditingNoteId);
+            if (!note) return;
+            note.taskIds = (note.taskIds || []).filter(id => id !== taskId);
+            triggerNoteSave();
+            renderNoteLinkedTasksFooter();
+            if (selectedNodeId === taskId) updateInspector();
+        }
+
+        // Render linked tasks in footer
+        function renderNoteLinkedTasksFooter() {
+            const container = document.getElementById('note-linked-tasks-list');
+            if (!container || !currentEditingNoteId) return;
+
+            const note = notes.find(n => n.id === currentEditingNoteId);
+            if (!note) return;
+
+            container.innerHTML = '<span class="note-linked-label">Linked Tasks:</span>';
+
+            if (!note.taskIds || note.taskIds.length === 0) {
+                container.innerHTML += '<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">None</span>';
+                return;
+            }
+
+            note.taskIds.forEach(tid => {
+                const task = nodes.find(n => n.id === tid) || archivedNodes.find(n => n.id === tid);
+                if (!task) return;
+
+                const tag = document.createElement('div');
+                tag.className = 'note-task-tag';
+                tag.innerHTML = `
+                    <span onclick="closeNoteEditor(); jumpToTask('${tid}')">${task.title}</span>
+                    <span class="unlink-btn" onclick="event.stopPropagation(); unlinkTaskFromNoteFooter('${tid}')">✕</span>
+                `;
+                container.appendChild(tag);
+            });
+        }
+
+        // Trigger save with debounce and status update
+        let noteSaveTimeout;
+        function triggerNoteSave() {
+            const status = document.getElementById('note-save-status');
+            const syncTime = document.getElementById('note-sync-time');
+            if (status) status.innerHTML = '⏳ Saving...';
+
+            clearTimeout(noteSaveTimeout);
+            noteSaveTimeout = setTimeout(() => {
+                saveCurrentNote();
+                if (status) status.innerHTML = 'All changes synced';
+                if (syncTime) syncTime.innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }, 500);
+        }
+
+        // Close pickers when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.category-trigger') && !e.target.closest('.category-picker')) {
+                document.querySelectorAll('.category-picker').forEach(p => p.style.display = 'none');
+            }
+        });
+
+        // --- END BLOCK-BASED NOTE SYSTEM FUNCTIONS ---
 
         function createTaskFromSelection() {
             const menu = document.getElementById('selection-menu');
@@ -4860,15 +5814,18 @@
             const newNode = createNode(worldX, worldY, currentSelectionText);
             nodes.push(newNode);
 
-            // Only if selection source is 'note', we replace the text in the editor
-            if (currentSelectionSource === 'note' && noteSelectionRange) {
-                const textarea = document.getElementById('note-body-input');
-                const text = textarea.value;
-                const replacement = `[[${currentSelectionText}]]`;
+            // Only if selection source is 'note', we replace the text in the active block
+            if (currentSelectionSource === 'note' && noteSelectionRange && activeBlockId) {
+                const textarea = document.getElementById(`editor-${activeBlockId}`);
+                if (textarea) {
+                    const text = textarea.value;
+                    const replacement = `[[${currentSelectionText}]]`;
 
-                const before = text.substring(0, noteSelectionRange.start);
-                const after = text.substring(noteSelectionRange.end);
-                textarea.value = before + replacement + after;
+                    const before = text.substring(0, noteSelectionRange.start);
+                    const after = text.substring(noteSelectionRange.end);
+                    textarea.value = before + replacement + after;
+                    updateBlockText(activeBlockId, textarea.value);
+                }
 
                 // Link new task to current note
                 if (currentEditingNoteId) {
@@ -4877,11 +5834,11 @@
                         if (!note.taskIds) note.taskIds = [];
                         if (!note.taskIds.includes(newNode.id)) {
                             note.taskIds.push(newNode.id);
-                            renderNoteLinkedTasks();
+                            renderNoteLinkedTasksFooter();
                         }
                     }
                 }
-                saveCurrentNote();
+                triggerNoteSave();
             }
 
             updateCalculations();
@@ -4978,22 +5935,32 @@
                 const el = document.createElement('div');
                 el.className = `note-card ${note.isPinned ? 'pinned-note' : ''}`;
                 if (note.id === currentEditingNoteId) el.classList.add('active');
-            
-                const tagsHtml = (note.body.match(/#\w+/g) || [])
+
+                // Extract preview from blocks or legacy string
+                let previewText = '';
+                try {
+                    const blocks = JSON.parse(note.body);
+                    if (Array.isArray(blocks)) {
+                        previewText = blocks.map(b => b.text || '').join(' ');
+                    }
+                } catch (e) {
+                    previewText = note.body || '';
+                }
+                previewText = previewText.replace(/[#*\[\]]/g, '').substring(0, 80);
+
+                const tagsHtml = (previewText.match(/#\w+/g) || [])
                     .map(t => `<span class="note-tag">${t}</span>`).join('');
-            
-                const plainText = note.body.replace(/[#*\[\]]/g, '').substring(0, 80);
-            
+
                 const linkedCount = (note.taskIds || []).length;
                 const linkIndicator = linkedCount > 0 ? `<span style="font-size:10px; color:#3b82f6; margin-left:6px;">🔗 ${linkedCount}</span>` : '';
-            
-                const pinIcon = isPinned('note', note.id) ? 
-                    `<button class="btn" style="padding:1px 4px; font-size:9px; margin-left:4px; border-color:var(--accent); color:var(--accent);" onclick="event.stopPropagation(); togglePinItem('note', '${note.id}'); renderNotesList();">📌</button>` : 
+
+                const pinIcon = isPinned('note', note.id) ?
+                    `<button class="btn" style="padding:1px 4px; font-size:9px; margin-left:4px; border-color:var(--accent); color:var(--accent);" onclick="event.stopPropagation(); togglePinItem('note', '${note.id}'); renderNotesList();">📌</button>` :
                     `<button class="btn" style="padding:1px 4px; font-size:9px; margin-left:4px; opacity:0.3;" onclick="event.stopPropagation(); togglePinItem('note', '${note.id}'); renderNotesList();">📌</button>`;
-            
+
                 el.innerHTML = `
                 <div class="note-card-title">${note.isPinned ? '📌 ' : ''}${note.title || '(Untitled)'}${linkIndicator}</div>
-                <div class="note-card-preview">${plainText}...</div>
+                <div class="note-card-preview">${previewText}...</div>
                 <div style="margin-top:5px;">${tagsHtml}</div>
                 <div class="note-card-meta"><span>${new Date(note.timestamp || Date.now()).toLocaleDateString()}</span>${pinIcon}</div>
             `;
@@ -5038,31 +6005,47 @@
         }
 
         // 2. UPDATED openNoteEditor
-        // Always opens as a modal now
+        // Opens as a modal with block-based editing
         function openNoteEditor(noteId) {
             const note = notes.find(n => n.id === noteId);
             if (!note) return;
 
             currentEditingNoteId = noteId;
 
-            // Populate fields
+            // Populate title
             document.getElementById('note-title-input').value = note.title;
-            document.getElementById('note-body-input').value = note.body;
 
-            // Show the editor (CSS now makes it a modal automatically)
+            // Parse blocks with legacy migration
+            currentNoteBlocks = parseNoteBody(note);
+
+            // Assign IDs to blocks if missing (legacy blocks)
+            currentNoteBlocks.forEach((block, idx) => {
+                if (!block.id) block.id = Date.now() + Math.random() + idx;
+            });
+
+            // Reset state
+            activeBlockId = currentNoteBlocks.length > 0 ? currentNoteBlocks[0].id : null;
+            isNoteGlobalViewMode = false;
+
+            // Show the editor
             const editor = document.getElementById('note-editor');
             editor.classList.remove('hidden');
 
-            // Reset to Edit mode by default
-            setNoteMode('edit');
+            // Reset toolbar to Edit mode
+            document.getElementById('toggle-edit-btn').classList.add('active-mode');
+            document.getElementById('toggle-view-btn').classList.remove('active-mode');
+            document.querySelectorAll('.note-edit-only-ui').forEach(el => el.classList.remove('note-view-mode-hide'));
 
-            // Render linked tasks
-            renderNoteLinkedTasks();
+            // Render blocks
+            renderNoteBlocks();
 
-            // Focus the body for immediate typing
-            setTimeout(() => {
-                document.getElementById('note-body-input').focus();
-            }, 100);
+            // Focus the first block for immediate typing
+            if (currentNoteBlocks.length > 0 && !isNoteGlobalViewMode) {
+                setTimeout(() => {
+                    const el = document.getElementById(`editor-${currentNoteBlocks[0].id}`);
+                    if (el) { el.focus(); autoResizeTextarea(el); }
+                }, 100);
+            }
         }
 
         // 3. UPDATED closeNoteEditor
@@ -5071,7 +6054,14 @@
             const editor = document.getElementById('note-editor');
             editor.classList.add('hidden');
 
+            // Save before closing
+            if (currentEditingNoteId) {
+                saveCurrentNote();
+            }
+
             currentEditingNoteId = null;
+            currentNoteBlocks = [];
+            activeBlockId = null;
 
             // Re-render list to show any title changes/previews
             renderNotesList();
@@ -5098,7 +6088,7 @@
             const note = notes.find(n => n.id === currentEditingNoteId);
             if (!note) return;
             note.title = document.getElementById('note-title-input').value;
-            note.body = document.getElementById('note-body-input').value;
+            note.body = serializeNoteBlocks();
             note.timestamp = Date.now();
             saveToStorage();
         }
@@ -5628,7 +6618,7 @@
                         toggleTaskListWindow();
                     }
                 }
-                                
+
                 const sync = document.getElementById('sync-panel');
                 const syncBtn = document.querySelector('button[onclick="toggleSyncPanel()"]');
                 if (!sync.classList.contains('hidden') && !sync.contains(e.target) && e.target !== syncBtn) {
@@ -6594,11 +7584,11 @@
                     return true;
                 }
                 // Keep if task exists in nodes or archived
-                const taskExists = nodes.some(n => n.id === slot.taskId) || 
-                                  archivedNodes.some(n => n.id === slot.taskId);
+                const taskExists = nodes.some(n => n.id === slot.taskId) ||
+                    archivedNodes.some(n => n.id === slot.taskId);
                 return taskExists;
             });
-            
+
             // Ensure all agenda items have valid date strings
             agenda.forEach(slot => {
                 if (!slot.start || !slot.end) {
@@ -6620,13 +7610,13 @@
         function addToInbox() { const input = document.getElementById('inbox-input'); const val = input.value.trim(); if (val) { inbox.push({ id: 'inbox_' + Date.now(), title: val }); input.value = ''; renderInbox(); saveToStorage(); } }
         function deleteInboxTask(index) {
             const item = inbox[index];
-            
+
             // NEW: Remove any agenda slots for this inbox item
             agenda = agenda.filter(slot => !slot.taskId.includes(item.id.split('_')[1]));
-            
+
             // Remove temp node if exists
             nodes = nodes.filter(n => !n.id.includes(item.id.split('_')[1]) || !n.isInboxItem);
-            
+
             inbox.splice(index, 1);
             renderInbox();
             saveToStorage();
@@ -6645,10 +7635,10 @@
         function scheduleInboxItem(index) {
             const item = inbox[index];
             if (!item) return;
-            
+
             // Create a temporary task node for the agenda (it stays in inbox)
             const tempTaskId = 'inbox_temp_' + Date.now();
-            
+
             // Create a minimal task object that agenda can reference
             const tempTask = {
                 id: tempTaskId,
@@ -6657,24 +7647,24 @@
                 isInboxItem: true, // Flag to identify it's from inbox
                 inboxIndex: index  // Store original index
             };
-            
+
             // Add to nodes temporarily (it won't be saved to storage)
             nodes.push(tempTask);
-            
+
             // Calculate default time slot (now + 30 minutes)
             const now = new Date();
             const start = new Date(now.getTime() + 5 * 60000); // 5 mins from now for testing
             const end = new Date(start.getTime() + 30 * 60000); // 30 min duration
-            
+
             // Add to agenda
             agenda.push({
                 taskId: tempTaskId,
                 start: start.toISOString(),
                 end: end.toISOString()
             });
-            
+
             saveToStorage();
-            
+
             // Open agenda panel to show the new item
             const agendaPanel = document.getElementById('agenda-panel');
             if (agendaPanel.classList.contains('hidden')) {
@@ -6682,7 +7672,7 @@
             } else {
                 renderAgenda();
             }
-            
+
             showNotification(`"${item.title}" scheduled for ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
         }
         function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); }
@@ -6706,7 +7696,7 @@
                         notes = [];
                         archivedNodes = [];
                         habits = [];
-                        agenda = []; 
+                        agenda = [];
                     } else {
                         // Modern support: Wrapper object
                         nodes = parsed.nodes || [];
@@ -6724,7 +7714,7 @@
                     render();
                     renderInbox();
                     renderGoals();
-                    renderAgenda(); 
+                    renderAgenda();
 
                     // 4. Save to local storage immediately so a refresh keeps the data
                     saveToStorage();
@@ -6804,18 +7794,18 @@
             if (hasRunningHabit && !document.getElementById('habits-panel').classList.contains('hidden')) {
                 renderHabits();
 
-            // Update pinned window if it has running timers
-            const pinnedWindow = document.getElementById('pinned-window');
-            if (pinnedWindow && !pinnedWindow.classList.contains('hidden')) {
-                const hasRunningInPinned = pinnedItems.some(p => {
-                    if (p.type === 'habit') {
-                        const h = habits.find(habit => habit.id === p.id);
-                        return h && h.activeTimerStart;
-                    }
-                    return false;
-                });
-                if (hasRunningInPinned) renderPinnedWindow();
-            }
+                // Update pinned window if it has running timers
+                const pinnedWindow = document.getElementById('pinned-window');
+                if (pinnedWindow && !pinnedWindow.classList.contains('hidden')) {
+                    const hasRunningInPinned = pinnedItems.some(p => {
+                        if (p.type === 'habit') {
+                            const h = habits.find(habit => habit.id === p.id);
+                            return h && h.activeTimerStart;
+                        }
+                        return false;
+                    });
+                    if (hasRunningInPinned) renderPinnedWindow();
+                }
             }
         }
 
@@ -6824,24 +7814,24 @@
             const doingRow = document.getElementById('hud-doing-row');
             const shouldRow = document.getElementById('hud-should-row');
             const upcomingRow = document.getElementById('hud-upcoming-row'); // NEW
-        
+
             // Identify "Doing" (Which task has an active timer?)
             const activeTask = nodes.find(n => n.activeTimerStart) || archivedNodes.find(n => n.activeTimerStart);
-        
+
             // Identify "Should Be" (What does the agenda say for right now?)
             const currentSlot = agenda.find(slot => {
                 const start = new Date(slot.start).getTime();
                 const end = new Date(slot.end).getTime();
                 return now >= start && now <= end;
             });
-        
+
             // NEW: Find the next upcoming slot
             const upcomingSlot = agenda
                 .filter(slot => new Date(slot.start).getTime() > now)
                 .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())[0];
-        
+
             const currentSlotId = currentSlot ? currentSlot.taskId : null;
-        
+
             if (currentSlotId !== lastKnownAgendaTaskId) {
                 if (currentSlotId) {
                     playAudioFeedback('agenda-start');
@@ -6850,9 +7840,9 @@
                 }
                 lastKnownAgendaTaskId = currentSlotId;
             }
-        
+
             let hudActive = false;
-        
+
             // --- Render "Doing" Row ---
             if (activeTask) {
                 hudActive = true;
@@ -6860,14 +7850,14 @@
                 document.getElementById('hud-doing-title').innerText = activeTask.title;
                 document.getElementById('hud-doing-time').innerText = formatTime(getTotalTime(activeTask));
                 hud.dataset.doingTaskId = activeTask.id;
-        
+
                 if (currentSlot && activeTask.id === currentSlot.taskId) {
                     doingRow.classList.remove('overtime');
                 }
             } else {
                 doingRow.style.display = 'none';
             }
-        
+
             // --- Render "Should Be" Row ---
             if (currentSlot && (!activeTask || activeTask.id !== currentSlot.taskId)) {
                 hudActive = true;
@@ -6879,21 +7869,21 @@
                     if (inboxItem) scheduledTask = { title: inboxItem.title + ' (Inbox)' };
                 }
                 document.getElementById('hud-should-title').innerText = scheduledTask ? scheduledTask.title : "Unscheduled Block";
-        
+
                 const startStr = new Date(currentSlot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const endStr = new Date(currentSlot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 document.getElementById('hud-should-interval').innerText = `${startStr} - ${endStr}`;
-        
+
                 hud.dataset.shouldTaskId = currentSlot.taskId;
             } else {
                 shouldRow.style.display = 'none';
             }
-        
+
             // --- NEW: Render "Upcoming" Row ---
             if (upcomingSlot) {
                 hudActive = true;
                 upcomingRow.style.display = 'flex';
-                
+
                 const upcomingTask = nodes.find(n => n.id === upcomingSlot.taskId) || archivedNodes.find(n => n.id === upcomingSlot.taskId);
                 // NEW: Check inbox if not found
                 if (!upcomingTask && upcomingSlot.taskId.startsWith('inbox_temp_')) {
@@ -6901,12 +7891,12 @@
                     if (inboxItem) upcomingTask = { title: inboxItem.title + ' (Inbox)' };
                 }
                 document.getElementById('hud-upcoming-title').innerText = upcomingTask ? upcomingTask.title : "Unscheduled Block";
-        
+
                 // Calculate minutes until start
                 const startTime = new Date(upcomingSlot.start).getTime();
                 const minutesUntil = Math.round((startTime - now) / 60000);
                 const countdownEl = document.getElementById('hud-upcoming-countdown');
-                
+
                 if (minutesUntil < 60) {
                     countdownEl.innerText = `in ${minutesUntil}m`;
                 } else {
@@ -6914,16 +7904,16 @@
                     const mins = minutesUntil % 60;
                     countdownEl.innerText = `in ${hours}h ${mins}m`;
                 }
-        
+
                 const startStr = new Date(upcomingSlot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const endStr = new Date(upcomingSlot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 document.getElementById('hud-upcoming-interval').innerText = `${startStr} - ${endStr}`;
-        
+
                 hud.dataset.upcomingTaskId = upcomingSlot.taskId;
             } else {
                 upcomingRow.style.display = 'none';
             }
-        
+
             if (hudActive) hud.classList.add('active');
             else hud.classList.remove('active');
         }
@@ -6940,7 +7930,7 @@
             if (type === 'doing') taskId = hud.dataset.doingTaskId;
             else if (type === 'should') taskId = hud.dataset.shouldTaskId;
             else if (type === 'upcoming') taskId = hud.dataset.upcomingTaskId; // NEW
-            
+
             if (taskId) jumpToTask(taskId);
         }
 
@@ -7613,7 +8603,7 @@
         }
 
         let currentTaskFilter = 'all';
-        
+
         function toggleTaskListWindow() {
             const window = document.getElementById('task-list-window');
             window.classList.toggle('hidden');
@@ -7621,10 +8611,10 @@
                 renderTaskList();
             }
         }
-        
+
         function setTaskFilter(filter) {
             currentTaskFilter = filter;
-            
+
             // Update button states
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 if (btn.dataset.filter === filter) {
@@ -7633,20 +8623,20 @@
                     btn.classList.remove('active');
                 }
             });
-            
+
             renderTaskList();
         }
-        
+
         function renderTaskList() {
             const container = document.getElementById('task-list-content');
             if (!container) return;
-            
+
             container.innerHTML = '';
-            
+
             // Filter tasks based on current filter
             let filteredTasks = [...nodes];
-            
-            switch(currentTaskFilter) {
+
+            switch (currentTaskFilter) {
                 case 'urgent':
                     filteredTasks = filteredTasks.filter(n => n._isUrgent && !n.completed);
                     break;
@@ -7668,23 +8658,23 @@
                     filteredTasks = filteredTasks.filter(n => !n.completed);
                     break;
             }
-            
+
             // Sort alphabetically
             filteredTasks.sort((a, b) => a.title.localeCompare(b.title));
-            
+
             if (filteredTasks.length === 0) {
                 container.innerHTML = '<div style="text-align:center; color:#666; padding:20px; font-size:11px;">No tasks found</div>';
                 return;
             }
-            
+
             filteredTasks.forEach(task => {
                 const el = document.createElement('div');
                 el.className = 'task-list-item';
-                
+
                 if (task.completed) el.classList.add('completed');
                 else if (task._isUrgent) el.classList.add('urgent');
                 else if (task._isCritical) el.classList.add('critical');
-                
+
                 let badges = '';
                 if (!task.completed) {
                     if (task._isUrgent) badges += '<span class="badge urgent-badge">URGENT</span>';
@@ -7692,58 +8682,58 @@
                     if (task._isBlocked) badges += '<span class="badge">🔒</span>';
                     if (task._downstreamWeight > 0) badges += `<span class="badge weight">⚡${task._downstreamWeight}</span>`;
                 }
-                
+
                 if (task.dueDate && !task.completed) {
                     const due = new Date(task.dueDate);
-                    const dateStr = due.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+                    const dateStr = due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                     badges += `<span class="badge date-badge">📅 ${dateStr}</span>`;
                 }
-                
+
                 el.innerHTML = `
                     <div style="font-weight:600; margin-bottom:4px;">${task.completed ? '✅' : ''} ${task.title}</div>
                     <div style="display:flex; gap:4px; flex-wrap:wrap;">${badges}</div>
                 `;
-                
+
                 el.onclick = () => {
                     toggleTaskListWindow();
                     jumpToTask(task.id);
                 };
-                
+
                 container.appendChild(el);
             });
         }
-        
+
         function togglePinItem(type, id) {
             const index = pinnedItems.findIndex(p => p.type === type && p.id === id);
             if (index > -1) {
                 pinnedItems.splice(index, 1);
             } else {
-                pinnedItems.push({type, id});
+                pinnedItems.push({ type, id });
             }
             saveToStorage();
             renderPinnedWindow();
-            
+
             // Update source panels if open
             if (type === 'habit' && !document.getElementById('habits-panel').classList.contains('hidden')) {
                 renderHabits();
             }
         }
-        
+
         function isPinned(type, id) {
             return pinnedItems.some(p => p.type === type && p.id === id);
         }
-        
+
         function renderPinnedWindow() {
             const container = document.getElementById('pinned-content');
             if (!container) return;
-            
+
             container.innerHTML = '';
-            
+
             if (pinnedItems.length === 0) {
                 container.innerHTML = '<div style="text-align:center; color:#666; padding:20px; font-size:11px;">No pinned items.<br><br>Pin tasks, notes, or habits from their panels.</div>';
                 return;
             }
-            
+
             pinnedItems.forEach(item => {
                 if (item.type === 'task') {
                     renderPinnedTask(container, item.id);
@@ -7754,7 +8744,7 @@
                 }
             });
         }
-        
+
         function renderPinnedTask(container, taskId) {
             const node = nodes.find(n => n.id === taskId) || archivedNodes.find(n => n.id === taskId);
             if (!node) {
@@ -7763,51 +8753,51 @@
                 saveToStorage();
                 return;
             }
-            
+
             const el = document.createElement('div');
             el.className = 'pinned-node';
-            
+
             if (!node.completed) {
                 if (node._isUrgent) el.classList.add('critical-urgent');
                 else if (node._isCritical) el.classList.add('critical');
             }
             if (node.completed) el.classList.add('completed');
-            
+
             let badgesHtml = '';
             if (!node.completed) {
                 if (node._isUrgent) badgesHtml += `<span class="badge urgent-badge">URGENT</span>`;
                 else if (node._isCritical) badgesHtml += `<span class="badge critical-badge">CP</span>`;
             }
-            
+
             const totalTime = getTotalTime(node);
             if (totalTime > 0) {
                 badgesHtml += `<span class="badge time-badge">${formatTime(totalTime)}</span>`;
             }
-            
+
             if (node.dueDate && !node.completed) {
                 const due = new Date(node.dueDate);
-                const dateStr = due.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+                const dateStr = due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                 badgesHtml += `<span class="badge date-badge">📅 ${dateStr}</span>`;
             }
-            
+
             const totalSubs = node.subtasks.length;
             const doneSubs = node.subtasks.filter(s => s.done).length;
             const progress = totalSubs === 0 ? 0 : (doneSubs / totalSubs) * 100;
-            
+
             el.innerHTML = `
                 <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('task', '${taskId}')">✕</button>
                 <div style="font-weight:600; font-size:12px; margin-bottom:4px; color:#eee;">${node.completed ? '✅' : ''} ${node.title}</div>
                 <div style="display:flex; gap:4px; flex-wrap:wrap; font-size:10px; margin-bottom:4px;">${badgesHtml}</div>
                 ${totalSubs > 0 ? `<div class="progress-container" style="height:3px;"><div class="progress-bar" style="width:${progress}%"></div></div>` : ''}
             `;
-            
+
             el.onclick = () => {
                 selectNode(taskId);
             };
-            
+
             container.appendChild(el);
         }
-        
+
         function renderPinnedNote(container, noteId) {
             const note = notes.find(n => n.id === noteId);
             if (!note) {
@@ -7815,25 +8805,25 @@
                 saveToStorage();
                 return;
             }
-            
+
             const el = document.createElement('div');
             el.className = 'pinned-note';
-            
+
             const preview = note.body.replace(/[#*\[\]]/g, '').substring(0, 50);
-            
+
             el.innerHTML = `
                 <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('note', '${noteId}')">✕</button>
                 <div style="font-weight:600; font-size:11px; margin-bottom:3px; color:#eee;">📝 ${note.title || '(Untitled)'}</div>
                 <div style="font-size:10px; color:#888;">${preview}...</div>
             `;
-            
+
             el.onclick = () => {
                 openNoteEditor(noteId);
             };
-            
+
             container.appendChild(el);
         }
-        
+
         function renderPinnedHabit(container, habitId) {
             const h = habits.find(habit => habit.id === habitId);
             if (!h) {
@@ -7841,16 +8831,16 @@
                 saveToStorage();
                 return;
             }
-            
+
             const freq = h.frequency || 'daily';
             const bounds = getPeriodBounds(freq);
             const val = getSumInPeriod(h, bounds);
             const target = h.target || 1;
             const isDone = val >= target;
             const percent = Math.min(100, (val / target) * 100);
-            
+
             if (!h.type) h.type = 'checkbox';
-            
+
             let controlsHtml = '';
             if (h.type === 'checkbox') {
                 controlsHtml = `
@@ -7876,10 +8866,10 @@
                         <span style="font-family:monospace; font-size:10px; color:${isDone ? 'var(--ready-color)' : '#aaa'};">${minsVal}m/${minsTarget}m</span>
                     </div>`;
             }
-            
+
             const el = document.createElement('div');
             el.className = `pinned-habit ${isDone ? 'done-today' : ''}`;
-            
+
             el.innerHTML = `
                 <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('habit', '${habitId}')">✕</button>
                 ${h.type === 'checkbox' ? controlsHtml : ''}
@@ -7893,7 +8883,7 @@
                 </div>
                 ${h.type !== 'checkbox' ? controlsHtml : ''}
             `;
-            
+
             container.appendChild(el);
         }
 
