@@ -156,6 +156,51 @@
             color: white;
         }
 
+        /* Data Health Metrics */
+        .metrics-breakdown {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .metric-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .metric-label {
+            font-size: 9px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .metric-value {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .bookmark-link {
+            color: var(--accent);
+            cursor: pointer;
+            text-decoration: underline;
+            font-weight: 500;
+        }
+
+        .bookmark-link:hover {
+            color: #fff;
+            background: var(--accent);
+            text-decoration: none;
+            border-radius: 3px;
+            padding: 0 2px;
+        }
+
         .pinned-habit {
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid transparent;
@@ -3775,6 +3820,16 @@
             <button class="btn" style="flex:1" onclick="pullFromGist()">⬇ Pull</button>
             <button class="btn btn-primary" style="flex:1" onclick="pushToGist()">⬆ Push</button>
         </div>
+        <div id="data-health-panel" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #333;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span style="font-size:11px; font-weight:bold; color:#eee;">📊 Data Health & Metrics</span>
+                <span id="total-gist-size" style="font-size:10px; color:var(--ready-color); font-family:monospace;">0.0
+                    KB</span>
+            </div>
+            <div id="metrics-breakdown" class="metrics-breakdown">
+                <!-- Filled via JS -->
+            </div>
+        </div>
         <div id="sync-status" class="sync-status"></div>
     </div>
 
@@ -5582,8 +5637,14 @@
                 gfm: true // GitHub Flavored Markdown
             });
 
-            // 1. Handle [[WikiLinks]] (Existing logic)
-            let processedText = text.replace(/\[\[(.*?)\]\]/g, (match, title) => {
+            // 1. Handle [[#BookmarkName]] (Jump Links)
+            let processedText = text.replace(/\[\[#(.*?)\]\]/g, (match, name) => {
+                const cleanName = name.trim();
+                return `<span class="bookmark-link" onclick="jumpToBookmarkByName('${cleanName.replace(/'/g, "\\'")}')">#${cleanName}</span>`;
+            });
+
+            // 2. Handle [[WikiLinks]] (Existing logic)
+            processedText = processedText.replace(/\[\[(.*?)\]\]/g, (match, title) => {
                 const cleanTitle = title.replace(/^Note: /, '').trim();
                 const target = notes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) ||
                     nodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) ||
@@ -5764,7 +5825,7 @@
                         oninput="updateBlockText(${block.id}, this.value); autoResizeTextarea(this)" 
                         onfocus="setActiveBlock(${block.id})" 
                         placeholder="Type something here...">${block.text}</textarea>
-                    <div id="preview-${block.id}" class="block-preview-area" style="display:${isCurrentBlockEditing ? 'none' : 'block'}">${marked.parse(block.text || '_Empty_')}</div>
+                    <div id="preview-${block.id}" class="block-preview-area" style="display:${isCurrentBlockEditing ? 'none' : 'block'}">${renderMarkdown(block.text || '_Empty_')}</div>
                 `;
                 list.appendChild(blockDiv);
 
@@ -5844,6 +5905,14 @@
             const block = currentNoteBlocks.find(b => b.id === id);
             if (block) block.isEditing = !block.isEditing;
             renderNoteBlocks();
+
+            // Refocus/Scroll to block to prevent jump
+            setTimeout(() => {
+                const el = document.getElementById(`block-${id}`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+                }
+            }, 0);
         }
 
         // Set block color
@@ -5996,6 +6065,15 @@
                 setTimeout(() => {
                     element.classList.remove('flash-highlight');
                 }, 1500);
+            }
+        }
+
+        function jumpToBookmarkByName(name) {
+            const block = currentNoteBlocks.find(b => b.bookmarkName && b.bookmarkName.toLowerCase() === name.toLowerCase());
+            if (block) {
+                jumpToBookmark(block.id);
+            } else {
+                showNotification("Bookmark not found: " + name);
             }
         }
         // --- END BOOKMARK SYSTEM FUNCTIONS ---
@@ -7897,6 +7975,9 @@
 
             // 6. Trigger Toast Notification
             showNotification(`Sync Ready (${percent}%)`);
+
+            // 7. Update Metrics
+            updateDataMetrics();
         }
 
         function loadFromStorage() {
@@ -7928,6 +8009,7 @@
 
                     // CALL THE CLEANER HERE
                     sanitizeLoadedData();
+                    updateDataMetrics();
 
                 } catch (e) {
                     console.error("Save data corrupted", e);
@@ -8005,6 +8087,65 @@
                     console.warn('Invalid agenda slot detected:', slot);
                 }
             });
+
+            // --- PINNED ITEMS MIGRATION ---
+            if (typeof pinnedItems !== 'undefined' && pinnedItems && pinnedItems.length > 0) {
+                pinnedItems.forEach(p => {
+                    let item;
+                    if (p.type === 'task') item = nodes.find(n => n.id === p.id) || archivedNodes.find(n => n.id === p.id);
+                    else if (p.type === 'note') item = notes.find(n => n.id === p.id);
+                    else if (p.type === 'habit') item = habits.find(h => h.id === p.id);
+                    if (item) item.isPinned = true;
+                });
+                pinnedItems = []; // Clear old flat array once migrated
+            }
+        }
+
+        function updateDataMetrics() {
+            const financeLocal = localStorage.getItem('finance_flow_encrypted_v1');
+            let financeData = null;
+            try { financeData = financeLocal ? JSON.parse(financeLocal) : null; } catch (e) { }
+
+            const collections = {
+                'Notes': notes,
+                'Tasks': { nodes, archivedNodes, inbox, agenda },
+                'Habits': habits,
+                'Finance': financeData,
+                'Goals': lifeGoals
+            };
+
+            const breakdown = document.getElementById('metrics-breakdown');
+            const totalEl = document.getElementById('total-gist-size');
+            if (!breakdown || !totalEl) return;
+
+            breakdown.innerHTML = '';
+            let totalBytes = 0;
+
+            for (const [name, data] of Object.entries(collections)) {
+                if (!data) continue;
+                const size = new Blob([JSON.stringify(data)]).size;
+                totalBytes += size;
+
+                const item = document.createElement('div');
+                item.className = 'metric-item';
+
+                // Visual progress bar (capped at 100KB for "soft limit" visualization)
+                const softLimit = 100 * 1024;
+                const visualPct = Math.min(100, (size / softLimit) * 100);
+
+                item.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <span class="metric-label">${name}</span>
+                        <span class="metric-value">${(size / 1024).toFixed(1)} KB</span>
+                    </div>
+                    <div style="height:3px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden;">
+                        <div style="height:100%; width:${visualPct}%; background:${visualPct > 80 ? 'var(--blocked-color)' : 'var(--accent)'};"></div>
+                    </div>
+                `;
+                breakdown.appendChild(item);
+            }
+
+            totalEl.innerText = (totalBytes / 1024).toFixed(1) + ' KB';
         }
 
         function toggleInbox() { const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) { panel.classList.remove('hidden'); setTimeout(() => document.getElementById('inbox-input').focus(), 100); } else { panel.classList.add('hidden'); } }
@@ -9114,12 +9255,16 @@
         }
 
         function togglePinItem(type, id) {
-            const index = pinnedItems.findIndex(p => p.type === type && p.id === id);
-            if (index > -1) {
-                pinnedItems.splice(index, 1);
-            } else {
-                pinnedItems.push({ type, id });
+            let item;
+            if (type === 'task') item = nodes.find(n => n.id === id) || archivedNodes.find(n => n.id === id);
+            else if (type === 'note') item = notes.find(n => n.id === id);
+            else if (type === 'habit') item = habits.find(h => h.id === id);
+
+            if (item) {
+                item.isPinned = !item.isPinned;
+                showNotification(item.isPinned ? `${type.charAt(0).toUpperCase() + type.slice(1)} Pinned` : "Unpinned");
             }
+
             saveToStorage();
             renderPinnedWindow();
 
@@ -9130,7 +9275,11 @@
         }
 
         function isPinned(type, id) {
-            return pinnedItems.some(p => p.type === type && p.id === id);
+            let item;
+            if (type === 'task') item = nodes.find(n => n.id === id) || archivedNodes.find(n => n.id === id);
+            else if (type === 'note') item = notes.find(n => n.id === id);
+            else if (type === 'habit') item = habits.find(h => h.id === id);
+            return item ? !!item.isPinned : false;
         }
 
         function renderPinnedWindow() {
@@ -9139,12 +9288,18 @@
 
             container.innerHTML = '';
 
-            if (pinnedItems.length === 0) {
+            const pinnedItemsList = [];
+            // Collect all items with isPinned = true
+            nodes.concat(archivedNodes).forEach(n => { if (n.isPinned) pinnedItemsList.push({ type: 'task', id: n.id }); });
+            notes.forEach(n => { if (n.isPinned) pinnedItemsList.push({ type: 'note', id: n.id }); });
+            habits.forEach(h => { if (h.isPinned) pinnedItemsList.push({ type: 'habit', id: h.id }); });
+
+            if (pinnedItemsList.length === 0) {
                 container.innerHTML = '<div style="text-align:center; color:#666; padding:20px; font-size:11px;">No pinned items.<br><br>Pin tasks, notes, or habits from their panels.</div>';
                 return;
             }
 
-            pinnedItems.forEach(item => {
+            pinnedItemsList.forEach(item => {
                 if (item.type === 'task') {
                     renderPinnedTask(container, item.id);
                 } else if (item.type === 'note') {
