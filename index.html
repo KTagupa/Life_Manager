@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Urgency Flow: Project Management Edition</title>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root {
             /* Calming Dark Green Theme */
@@ -1152,6 +1154,208 @@
             background: rgba(59, 130, 246, 0.2);
             transform: translateY(-2px);
         }
+
+        /* --- BOOKMARK SYSTEM STYLES --- */
+        .bookmark-badge {
+            position: absolute;
+            top: 40px;
+            right: 12px;
+            background: var(--accent);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            z-index: 5;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            pointer-events: none;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .bookmark-dropdown-container {
+            position: relative;
+        }
+
+        .bookmark-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            min-width: 240px;
+            max-height: 350px;
+            overflow-y: auto;
+            z-index: 1100;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 6px;
+        }
+
+        .bookmark-dropdown.show {
+            display: block;
+            animation: dropdownFadeIn 0.2s ease-out;
+        }
+
+        @keyframes dropdownFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .bookmark-item {
+            padding: 10px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-main);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 2px;
+        }
+
+        .bookmark-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--accent);
+        }
+
+        .bookmark-item i {
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        .bookmark-count-badge {
+            background: var(--accent);
+            color: white;
+            font-size: 9px;
+            padding: 1px 5px;
+            border-radius: 10px;
+            margin-left: 5px;
+            font-weight: 800;
+        }
+
+        /* Arrival Flash Animation */
+        @keyframes flash-arrival {
+            0% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.8);
+                border-color: var(--accent);
+                transform: scale(1);
+            }
+
+            50% {
+                box-shadow: 0 0 30px 15px rgba(59, 130, 246, 0);
+                border-color: var(--accent);
+                transform: scale(1.01);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+                transform: scale(1);
+            }
+        }
+
+        .flash-highlight {
+            animation: flash-arrival 1.2s cubic-bezier(0.23, 1, 0.32, 1);
+            z-index: 100 !important;
+        }
+
+        /* Bookmark Rename Window (Match Rename Category) */
+        .bookmark-window {
+            background: #1e293b;
+            padding: 24px;
+            border-radius: 16px;
+            width: 320px;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .bookmark-window h3 {
+            margin: 0 0 16px 0;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .bookmark-window input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .bookmark-window input:focus {
+            border-color: var(--accent);
+        }
+
+        .bookmark-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .bookmark-actions button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .bookmark-save-btn {
+            background: var(--accent);
+            color: white;
+        }
+
+        .bookmark-save-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .bookmark-cancel-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ccc;
+        }
+
+        .bookmark-cancel-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        #bookmark-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+
+        /* --- END BOOKMARK SYSTEM STYLES --- */
 
         /* Task Search Overlay */
         #note-task-search-overlay {
@@ -3772,6 +3976,18 @@
                     🔗 Link Tasks
                 </button>
             </div>
+
+            <div class="note-toolbar-group">
+                <div class="bookmark-dropdown-container">
+                    <button class="note-toolbar-btn" id="bookmark-dropdown-btn" onclick="toggleBookmarkDropdown()">
+                        <i class="fas fa-bookmark"></i> Bookmarks <span id="bookmark-count-badge"
+                            class="bookmark-count-badge">0</span>
+                    </button>
+                    <div id="bookmark-dropdown" class="bookmark-dropdown">
+                        <!-- Bookmarks render here -->
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Scrollable Blocks -->
@@ -3834,6 +4050,18 @@
             <div class="rename-actions">
                 <button class="cancel-btn" onclick="closeRenameCatModal()">Cancel</button>
                 <button class="save-cat-btn" onclick="saveBlockCategoryRename()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bookmark Naming Modal -->
+    <div id="bookmark-modal">
+        <div class="bookmark-window">
+            <h3>Set Bookmark</h3>
+            <input type="text" id="bookmark-input" placeholder="Bookmark name (e.g. Phase 1)...">
+            <div class="bookmark-actions">
+                <button class="bookmark-cancel-btn" onclick="closeBookmarkModal()">Cancel</button>
+                <button class="bookmark-save-btn" onclick="saveBookmark()">Save Bookmark</button>
             </div>
         </div>
     </div>
@@ -5439,11 +5667,17 @@
             if (!note || !note.body) return [];
             try {
                 const parsed = JSON.parse(note.body);
-                if (Array.isArray(parsed)) return parsed;
+                if (Array.isArray(parsed)) {
+                    // Initialize bookmarkName if missing
+                    parsed.forEach(b => {
+                        if (typeof b.bookmarkName === 'undefined') b.bookmarkName = "";
+                    });
+                    return parsed;
+                }
             } catch (e) { /* not JSON, legacy note */ }
 
             // Convert legacy string to single block
-            return [{ id: Date.now() + Math.random(), text: note.body || "", colorIndex: 0, isEditing: true }];
+            return [{ id: Date.now() + Math.random(), text: note.body || "", colorIndex: 0, isEditing: true, bookmarkName: "" }];
         }
 
         // Serialize blocks to JSON for storage
@@ -5451,7 +5685,8 @@
             return JSON.stringify(currentNoteBlocks.map(b => ({
                 text: b.text,
                 colorIndex: b.colorIndex,
-                isEditing: b.isEditing
+                isEditing: b.isEditing,
+                bookmarkName: b.bookmarkName || ""
             })));
         }
 
@@ -5480,6 +5715,7 @@
                 const isCurrentBlockEditing = !isNoteGlobalViewMode && block.isEditing;
 
                 blockDiv.className = `note-block ${activeBlockId === block.id && !isNoteGlobalViewMode ? 'active-block' : ''}`;
+                blockDiv.id = `block-${block.id}`;
                 blockDiv.style.backgroundColor = noteCategoryColors[block.colorIndex] || noteCategoryColors[0];
                 blockDiv.onclick = () => { if (!isNoteGlobalViewMode) setActiveBlock(block.id); };
 
@@ -5502,6 +5738,9 @@
                          onclick="event.stopPropagation(); addNoteBlock('', 0, ${idx})">
                         +
                     </div>
+
+                    ${block.bookmarkName ? `<div class="bookmark-badge"><i class="fas fa-bookmark"></i> ${block.bookmarkName}</div>` : ''}
+
                     <div class="block-toolbar ${isNoteGlobalViewMode ? 'note-view-mode-hide' : ''}">
                         <div class="category-trigger" onclick="event.stopPropagation(); toggleBlockCategoryPicker(${block.id})">
                             🏷️ ${noteSettings.categoryNames[block.colorIndex] || 'Category'}
@@ -5510,6 +5749,9 @@
                             ${catListHtml}
                         </div>
                         <div class="block-controls">
+                            <button class="note-toolbar-btn" onclick="event.stopPropagation(); openBookmarkModal(${block.id})" title="Set Bookmark">
+                                <i class="fas fa-bookmark" style="${block.bookmarkName ? 'color:var(--accent)' : ''}"></i>
+                            </button>
                             <button class="note-toolbar-btn" onclick="event.stopPropagation(); toggleBlockMode(${block.id})" title="${block.isEditing ? 'View' : 'Edit'}">
                                 ${block.isEditing ? '👁️' : '✏️'}
                             </button>
@@ -5535,13 +5777,14 @@
                 }
             });
 
+            updateBookmarkDropdown();
             renderNoteLinkedTasksFooter();
         }
 
         // Add new block
         function addNoteBlock(text = "", colorIndex = 0, index = null) {
             const blockId = Date.now() + Math.random();
-            const newBlock = { id: blockId, text: text, colorIndex: colorIndex, isEditing: true };
+            const newBlock = { id: blockId, text: text, colorIndex: colorIndex, isEditing: true, bookmarkName: "" };
 
             if (index !== null && index >= 0) {
                 currentNoteBlocks.splice(index, 0, newBlock);
@@ -5651,6 +5894,112 @@
                 triggerNoteSave();
             }
         }
+
+        // --- BOOKMARK SYSTEM FUNCTIONS ---
+        let currentBookmarkBlockId = null;
+
+        function toggleBookmarkDropdown() {
+            const dropdown = document.getElementById('bookmark-dropdown');
+            if (dropdown) dropdown.classList.toggle('show');
+        }
+
+        function updateBookmarkDropdown() {
+            const dropdown = document.getElementById('bookmark-dropdown');
+            const badge = document.getElementById('bookmark-count-badge');
+            if (!dropdown) return;
+
+            const bookmarkedBlocks = currentNoteBlocks.filter(b => b.bookmarkName && b.bookmarkName.trim() !== "");
+
+            if (badge) badge.innerText = bookmarkedBlocks.length;
+
+            dropdown.innerHTML = '';
+            if (bookmarkedBlocks.length === 0) {
+                dropdown.innerHTML = '<div class="bookmark-item" style="color: #666; font-style: italic; justify-content: center;">No bookmarks set</div>';
+            } else {
+                bookmarkedBlocks.forEach(block => {
+                    const item = document.createElement('div');
+                    item.className = 'bookmark-item';
+                    item.innerHTML = `
+                        <span>${block.bookmarkName}</span>
+                        <i class="fas fa-chevron-right"></i>
+                    `;
+                    item.onclick = (e) => {
+                        e.stopPropagation();
+                        jumpToBookmark(block.id);
+                        dropdown.classList.remove('show');
+                    };
+                    dropdown.appendChild(item);
+                });
+            }
+        }
+
+        function openBookmarkModal(blockId) {
+            currentBookmarkBlockId = blockId;
+            const block = currentNoteBlocks.find(b => b.id === blockId);
+            const modal = document.getElementById('bookmark-modal');
+            const input = document.getElementById('bookmark-input');
+
+            if (block && modal && input) {
+                input.value = block.bookmarkName || "";
+                modal.style.display = 'flex';
+                input.focus();
+                input.select();
+
+                // Add Enter key listener for saving
+                const handleEnter = (e) => {
+                    if (e.key === 'Enter') {
+                        saveBookmark();
+                        input.removeEventListener('keydown', handleEnter);
+                    } else if (e.key === 'Escape') {
+                        closeBookmarkModal();
+                        input.removeEventListener('keydown', handleEnter);
+                    }
+                };
+                input.addEventListener('keydown', handleEnter);
+            }
+        }
+
+        function closeBookmarkModal() {
+            const modal = document.getElementById('bookmark-modal');
+            if (modal) modal.style.display = 'none';
+            currentBookmarkBlockId = null;
+        }
+
+        function saveBookmark() {
+            const input = document.getElementById('bookmark-input');
+            const name = input ? input.value.trim() : "";
+
+            if (currentBookmarkBlockId) {
+                const block = currentNoteBlocks.find(b => b.id === currentBookmarkBlockId);
+                if (block) {
+                    block.bookmarkName = name;
+                    renderNoteBlocks();
+                    triggerNoteSave();
+                }
+            }
+            closeBookmarkModal();
+        }
+
+        function jumpToBookmark(blockId) {
+            const element = document.getElementById(`block-${blockId}`);
+            const container = document.getElementById('blocks-container');
+
+            if (element && container) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                // Flash animation
+                element.classList.remove('flash-highlight');
+                void element.offsetWidth; // trigger reflow
+                element.classList.add('flash-highlight');
+
+                // Remove class after animation
+                setTimeout(() => {
+                    element.classList.remove('flash-highlight');
+                }, 1500);
+            }
+        }
+        // --- END BOOKMARK SYSTEM FUNCTIONS ---
+
 
         // Apply formatting to active block
         function applyBlockFormat(type) {
@@ -5790,10 +6139,17 @@
             }, 500);
         }
 
-        // Close pickers when clicking outside
+        // Close pickers and dropdowns when clicking outside
         document.addEventListener('click', (e) => {
+            // Category pickers
             if (!e.target.closest('.category-trigger') && !e.target.closest('.category-picker')) {
                 document.querySelectorAll('.category-picker').forEach(p => p.style.display = 'none');
+            }
+            // Bookmark dropdown
+            const dropdown = document.getElementById('bookmark-dropdown');
+            const btn = document.getElementById('bookmark-dropdown-btn');
+            if (dropdown && dropdown.classList.contains('show') && !dropdown.contains(e.target) && !btn.contains(e.target)) {
+                dropdown.classList.remove('show');
             }
         });
 
