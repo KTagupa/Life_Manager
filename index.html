@@ -2573,6 +2573,116 @@
             border-color: #b91c1c;
         }
 
+        /* Subtask Expand Button */
+        .node-subtask-expand {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #2d2d2d;
+            border: 2px solid var(--border);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s;
+            z-index: 20;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            font-size: 12px;
+            pointer-events: auto;
+        }
+
+        .node-subtask-expand.visible-btn {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .node:hover .node-subtask-expand {
+            opacity: 1;
+        }
+
+        .node-subtask-expand:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        /* Expanded Subtasks Box */
+        .subtasks-expanded-box {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            width: 200px;
+            max-height: 250px;
+            background: #1a1a1a;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+            z-index: 100;
+            overflow-y: auto;
+            padding: 8px;
+            display: none;
+        }
+
+        .subtasks-expanded-box.visible {
+            display: block;
+        }
+
+        .expanded-subtask-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 6px;
+            margin-bottom: 4px;
+            background: #252526;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .expanded-subtask-item:hover {
+            background: #2d2d2d;
+        }
+
+        .expanded-subtask-check {
+            width: 18px;
+            height: 18px;
+            min-width: 18px;
+            border: 2px solid #475569;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-size: 12px;
+            color: white;
+            margin-top: 2px;
+        }
+
+        .expanded-subtask-check.checked {
+            background: #94a3b8;
+            border-color: #94a3b8;
+        }
+
+        .expanded-subtask-text {
+            flex: 1;
+            font-size: 12px;
+            color: #cbd5e1;
+            word-wrap: break-word;
+            word-break: break-word;
+            line-height: 1.4;
+            max-width: 160px;
+        }
+
+        .expanded-subtask-text.done {
+            text-decoration: line-through;
+            color: #64748b;
+            opacity: 0.7;
+        }
+
         .progress-container {
             height: 4px;
             background: #444;
@@ -7018,10 +7128,19 @@
                 // Add event.stopPropagation() inside the onclick string
                 el.innerHTML = `
                 <div class="${timerBtnClass}" 
+                     onmousedown="event.stopPropagation();"
                      onclick="event.stopPropagation(); handleNodeTimerClick(event, '${node.id}')" 
                      title="${isActive ? 'Stop Timer' : 'Start Timer'}">
                     ${timerBtnIcon}
                 </div>
+                ${totalSubs > 0 ? `
+                <div class="node-subtask-expand" 
+                     onmousedown="event.stopPropagation();" 
+                     onclick="event.stopPropagation(); toggleSubtaskExpansion('${node.id}', event)" 
+                     title="Show Subtasks">
+                    ☰
+                </div>
+                ` : ''}
                 <div class="node-header"><span>${icon} ${node.title}</span></div>
                 <div class="node-meta">${badgesHtml}</div>
                 ${totalSubs > 0 ? `<div class="progress-container"><div class="progress-bar" style="width: ${progress}%"></div></div>` : ''}
@@ -7095,6 +7214,15 @@
             document.addEventListener('mousedown', (e) => {
                 const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
                 if (!panel.classList.contains('hidden')) { if (!panel.contains(e.target) && !fab.contains(e.target)) toggleInbox(); }
+
+                // Close subtask expansion boxes when clicking outside
+                const clickedBox = e.target.closest('.subtasks-expanded-box');
+                const clickedExpandBtn = e.target.closest('.node-subtask-expand');
+                const clickedCheckbox = e.target.closest('.expanded-subtask-check');
+
+                if (!clickedBox && !clickedExpandBtn && !clickedCheckbox) {
+                    closeAllSubtaskBoxes();
+                }
 
                 const aiPanel = document.getElementById('ai-panel'); const aiFab = document.getElementById('fab-ai');
                 if (!aiPanel.classList.contains('hidden')) { if (!aiPanel.contains(e.target) && !aiFab.contains(e.target)) toggleAIPanel(); }
@@ -7665,7 +7793,99 @@
         function removeDependency(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies = node.dependencies.filter(d => d.id !== parentId); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function toggleDepType(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function addSubtask() { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks.push({ text: 'New Step', done: false }); render(); updateInspector(); saveToStorage(); } }
-        function toggleSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks[index].done = !node.subtasks[index].done; render(); updateInspector(); saveToStorage(); } }
+        function toggleSubtask(index) {
+            const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
+            if (node) {
+                node.subtasks[index].done = !node.subtasks[index].done;
+                render();
+                updateInspector();
+                saveToStorage();
+
+                // Refresh any open expanded subtask box
+                const nodeEl = document.querySelector(`.node[data-id="${selectedNodeId}"]`);
+                if (nodeEl) {
+                    const box = nodeEl.querySelector('.subtasks-expanded-box.visible');
+                    if (box) {
+                        box.remove();
+                        // Recreate it
+                        setTimeout(() => {
+                            const event = new Event('click');
+                            toggleSubtaskExpansion(selectedNodeId, event);
+                        }, 10);
+                    }
+                }
+            }
+        }
+
+        function toggleSubtaskExpansion(nodeId, event) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+
+            // Find the node element
+            const nodeEl = document.querySelector(`.node[data-id="${nodeId}"]`);
+            if (!nodeEl) return;
+
+            // Check if box already exists
+            let box = nodeEl.querySelector('.subtasks-expanded-box');
+
+            if (box) {
+                // Toggle visibility
+                box.classList.toggle('visible');
+                if (!box.classList.contains('visible')) {
+                    box.remove();
+                }
+            } else {
+                // Create new box
+                const node = nodes.find(n => n.id === nodeId) || archivedNodes.find(n => n.id === nodeId);
+                if (!node || node.subtasks.length === 0) return;
+
+                box = document.createElement('div');
+                box.className = 'subtasks-expanded-box visible';
+
+                node.subtasks.forEach((st, idx) => {
+                    const item = document.createElement('div');
+                    item.className = 'expanded-subtask-item';
+
+                    const checkbox = document.createElement('div');
+                    checkbox.className = `expanded-subtask-check ${st.done ? 'checked' : ''}`;
+                    checkbox.innerHTML = st.done ? '✓' : '';
+                    checkbox.onclick = (e) => {
+                        e.stopPropagation();
+                        // Important: selectedNodeId must be set for toggleSubtask to work as written
+                        // Since toggleSubtaskExpansion is called via onclick, we can assume this node is being interacted with.
+                        // However, toggleSubtask uses selectedNodeId. Let's make sure it's set or passed.
+                        // Actually, the user's provided code for toggleSubtask uses selectedNodeId.
+                        // Let's set it just in case, though usually clicking a node selects it.
+                        const oldSelected = selectedNodeId;
+                        selectedNodeId = nodeId;
+                        toggleSubtask(idx);
+                        selectedNodeId = oldSelected;
+
+                        // Update this specific checkbox
+                        checkbox.classList.toggle('checked');
+                        checkbox.innerHTML = checkbox.classList.contains('checked') ? '✓' : '';
+                        textSpan.classList.toggle('done');
+                    };
+
+                    const textSpan = document.createElement('div');
+                    textSpan.className = `expanded-subtask-text ${st.done ? 'done' : ''}`;
+                    textSpan.textContent = st.text;
+
+                    item.appendChild(checkbox);
+                    item.appendChild(textSpan);
+                    box.appendChild(item);
+                });
+
+                nodeEl.appendChild(box);
+            }
+        }
+
+        function closeAllSubtaskBoxes() {
+            document.querySelectorAll('.subtasks-expanded-box').forEach(box => box.remove());
+        }
+
         function closeInspector() { selectedNodeId = null; selectedIds.clear(); document.getElementById('inspector').classList.add('hidden'); render(); }
         function updateSubtaskText(index, val) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks[index].text = val; saveToStorage(); }
         function removeSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks.splice(index, 1); render(); updateInspector(); saveToStorage(); }
