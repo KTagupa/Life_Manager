@@ -848,22 +848,27 @@
             max-width: 1000px;
             max-height: 800px;
             z-index: 2000;
-            /* High z-index to be on top of everything */
             background: #222;
             border: 1px solid var(--accent);
             border-radius: 12px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 0 100vmax rgba(0, 0, 0, 0.7);
-            /* Dark backdrop */
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            transition: opacity 0.2s;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         #note-editor.hidden {
             display: none;
             opacity: 0;
             pointer-events: none;
+        }
+
+        #note-editor.maximized {
+            width: 95vw;
+            height: 95vh;
+            max-width: none;
+            max-height: none;
         }
 
         /* --- BLOCK-BASED NOTE EDITOR STYLES --- */
@@ -2615,7 +2620,7 @@
             position: absolute;
             top: calc(100% + 8px);
             left: 0;
-            width: 180px;
+            width: 200px;
             max-height: 250px;
             background: #1a1a1a;
             border: 2px solid var(--accent);
@@ -4109,6 +4114,8 @@
             <input type="text" id="note-title-input" placeholder="Note Title..." oninput="saveCurrentNote()">
             <div class="note-header-actions">
                 <button class="icon-btn" id="pin-note-btn" onclick="toggleCurrentNotePin()" title="Pin Note">📌</button>
+                <button class="icon-btn" id="note-maximize-btn" onclick="toggleNoteEditorSize()"
+                    title="Maximize (Alt+W)">⛶</button>
                 <button class="icon-btn danger" onclick="deleteCurrentNote()" title="Delete Note">🗑️</button>
                 <button class="icon-btn" onclick="closeNoteEditor()" title="Close">✕</button>
             </div>
@@ -4767,6 +4774,7 @@
         let selectedNodeId = null;
         let selectedIds = new Set();
         let currentEditingNoteId = null;
+        let noteEditorState = 'normal'; // 'normal' or 'maximized'
         let pinnedItems = []; // {type: 'task'|'note'|'habit', id: string}
         let scale = 1;
         let panX = 0;
@@ -6629,6 +6637,15 @@
             const editor = document.getElementById('note-editor');
             editor.classList.remove('hidden');
 
+            // Reset maximize state
+            editor.classList.remove('maximized');
+            noteEditorState = 'normal';
+            const maxBtn = document.getElementById('note-maximize-btn');
+            if (maxBtn) {
+                maxBtn.innerHTML = '⛶';
+                maxBtn.title = 'Maximize (Alt+W)';
+            }
+
             // Reset toolbar to Edit mode
             document.getElementById('toggle-edit-btn').classList.add('active-mode');
             document.getElementById('toggle-view-btn').classList.remove('active-mode');
@@ -6657,6 +6674,10 @@
                 saveCurrentNote();
             }
 
+            // Reset editor size state
+            editor.classList.remove('maximized');
+            noteEditorState = 'normal';
+
             currentEditingNoteId = null;
             currentNoteBlocks = [];
             activeBlockId = null;
@@ -6666,6 +6687,27 @@
 
             // If we were editing a note linked to a specific task, update the inspector too
             if (selectedNodeId) updateInspector();
+        }
+
+        function toggleNoteEditorSize() {
+            const editor = document.getElementById('note-editor');
+            const btn = document.getElementById('note-maximize-btn');
+
+            if (!editor || !btn) return;
+
+            if (noteEditorState === 'normal') {
+                // Switch to maximized
+                editor.classList.add('maximized');
+                btn.innerHTML = '🗗';
+                btn.title = 'Restore Size (Alt+W)';
+                noteEditorState = 'maximized';
+            } else {
+                // Switch to normal
+                editor.classList.remove('maximized');
+                btn.innerHTML = '⛶';
+                btn.title = 'Maximize (Alt+W)';
+                noteEditorState = 'normal';
+            }
         }
 
         function toggleNotePopOut() {
@@ -7207,6 +7249,12 @@
                         case 'KeyE': toggleEcoMode(); break;
                         case 'KeyP': togglePinnedWindow(); break; // I added this own my own
                         case 'KeyF': toggleTaskListWindow(); break;
+                        case 'KeyW':
+                            const noteEditor = document.getElementById('note-editor');
+                            if (noteEditor && !noteEditor.classList.contains('hidden')) {
+                                toggleNoteEditorSize();
+                            }
+                            break;
                     }
                 }
             });
