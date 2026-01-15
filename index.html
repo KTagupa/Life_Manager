@@ -8650,7 +8650,7 @@
         // --- STORAGE & PERSISTENCE ---
         function saveToStorage() {
             // 1. Serialize Data ONCE
-            const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits, agenda, pinnedItems };
+            const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits, agenda, pinnedItems, noteSettings };
             const rawString = JSON.stringify(data);
 
             // 2. Save to Browser Storage
@@ -8715,6 +8715,9 @@
                         gistId = parsed.gistId || '';
                         agenda = parsed.agenda || [];
                         pinnedItems = parsed.pinnedItems || [];
+                        if (parsed.noteSettings) {
+                            noteSettings = parsed.noteSettings;
+                        }
                     }
 
                     // CALL THE CLEANER HERE
@@ -8757,6 +8760,19 @@
             // Run task cleanup
             nodes.forEach(sanitizeTask);
             archivedNodes.forEach(sanitizeTask);
+
+            // Sanitize Note Settings
+            if (!noteSettings) {
+                noteSettings = { categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`) };
+            }
+            if (!noteSettings.categoryNames || !Array.isArray(noteSettings.categoryNames)) {
+                noteSettings.categoryNames = Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`);
+            } else if (noteSettings.categoryNames.length < 10) {
+                // Ensure there are at least 10 categories
+                while (noteSettings.categoryNames.length < 10) {
+                    noteSettings.categoryNames.push(`Category ${noteSettings.categoryNames.length + 1}`);
+                }
+            }
 
             // --- NOTES CLEANUP (Many-to-Many Linkage) ---
             if (!Array.isArray(notes)) notes = [];
@@ -8990,7 +9006,26 @@
             input.value = '';
             reader.readAsText(file);
         }
-        function clearData() { if (confirm("Are you sure you want to clear all tasks?")) { nodes = []; archivedNodes = []; inbox = []; lifeGoals = {}; notes = []; habits = []; agenda = []; localStorage.removeItem('urgencyFlowData'); render(); renderInbox(); renderGoals(); renderAgenda(); deselectNode(); } }
+        function clearData() {
+            if (confirm("Are you sure you want to clear all tasks?")) {
+                nodes = [];
+                archivedNodes = [];
+                inbox = [];
+                lifeGoals = {};
+                notes = [];
+                habits = [];
+                agenda = [];
+                noteSettings = {
+                    categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`)
+                };
+                localStorage.removeItem('urgencyFlowData');
+                render();
+                renderInbox();
+                renderGoals();
+                renderAgenda();
+                deselectNode();
+            }
+        }
 
         function showNotification(msg) {
             const n = document.getElementById('notification');
