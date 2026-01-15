@@ -1407,6 +1407,82 @@
 
         /* --- END BOOKMARK SYSTEM STYLES --- */
 
+        /* --- MAXIMIZED BLOCK WINDOW --- */
+        #maximized-block-window {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85vw;
+            height: 85vh;
+            z-index: 2500;
+            background: #1e293b;
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 0 100vmax rgba(0, 0, 0, 0.7);
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #maximized-block-window.visible {
+            display: flex;
+        }
+
+        .maximized-block-header {
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .maximized-block-category {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        .maximized-block-toolbar {
+            padding: 8px 1.5rem;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .maximized-block-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .maximized-block-textarea {
+            width: 100%;
+            min-height: 100%;
+            background: transparent;
+            border: none;
+            color: #e2e8f0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-size: 1.1rem;
+            resize: none;
+            outline: none;
+            line-height: 1.7;
+        }
+
+        .maximized-block-preview {
+            width: 100%;
+            min-height: 100%;
+            color: #e2e8f0;
+            font-size: 1.1rem;
+            line-height: 1.7;
+        }
+
+
         /* Task Search Overlay */
         #note-task-search-overlay {
             display: none;
@@ -4364,7 +4440,73 @@
         </div>
     </div>
 
+    <div id="maximized-block-window">
+        <div class="maximized-block-header">
+            <div class="maximized-block-category" id="max-block-category">Category Name</div>
+            <div style="display:flex; gap:8px;">
+                <button class="icon-btn" onclick="closeMaximizedBlock()" title="Minimize">🗗</button>
+            </div>
+        </div>
+
+        <div class="maximized-block-toolbar">
+            <div class="note-toolbar-group">
+                <button id="max-toggle-edit-btn" class="note-toolbar-btn active-mode"
+                    onclick="toggleMaxBlockMode(false)">
+                    📝 Edit
+                </button>
+                <button id="max-toggle-view-btn" class="note-toolbar-btn" onclick="toggleMaxBlockMode(true)">
+                    👁️ View
+                </button>
+            </div>
+
+            <div class="note-toolbar-group" id="max-edit-tools">
+                <button class="note-toolbar-btn" onclick="applyMaxBlockFormat('bold')" title="Bold"><b>B</b></button>
+                <button class="note-toolbar-btn" onclick="applyMaxBlockFormat('italic')"
+                    title="Italic"><i>I</i></button>
+                <button class="note-toolbar-btn" onclick="applyMaxBlockFormat('checkbox')"
+                    title="Add Checkbox">☑</button>
+            </div>
+
+            <div class="note-toolbar-group">
+                <button class="note-toolbar-btn" onclick="convertMaxBlockSelectionToTask()"
+                    title="Convert Selection to Task" style="color:var(--critical-path)">
+                    ✨ Selection → Task
+                </button>
+            </div>
+
+            <div class="note-toolbar-group">
+                <button class="note-toolbar-btn" onclick="openMaxBlockBookmark()" title="Set Bookmark">
+                    <i class="fas fa-bookmark"></i> <span id="max-bookmark-name"></span>
+                </button>
+            </div>
+
+            <div class="note-toolbar-group">
+                <button class="note-toolbar-btn" style="color:#8b5cf6" onclick="applyMaxBlockAI('grammar')"
+                    title="AI Grammar">
+                    ✨ Grammar
+                </button>
+                <button class="note-toolbar-btn" style="color:#8b5cf6" onclick="applyMaxBlockAI('clarity')"
+                    title="AI Clarity">
+                    💡 Clarity
+                </button>
+            </div>
+
+            <div class="note-toolbar-group">
+                <button class="note-toolbar-btn" style="color:var(--blocked-color)" onclick="deleteMaxBlock()"
+                    title="Delete Block">
+                    🗑️ Delete
+                </button>
+            </div>
+        </div>
+
+        <div class="maximized-block-content">
+            <textarea id="max-block-textarea" class="maximized-block-textarea"></textarea>
+            <div id="max-block-preview" class="maximized-block-preview" style="display:none;"></div>
+        </div>
+    </div>
+
     <div id="notification">State Saved</div>
+
 
 
 
@@ -5928,6 +6070,10 @@
                             ${catListHtml}
                         </div>
                         <div class="block-controls">
+                            <button class="note-toolbar-btn" onclick="event.stopPropagation(); maximizeBlock(${block.id})" title="Maximize Block">
+                                <i class="fas fa-expand"></i>
+                            </button>
+
                             <button class="note-toolbar-btn" onclick="event.stopPropagation(); openBookmarkModal(${block.id})" title="Set Bookmark">
                                 <i class="fas fa-bookmark" style="${block.bookmarkName ? 'color:var(--accent)' : ''}"></i>
                             </button>
@@ -6152,6 +6298,289 @@
             currentBookmarkBlockId = null;
         }
 
+        // --- MAXIMIZED BLOCK FUNCTIONS ---
+        let maximizedBlockId = null;
+        let maxBlockIsViewMode = false;
+
+        function maximizeBlock(blockId) {
+            const block = currentNoteBlocks.find(b => b.id === blockId);
+            if (!block) return;
+
+            maximizedBlockId = blockId;
+            maxBlockIsViewMode = false;
+
+            const windowEl = document.getElementById('maximized-block-window');
+            const categoryEl = document.getElementById('max-block-category');
+            const textarea = document.getElementById('max-block-textarea');
+            const preview = document.getElementById('max-block-preview');
+            const bookmarkName = document.getElementById('max-bookmark-name');
+
+            // Set category name
+            categoryEl.innerText = noteSettings.categoryNames[block.colorIndex] || 'Category';
+            categoryEl.style.color = noteCategoryColors[block.colorIndex];
+
+            // Set bookmark display
+            if (block.bookmarkName) {
+                bookmarkName.innerText = block.bookmarkName;
+                bookmarkName.style.color = 'var(--accent)';
+            } else {
+                bookmarkName.innerText = '';
+            }
+
+            // Set content
+            textarea.value = block.text || '';
+            preview.innerHTML = renderMarkdown(block.text || '_Empty_');
+
+            // Show edit mode by default
+            textarea.style.display = 'block';
+            preview.style.display = 'none';
+            document.getElementById('max-toggle-edit-btn').classList.add('active-mode');
+            document.getElementById('max-toggle-view-btn').classList.remove('active-mode');
+            document.getElementById('max-edit-tools').style.display = 'flex';
+
+            // Show window
+            windowEl.classList.add('visible');
+
+            // Focus and resize
+            setTimeout(() => {
+                textarea.focus();
+                autoResizeMaxTextarea();
+            }, 100);
+        }
+
+        function closeMaximizedBlock() {
+            const windowEl = document.getElementById('maximized-block-window');
+            windowEl.classList.remove('visible');
+
+            // Scroll back to the block in main editor
+            if (maximizedBlockId) {
+                setTimeout(() => {
+                    const blockEl = document.getElementById(`block-${maximizedBlockId}`);
+                    const container = document.getElementById('blocks-container');
+                    if (blockEl && container) {
+                        blockEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                        // Flash animation
+                        blockEl.classList.remove('flash-highlight');
+                        void blockEl.offsetWidth;
+                        blockEl.classList.add('flash-highlight');
+
+                        setTimeout(() => {
+                            blockEl.classList.remove('flash-highlight');
+                        }, 1500);
+                    }
+                }, 100);
+            }
+
+            maximizedBlockId = null;
+        }
+
+        function toggleMaxBlockMode(isView) {
+            maxBlockIsViewMode = isView;
+            const textarea = document.getElementById('max-block-textarea');
+            const preview = document.getElementById('max-block-preview');
+            const editBtn = document.getElementById('max-toggle-edit-btn');
+            const viewBtn = document.getElementById('max-toggle-view-btn');
+            const editTools = document.getElementById('max-edit-tools');
+
+            if (isView) {
+                textarea.style.display = 'none';
+                preview.style.display = 'block';
+                preview.innerHTML = renderMarkdown(textarea.value || '_Empty_');
+                editBtn.classList.remove('active-mode');
+                viewBtn.classList.add('active-mode');
+                editTools.style.display = 'none';
+            } else {
+                textarea.style.display = 'block';
+                preview.style.display = 'none';
+                editBtn.classList.add('active-mode');
+                viewBtn.classList.remove('active-mode');
+                editTools.style.display = 'flex';
+                textarea.focus();
+            }
+        }
+
+        function autoResizeMaxTextarea() {
+            const textarea = document.getElementById('max-block-textarea');
+            if (!textarea) return;
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.max(textarea.scrollHeight, 300) + 'px';
+        }
+
+        function applyMaxBlockFormat(type) {
+            const textarea = document.getElementById('max-block-textarea');
+            if (!textarea) return;
+
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            const selected = text.substring(start, end);
+
+            let replacement = "";
+            switch (type) {
+                case 'bold': replacement = `**${selected}**`; break;
+                case 'italic': replacement = `*${selected}*`; break;
+                case 'checkbox': replacement = `\n- [ ] ${selected}`; break;
+            }
+
+            textarea.value = text.substring(0, start) + replacement + text.substring(end);
+            updateMaxBlockText();
+            textarea.focus();
+
+            const newPos = start + replacement.length;
+            textarea.setSelectionRange(newPos, newPos);
+            autoResizeMaxTextarea();
+        }
+
+        function convertMaxBlockSelectionToTask() {
+            const textarea = document.getElementById('max-block-textarea');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end).trim();
+
+            if (!selectedText) {
+                showNotification("Please select text first");
+                return;
+            }
+
+            // Create task
+            const worldX = (window.innerWidth / 2 - panX) / scale - 90;
+            const worldY = (window.innerHeight / 2 - panY) / scale - 50;
+            const newNode = createNode(worldX, worldY, selectedText);
+            nodes.push(newNode);
+
+            // Replace selected text with wiki-link
+            const text = textarea.value;
+            const replacement = `[[${selectedText}]]`;
+            textarea.value = text.substring(0, start) + replacement + text.substring(end);
+
+            // Update block
+            updateMaxBlockText();
+            autoResizeMaxTextarea();
+
+            // Link to current note
+            if (currentEditingNoteId) {
+                const note = notes.find(n => n.id === currentEditingNoteId);
+                if (note) {
+                    if (!note.taskIds) note.taskIds = [];
+                    if (!note.taskIds.includes(newNode.id)) {
+                        note.taskIds.push(newNode.id);
+                    }
+                }
+            }
+
+            updateCalculations();
+            render();
+            saveToStorage();
+
+            showNotification("Task Created: " + selectedText.substring(0, 30) + (selectedText.length > 30 ? "..." : ""));
+        }
+
+        function openMaxBlockBookmark() {
+            if (!maximizedBlockId) return;
+            currentBookmarkBlockId = maximizedBlockId;
+            const block = currentNoteBlocks.find(b => b.id === maximizedBlockId);
+            const modal = document.getElementById('bookmark-modal');
+            const input = document.getElementById('bookmark-input');
+
+            if (block && modal && input) {
+                input.value = block.bookmarkName || "";
+                modal.style.display = 'flex';
+                input.focus();
+                input.select();
+            }
+        }
+
+        async function applyMaxBlockAI(mode) {
+            const textarea = document.getElementById('max-block-textarea');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end);
+
+            if (!selectedText) {
+                showNotification("Please select text first");
+                return;
+            }
+
+            if (!geminiApiKey) {
+                alert("⚠️ Please set your Gemini API Key in settings");
+                return;
+            }
+
+            const systemPrompt = mode === 'grammar'
+                ? "Fix grammar and spelling. Return ONLY the corrected text. No quotes. Preserve formatting. Text: "
+                : "Improve clarity and flow. Return ONLY the rewritten text. No quotes. Preserve formatting. Text: ";
+
+            try {
+                const responseData = await fetchGemini({
+                    contents: [{ parts: [{ text: systemPrompt + selectedText }] }]
+                });
+
+                let result = responseData.candidates[0].content.parts[0].text.trim();
+
+                if (result.startsWith('"') && result.endsWith('"') && result.length > 2) {
+                    result = result.slice(1, -1);
+                }
+
+                const before = textarea.value.substring(0, start);
+                const after = textarea.value.substring(end);
+                textarea.value = before + result + after;
+
+                updateMaxBlockText();
+                autoResizeMaxTextarea();
+
+            } catch (err) {
+                alert("AI Error: " + err.message);
+            }
+        }
+
+        function deleteMaxBlock() {
+            if (!maximizedBlockId) return;
+            if (!confirm("Delete this block?")) return;
+
+            currentNoteBlocks = currentNoteBlocks.filter(b => b.id !== maximizedBlockId);
+
+            closeMaximizedBlock();
+            renderNoteBlocks();
+            triggerNoteSave();
+        }
+
+        function updateMaxBlockText() {
+            if (!maximizedBlockId) return;
+            const block = currentNoteBlocks.find(b => b.id === maximizedBlockId);
+            const textarea = document.getElementById('max-block-textarea');
+
+            if (block && textarea) {
+                block.text = textarea.value;
+                triggerNoteSave();
+
+                // Update preview if in view mode
+                if (maxBlockIsViewMode) {
+                    document.getElementById('max-block-preview').innerHTML = renderMarkdown(textarea.value || '_Empty_');
+                }
+            }
+        }
+
+        // Auto-update on typing
+        document.addEventListener('DOMContentLoaded', () => {
+            const textarea = document.getElementById('max-block-textarea');
+            if (textarea) {
+                textarea.addEventListener('input', () => {
+                    updateMaxBlockText();
+                    autoResizeMaxTextarea();
+                });
+            }
+        });
+
+        // Close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && maximizedBlockId) {
+                closeMaximizedBlock();
+            }
+        });
+
+
+
         function saveBookmark() {
             const input = document.getElementById('bookmark-input');
             const name = input ? input.value.trim() : "";
@@ -6164,7 +6593,17 @@
                     triggerNoteSave();
                 }
             }
+            // Update maximized window if open
+            if (maximizedBlockId === currentBookmarkBlockId) {
+                const bookmarkName = document.getElementById('max-bookmark-name');
+                if (bookmarkName) {
+                    bookmarkName.innerText = name;
+                    bookmarkName.style.color = name ? 'var(--accent)' : '';
+                }
+            }
+
             closeBookmarkModal();
+
         }
 
         function jumpToBookmark(blockId) {
