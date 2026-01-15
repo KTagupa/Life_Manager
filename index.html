@@ -1459,10 +1459,12 @@
             flex: 1;
             padding: 2rem;
             overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .maximized-block-textarea {
             width: 100%;
+            height: 100%;
             min-height: 100%;
             background: transparent;
             border: none;
@@ -1472,6 +1474,7 @@
             resize: none;
             outline: none;
             line-height: 1.7;
+            overflow-y: hidden;
         }
 
         .maximized-block-preview {
@@ -6404,7 +6407,7 @@
             const textarea = document.getElementById('max-block-textarea');
             if (!textarea) return;
             textarea.style.height = 'auto';
-            textarea.style.height = Math.max(textarea.scrollHeight, 300) + 'px';
+            textarea.style.height = textarea.scrollHeight + 'px';
         }
 
         function applyMaxBlockFormat(type) {
