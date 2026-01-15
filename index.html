@@ -308,6 +308,16 @@
             opacity: 0.7;
         }
 
+        .hud-row.habit-row {
+            border-top: 1px solid #333;
+            padding-top: 5px;
+            margin-top: 5px;
+        }
+
+        .habit-row .hud-label {
+            color: #10b981;
+        }
+
         .upcoming .hud-label {
             color: var(--upcoming-color);
         }
@@ -3924,6 +3934,20 @@
                 <button class="btn-timer"
                     style="width:28px; height:28px; border-radius:50%; padding:0; background:var(--accent);"
                     onclick="toggleFocusTimer('should')">▶</button>
+            </div>
+        </div>
+
+        <div id="hud-habit-row" class="hud-row habit-row" style="display: none;">
+            <div class="hud-task-info">
+                <span class="hud-label">TRACKING HABIT</span>
+                <span class="hud-task-name" id="hud-habit-title">---</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span class="hud-timer" id="hud-habit-time"
+                    style="color:var(--ready-color); font-family:monospace;">00:00</span>
+                <button class="btn-timer stop" id="hud-habit-stop-btn"
+                    style="width:28px; height:28px; border-radius:50%; padding:0;"
+                    onclick="toggleHabitFocusTimer()">🛑</button>
             </div>
         </div>
 
@@ -9110,6 +9134,7 @@
             const doingRow = document.getElementById('hud-doing-row');
             const shouldRow = document.getElementById('hud-should-row');
             const upcomingRow = document.getElementById('hud-upcoming-row'); // NEW
+            const habitRow = document.getElementById('hud-habit-row');
 
             // Identify "Doing" (Which task has an active timer?)
             const activeTask = nodes.find(n => n.activeTimerStart) || archivedNodes.find(n => n.activeTimerStart);
@@ -9210,6 +9235,23 @@
                 upcomingRow.style.display = 'none';
             }
 
+            // --- Render Habit Row ---
+            const activeHabit = habits.find(h => h.activeTimerStart);
+            if (activeHabit) {
+                hudActive = true;
+                habitRow.style.display = 'flex';
+                document.getElementById('hud-habit-title').innerText = activeHabit.title;
+
+                const freq = activeHabit.frequency || 'daily';
+                const bounds = getPeriodBounds(freq);
+                const val = getSumInPeriod(activeHabit, bounds);
+
+                document.getElementById('hud-habit-time').innerText = formatTime(val);
+                hud.dataset.activeHabitId = activeHabit.id;
+            } else {
+                habitRow.style.display = 'none';
+            }
+
             if (hudActive) hud.classList.add('active');
             else hud.classList.remove('active');
         }
@@ -9218,6 +9260,12 @@
             const hud = document.getElementById('focus-hud');
             const taskId = (type === 'doing') ? hud.dataset.doingTaskId : hud.dataset.shouldTaskId;
             if (taskId) toggleTimer(taskId);
+        }
+
+        function toggleHabitFocusTimer() {
+            const hud = document.getElementById('focus-hud');
+            const habitId = hud.dataset.activeHabitId;
+            if (habitId) toggleHabitTimer(habitId);
         }
 
         function focusHUDTask(type) {
