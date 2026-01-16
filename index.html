@@ -598,6 +598,70 @@
             padding: 8px;
         }
 
+        /* --- CHECK-IN GRID --- */
+        .checkin-grid-container {
+            margin-top: 12px;
+            overflow-x: auto;
+            display: flex;
+            gap: 6px;
+            padding: 4px 0 12px 0;
+            scrollbar-width: thin;
+            scrollbar-color: #334155 transparent;
+        }
+
+        .checkin-grid-container::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .checkin-grid-container::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+
+        .checkin-box {
+            min-width: 32px;
+            height: 38px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .checkin-box.checked {
+            background: #059669;
+            border-color: #10b981;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+        }
+
+        .checkin-box .day-num {
+            font-size: 11px;
+            font-weight: 700;
+            color: #94a3b8;
+        }
+
+        .checkin-box.checked .day-num {
+            color: white;
+        }
+
+        .checkin-box .day-indicator {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: #475569;
+            margin-top: 2px;
+        }
+
+        .checkin-box.checked .day-indicator {
+            background: white;
+            box-shadow: 0 0 5px white;
+        }
+
         .subtask-row {
             display: flex;
             align-items: center;
@@ -2652,10 +2716,6 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
         }
 
-        .node:hover .node-timer-control,
-        .node-timer-control.running {
-            opacity: 1;
-        }
 
         .node-timer-control.play {
             background: #059669;
@@ -2665,6 +2725,58 @@
         .node-timer-control.stop {
             background: #b91c1c;
             border-color: #b91c1c;
+        }
+
+        .node-checkin-btn {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid #10b981;
+            color: #10b981;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 10px;
+            margin-right: 8px;
+            flex-shrink: 0;
+            opacity: 0;
+        }
+
+        .node:hover .node-checkin-btn,
+        .node:hover .node-timer-control,
+        .node-timer-control.running,
+        .node:hover .node-subtask-expand {
+            opacity: 1;
+        }
+
+        .node-checkin-btn:hover {
+            background: #10b981;
+            color: white;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+
+        @keyframes checkin-glow {
+            0% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+                transform: scale(1);
+            }
+
+            50% {
+                box-shadow: 0 0 15px 5px rgba(16, 185, 129, 0.5);
+                transform: scale(1.2);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+                transform: scale(1);
+            }
+        }
+
+        .checkin-glow {
+            animation: checkin-glow 0.5s ease-out;
         }
 
         /* Subtask Expand Button */
@@ -5803,6 +5915,7 @@
                 subtasks: [],
                 activeTimerStart: null,
                 timeLogs: [],
+                checkIns: [],
                 externalLink: ''
             };
         }
@@ -7766,7 +7879,18 @@
                     </div>
                     ` : ''}
                     ` : ''}
-                    <div class="node-header"><span>${icon} ${node.title}</span></div>
+                    <div class="node-header">
+                        <div style="display:flex; align-items:center;">
+                            ${!isUltraEcoMode ? `
+                            <div class="node-checkin-btn" 
+                                 onmousedown="event.stopPropagation();"
+                                 onclick="event.stopPropagation(); handleCheckIn(event, '${node.id}')" 
+                                 title="Fast Check-in">
+                                ✓
+                            </div>` : ''}
+                            <span>${icon} ${node.title}</span>
+                        </div>
+                    </div>
                     ${!isUltraEcoMode ? `<div class="node-meta">${badgesHtml}</div>` : ''}
                     ${!isUltraEcoMode && totalSubs > 0 ? `<div class="progress-container"><div class="progress-bar" style="width: ${progress}%"></div></div>` : ''}
                 `;
@@ -8130,6 +8254,69 @@
             if (document.getElementById('archive-panel').classList.contains('hidden') === false) renderArchiveList();
         }
 
+        // --- CHECK-IN LOGIC ---
+        function handleCheckIn(e, nodeId) {
+            if (e) e.stopPropagation();
+            const node = (nodes.find(n => n.id === nodeId) || archivedNodes.find(n => n.id === nodeId));
+            if (!node) return;
+
+            if (!node.checkIns) node.checkIns = [];
+            node.checkIns.push(Date.now());
+
+            // Glow effect
+            if (e && e.target) {
+                const btn = e.target.closest('.node-checkin-btn');
+                if (btn) {
+                    btn.classList.add('checkin-glow');
+                    setTimeout(() => btn.classList.remove('checkin-glow'), 500);
+                }
+            }
+
+            showNotification(`Checked in for ${node.title} for today`);
+            playAudioFeedback('timer-start'); // Subtle feedback
+
+            saveToStorage();
+            render();
+            if (selectedNodeId === nodeId) updateInspector();
+        }
+
+        function renderCheckInGrid(node) {
+            if (!node.checkIns) node.checkIns = [];
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let gridHtml = `<div class="checkin-grid-container" onwheel="this.scrollLeft += event.deltaY">`;
+
+            // Generate 30 days of boxes
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(today.getDate() - i);
+                const dateTimestamp = date.getTime();
+                const dayNum = date.getDate();
+
+                // Check if any check-in exists for this calendar day
+                const isChecked = node.checkIns.some(ts => {
+                    const checkDate = new Date(ts);
+                    checkDate.setHours(0, 0, 0, 0);
+                    return checkDate.getTime() === dateTimestamp;
+                });
+
+                const titleTip = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+                gridHtml += `
+                    <div class="checkin-box ${isChecked ? 'checked' : ''}" 
+                         title="${titleTip}"
+                         onclick="handleCheckIn(null, '${node.id}')">
+                        <span class="day-num">${dayNum}</span>
+                        <div class="day-indicator"></div>
+                    </div>
+                `;
+            }
+            gridHtml += `</div>`;
+            return gridHtml;
+        }
+
         // --- INSPECTOR Logic ---
         function updateInspector() {
             const panel = document.getElementById('insp-content');
@@ -8168,6 +8355,7 @@
                     <div class="inspector-title-wrapper">
                         <input type="text" class="inspector-title-input" value="${node.title}" placeholder="Task Title..." oninput="updateNodeField('title', this.value)">
                     </div>
+                    ${renderCheckInGrid(node)}
                 </div>`;
 
             // --- CONTENT FIELDS ---
