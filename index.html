@@ -4,43 +4,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Urgency Flow: Project Management Edition</title>
+    <title>Urgency Flow: Project Management Edition - Enhanced UI</title>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         :root {
-            /* Calming Dark Green Theme */
-            --bg-color: #0c1812;
-            --dots-color: #24342b;
-            --panel-bg: #15261d;
+            /* Enhanced Modern Dark Theme with Better Contrast */
+            --bg-color: #0a0f0c;
+            --dots-color: #1a2520;
+            --panel-bg: #141b18;
+            --panel-bg-elevated: #1a2520;
+            --panel-bg-hover: #1f2a25;
 
-            /* Preserved Colors */
-            --text-main: #e0e0e0;
-            --text-muted: #a0a0a0;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --border: #333;
+            /* Improved Text Colors */
+            --text-main: #f0f4f2;
+            --text-secondary: #c8d4d0;
+            --text-muted: #8a9a94;
+            --text-disabled: #5a6a64;
 
-            --node-bg: #2d2d2d;
-            --node-border: #444;
-            --node-selected: #3b82f6;
+            /* Enhanced Accent Colors */
+            --accent: #4f9cf9;
+            --accent-hover: #3b82f6;
+            --accent-light: rgba(79, 156, 249, 0.1);
+            --accent-border: rgba(79, 156, 249, 0.3);
 
-            /* Logic Colors */
+            /* Improved Borders */
+            --border: #2a3530;
+            --border-light: #1f2a25;
+            --border-hover: #3a4540;
+
+            /* Enhanced Node Colors */
+            --node-bg: #1e2724;
+            --node-bg-hover: #25302c;
+            --node-border: #2f3a35;
+            --node-selected: #4f9cf9;
+            --node-shadow: rgba(0, 0, 0, 0.4);
+
+            /* Logic Colors - Enhanced */
             --critical-path: #ffd700;
-            /* Gold */
-            --ready-color: #10b981;
-            /* Green */
+            --critical-path-light: rgba(255, 215, 0, 0.15);
+            --ready-color: #22c55e;
+            --ready-color-light: rgba(34, 197, 94, 0.15);
             --blocked-color: #ef4444;
-            /* Red */
-            --soft-dep-color: #888;
+            --blocked-color-light: rgba(239, 68, 68, 0.15);
+            --soft-dep-color: #64748b;
 
-            /* AI Colors */
-            --ai-accent: #8b5cf6;
+            /* AI Colors - Enhanced */
+            --ai-accent: #a78bfa;
+            --ai-accent-light: rgba(167, 139, 250, 0.15);
 
-            /* Amber/Yellow for upcoming */
+            /* Upcoming Colors */
             --upcoming-color: #fbbf24;
+            --upcoming-color-light: rgba(251, 191, 36, 0.15);
 
-            /* Block Note Category Colors */
+            /* Block Note Category Colors - Refined */
             --cat-1: #f1f5f9;
             --cat-2: #ffedd5;
             --cat-3: #fef9c3;
@@ -51,24 +68,49 @@
             --cat-8: #fae8ff;
             --cat-9: #ffe4e6;
             --cat-10: #fee2e2;
+
+            /* Spacing System */
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+
+            /* Border Radius */
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+
+            /* Shadows */
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+            --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+            /* Transitions */
+            --transition-fast: 0.15s ease;
+            --transition-base: 0.2s ease;
+            --transition-slow: 0.3s ease;
         }
 
         /* --- NEW PINNED WINDOW --- */
         #pinned-window {
             position: fixed;
-            top: 60px;
-            left: 60px;
-            width: 250px;
+            top: 70px;
+            left: 70px;
+            width: 280px;
             max-height: 80vh;
-            background: var(--panel-bg);
+            background: var(--panel-bg-elevated);
+            backdrop-filter: blur(20px);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: var(--radius-lg);
             display: flex;
             flex-direction: column;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+            box-shadow: var(--shadow-xl);
             z-index: 105;
             overflow: hidden;
-            transition: transform 0.3s ease, opacity 0.3s ease;
+            transition: all var(--transition-slow);
         }
 
         #pinned-window.hidden {
@@ -237,26 +279,28 @@
             border-color: var(--accent);
         }
 
-        /* --- UPDATED DUAL HUD STYLES --- */
+        /* --- ENHANCED FOCUS HUD --- */
         #focus-hud {
             position: fixed;
             top: 0;
             left: 50%;
             transform: translateX(-50%);
             z-index: 2000;
-            background: rgba(12, 24, 18, 0.98);
+            background: var(--panel-bg-elevated);
+            backdrop-filter: blur(20px);
             border: 1px solid var(--border);
             border-top: none;
-            border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 12px;
-            padding: 10px 20px;
+            border-bottom-left-radius: var(--radius-xl);
+            border-bottom-right-radius: var(--radius-xl);
+            padding: var(--spacing-md) var(--spacing-lg);
             display: flex;
             flex-direction: column;
-            gap: 5px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
-            min-width: 350px;
+            gap: var(--spacing-sm);
+            box-shadow: var(--shadow-xl);
+            min-width: 420px;
+            max-width: 600px;
             visibility: hidden;
-            transition: all 0.3s ease;
+            transition: all var(--transition-slow);
         }
 
         #focus-hud.active {
@@ -382,10 +426,12 @@
 
         body {
             margin: 0;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background-color: var(--bg-color);
-            background-image: radial-gradient(var(--dots-color) 1px, transparent 1px);
-            background-size: 20px 20px;
+            background-image: 
+                radial-gradient(circle at 1px 1px, var(--dots-color) 1px, transparent 0);
+            background-size: 24px 24px;
+            background-position: 0 0, 12px 12px;
             color: var(--text-main);
             overflow: hidden;
             height: 100vh;
@@ -393,27 +439,31 @@
             width: 100vw;
             display: flex;
             touch-action: none;
+            font-size: 14px;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
-        /* --- UI LAYOUT --- */
+        /* --- ENHANCED UI LAYOUT --- */
         #toolbar {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            top: 16px;
+            left: 16px;
             z-index: 100;
             display: flex;
             flex-direction: column;
-            /* Changed to column for vertical alignment */
             align-items: flex-start;
-            transition: all 0.3s ease;
+            transition: all var(--transition-base);
             pointer-events: none;
         }
 
         #menu-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--panel-bg);
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: var(--panel-bg-elevated);
+            backdrop-filter: blur(10px);
             border: 1px solid var(--border);
             color: var(--text-main);
             display: flex;
@@ -421,56 +471,76 @@
             justify-content: center;
             font-size: 20px;
             cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--shadow-md);
             z-index: 101;
             flex-shrink: 0;
-            transition: transform 0.2s, background 0.2s;
+            transition: all var(--transition-base);
             pointer-events: auto;
         }
 
         #menu-btn:hover {
-            background: #2a2a2a;
-            transform: scale(1.05);
+            background: var(--panel-bg-hover);
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        #menu-btn:active {
+            transform: translateY(0);
         }
 
         #toolbar-content {
             display: flex;
             flex-direction: column;
-            /* Stack buttons vertically */
-            gap: 8px;
-            background: var(--panel-bg);
-            padding: 10px;
-            border-radius: 8px;
+            gap: var(--spacing-sm);
+            background: var(--panel-bg-elevated);
+            backdrop-filter: blur(20px);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-lg);
             border: 1px solid var(--border);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            margin-left: 0;
-            /* Removed side margin */
-            margin-top: 10px;
-            /* Added top margin to space from ☰ button */
+            box-shadow: var(--shadow-xl);
+            margin-top: var(--spacing-md);
             opacity: 1;
             transform: translateY(0) scale(1);
-            /* Changed to Y for vertical slide */
             transform-origin: top left;
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             pointer-events: auto;
-            width: 200px;
-            /* Set a fixed width for the vertical list */
+            width: 240px;
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
         }
 
         #toolbar.collapsed #toolbar-content {
             opacity: 0;
-            transform: translateY(-20px) scale(0.9);
-            /* Slides up behind button */
+            transform: translateY(-20px) scale(0.95);
             pointer-events: none;
             position: absolute;
-            top: 40px;
-            /* Positioned relative to the menu button */
+            top: 60px;
             display: none;
         }
 
+        /* Enhanced Scrollbar for Toolbar */
+        #toolbar-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #toolbar-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #toolbar-content::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        #toolbar-content::-webkit-scrollbar-thumb:hover {
+            background: var(--border-hover);
+        }
+
         #inspector {
-            width: 350px;
-            background: var(--panel-bg);
+            width: 380px;
+            background: var(--panel-bg-elevated);
+            backdrop-filter: blur(20px);
             border-left: 1px solid var(--border);
             display: flex;
             flex-direction: column;
@@ -479,8 +549,8 @@
             right: 0;
             top: 0;
             bottom: 0;
-            transition: transform 0.3s ease;
-            box-shadow: -4px 0 10px rgba(0, 0, 0, 0.2);
+            transition: transform var(--transition-slow);
+            box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4);
         }
 
         #inspector.hidden {
@@ -807,8 +877,9 @@
         }
 
         .side-panel {
-            width: 380px;
-            background: #1a1a1a;
+            width: 400px;
+            background: var(--panel-bg-elevated);
+            backdrop-filter: blur(20px);
             border-left: 1px solid var(--border);
             display: flex;
             flex-direction: column;
@@ -817,8 +888,8 @@
             right: 0;
             top: 0;
             bottom: 0;
-            transition: transform 0.3s ease;
-            box-shadow: -4px 0 10px rgba(0, 0, 0, 0.3);
+            transition: transform var(--transition-slow);
+            box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4);
         }
 
         /* Update this block in your <style> section */
@@ -871,12 +942,15 @@
         }
 
         .panel-header-row {
-            padding: 15px;
+            padding: var(--spacing-md);
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: #222;
+            background: var(--panel-bg);
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-main);
         }
 
         .panel-list {
@@ -887,22 +961,26 @@
 
         /* --- NOTES STYLES --- */
         .note-card {
-            background: #2d2d2d;
-            border: 1px solid #444;
-            border-radius: 6px;
-            padding: 10px;
-            margin-bottom: 8px;
+            background: var(--node-bg);
+            border: 1px solid var(--node-border);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
             cursor: pointer;
-            transition: border-color 0.2s;
+            transition: all var(--transition-base);
         }
 
         .note-card:hover {
-            border-color: var(--accent);
+            border-color: var(--accent-border);
+            background: var(--node-bg-hover);
+            transform: translateX(4px);
+            box-shadow: var(--shadow-sm);
         }
 
         .note-card.active {
             border-color: var(--accent);
-            background: #333;
+            background: var(--accent-light);
+            box-shadow: 0 0 0 3px var(--accent-light);
         }
 
         .note-card-title {
@@ -2030,27 +2108,32 @@
         /* AI CHAT STYLES (Bottom Left) */
         #fab-ai {
             position: fixed;
-            bottom: 20px;
-            left: 20px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
+            bottom: 24px;
+            left: 24px;
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
             background: var(--ai-accent);
             color: white;
-            font-size: 24px;
+            font-size: 28px;
             border: none;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            box-shadow: var(--shadow-lg);
             cursor: pointer;
             z-index: 100;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.2s, background 0.2s;
+            transition: all var(--transition-base);
         }
 
         #fab-ai:hover {
-            transform: scale(1.1);
-            filter: brightness(1.2);
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 12px 32px rgba(167, 139, 250, 0.4);
+            filter: brightness(1.1);
+        }
+
+        #fab-ai:active {
+            transform: translateY(-2px) scale(1.02);
         }
 
         #ai-suggestions {
@@ -2071,26 +2154,25 @@
 
         #ai-panel {
             position: fixed;
-            bottom: 90px;
-            left: 20px;
-            width: 350px;
-            height: 500px;
-            max-height: 60vh;
-            background: var(--panel-bg);
+            bottom: 100px;
+            left: 24px;
+            width: 400px;
+            height: 550px;
+            max-height: 65vh;
+            background: var(--panel-bg-elevated);
+            backdrop-filter: blur(20px);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: var(--radius-xl);
             display: flex;
             flex-direction: column;
-            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.6);
+            box-shadow: var(--shadow-xl);
             z-index: 99;
             transform-origin: bottom left;
-            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+            transition: all var(--transition-slow);
             resize: both;
-            /* Enable manual resizing */
             overflow: hidden;
-            /* Required for resizing to work */
-            min-width: 300px;
-            min-height: 400px;
+            min-width: 320px;
+            min-height: 420px;
         }
 
         #ai-panel .panel-header-row {
@@ -2601,32 +2683,35 @@
             display: none;
         }
 
-        /* --- NODES --- */
+        /* --- ENHANCED NODES --- */
         .node {
             position: absolute;
-            width: 180px;
+            width: 200px;
             background: var(--node-bg);
             border: 1px solid var(--node-border);
-            border-radius: 8px;
-            padding: 10px;
+            border-radius: var(--radius-lg);
+            padding: 14px;
             user-select: none;
             cursor: pointer;
             z-index: 10;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
-            transition: box-shadow 0.2s, border-color 0.2s, opacity 0.3s;
+            box-shadow: var(--shadow-md);
+            transition: all var(--transition-base);
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 8px;
         }
 
         .node:hover {
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.6);
-            border-color: #666;
+            box-shadow: var(--shadow-lg);
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+            background: var(--node-bg-hover);
         }
 
         .node.selected {
             border: 2px solid var(--node-selected);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 0 0 4px rgba(79, 156, 249, 0.2), var(--shadow-lg);
+            background: var(--node-bg-hover);
         }
 
         .node.critical {
@@ -2670,26 +2755,36 @@
         }
 
         .badge {
-            padding: 2px 4px;
-            border-radius: 4px;
-            background: #333;
-            color: #aaa;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            background: var(--node-bg);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid var(--border);
+            transition: all var(--transition-fast);
         }
 
         .badge.critical-badge {
-            background: rgba(255, 215, 0, 0.2);
+            background: var(--critical-path-light);
             color: var(--critical-path);
+            border-color: rgba(255, 215, 0, 0.3);
         }
 
         .badge.urgent-badge {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-            font-weight: bold;
+            background: var(--blocked-color-light);
+            color: var(--blocked-color);
+            border-color: rgba(239, 68, 68, 0.3);
+            font-weight: 700;
         }
 
         .badge.weight {
-            background: rgba(59, 130, 246, 0.2);
+            background: var(--accent-light);
             color: var(--accent);
+            border-color: var(--accent-border);
         }
 
         .badge.date-badge {
@@ -2954,15 +3049,18 @@
         input[type="text"],
         input[type="number"],
         input[type="date"],
+        input[type="password"],
         textarea,
         select {
             width: 100%;
-            background: #121212;
+            background: var(--node-bg);
             border: 1px solid var(--border);
             color: var(--text-main);
-            padding: 8px;
-            border-radius: 4px;
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
             font-family: inherit;
+            font-size: 14px;
+            transition: all var(--transition-base);
         }
 
         input:focus,
@@ -2970,31 +3068,67 @@
         select:focus {
             outline: none;
             border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-light);
+            background: var(--node-bg-hover);
+        }
+
+        input::placeholder,
+        textarea::placeholder {
+            color: var(--text-muted);
         }
 
         .btn {
             background: var(--node-bg);
             border: 1px solid var(--border);
             color: var(--text-main);
-            padding: 6px 12px;
-            border-radius: 4px;
+            padding: 10px 16px;
+            border-radius: var(--radius-md);
             cursor: pointer;
-            font-size: 12px;
-            transition: background 0.2s;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all var(--transition-base);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+            user-select: none;
         }
 
         .btn:hover {
-            background: #3a3a3a;
+            background: var(--node-bg-hover);
+            border-color: var(--border-hover);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn:active {
+            transform: translateY(0);
         }
 
         .btn-primary {
             background: var(--accent);
             border-color: var(--accent);
             color: white;
+            font-weight: 600;
         }
 
         .btn-primary:hover {
             background: var(--accent-hover);
+            border-color: var(--accent-hover);
+            box-shadow: 0 4px 12px rgba(79, 156, 249, 0.3);
+        }
+
+        .btn-danger {
+            background: var(--blocked-color);
+            border-color: var(--blocked-color);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            border-color: #dc2626;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
         }
 
         .btn-danger {
