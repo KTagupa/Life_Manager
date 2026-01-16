@@ -9516,11 +9516,23 @@
                     redZoneStartTime = null;
                 } else {
                     fpsDot.className = 'health-dot err';
-                    if (!isEcoMode) {
+
+                    // Auto-switch logic based on severity
+                    if (ecoModeLevel === 0) {
+                        // In Turbo: Switch to Eco after 5s of lag
                         if (!redZoneStartTime) redZoneStartTime = Date.now();
                         if (Date.now() - redZoneStartTime > 5000) {
                             ecoModeLevel = 1;
                             applyEcoMode();
+                            showNotification("⚠️ Auto-switched to Eco Mode (high CPU load)");
+                        }
+                    } else if (ecoModeLevel === 1 && lastRenderTime > 100) {
+                        // In Eco: Switch to Ultra Eco if REALLY struggling (>100ms frames)
+                        if (!redZoneStartTime) redZoneStartTime = Date.now();
+                        if (Date.now() - redZoneStartTime > 3000) {
+                            ecoModeLevel = 2;
+                            applyEcoMode();
+                            showNotification("🔋 Auto-switched to Battery Mode (critical CPU load)");
                         }
                     }
                 }
