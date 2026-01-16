@@ -662,6 +662,24 @@
             box-shadow: 0 0 5px white;
         }
 
+        .today-checkins-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .today-checkin-tag {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #10b981;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            font-family: monospace;
+        }
+
         .subtask-row {
             display: flex;
             align-items: center;
@@ -7741,6 +7759,7 @@
                 // STARTING
                 node.activeTimerStart = Date.now();
                 playAudioFeedback('timer-start'); // <--- SOUND
+                handleCheckIn(null, targetId); // <--- Auto Check-in
             }
             saveToStorage();
             render();
@@ -8285,6 +8304,7 @@
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);
+            const todayTimestamp = today.getTime();
 
             let gridHtml = `<div class="checkin-grid-container" onwheel="this.scrollLeft += event.deltaY">`;
 
@@ -8295,7 +8315,6 @@
                 const dateTimestamp = date.getTime();
                 const dayNum = date.getDate();
 
-                // Check if any check-in exists for this calendar day
                 const isChecked = node.checkIns.some(ts => {
                     const checkDate = new Date(ts);
                     checkDate.setHours(0, 0, 0, 0);
@@ -8314,6 +8333,23 @@
                 `;
             }
             gridHtml += `</div>`;
+
+            // Filter today's check-ins
+            const todayCheckIns = node.checkIns.filter(ts => {
+                const checkDate = new Date(ts);
+                checkDate.setHours(0, 0, 0, 0);
+                return checkDate.getTime() === todayTimestamp;
+            }).sort((a, b) => a - b);
+
+            if (todayCheckIns.length > 0) {
+                gridHtml += `<div class="today-checkins-list">`;
+                todayCheckIns.forEach(ts => {
+                    const timeStr = new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                    gridHtml += `<div class="today-checkin-tag">${timeStr}</div>`;
+                });
+                gridHtml += `</div>`;
+            }
+
             return gridHtml;
         }
 
