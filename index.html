@@ -2103,39 +2103,6 @@
             display: none;
         }
 
-        /* REMOVED: .visible class logic is not used by your JS */
-
-        /* AI CHAT STYLES (Bottom Left) */
-        #fab-ai {
-            position: fixed;
-            bottom: 24px;
-            left: 24px;
-            width: 64px;
-            height: 64px;
-            border-radius: 16px;
-            background: var(--ai-accent);
-            color: white;
-            font-size: 28px;
-            border: none;
-            box-shadow: var(--shadow-lg);
-            cursor: pointer;
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all var(--transition-base);
-        }
-
-        #fab-ai:hover {
-            transform: translateY(-4px) scale(1.05);
-            box-shadow: 0 12px 32px rgba(167, 139, 250, 0.4);
-            filter: brightness(1.1);
-        }
-
-        #fab-ai:active {
-            transform: translateY(-2px) scale(1.02);
-        }
-
         #ai-suggestions {
             background: rgba(0, 0, 0, 0.1);
         }
@@ -2153,26 +2120,8 @@
         }
 
         #ai-panel {
-            position: fixed;
-            bottom: 100px;
-            left: 24px;
-            width: 400px;
-            height: 550px;
-            max-height: 65vh;
-            background: var(--panel-bg-elevated);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-xl);
-            display: flex;
-            flex-direction: column;
-            box-shadow: var(--shadow-xl);
-            z-index: 99;
-            transform-origin: bottom left;
-            transition: all var(--transition-slow);
-            resize: both;
-            overflow: hidden;
-            min-width: 320px;
-            min-height: 420px;
+            /* Keep this for backward compatibility but hide it */
+            display: none !important;
         }
 
         #ai-panel .panel-header-row {
@@ -3367,27 +3316,6 @@
             opacity: 1;
         }
 
-        #fab-inbox {
-            position: fixed;
-            bottom: 25px;
-            left: 95px;
-            /* Positioned next to AI button */
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: var(--accent);
-            color: white;
-            font-size: 28px;
-            border: none;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-            cursor: pointer;
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.2s, background 0.2s;
-        }
-
         #btn-finance-link {
             width: 40px;
             height: 40px;
@@ -3581,19 +3509,8 @@
         }
 
         #inbox-panel {
-            position: fixed;
-            bottom: 90px;
-            left: 20px;
-            width: 320px;
-            background: var(--panel-bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
-            z-index: 99;
-            transform-origin: bottom left;
-            transition: transform 0.2s ease, opacity 0.2s ease;
+            /* Keep this for backward compatibility but hide it */
+            display: none !important;
         }
 
         #inbox-panel.hidden {
@@ -3894,6 +3811,133 @@
             cursor: default !important;
         }
 
+        /* --- AI ASSISTANT MODAL --- */
+        #ai-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 450px;
+            height: 600px;
+            min-width: 350px;
+            min-height: 450px;
+            max-width: 90vw;
+            max-height: 90vh;
+            background: linear-gradient(145deg, #1a1625, #0f0a1a);
+            border: 2px solid var(--ai-accent);
+            border-radius: 16px;
+            box-shadow: 0 25px 60px rgba(167, 139, 250, 0.3), 0 0 100px rgba(0, 0, 0, 0.8);
+            z-index: 2500;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            resize: both;
+            transition: opacity 0.3s ease;
+        }
+        
+        #ai-modal.visible {
+            display: flex;
+        }
+        
+        #ai-modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 2499;
+            display: none;
+        }
+        
+        #ai-modal-backdrop.visible {
+            display: block;
+        }
+        
+        /* --- INBOX MODAL --- */
+        #inbox-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 380px;
+            height: 500px;
+            min-width: 320px;
+            min-height: 400px;
+            max-width: 90vw;
+            max-height: 90vh;
+            background: linear-gradient(145deg, #1a2520, #0f1814);
+            border: 2px solid var(--ready-color);
+            border-radius: 16px;
+            box-shadow: 0 25px 60px rgba(34, 197, 94, 0.3), 0 0 100px rgba(0, 0, 0, 0.8);
+            z-index: 2500;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            resize: both;
+            transition: opacity 0.3s ease;
+        }
+        
+        #inbox-modal.visible {
+            display: flex;
+        }
+        
+        .modal-header-enhanced {
+            padding: 16px 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            user-select: none;
+        }
+        
+        .modal-title-enhanced {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .modal-close-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-muted);
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+        
+        .modal-close-btn:hover {
+            background: var(--blocked-color);
+            color: white;
+            border-color: var(--blocked-color);
+        }
+        
+        /* --- DRAGGABLE HEALTH DASHBOARD --- */
+        #health-dashboard {
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+            cursor: move;
+            user-select: none;
+            pointer-events: auto !important;
+        }
+        
+        #health-dashboard:hover,
+        #health-dashboard:active {
+            opacity: 1;
+        }
+        
         /* --- CALENDAR PANEL --- */
         #calendar-panel {
             position: fixed;
@@ -4374,13 +4418,12 @@
         <div id="sync-status" class="sync-status"></div>
     </div>
 
-    <button id="fab-ai" onclick="toggleAIPanel()">✨</button>
     <div id="ai-panel" class="hidden">
         <div class="panel-header-row">
             <span>✨ AI Project Assistant</span>
             <div style="display:flex; gap:5px;">
                 <button class="tool-btn" onclick="toggleAISettings()" title="API Key Settings">⚙️</button>
-                <button class="btn" onclick="toggleAIPanel()">✕</button>
+                <button class="btn" onclick="toggleAIModal()">✕</button>
             </div>
         </div>
 
@@ -4413,6 +4456,57 @@
                 Weekly Recap</button>
         </div>
 
+        <div style="padding: 10px; border-top: 1px solid #333; display: flex; gap: 5px;">
+            <input type="text" id="ai-input" placeholder="Analyze my current risks..."
+                onkeypress="if(event.key==='Enter') askAI()">
+            <button class="btn btn-primary" style="background: var(--ai-accent); border-color: var(--ai-accent);"
+                onclick="askAI()">Ask</button>
+        </div>
+    </div>
+
+    <!-- AI Assistant Modal -->
+    <div id="ai-modal-backdrop"></div>
+    <div id="ai-modal">
+        <div class="modal-header-enhanced" id="ai-modal-header">
+            <div class="modal-title-enhanced">
+                <span style="font-size: 24px;">✨</span>
+                <span>AI Project Assistant</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="modal-close-btn" onclick="toggleAISettings()" title="Settings" style="width: auto; padding: 0 12px; font-size: 14px;">⚙️</button>
+                <button class="modal-close-btn" onclick="closeAIModal()">✕</button>
+            </div>
+        </div>
+    
+        <div id="ai-settings-pane">
+            <label style="margin-bottom:5px; display:block;">Gemini API Key</label>
+            <input type="password" id="gemini-api-key-input" placeholder="Paste API Key here..."
+                onchange="saveGeminiKey(this.value)" style="width:100%; margin-bottom:5px;">
+            <div style="font-size:10px; color:#888;">Key is saved to your browser's Local Storage.</div>
+        </div>
+    
+        <div id="ai-chat-history" class="panel-list"
+            style="padding: 15px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
+            <div class="ai-msg bot">Hello! I can analyze your tasks, notes, and life goals to provide strategic
+                insights. <br><br>Please click the ⚙️ icon to set your Google Gemini API Key to get started.</div>
+        </div>
+    
+        <div id="ai-loading" class="hidden" style="padding: 0 15px 10px; color: var(--ai-accent); font-size: 11px;">
+            Gemini is thinking...</div>
+    
+        <div id="ai-suggestions"
+            style="padding: 5px 10px; display: flex; gap: 5px; flex-wrap: wrap; border-top: 1px solid #333; background: rgba(0,0,0,0.1);">
+            <button class="btn" style="font-size: 10px; padding: 4px 8px;"
+                onclick="quickPrompt('Analyze my Inbox and my current Life Goals. Which ideas should I promote to tasks immediately to maintain momentum?')">🎯
+                Goal Alignment</button>
+            <button class="btn" style="font-size: 10px; padding: 4px 8px;"
+                onclick="quickPrompt('Identify the Critical Path tasks that are currently blocked. What is the single most important thing I must finish today to prevent a cascade of delays?')">⚠️
+                Risk Check</button>
+            <button class="btn" style="font-size: 10px; padding: 4px 8px;"
+                onclick="quickPrompt('Look at my archived and completed tasks and current progress. Write a brief executive summary of what I achieved this week and what my top 3 priorities should be for next week.')">📝
+                Weekly Recap</button>
+        </div>
+    
         <div style="padding: 10px; border-top: 1px solid #333; display: flex; gap: 5px;">
             <input type="text" id="ai-input" placeholder="Analyze my current risks..."
                 onkeypress="if(event.key==='Enter') askAI()">
@@ -4676,12 +4770,10 @@
         </div>
     </div>
 
-    <button id="fab-inbox" onclick="toggleInbox()">+</button>
-
     <div id="inbox-panel" class="hidden">
         <div class="inbox-header">
             <span>Inbox (Ideas)</span>
-            <span style="cursor:pointer; font-size:18px" onclick="toggleInbox()">×</span>
+            <span style="cursor:pointer; font-size:18px" onclick="toggleInboxModal()">×</span>
         </div>
         <div class="inbox-list" id="inbox-list">
         </div>
@@ -4692,6 +4784,27 @@
         </div>
     </div>
 
+    <!-- Inbox Modal -->
+    <div id="inbox-modal">
+        <div class="modal-header-enhanced" id="inbox-modal-header">
+            <div class="modal-title-enhanced">
+                <span style="font-size: 24px;">📥</span>
+                <span>Quick Capture Inbox</span>
+            </div>
+            <button class="modal-close-btn" onclick="closeInboxModal()">✕</button>
+        </div>
+    
+        <div class="panel-list" id="inbox-modal-list" style="flex-grow: 1; overflow-y: auto; padding: 10px;">
+            <!-- Inbox items will render here -->
+        </div>
+    
+        <div style="padding: 12px; border-top: 1px solid var(--border); display: flex; gap: 8px; background: rgba(0,0,0,0.2);">
+            <input type="text" id="inbox-modal-input" placeholder="Quick task or idea..."
+                onkeypress="if(event.key==='Enter') addToInboxModal()" style="flex: 1;">
+            <button class="btn btn-primary" onclick="addToInboxModal()" style="background: var(--ready-color); border-color: var(--ready-color);">Add</button>
+        </div>
+    </div>
+    
     <div id="pinned-window" class="hidden">
         <div class="pinned-header">
             <span>📌 Pinned</span>
@@ -5272,6 +5385,9 @@
         let currentEditingNoteId = null;
         let noteEditorState = 'normal'; // 'normal' or 'maximized'
         let pinnedItems = []; // {type: 'task'|'note'|'habit', id: string}
+        let aiModalPosition = { x: null, y: null, width: 450, height: 600 };
+        let inboxModalPosition = { x: null, y: null, width: 380, height: 500 };
+        let healthDashboardPosition = { x: null, y: null };
         let scale = 1;
         let panX = 0;
         let panY = 0;
@@ -5345,6 +5461,27 @@
             const aiHeader = aiPanel.querySelector('.panel-header-row');
             makeElementDraggable(aiPanel, aiHeader);
 
+            // Setup modal dragging
+            setupModalDragging();
+            
+            // Load saved positions
+            const savedAIPos = localStorage.getItem('aiModalPosition');
+            if (savedAIPos) aiModalPosition = JSON.parse(savedAIPos);
+            
+            const savedInboxPos = localStorage.getItem('inboxModalPosition');
+            if (savedInboxPos) inboxModalPosition = JSON.parse(savedInboxPos);
+            
+            const savedHealthPos = localStorage.getItem('healthDashboardPosition');
+            if (savedHealthPos) {
+                healthDashboardPosition = JSON.parse(savedHealthPos);
+                const healthDash = document.getElementById('health-dashboard');
+                if (healthDash && healthDashboardPosition.x !== null) {
+                    healthDash.style.left = healthDashboardPosition.x + 'px';
+                    healthDash.style.top = healthDashboardPosition.y + 'px';
+                    healthDash.style.bottom = 'auto';
+                }
+            }
+            
             window.timerInterval = setInterval(tickTimers, 1000);
             setInterval(checkAutoArchive, 60000);
 
@@ -5667,14 +5804,46 @@
             askAI(); // This triggers the function we updated earlier
         }
         // --- GEMINI AI INTEGRATION ---
-        function toggleAIPanel() {
-            const panel = document.getElementById('ai-panel');
-            if (panel.classList.contains('hidden')) {
-                panel.classList.remove('hidden');
-                setTimeout(() => document.getElementById('ai-input').focus(), 100);
+        function toggleAIModal() {
+            const modal = document.getElementById('ai-modal');
+            const backdrop = document.getElementById('ai-modal-backdrop');
+            
+            if (modal.classList.contains('visible')) {
+                closeAIModal();
             } else {
-                panel.classList.add('hidden');
+                // Restore saved position
+                if (aiModalPosition.x !== null && aiModalPosition.y !== null) {
+                    modal.style.left = aiModalPosition.x + 'px';
+                    modal.style.top = aiModalPosition.y + 'px';
+                    modal.style.transform = 'none';
+                }
+                if (aiModalPosition.width && aiModalPosition.height) {
+                    modal.style.width = aiModalPosition.width + 'px';
+                    modal.style.height = aiModalPosition.height + 'px';
+                }
+                
+                modal.classList.add('visible');
+                backdrop.classList.add('visible');
+                setTimeout(() => document.getElementById('ai-input').focus(), 100);
             }
+        }
+        
+        function closeAIModal() {
+            const modal = document.getElementById('ai-modal');
+            const backdrop = document.getElementById('ai-modal-backdrop');
+            
+            // Save position before closing
+            const rect = modal.getBoundingClientRect();
+            aiModalPosition = {
+                x: rect.left,
+                y: rect.top,
+                width: rect.width,
+                height: rect.height
+            };
+            localStorage.setItem('aiModalPosition', JSON.stringify(aiModalPosition));
+            
+            modal.classList.remove('visible');
+            backdrop.classList.remove('visible');
         }
 
         function toggleAISettings() {
@@ -6260,12 +6429,121 @@
             });
         }
 
+        function setupModalDragging() {
+            // AI Modal
+            const aiModal = document.getElementById('ai-modal');
+            const aiHeader = document.getElementById('ai-modal-header');
+            makeModalDraggable(aiModal, aiHeader, 'aiModalPosition');
+            
+            // Inbox Modal
+            const inboxModal = document.getElementById('inbox-modal');
+            const inboxHeader = document.getElementById('inbox-modal-header');
+            makeModalDraggable(inboxModal, inboxHeader, 'inboxModalPosition');
+            
+            // Health Dashboard
+            const healthDash = document.getElementById('health-dashboard');
+            makeHealthDashboardDraggable(healthDash);
+        }
+        
+        function makeModalDraggable(modal, handle, positionKey) {
+            let isDragging = false;
+            let currentX, currentY, initialX, initialY;
+            
+            handle.addEventListener('mousedown', (e) => {
+                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+                
+                isDragging = true;
+                const rect = modal.getBoundingClientRect();
+                initialX = e.clientX - rect.left;
+                initialY = e.clientY - rect.top;
+                
+                modal.style.transform = 'none';
+                e.preventDefault();
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                e.preventDefault();
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+                
+                modal.style.left = currentX + 'px';
+                modal.style.top = currentY + 'px';
+            });
+            
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    
+                    // Save position
+                    const rect = modal.getBoundingClientRect();
+                    const position = {
+                        x: rect.left,
+                        y: rect.top,
+                        width: rect.width,
+                        height: rect.height
+                    };
+                    
+                    if (positionKey === 'aiModalPosition') {
+                        aiModalPosition = position;
+                    } else if (positionKey === 'inboxModalPosition') {
+                        inboxModalPosition = position;
+                    }
+                    
+                    localStorage.setItem(positionKey, JSON.stringify(position));
+                }
+            });
+        }
+        
+        function makeHealthDashboardDraggable(element) {
+            let isDragging = false;
+            let currentX, currentY, initialX, initialY;
+            
+            element.addEventListener('mousedown', (e) => {
+                // Don't drag if clicking on buttons
+                if (e.target.classList.contains('health-btn') || e.target.closest('.health-btn')) {
+                    return;
+                }
+                
+                isDragging = true;
+                initialX = e.clientX - element.offsetLeft;
+                initialY = e.clientY - element.offsetTop;
+                e.preventDefault();
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                e.preventDefault();
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+                
+                element.style.left = currentX + 'px';
+                element.style.top = currentY + 'px';
+                element.style.bottom = 'auto';
+            });
+            
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    
+                    // Save position
+                    healthDashboardPosition = {
+                        x: element.offsetLeft,
+                        y: element.offsetTop
+                    };
+                    localStorage.setItem('healthDashboardPosition', JSON.stringify(healthDashboardPosition));
+                }
+            });
+        }
+
         window.jumpToTask = function (id) {
             // NEW: Check if it's an inbox temp task
             if (id && id.startsWith('inbox_temp_')) {
                 const inboxPanel = document.getElementById('inbox-panel');
                 if (inboxPanel.classList.contains('hidden')) {
-                    toggleInbox();
+                    toggleInboxModal();
                 }
                 showNotification("This task is still in your Inbox");
                 return;
@@ -8211,6 +8489,18 @@
                         case 'KeyE': cycleEcoMode(); break;
                         case 'KeyP': togglePinnedWindow(); break; // I added this own my own
                         case 'KeyF': toggleTaskListWindow(); break;
+                        case 'Space':
+                            if (e.altKey) {
+                                e.preventDefault();
+                                toggleAIModal();
+                            }
+                            break;
+                        case 'KeyI':
+                            if (e.altKey) {
+                                e.preventDefault();
+                                toggleInboxModal();
+                            }
+                            break;
                         case 'KeyW':
                             const noteEditor = document.getElementById('note-editor');
                             if (noteEditor && !noteEditor.classList.contains('hidden')) {
@@ -8222,8 +8512,14 @@
             });
 
             document.addEventListener('mousedown', (e) => {
+                // Close AI modal when clicking backdrop
+                const aiBackdrop = document.getElementById('ai-modal-backdrop');
+                if (aiBackdrop && aiBackdrop.classList.contains('visible') && e.target === aiBackdrop) {
+                    closeAIModal();
+                    return;
+                }
                 const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
-                if (!panel.classList.contains('hidden')) { if (!panel.contains(e.target) && !fab.contains(e.target)) toggleInbox(); }
+                if (!panel.classList.contains('hidden')) { if (!panel.contains(e.target) && !fab.contains(e.target)) toggleInboxModal(); }
 
                 // Close subtask expansion boxes when clicking outside
                 const clickedBox = e.target.closest('.subtasks-expanded-box');
@@ -8235,7 +8531,7 @@
                 }
 
                 const aiPanel = document.getElementById('ai-panel'); const aiFab = document.getElementById('fab-ai');
-                if (!aiPanel.classList.contains('hidden')) { if (!aiPanel.contains(e.target) && !aiFab.contains(e.target)) toggleAIPanel(); }
+                if (!aiPanel.classList.contains('hidden')) { if (!aiPanel.contains(e.target) && !aiFab.contains(e.target)) toggleAIModal(); }
 
                 const taskListWindow = document.getElementById('task-list-window');
                 const taskListBtn = document.getElementById('btn-task-list');
@@ -9547,7 +9843,72 @@
             totalEl.innerText = (totalBytes / 1024).toFixed(1) + ' KB';
         }
 
-        function toggleInbox() { const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) { panel.classList.remove('hidden'); setTimeout(() => document.getElementById('inbox-input').focus(), 100); } else { panel.classList.add('hidden'); } }
+        function toggleInboxModal() {
+            const modal = document.getElementById('inbox-modal');
+            
+            if (modal.classList.contains('visible')) {
+                closeInboxModal();
+            } else {
+                // Restore saved position
+                if (inboxModalPosition.x !== null && inboxModalPosition.y !== null) {
+                    modal.style.left = inboxModalPosition.x + 'px';
+                    modal.style.top = inboxModalPosition.y + 'px';
+                    modal.style.transform = 'none';
+                }
+                if (inboxModalPosition.width && inboxModalPosition.height) {
+                    modal.style.width = inboxModalPosition.width + 'px';
+                    modal.style.height = inboxModalPosition.height + 'px';
+                }
+                
+                modal.classList.add('visible');
+                renderInboxModal();
+                setTimeout(() => document.getElementById('inbox-modal-input').focus(), 100);
+            }
+        }
+        
+        function closeInboxModal() {
+            const modal = document.getElementById('inbox-modal');
+            
+            // Save position before closing
+            const rect = modal.getBoundingClientRect();
+            inboxModalPosition = {
+                x: rect.left,
+                y: rect.top,
+                width: rect.width,
+                height: rect.height
+            };
+            localStorage.setItem('inboxModalPosition', JSON.stringify(inboxModalPosition));
+            
+            modal.classList.remove('visible');
+        }
+        
+        function renderInboxModal() {
+            const list = document.getElementById('inbox-modal-list');
+            list.innerHTML = '';
+            
+            if (inbox.length === 0) {
+                list.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:40px 20px; font-size: 13px;">📭<br><br>Your inbox is empty.<br>Capture ideas as they come!</div>';
+                return;
+            }
+            
+            inbox.forEach((item, index) => {
+                const el = document.createElement('div');
+                el.className = 'inbox-item';
+                el.innerHTML = `<span>${linkify(item.title)}</span><div class="inbox-actions"><span class="inbox-btn promote-btn" onclick="promoteInboxTask(${index}); renderInboxModal();" title="Move to Board">⬆</span><span class="inbox-btn promote-goal-btn" onclick="promoteInboxToGoal(${index}); renderInboxModal();" title="Move to Goals">🎯</span><span class="inbox-btn" style="color: var(--accent);" onclick="scheduleInboxItem(${index}); renderInboxModal();" title="Add to Agenda">📅</span><span class="inbox-btn delete-btn" onclick="deleteInboxTask(${index}); renderInboxModal();" title="Delete">✕</span></div>`;
+                list.appendChild(el);
+            });
+        }
+        
+        function addToInboxModal() {
+            const input = document.getElementById('inbox-modal-input');
+            const val = input.value.trim();
+            if (val) {
+                inbox.push({ id: 'inbox_' + Date.now(), title: val });
+                input.value = '';
+                renderInboxModal();
+                saveToStorage();
+            }
+        }
         function renderInbox() {
             const list = document.getElementById('inbox-list'); list.innerHTML = '';
             if (inbox.length === 0) { list.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:20px;">No pending tasks</div>'; return; }
@@ -9625,7 +9986,7 @@
 
             showNotification(`"${item.title}" scheduled for ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
         }
-        function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); }
+        function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInboxModal(); saveToStorage(); }
         function saveData(download = false) { const data = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, habits, agenda }, null, 2); if (download) { const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
         function loadFile(input) {
             const file = input.files[0];
