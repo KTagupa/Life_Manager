@@ -7,11 +7,6 @@
     <title>Urgency Flow: Project Management Edition - Enhanced UI</title>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    
     <style>
         :root {
             /* Enhanced Modern Dark Theme with Better Contrast */
@@ -4232,38 +4227,6 @@
 </head>
 
 <body>
-    <div id="auth-screen" style="display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--bg-color); z-index: 9999; flex-direction: column; gap: 30px;">
-        <div style="text-align: center;">
-            <h1 style="font-size: 3rem; margin: 0; background: linear-gradient(135deg, var(--accent), var(--ai-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Urgency Flow</h1>
-            <p style="color: var(--text-muted); font-size: 1.2rem; margin-top: 10px;">Project Management Edition</p>
-        </div>
-        
-        <button id="google-sign-in-btn" style="
-            background: white;
-            color: #333;
-            border: none;
-            padding: 14px 28px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            transition: transform 0.2s, box-shadow 0.2s;
-        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0,0,0,0.4)';" onmouseout="this.style.transform=''; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)';">
-            <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-            Sign in with Google
-        </button>
-        
-        <div id="auth-loading" style="display: none; color: var(--text-muted); font-size: 14px;">
-            <i class="fas fa-spinner fa-spin"></i> Signing in...
-        </div>
-        
-        <div id="auth-error" style="display: none; color: var(--blocked-color); font-size: 14px; max-width: 400px; text-align: center; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border: 1px solid var(--blocked-color);"></div>
-    </div>
-    
     <div id="focus-hud">
         <div id="hud-doing-row" class="hud-row" style="display: none;">
             <div class="hud-task-info">
@@ -4334,18 +4297,6 @@
             <a href="#" id="btn-pinned" title="Pinned Window" onclick="togglePinnedWindow()">📌</a>
         </div>
         <div id="toolbar-content">
-            <div id="user-profile" style="display: none; padding: 12px; background: rgba(79, 156, 249, 0.1); border-radius: 8px; border: 1px solid var(--accent-border); margin-bottom: 12px;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                    <img id="user-avatar" src="" alt="User" style="width: 32px; height: 32px; border-radius: 50%;">
-                    <div style="flex: 1; min-width: 0;">
-                        <div id="user-name" style="font-size: 12px; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
-                        <div id="user-email" style="font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
-                    </div>
-                </div>
-                <button class="btn" onclick="signOut()" style="width: 100%; padding: 6px; font-size: 11px; background: rgba(239, 68, 68, 0.1); border-color: var(--blocked-color); color: var(--blocked-color);">
-                    Sign Out
-                </button>
-            </div>
             <button class="btn btn-primary" onclick="addNode()">+ New Task (Optn+T)</button>
             <button class="btn" onclick="toggleGoals()">🎯 Life Goals (Optn+G)</button>
             <button class="btn" onclick="toggleHabits()">✅ Habits (Optn+H)</button>
@@ -4385,22 +4336,9 @@
 
     <div id="sync-panel" class="hidden">
         <div class="sync-header">
-            <span>☁️ Data Sync & Backup</span>
+            <span>☁️ GitHub Gist Sync</span>
             <span style="cursor:pointer" onclick="toggleSyncPanel()">✕</span>
         </div>
-        <div style="padding: 12px; background: rgba(79, 156, 249, 0.05); border-bottom: 1px solid var(--border);">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <div id="firebase-status-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--ready-color);"></div>
-                <span style="font-size: 11px; font-weight: 600; color: var(--text-main);">Firebase (Primary Storage)</span>
-            </div>
-            <div id="firebase-status-text" style="font-size: 10px; color: var(--text-muted);">Connected • Auto-sync enabled</div>
-            <div id="firebase-last-sync" style="font-size: 9px; color: var(--text-muted); margin-top: 4px;">Last sync: Just now</div>
-        </div>
-        
-        <!-- KEEP GITHUB SECTION BUT ADD DIVIDER -->
-        <div style="padding: 12px; border-top: 2px solid var(--border); margin-top: 12px;">
-            <div style="font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">📦 Manual Backup Options</div>
-        
         <div class="sync-info">
             Enter your GitHub Personal Access Token to sync data across devices via a private Gist.
         </div>
@@ -5304,7 +5242,7 @@
             });
 
             render();
-            saveToFirebase();
+            saveToStorage();
             fitView();
             showNotification("Logic-driven Smart Layout Applied");
         }
@@ -5380,349 +5318,16 @@
         let currentSelectionSource = ''; // 'note' or 'ai'
         let noteSelectionRange = null; // Store indices for note replacement
 
-        // --- FIREBASE INITIALIZATION ---
-        // ADD YOUR FIREBASE CONFIG HERE
-        const firebaseConfig = {
-          apiKey: "AIzaSyAj-0W-uuKE6cAhCG7ZeswUhKG6SOXPl0E",
-          authDomain: "urgency-flow.firebaseapp.com",
-          projectId: "urgency-flow",
-          storageBucket: "urgency-flow.firebasestorage.app",
-          messagingSenderId: "345021125258",
-          appId: "1:345021125258:web:d4126b5bb29d998796d373"
-        };
-        
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        
-        // Enable offline persistence
-        db.enablePersistence()
-            .catch((err) => {
-                if (err.code === 'failed-precondition') {
-                    console.warn('Persistence failed: Multiple tabs open');
-                } else if (err.code === 'unimplemented') {
-                    console.warn('Persistence not available in this browser');
-                }
-            });
-        
-        // Global user state
-        let currentUser = null;
-        let unsubscribeFirestore = null;
-        
-        // --- FIREBASE AUTH FUNCTIONS ---
-        function initAuth() {
-            auth.onAuthStateChanged(async (user) => {
-                if (user) {
-                    currentUser = user;
-                    await handleSignIn(user);
-                } else {
-                    currentUser = null;
-                    handleSignOut();
-                }
-            });
-        }
-        
-        function monitorOnlineStatus() {
-            window.addEventListener('online', () => {
-                const statusText = document.getElementById('firebase-status-text');
-                const statusDot = document.getElementById('firebase-status-dot');
-                if (statusText) statusText.textContent = 'Connected • Auto-sync enabled';
-                if (statusDot) statusDot.style.background = 'var(--ready-color)';
-                showNotification('🌐 Back online - syncing...');
-            });
-            
-            window.addEventListener('offline', () => {
-                const statusText = document.getElementById('firebase-status-text');
-                const statusDot = document.getElementById('firebase-status-dot');
-                if (statusText) statusText.textContent = 'Offline • Changes will sync when online';
-                if (statusDot) statusDot.style.background = '#fbbf24';
-                showNotification('📡 Offline mode - changes saved locally');
-            });
-        }
-        
-        async function handleSignIn(user) {
-            // Hide auth screen
-            document.getElementById('auth-screen').style.display = 'none';
-            document.getElementById('auth-loading').style.display = 'none';
-            
-            // Show user profile in toolbar
-            document.getElementById('user-profile').style.display = 'block';
-            document.getElementById('user-name').textContent = user.displayName || 'User';
-            document.getElementById('user-email').textContent = user.email;
-            document.getElementById('user-avatar').src = user.photoURL || 'https://via.placeholder.com/32';
-            
-            // Check for data migration
-            await checkAndMigrateData(user.uid);
-            
-            // Load from Firebase
-            await loadFromFirebase(user.uid);
-            
-            // Setup real-time listener
-            setupFirestoreListener(user.uid);
-            
-            // Initialize app
-            checkAutoArchive();
-            updateCalculations();
-            render();
-            renderInbox();
-            renderGoals();
-            setupInteractions();
-            setupPanelDrag();
-            setupContextualMenu();
-            renderPinnedWindow();
-            
-            window.timerInterval = setInterval(tickTimers, 1000);
-            setInterval(checkAutoArchive, 60000);
-            updateBackupStatusUI();
-            setInterval(checkAutomatedBackup, 60000);
-            
-            showNotification('Signed in as ' + user.displayName);
-        }
-        
-        function handleSignOut() {
-            // Show auth screen
-            document.getElementById('auth-screen').style.display = 'flex';
-            document.getElementById('user-profile').style.display = 'none';
-            
-            // Clear data
-            nodes = [];
-            archivedNodes = [];
-            inbox = [];
-            lifeGoals = {};
-            notes = [];
-            habits = [];
-            agenda = [];
-            
-            // Unsubscribe from real-time updates
-            if (unsubscribeFirestore) {
-                unsubscribeFirestore();
-                unsubscribeFirestore = null;
-            }
-            
-            // Clear intervals
-            if (window.timerInterval) {
-                clearInterval(window.timerInterval);
-                window.timerInterval = null;
-            }
-        }
-        
-        async function googleSignIn() {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            document.getElementById('google-sign-in-btn').style.display = 'none';
-            document.getElementById('auth-loading').style.display = 'block';
-            document.getElementById('auth-error').style.display = 'none';
-            
-            try {
-                await auth.signInWithPopup(provider);
-            } catch (error) {
-                console.error('Sign-in error:', error);
-                document.getElementById('auth-error').textContent = 'Sign-in failed: ' + error.message;
-                document.getElementById('auth-error').style.display = 'block';
-                document.getElementById('google-sign-in-btn').style.display = 'flex';
-                document.getElementById('auth-loading').style.display = 'none';
-            }
-        }
-        
-        async function signOut() {
-            if (confirm('Sign out? Your data is safely stored in the cloud.')) {
-                await auth.signOut();
-            }
-        }
-        
-        // Attach sign-in handler
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('google-sign-in-btn')?.addEventListener('click', googleSignIn);
-            initAuth();
-            monitorOnlineStatus(); // ADD THIS
-        });
-        // --- END FIREBASE AUTH ---
-
-        // --- FIREBASE DATA FUNCTIONS ---
-        async function checkAndMigrateData(userId) {
-            const docRef = db.collection('users').doc(userId);
-            const doc = await docRef.get();
-            
-            const hasFirebaseData = doc.exists && doc.data().appData;
-            const localData = localStorage.getItem('urgencyFlowData');
-            const hasLocalData = localData && localData !== '{}';
-            
-            if (!hasFirebaseData && hasLocalData) {
-                // Migration scenario
-                const confirmMigrate = confirm(
-                    '📦 Local data detected!\n\n' +
-                    'Would you like to upload your existing data to the cloud?\n\n' +
-                    '✅ Yes - Upload to Firebase (recommended)\n' +
-                    '❌ No - Start fresh in the cloud'
-                );
-                
-                if (confirmMigrate) {
-                    try {
-                        const parsed = JSON.parse(localData);
-                        const appData = {
-                            nodes: parsed.nodes || [],
-                            archivedNodes: parsed.archivedNodes || [],
-                            inbox: parsed.inbox || [],
-                            lifeGoals: parsed.lifeGoals || {},
-                            notes: parsed.notes || [],
-                            habits: parsed.habits || [],
-                            agenda: parsed.agenda || [],
-                            noteSettings: parsed.noteSettings || { categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`) },
-                            pinnedItems: parsed.pinnedItems || [],
-                            lastModified: firebase.firestore.FieldValue.serverTimestamp()
-                        };
-                        
-                        await docRef.set({ appData });
-                        showNotification('✅ Data migrated to Firebase successfully!');
-                        
-                        // Keep localStorage as backup for now
-                        console.log('Migration complete. localStorage kept as backup.');
-                    } catch (err) {
-                        console.error('Migration error:', err);
-                        alert('Migration failed: ' + err.message);
-                    }
-                }
-            } else if (hasFirebaseData && hasLocalData) {
-                // Both exist - ask which to keep
-                const choice = confirm(
-                    '⚠️ Data found in both locations!\n\n' +
-                    '✅ OK - Use cloud data (recommended)\n' +
-                    '❌ Cancel - Use local data and overwrite cloud'
-                );
-                
-                if (!choice) {
-                    // User wants local data
-                    const parsed = JSON.parse(localData);
-                    await docRef.set({
-                        appData: {
-                            ...parsed,
-                            lastModified: firebase.firestore.FieldValue.serverTimestamp()
-                        }
-                    });
-                    showNotification('Local data uploaded to cloud');
-                }
-            }
-        }
-        
-        async function loadFromFirebase(userId) {
-            try {
-                const doc = await db.collection('users').doc(userId).get();
-                
-                if (doc.exists && doc.data().appData) {
-                    const data = doc.data().appData;
-                    
-                    nodes = data.nodes || [];
-                    archivedNodes = data.archivedNodes || [];
-                    inbox = data.inbox || [];
-                    lifeGoals = data.lifeGoals || {};
-                    notes = data.notes || [];
-                    habits = data.habits || [];
-                    agenda = data.agenda || [];
-                    noteSettings = data.noteSettings || { categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`) };
-                    
-                    sanitizeLoadedData();
-                    updateDataMetrics();
-                    
-                    console.log('✅ Data loaded from Firebase');
-                } else {
-                    // No data in Firebase, start fresh
-                    initDemoData();
-                    await saveToFirebase(userId);
-                }
-            } catch (err) {
-                console.error('Firebase load error:', err);
-                showNotification('⚠️ Failed to load from cloud');
-            }
-        }
-        
-        let saveToFirebaseTimeout = null;
-        async function saveToFirebase(userId = null) {
-            if (!userId && currentUser) userId = currentUser.uid;
-            if (!userId) return;
-            
-            // Debounce saves
-            clearTimeout(saveToFirebaseTimeout);
-            saveToFirebaseTimeout = setTimeout(async () => {
-                try {
-                    const appData = {
-                        nodes,
-                        archivedNodes,
-                        inbox,
-                        lifeGoals,
-                        notes,
-                        habits,
-                        agenda,
-                        noteSettings,
-                        lastModified: firebase.firestore.FieldValue.serverTimestamp()
-                    };
-                    
-                    await db.collection('users').doc(userId).set({ appData });
-                    
-                    // Update UI
-                    const statusText = document.getElementById('firebase-status-text');
-                    const lastSync = document.getElementById('firebase-last-sync');
-                    if (statusText) statusText.textContent = 'Connected • Auto-sync enabled';
-                    if (lastSync) lastSync.textContent = 'Last sync: ' + new Date().toLocaleTimeString();
-                    
-                    // Also save to localStorage as backup
-                    localStorage.setItem('urgencyFlowData', JSON.stringify({
-                        nodes, archivedNodes, inbox, lifeGoals, notes, habits, agenda, noteSettings
-                    }));
-                    
-                } catch (err) {
-                    console.error('Firebase save error:', err);
-                    const statusText = document.getElementById('firebase-status-text');
-                    if (statusText) statusText.textContent = '⚠️ Sync failed - will retry';
-                }
-            }, 500);
-        }
-        
-        function setupFirestoreListener(userId) {
-            // Clean up existing listener
-            if (unsubscribeFirestore) unsubscribeFirestore();
-            
-            // Listen for real-time updates
-            unsubscribeFirestore = db.collection('users').doc(userId)
-                .onSnapshot((doc) => {
-                    if (doc.exists && doc.metadata.hasPendingWrites === false) {
-                        // This update came from another device/tab
-                        const data = doc.data().appData;
-                        if (data && data.lastModified) {
-                            // Check if this is newer than our current data
-                            const serverTime = data.lastModified.toMillis();
-                            const localTime = Date.now();
-                            
-                            // Only update if server data is newer (last-write-wins)
-                            if (Math.abs(serverTime - localTime) > 2000) { // 2 second threshold
-                                nodes = data.nodes || [];
-                                archivedNodes = data.archivedNodes || [];
-                                inbox = data.inbox || [];
-                                lifeGoals = data.lifeGoals || {};
-                                notes = data.notes || [];
-                                habits = data.habits || [];
-                                agenda = data.agenda || [];
-                                noteSettings = data.noteSettings || noteSettings;
-                                
-                                sanitizeLoadedData();
-                                updateCalculations();
-                                render();
-                                renderInbox();
-                                renderGoals();
-                                
-                                showNotification('🔄 Synced from another device');
-                            }
-                        }
-                    }
-                }, (err) => {
-                    console.error('Firestore listener error:', err);
-                });
-        }
-        // --- END FIREBASE DATA FUNCTIONS ---
-        
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
+            loadFromStorage();
+            if (nodes.length === 0 && inbox.length === 0 && Object.keys(lifeGoals).length === 0 && archivedNodes.length === 0) {
+                initDemoData();
+            }
+
             if (githubToken) document.getElementById('github-token').value = githubToken;
             if (gistId) document.getElementById('gist-id').value = gistId;
+
             // Load API Key into input if exists
             if (geminiApiKey) document.getElementById('gemini-api-key-input').value = geminiApiKey;
 
@@ -5834,7 +5439,7 @@
 
         function saveGithubToken(val) {
             githubToken = val.trim();
-            saveToFirebase();
+            saveToStorage();
             setSyncStatus('Token saved locally.');
         }
 
@@ -5886,10 +5491,6 @@
         }
 
         async function pushToGist() {
-            if (!currentUser) {
-                alert('Please sign in first to use backup features.');
-                return;
-            }
             // NEW: Stop any active task timers before pushing to ensure a static "snapshot"
             nodes.forEach(n => {
                 if (n.activeTimerStart) {
@@ -5931,7 +5532,7 @@
             }
 
             githubToken = cleanToken;
-            saveToFirebase();
+            saveToStorage();
             setSyncStatus('Connecting to GitHub...');
 
             // --- STEP 3: NETWORK REQUEST ---
@@ -5973,7 +5574,7 @@
                 const gistIdInput = document.getElementById('gist-id');
                 if (gistIdInput) gistIdInput.value = gistId;
 
-                saveToFirebase();
+                saveToStorage();
                 setSyncStatus('Success!');
                 showNotification('GitHub Sync Complete!');
 
@@ -5985,10 +5586,6 @@
         }
 
         async function pullFromGist() {
-            if (!currentUser) {
-                alert('Please sign in first to use backup features.');
-                return;
-            }
             if (!githubToken) githubToken = document.getElementById('github-token').value.trim();
 
             if (!githubToken) {
@@ -6048,7 +5645,7 @@
                 // 5. Cleanup & UI Refresh
                 sanitizeLoadedData(); // Fixes missing properties in old data
 
-                saveToFirebase();      // Sync localstorage with pulled data
+                saveToStorage();      // Sync localstorage with pulled data
                 updateCalculations(); // Recalculate critical path/urgency
                 render();             // Redraw the graph
                 renderInbox();        // Update fab inbox list
@@ -6139,7 +5736,7 @@
                     try {
                         const newSlots = JSON.parse(scheduleJson);
                         agenda = [...agenda, ...newSlots];
-                        saveToFirebase();
+                        saveToStorage();
                         renderAgenda();
                         showNotification("Agenda Updated!");
                         pushBtn.innerText = '✅ Applied';
@@ -6328,7 +5925,7 @@
 
             updateCalculations();
             render();
-            saveToFirebase();
+            saveToStorage();
             showNotification(`Generated ${data.length} tasks!`);
         }
 
@@ -6518,7 +6115,7 @@
             notes = [
                 createNoteObject("Project Ideas", "# My Project\n\n- [ ] Better colors\n- [ ] Mobile support\n\nSee [[Define Goal]] for more context.", null)
             ];
-            saveToFirebase();
+            saveToStorage();
         }
 
         // --- ARCHIVE LOGIC ---
@@ -6537,7 +6134,7 @@
 
             if (changed) {
                 nodes = activeNodes;
-                saveToFirebase();
+                saveToStorage();
                 render();
                 if (!document.getElementById('archive-panel').classList.contains('hidden')) {
                     renderArchiveList();
@@ -7283,7 +6880,7 @@
 
             updateCalculations();
             render();
-            saveToFirebase();
+            saveToStorage();
 
             showNotification("Task Created: " + selectedText.substring(0, 30) + (selectedText.length > 30 ? "..." : ""));
         }
@@ -7649,7 +7246,7 @@
             triggerNoteSave();
             updateCalculations();
             render();
-            saveToFirebase();
+            saveToStorage();
 
             showNotification("Task Created: " + selectedText.substring(0, 20) + (selectedText.length > 20 ? "..." : ""));
         }
@@ -7700,7 +7297,7 @@
 
             updateCalculations();
             render();
-            saveToFirebase();
+            saveToStorage();
 
             showNotification("Task Created: " + currentSelectionText.substring(0, 20) + (currentSelectionText.length > 20 ? "..." : ""));
         }
@@ -7757,7 +7354,7 @@
                 saveCurrentNote();
             }
 
-            saveToFirebase();
+            saveToStorage();
             renderNotesList();
 
             showNotification("Note Created: " + title);
@@ -7831,7 +7428,7 @@
             const note = notes.find(n => n.id === currentEditingNoteId);
             if (note) {
                 note.isPinned = !note.isPinned;
-                saveToFirebase();
+                saveToStorage();
                 renderNotesList();
                 showNotification(note.isPinned ? "Note Pinned" : "Note Unpinned");
             }
@@ -7847,7 +7444,7 @@
             notes.push(newNote);
 
             // Save immediately
-            saveToFirebase();
+            saveToStorage();
 
             // Render the list (so it appears in the side panel background)
             const panel = document.getElementById('notes-panel');
@@ -7981,7 +7578,7 @@
             note.title = document.getElementById('note-title-input').value;
             note.body = serializeNoteBlocks();
             note.timestamp = Date.now();
-            saveToFirebase();
+            saveToStorage();
         }
 
         function deleteCurrentNote() {
@@ -7996,7 +7593,7 @@
                 currentEditingNoteId = null;
 
                 closeNoteEditor();
-                saveToFirebase();
+                saveToStorage();
                 renderNotesList();
 
                 // Force update inspector if the deleted note was linked to the active task
@@ -8111,7 +7708,7 @@
             if (!note.taskIds) note.taskIds = [];
             if (!note.taskIds.includes(taskId)) {
                 note.taskIds.push(taskId);
-                saveToFirebase();
+                saveToStorage();
                 renderNoteLinkedTasks();
                 if (selectedNodeId === taskId) updateInspector();
             }
@@ -8122,7 +7719,7 @@
             const note = notes.find(n => n.id === currentEditingNoteId);
             if (!note) return;
             note.taskIds = (note.taskIds || []).filter(id => id !== taskId);
-            saveToFirebase();
+            saveToStorage();
             renderNoteLinkedTasks();
             if (selectedNodeId === taskId) updateInspector();
         }
@@ -8134,7 +7731,7 @@
             if (!note.taskIds) note.taskIds = [];
             if (!note.taskIds.includes(taskId)) {
                 note.taskIds.push(taskId);
-                saveToFirebase();
+                saveToStorage();
                 updateInspector();
                 showNotification("Note Linked to Task");
             }
@@ -8147,7 +7744,7 @@
             if (!node.goalIds) node.goalIds = [];
             if (!node.goalIds.includes(goalId)) {
                 node.goalIds.push(goalId);
-                saveToFirebase();
+                saveToStorage();
                 updateInspector();
                 showNotification("Task Linked to Goal");
             }
@@ -8159,7 +7756,7 @@
             if (!node) return;
             if (!node.goalIds) node.goalIds = [];
             node.goalIds = node.goalIds.filter(id => id !== goalId);
-            saveToFirebase();
+            saveToStorage();
             updateInspector();
             showNotification("Task Unlinked from Goal");
         }
@@ -8194,7 +7791,7 @@
                     if (goal.children.length === 0) caret.classList.add('invisible');
                     if (goal.collapsed) caret.classList.add('collapsed');
                     caret.innerText = '▼'; caret.onclick = (e) => { e.stopPropagation(); toggleGoalCollapse(goal); };
-                    const textSpan = document.createElement('input'); textSpan.className = 'goal-text'; textSpan.value = goal.text; textSpan.onchange = (e) => { goal.text = e.target.value; saveToFirebase(); };
+                    const textSpan = document.createElement('input'); textSpan.className = 'goal-text'; textSpan.value = goal.text; textSpan.onchange = (e) => { goal.text = e.target.value; saveToStorage(); };
                     const actions = document.createElement('div'); actions.className = 'goal-actions';
                     const filterBtn = document.createElement('div'); filterBtn.className = 'goal-btn move'; filterBtn.innerHTML = '🔍'; filterBtn.title = "Show tasks linked to this goal"; filterBtn.onclick = (e) => { e.stopPropagation(); filterTasksByGoal(goal.id); }; actions.appendChild(filterBtn);
                     if (level < 5) { const addBtn = document.createElement('div'); addBtn.className = 'goal-btn add'; addBtn.innerHTML = '+'; addBtn.title = "Add Subgoal"; addBtn.onclick = (e) => { e.stopPropagation(); addSubGoal(goal); }; actions.appendChild(addBtn); }
@@ -8210,11 +7807,11 @@
             };
             container.appendChild(buildTree(goals, 1));
         }
-        function addRootGoal() { const input = document.getElementById('new-goal-input'); const val = input.value.trim(); if (val) { if (!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(val)); input.value = ''; renderGoals(); saveToFirebase(); } }
-        function addSubGoal(parentGoal) { parentGoal.children.push(createGoal("New Subgoal")); parentGoal.collapsed = false; renderGoals(); saveToFirebase(); }
-        function deleteGoal(goal, parentList) { if (!parentList || !goal) return; if (confirm("Delete goal '" + goal.text + "'?")) { const idx = parentList.indexOf(goal); if (idx > -1) parentList.splice(idx, 1); renderGoals(); saveToFirebase(); } }
-        function toggleGoalCollapse(goal) { goal.collapsed = !goal.collapsed; renderGoals(); saveToFirebase(); }
-        function moveGoalYear(goal) { const yearStr = prompt("Move '" + goal.text + "' to which year?", currentGoalYear + 1); const year = parseInt(yearStr); if (!isNaN(year)) { if (recursiveRemoveGoal(lifeGoals[currentGoalYear], goal.id)) { if (!lifeGoals[year]) lifeGoals[year] = []; lifeGoals[year].push(goal); renderGoals(); saveToFirebase(); alert(`Moved to ${year}`); } else { alert("Could not find goal to move."); } } }
+        function addRootGoal() { const input = document.getElementById('new-goal-input'); const val = input.value.trim(); if (val) { if (!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(val)); input.value = ''; renderGoals(); saveToStorage(); } }
+        function addSubGoal(parentGoal) { parentGoal.children.push(createGoal("New Subgoal")); parentGoal.collapsed = false; renderGoals(); saveToStorage(); }
+        function deleteGoal(goal, parentList) { if (!parentList || !goal) return; if (confirm("Delete goal '" + goal.text + "'?")) { const idx = parentList.indexOf(goal); if (idx > -1) parentList.splice(idx, 1); renderGoals(); saveToStorage(); } }
+        function toggleGoalCollapse(goal) { goal.collapsed = !goal.collapsed; renderGoals(); saveToStorage(); }
+        function moveGoalYear(goal) { const yearStr = prompt("Move '" + goal.text + "' to which year?", currentGoalYear + 1); const year = parseInt(yearStr); if (!isNaN(year)) { if (recursiveRemoveGoal(lifeGoals[currentGoalYear], goal.id)) { if (!lifeGoals[year]) lifeGoals[year] = []; lifeGoals[year].push(goal); renderGoals(); saveToStorage(); alert(`Moved to ${year}`); } else { alert("Could not find goal to move."); } } }
         function recursiveRemoveGoal(list, id) { if (!list) return false; for (let i = 0; i < list.length; i++) { if (list[i].id === id) { list.splice(i, 1); return true; } if (list[i].children && list[i].children.length > 0) { if (recursiveRemoveGoal(list[i].children, id)) return true; } } return false; }
         
         let currentGoalFilter = null;
@@ -8367,7 +7964,7 @@
                 playAudioFeedback('timer-start'); // <--- SOUND
                 handleCheckIn(null, targetId); // <--- Auto Check-in
             }
-            saveToFirebase();
+            saveToStorage();
             render();
             if (selectedNodeId === targetId) updateInspector();
         }
@@ -8728,7 +8325,7 @@
             });
 
             window.addEventListener('mouseup', (e) => {
-                if (isDragging) { isDragging = false; draggedNodeId = null; saveToFirebase(); }
+                if (isDragging) { isDragging = false; draggedNodeId = null; saveToStorage(); }
                 isPanning = false;
                 if (isBoxSelecting) {
                     isBoxSelecting = false;
@@ -8799,7 +8396,7 @@
             }, { passive: false });
 
             container.addEventListener('touchend', (e) => {
-                if (isDragging) { isDragging = false; saveToFirebase(); }
+                if (isDragging) { isDragging = false; saveToStorage(); }
                 if (e.touches.length < 2) initialPinchDist = null;
                 if (e.touches.length === 0) isPanning = false;
             });
@@ -8887,7 +8484,7 @@
         }
 
         // --- NODE MANAGEMENT ---
-        function addNode() { const worldX = (window.innerWidth / 2 - panX) / scale - 90 + (Math.random() * 40 - 20); const worldY = (window.innerHeight / 2 - panY) / scale - 50 + (Math.random() * 40 - 20); const n = createNode(worldX, worldY); nodes.push(n); selectNode(n.id); updateCalculations(); render(); saveToFirebase(); }
+        function addNode() { const worldX = (window.innerWidth / 2 - panX) / scale - 90 + (Math.random() * 40 - 20); const worldY = (window.innerHeight / 2 - panY) / scale - 50 + (Math.random() * 40 - 20); const n = createNode(worldX, worldY); nodes.push(n); selectNode(n.id); updateCalculations(); render(); saveToStorage(); }
 
         function selectNode(id) {
             selectedNodeId = id;
@@ -8933,7 +8530,7 @@
             showNotification(`Checked in for ${node.title} for today`);
             playAudioFeedback('timer-start'); // Subtle feedback
 
-            saveToFirebase();
+            saveToStorage();
             render();
             if (selectedNodeId === nodeId) updateInspector();
         }
@@ -9298,7 +8895,7 @@
                 updateCalculations();
                 render();
                 updateInspector();
-                saveToFirebase();
+                saveToStorage();
             }
         }
 
@@ -9312,7 +8909,7 @@
                     else if (field === 'dueDate') { if (value) { const due = new Date(value); const diffTime = due - today; let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if (diffDays < 1) diffDays = 1; node.duration = diffDays; const durInput = document.querySelector('input[type="number"]'); if (durInput) durInput.value = diffDays; } }
                 }
                 if (field === 'duration' || field === 'dueDate' || field === 'syncDurationDate') updateCalculations();
-                render(); saveToFirebase();
+                render(); saveToStorage();
             }
         }
 
@@ -9333,23 +8930,23 @@
                 updateCalculations();
                 render();
                 updateInspector();
-                saveToFirebase();
+                saveToStorage();
             }
         }
 
-        function toggleUrgency() { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.isManualUrgent = !node.isManualUrgent; if (node.isManualUrgent) node.isManualNotUrgent = false; updateCalculations(); render(); updateInspector(); saveToFirebase(); } }
-        function toggleNotUrgent() { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.isManualNotUrgent = !node.isManualNotUrgent; if (node.isManualNotUrgent) node.isManualUrgent = false; updateCalculations(); render(); updateInspector(); saveToFirebase(); } }
-        function addDependency(parentId) { if (!parentId) return; const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies.push({ id: parentId, type: 'hard' }); updateCalculations(); render(); updateInspector(); saveToFirebase(); } }
-        function removeDependency(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies = node.dependencies.filter(d => d.id !== parentId); updateCalculations(); render(); updateInspector(); saveToFirebase(); } }
-        function toggleDepType(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; updateCalculations(); render(); updateInspector(); saveToFirebase(); } }
-        function addSubtask() { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks.push({ text: 'New Step', done: false }); render(); updateInspector(); saveToFirebase(); } }
+        function toggleUrgency() { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.isManualUrgent = !node.isManualUrgent; if (node.isManualUrgent) node.isManualNotUrgent = false; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+        function toggleNotUrgent() { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.isManualNotUrgent = !node.isManualNotUrgent; if (node.isManualNotUrgent) node.isManualUrgent = false; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+        function addDependency(parentId) { if (!parentId) return; const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies.push({ id: parentId, type: 'hard' }); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+        function removeDependency(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies = node.dependencies.filter(d => d.id !== parentId); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+        function toggleDepType(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+        function addSubtask() { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks.push({ text: 'New Step', done: false }); render(); updateInspector(); saveToStorage(); } }
         function toggleSubtask(index) {
             const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
             if (node) {
                 node.subtasks[index].done = !node.subtasks[index].done;
                 render();
                 updateInspector();
-                saveToFirebase();
+                saveToStorage();
 
                 // Refresh any open expanded subtask box
                 const nodeEl = document.querySelector(`.node[data-id="${selectedNodeId}"]`);
@@ -9437,8 +9034,8 @@
         }
 
         function closeInspector() { selectedNodeId = null; selectedIds.clear(); document.getElementById('inspector').classList.add('hidden'); render(); }
-        function updateSubtaskText(index, val) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks[index].text = val; saveToFirebase(); }
-        function removeSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks.splice(index, 1); render(); updateInspector(); saveToFirebase(); }
+        function updateSubtaskText(index, val) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks[index].text = val; saveToStorage(); }
+        function removeSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks.splice(index, 1); render(); updateInspector(); saveToStorage(); }
 
         function promoteSubtaskToNode(index) {
             const parentNode = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
@@ -9453,7 +9050,7 @@
             updateCalculations();
             render();
             updateInspector();
-            saveToFirebase();
+            saveToStorage();
         }
 
         function demoteNodeToSubtask(parentId) {
@@ -9471,7 +9068,7 @@
             updateCalculations();
             render();
             updateInspector();
-            saveToFirebase();
+            saveToStorage();
         }
 
         function deleteSelectedNode() {
@@ -9484,7 +9081,7 @@
             updateCalculations();
             render();
             renderArchiveList();
-            saveToFirebase();
+            saveToStorage();
         }
 
         function toggleHeatmap() { const overlay = document.getElementById('heatmap-overlay'); const isHidden = overlay.classList.contains('hidden'); if (isHidden) { overlay.classList.remove('hidden'); renderHeatmap(); } else { overlay.classList.add('hidden'); } }
@@ -9727,27 +9324,29 @@
             // 1. Serialize Data ONCE
             const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits, agenda, pinnedItems, noteSettings };
             const rawString = JSON.stringify(data);
-            
+
             // 2. Save to Browser Storage
             localStorage.setItem('urgencyFlowData', rawString);
-            
+
             // 3. Calculate Storage Usage HERE (Heavy operation moved out of render loop)
             const bytes = new Blob([rawString]).size;
             const limit = 5 * 1024 * 1024; // 5MB limit for LocalStorage
             const percent = Math.min(100, (bytes / limit) * 100).toFixed(1);
-            
+
             // 4. Update the Dashboard UI immediately
             const bar = document.getElementById('hd-storage-bar');
             const text = document.getElementById('hd-storage-text');
+
             if (bar && text) {
                 text.innerText = percent + '%';
                 bar.style.width = percent + '%';
+
                 // Color coding
                 if (percent > 80) bar.style.background = '#ef4444';
                 else if (percent > 50) bar.style.background = '#eab308';
                 else bar.style.background = 'var(--ready-color)';
             }
-            
+
             // 5. Update Dashboard Sync Text
             const time = new Date().toLocaleTimeString();
             const syncEl = document.getElementById('hd-sync');
@@ -9756,58 +9355,49 @@
                 syncEl.style.color = "var(--ready-color)";
             }
 
-            const firebaseDot = document.getElementById('firebase-status-dot');
-            if (firebaseDot) {
-                firebaseDot.style.background = 'var(--ready-color)';
-            }
-            
             // 6. Trigger Toast Notification
             showNotification(`Sync Ready (${percent}%)`);
-            
+
             // 7. Update Metrics
             updateDataMetrics();
-            
-            // 8. Also trigger Firebase save (ADD THIS)
-            if (currentUser) {
-                saveToFirebase(currentUser.uid);
-            }
         }
 
         function loadFromStorage() {
-            // This function is now only used as a fallback/backup
-            // Primary loading happens in loadFromFirebase()
-            
             const data = localStorage.getItem('urgencyFlowData');
             if (data) {
                 try {
                     const parsed = JSON.parse(data);
-                    
-                    // Only load if we're not signed in
-                    if (!currentUser) {
-                        if (Array.isArray(parsed)) {
-                            nodes = parsed;
-                            inbox = [];
-                            lifeGoals = {};
-                            notes = [];
-                            archivedNodes = [];
-                            habits = [];
-                            agenda = [];
-                        } else {
-                            nodes = parsed.nodes || [];
-                            inbox = parsed.inbox || [];
-                            lifeGoals = parsed.lifeGoals || {};
-                            habits = parsed.habits || [];
-                            notes = parsed.notes || [];
-                            archivedNodes = parsed.archivedNodes || [];
-                            agenda = parsed.agenda || [];
-                            noteSettings = parsed.noteSettings || noteSettings;
+                    // Handle legacy array format or new object format
+                    if (Array.isArray(parsed)) {
+                        nodes = parsed;
+                        inbox = [];
+                        lifeGoals = {};
+                        notes = [];
+                        archivedNodes = [];
+                        habits = [];
+                        agenda = [];  // ADD THIS LINE
+                    } else {
+                        nodes = parsed.nodes || [];
+                        inbox = parsed.inbox || [];
+                        lifeGoals = parsed.lifeGoals || {};
+                        habits = parsed.habits || [];
+                        notes = parsed.notes || [];
+                        archivedNodes = parsed.archivedNodes || [];
+                        githubToken = parsed.githubToken || '';
+                        gistId = parsed.gistId || '';
+                        agenda = parsed.agenda || [];
+                        pinnedItems = parsed.pinnedItems || [];
+                        if (parsed.noteSettings) {
+                            noteSettings = parsed.noteSettings;
                         }
-                        
-                        sanitizeLoadedData();
-                        updateDataMetrics();
                     }
+
+                    // CALL THE CLEANER HERE
+                    sanitizeLoadedData();
+                    updateDataMetrics();
+
                 } catch (e) {
-                    console.error("LocalStorage data corrupted", e);
+                    console.error("Save data corrupted", e);
                 }
             }
         }
@@ -9967,7 +9557,7 @@
                 list.appendChild(el);
             });
         }
-        function addToInbox() { const input = document.getElementById('inbox-input'); const val = input.value.trim(); if (val) { inbox.push({ id: 'inbox_' + Date.now(), title: val }); input.value = ''; renderInbox(); saveToFirebase(); } }
+        function addToInbox() { const input = document.getElementById('inbox-input'); const val = input.value.trim(); if (val) { inbox.push({ id: 'inbox_' + Date.now(), title: val }); input.value = ''; renderInbox(); saveToStorage(); } }
         function deleteInboxTask(index) {
             const item = inbox[index];
 
@@ -9979,7 +9569,7 @@
 
             inbox.splice(index, 1);
             renderInbox();
-            saveToFirebase();
+            saveToStorage();
         }
         function promoteInboxTask(index) {
             const item = inbox[index];
@@ -9987,11 +9577,11 @@
             const worldY = (window.innerHeight / 2 - panY) / scale - 50;
             const newNode = createNode(worldX, worldY, item.title);
             inbox.splice(index, 1); nodes.push(newNode);
-            renderInbox(); updateCalculations(); render(); selectNode(newNode.id); saveToFirebase();
+            renderInbox(); updateCalculations(); render(); selectNode(newNode.id); saveToStorage();
             const inboxPanel = document.getElementById('inbox-panel');
             if (!inboxPanel.classList.contains('hidden')) inboxPanel.classList.add('hidden');
         }
-        function promoteInboxToGoal(index) { const item = inbox[index]; if (!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(item.title)); inbox.splice(index, 1); renderInbox(); renderGoals(); const panel = document.getElementById('goals-panel'); if (panel.classList.contains('hidden')) panel.classList.remove('hidden'); saveToFirebase(); }
+        function promoteInboxToGoal(index) { const item = inbox[index]; if (!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(item.title)); inbox.splice(index, 1); renderInbox(); renderGoals(); const panel = document.getElementById('goals-panel'); if (panel.classList.contains('hidden')) panel.classList.remove('hidden'); saveToStorage(); }
         function scheduleInboxItem(index) {
             const item = inbox[index];
             if (!item) return;
@@ -10023,7 +9613,7 @@
                 end: end.toISOString()
             });
 
-            saveToFirebase();
+            saveToStorage();
 
             // Open agenda panel to show the new item
             const agendaPanel = document.getElementById('agenda-panel');
@@ -10035,7 +9625,7 @@
 
             showNotification(`"${item.title}" scheduled for ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
         }
-        function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToFirebase(); }
+        function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; inbox.push({ id: 'inbox_' + Date.now(), title: node.title }); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInbox(); saveToStorage(); }
         function saveData(download = false) { const data = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, habits, agenda }, null, 2); if (download) { const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
         function loadFile(input) {
             const file = input.files[0];
@@ -10077,7 +9667,7 @@
                     renderAgenda();
 
                     // 4. Save to local storage immediately so a refresh keeps the data
-                    saveToFirebase();
+                    saveToStorage();
 
                     showNotification("File loaded successfully!");
                 } catch (err) {
@@ -10089,7 +9679,7 @@
             input.value = '';
             reader.readAsText(file);
         }
-        async function clearData() {
+        function clearData() {
             if (confirm("Are you sure you want to clear all tasks?")) {
                 nodes = [];
                 archivedNodes = [];
@@ -10102,12 +9692,6 @@
                     categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`)
                 };
                 localStorage.removeItem('urgencyFlowData');
-                
-                // ADD THIS - Clear from Firebase too
-                if (currentUser) {
-                    await saveToFirebase(currentUser.uid);
-                }
-                
                 render();
                 renderInbox();
                 renderGoals();
@@ -10405,12 +9989,12 @@
                 start: now.toISOString(),
                 end: new Date(now.getTime() + 30 * 60000).toISOString()
             });
-            renderAgenda(); saveToFirebase();
+            renderAgenda(); saveToStorage();
         }
 
         function deleteAgendaSlot(index) {
             agenda.splice(index, 1);
-            renderAgenda(); saveToFirebase();
+            renderAgenda(); saveToStorage();
         }
 
         // Replace your existing updateHealthMonitor with this one
@@ -10622,7 +10206,7 @@
                 input.value = '';
                 toggleHabitInputs(); // Reset visibility
                 renderHabits();
-                saveToFirebase();
+                saveToStorage();
             }
         }
 
@@ -10630,7 +10214,7 @@
             if (confirm("Delete this habit and its history?")) {
                 habits = habits.filter(h => h.id !== id);
                 renderHabits();
-                saveToFirebase();
+                saveToStorage();
             }
         }
 
@@ -10648,7 +10232,7 @@
             }
 
             renderHabits();
-            saveToFirebase();
+            saveToStorage();
         }
 
         // FOR COUNTERS
@@ -10668,7 +10252,7 @@
 
             habit.history[key] = newVal;
             renderHabits();
-            saveToFirebase();
+            saveToStorage();
         }
 
         // FOR TIMERS
@@ -10686,7 +10270,7 @@
                 playAudioFeedback('timer-start'); // <--- SOUND
             }
             renderHabits();
-            saveToFirebase();
+            saveToStorage();
         }
 
         function calculateStreak(habit) {
@@ -11143,7 +10727,7 @@
                 showNotification(item.isPinned ? `${type.charAt(0).toUpperCase() + type.slice(1)} Pinned` : "Unpinned");
             }
 
-            saveToFirebase();
+            saveToStorage();
             renderPinnedWindow();
 
             // Update source panels if open
@@ -11193,7 +10777,7 @@
             if (!node) {
                 // Task was deleted, remove from pinned
                 pinnedItems = pinnedItems.filter(p => !(p.type === 'task' && p.id === taskId));
-                saveToFirebase();
+                saveToStorage();
                 return;
             }
 
@@ -11245,7 +10829,7 @@
             const note = notes.find(n => n.id === noteId);
             if (!note) {
                 pinnedItems = pinnedItems.filter(p => !(p.type === 'note' && p.id === noteId));
-                saveToFirebase();
+                saveToStorage();
                 return;
             }
 
@@ -11271,7 +10855,7 @@
             const h = habits.find(habit => habit.id === habitId);
             if (!h) {
                 pinnedItems = pinnedItems.filter(p => !(p.type === 'habit' && p.id === habitId));
-                saveToFirebase();
+                saveToStorage();
                 return;
             }
 
