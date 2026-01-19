@@ -428,7 +428,7 @@
             margin: 0;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background-color: var(--bg-color);
-            background-image: 
+            background-image:
                 radial-gradient(circle at 1px 1px, var(--dots-color) 1px, transparent 0);
             background-size: 24px 24px;
             background-position: 0 0, 12px 12px;
@@ -1914,7 +1914,6 @@
             position: fixed;
             bottom: 20px;
             left: 155px;
-            /* Positioned next to AI and Inbox buttons */
             background: rgba(12, 24, 18, 0.9);
             backdrop-filter: blur(4px);
             border: 1px solid var(--border);
@@ -2119,33 +2118,9 @@
             color: white;
         }
 
-        #ai-panel {
-            /* Keep this for backward compatibility but hide it */
-            display: none !important;
-        }
-
-        #ai-panel .panel-header-row {
-            cursor: move;
-            /* Shows the "move" cursor on the top bar */
-        }
-
-        #ai-panel.hidden {
-            transform: scale(0.9) translateY(20px);
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        /* Add this near your #ai-panel styles */
-        #ai-panel::after {
-            content: "◢";
-            position: absolute;
-            bottom: 2px;
-            right: 5px;
-            font-size: 12px;
-            color: var(--ai-accent);
-            pointer-events: none;
-            /* Let the click pass through to the resize handle */
-            opacity: 0.5;
+        /* Legacy ai-panel styles removed */
+        #ai-chat-history {
+            margin-bottom: 5px;
         }
 
         /* Ensure the chat history doesn't cover the resize handle */
@@ -3703,9 +3678,8 @@
                 right: 5%;
             }
 
-            #ai-panel {
+            #ai-modal {
                 width: 90%;
-                bottom: 100px;
                 left: 5%;
             }
 
@@ -3797,7 +3771,7 @@
         body.ultra-eco-mode #habits-panel,
         body.ultra-eco-mode #archive-panel,
         body.ultra-eco-mode #agenda-panel,
-        body.ultra-eco-mode #ai-panel {
+        body.ultra-eco-mode #ai-modal {
             display: none !important;
         }
 
@@ -3834,11 +3808,11 @@
             resize: both;
             transition: opacity 0.3s ease;
         }
-        
+
         #ai-modal.visible {
             display: flex;
         }
-        
+
         #ai-modal-backdrop {
             position: fixed;
             top: 0;
@@ -3850,11 +3824,11 @@
             z-index: 2499;
             display: none;
         }
-        
+
         #ai-modal-backdrop.visible {
             display: block;
         }
-        
+
         /* --- INBOX MODAL --- */
         #inbox-modal {
             position: fixed;
@@ -3878,11 +3852,11 @@
             resize: both;
             transition: opacity 0.3s ease;
         }
-        
+
         #inbox-modal.visible {
             display: flex;
         }
-        
+
         .modal-header-enhanced {
             padding: 16px 20px;
             background: rgba(0, 0, 0, 0.3);
@@ -3893,7 +3867,7 @@
             cursor: move;
             user-select: none;
         }
-        
+
         .modal-title-enhanced {
             font-size: 16px;
             font-weight: 700;
@@ -3902,7 +3876,7 @@
             align-items: center;
             gap: 10px;
         }
-        
+
         .modal-close-btn {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -3917,13 +3891,13 @@
             font-size: 18px;
             transition: all 0.2s;
         }
-        
+
         .modal-close-btn:hover {
             background: var(--blocked-color);
             color: white;
             border-color: var(--blocked-color);
         }
-        
+
         /* --- DRAGGABLE HEALTH DASHBOARD --- */
         #health-dashboard {
             opacity: 0.6;
@@ -3932,12 +3906,12 @@
             user-select: none;
             pointer-events: auto !important;
         }
-        
+
         #health-dashboard:hover,
         #health-dashboard:active {
             opacity: 1;
         }
-        
+
         /* --- CALENDAR PANEL --- */
         #calendar-panel {
             position: fixed;
@@ -4427,27 +4401,28 @@
                 <span>AI Project Assistant</span>
             </div>
             <div style="display: flex; gap: 8px;">
-                <button class="modal-close-btn" onclick="toggleAISettings()" title="Settings" style="width: auto; padding: 0 12px; font-size: 14px;">⚙️</button>
+                <button class="modal-close-btn" onclick="toggleAISettings()" title="Settings"
+                    style="width: auto; padding: 0 12px; font-size: 14px;">⚙️</button>
                 <button class="modal-close-btn" onclick="closeAIModal()">✕</button>
             </div>
         </div>
-    
+
         <div id="ai-settings-pane">
             <label style="margin-bottom:5px; display:block;">Gemini API Key</label>
             <input type="password" id="gemini-api-key-input" placeholder="Paste API Key here..."
                 onchange="saveGeminiKey(this.value)" style="width:100%; margin-bottom:5px;">
             <div style="font-size:10px; color:#888;">Key is saved to your browser's Local Storage.</div>
         </div>
-    
+
         <div id="ai-chat-history" class="panel-list"
             style="padding: 15px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
             <div class="ai-msg bot">Hello! I can analyze your tasks, notes, and life goals to provide strategic
                 insights. <br><br>Please click the ⚙️ icon to set your Google Gemini API Key to get started.</div>
         </div>
-    
+
         <div id="ai-loading" class="hidden" style="padding: 0 15px 10px; color: var(--ai-accent); font-size: 11px;">
             Gemini is thinking...</div>
-    
+
         <div id="ai-suggestions"
             style="padding: 5px 10px; display: flex; gap: 5px; flex-wrap: wrap; border-top: 1px solid #333; background: rgba(0,0,0,0.1);">
             <button class="btn" style="font-size: 10px; padding: 4px 8px;"
@@ -4460,7 +4435,7 @@
                 onclick="quickPrompt('Look at my archived and completed tasks and current progress. Write a brief executive summary of what I achieved this week and what my top 3 priorities should be for next week.')">📝
                 Weekly Recap</button>
         </div>
-    
+
         <div style="padding: 10px; border-top: 1px solid #333; display: flex; gap: 5px;">
             <input type="text" id="ai-input" placeholder="Analyze my current risks..."
                 onkeypress="if(event.key==='Enter') askAI()">
@@ -4747,18 +4722,20 @@
             </div>
             <button class="modal-close-btn" onclick="closeInboxModal()">✕</button>
         </div>
-    
+
         <div class="panel-list" id="inbox-modal-list" style="flex-grow: 1; overflow-y: auto; padding: 10px;">
             <!-- Inbox items will render here -->
         </div>
-    
-        <div style="padding: 12px; border-top: 1px solid var(--border); display: flex; gap: 8px; background: rgba(0,0,0,0.2);">
+
+        <div
+            style="padding: 12px; border-top: 1px solid var(--border); display: flex; gap: 8px; background: rgba(0,0,0,0.2);">
             <input type="text" id="inbox-modal-input" placeholder="Quick task or idea..."
                 onkeypress="if(event.key==='Enter') addToInboxModal()" style="flex: 1;">
-            <button class="btn btn-primary" onclick="addToInboxModal()" style="background: var(--ready-color); border-color: var(--ready-color);">Add</button>
+            <button class="btn btn-primary" onclick="addToInboxModal()"
+                style="background: var(--ready-color); border-color: var(--ready-color);">Add</button>
         </div>
     </div>
-    
+
     <div id="pinned-window" class="hidden">
         <div class="pinned-header">
             <span>📌 Pinned</span>
@@ -5411,31 +5388,30 @@
             setupContextualMenu();
             renderPinnedWindow();
 
-            const aiPanel = document.getElementById('ai-panel');
-            const aiHeader = aiPanel.querySelector('.panel-header-row');
-            makeElementDraggable(aiPanel, aiHeader);
-
             // Setup modal dragging
             setupModalDragging();
-            
+
             // Load saved positions
             const savedAIPos = localStorage.getItem('aiModalPosition');
             if (savedAIPos) aiModalPosition = JSON.parse(savedAIPos);
-            
+
             const savedInboxPos = localStorage.getItem('inboxModalPosition');
             if (savedInboxPos) inboxModalPosition = JSON.parse(savedInboxPos);
-            
+
             const savedHealthPos = localStorage.getItem('healthDashboardPosition');
             if (savedHealthPos) {
-                healthDashboardPosition = JSON.parse(savedHealthPos);
-                const healthDash = document.getElementById('health-dashboard');
-                if (healthDash && healthDashboardPosition.x !== null) {
-                    healthDash.style.left = healthDashboardPosition.x + 'px';
-                    healthDash.style.top = healthDashboardPosition.y + 'px';
-                    healthDash.style.bottom = 'auto';
-                }
+                try {
+                    healthDashboardPosition = JSON.parse(savedHealthPos);
+                    const healthDash = document.getElementById('health-dashboard');
+                    if (healthDash && healthDashboardPosition.x !== null) {
+                        healthDash.style.setProperty('left', healthDashboardPosition.x + 'px', 'important');
+                        healthDash.style.setProperty('top', healthDashboardPosition.y + 'px', 'important');
+                        healthDash.style.setProperty('bottom', 'auto', 'important');
+                        healthDash.style.setProperty('right', 'auto', 'important');
+                    }
+                } catch (e) { }
             }
-            
+
             window.timerInterval = setInterval(tickTimers, 1000);
             setInterval(checkAutoArchive, 60000);
 
@@ -5482,13 +5458,12 @@
                     }
                 }
 
-                // 3. Check AI Panel Selection
-                const aiPanel = document.getElementById('ai-panel');
-                if (!aiPanel.classList.contains('hidden')) {
+                // 3. Check AI Modal Selection
+                const aiModal = document.getElementById('ai-modal');
+                if (aiModal && aiModal.classList.contains('visible')) {
                     const selection = window.getSelection();
                     const text = selection.toString().trim();
-                    // Check if selection anchor is within the AI panel
-                    if (text && aiPanel.contains(selection.anchorNode.nodeType === 3 ? selection.anchorNode.parentNode : selection.anchorNode)) {
+                    if (text && aiModal.contains(selection.anchorNode.nodeType === 3 ? selection.anchorNode.parentNode : selection.anchorNode)) {
                         currentSelectionText = text;
                         currentSelectionSource = 'ai';
                         noteSelectionRange = null;
@@ -5761,7 +5736,7 @@
         function toggleAIModal() {
             const modal = document.getElementById('ai-modal');
             const backdrop = document.getElementById('ai-modal-backdrop');
-            
+
             if (modal.classList.contains('visible')) {
                 closeAIModal();
             } else {
@@ -5775,17 +5750,17 @@
                     modal.style.width = aiModalPosition.width + 'px';
                     modal.style.height = aiModalPosition.height + 'px';
                 }
-                
+
                 modal.classList.add('visible');
                 backdrop.classList.add('visible');
                 setTimeout(() => document.getElementById('ai-input').focus(), 100);
             }
         }
-        
+
         function closeAIModal() {
             const modal = document.getElementById('ai-modal');
             const backdrop = document.getElementById('ai-modal-backdrop');
-            
+
             // Save position before closing
             const rect = modal.getBoundingClientRect();
             aiModalPosition = {
@@ -5795,7 +5770,7 @@
                 height: rect.height
             };
             localStorage.setItem('aiModalPosition', JSON.stringify(aiModalPosition));
-            
+
             modal.classList.remove('visible');
             backdrop.classList.remove('visible');
         }
@@ -5868,8 +5843,6 @@
                 };
                 msg.appendChild(pushBtn);
             }
-
-            history.appendChild(msg);
 
             // 3. Check for Decomposition Data
             let decompJson = null;
@@ -6016,7 +5989,7 @@
         }
 
         function decomposeGoal(goal) {
-            document.getElementById('ai-panel').classList.remove('hidden');
+            toggleAIModal();
             const prompt = `Break down the goal "${goal.text}" into a detailed project plan with dependencies. Specify durations for each task in days.`;
             quickPrompt(prompt);
         }
@@ -6024,7 +5997,7 @@
         function decomposeTask() {
             const node = nodes.find(n => n.id === selectedNodeId);
             if (!node) return;
-            document.getElementById('ai-panel').classList.remove('hidden');
+            toggleAIModal();
             const prompt = `Decompose the task "${node.title}" into smaller sub-tasks. Maintain the context of any existing dependencies if possible.`;
             quickPrompt(prompt);
         }
@@ -6033,8 +6006,8 @@
             if (!data || !Array.isArray(data)) return;
 
             const idMap = {};
-            const startX = (window.innerWidth / 2 - panX) / scale;
-            const startY = (window.innerHeight / 2 - panY) / scale;
+            const startX = (window.innerWidth / 2 - panX) / scale - 90;
+            const startY = (window.innerHeight / 2 - panY) / scale - 50;
 
             // 1. Create Nodes
             data.forEach((item, index) => {
@@ -6048,11 +6021,13 @@
             data.forEach(item => {
                 if (item.dependencies && Array.isArray(item.dependencies)) {
                     const targetNode = nodes.find(n => n.id === idMap[item.tempId]);
-                    item.dependencies.forEach(depId => {
-                        if (idMap[depId]) {
-                            targetNode.dependencies.push({ id: idMap[depId], type: 'hard' });
-                        }
-                    });
+                    if (targetNode) { // Ensure targetNode exists
+                        item.dependencies.forEach(depId => {
+                            if (idMap[depId]) {
+                                targetNode.dependencies.push({ id: idMap[depId], type: 'hard' });
+                            }
+                        });
+                    }
                 }
             });
 
@@ -6095,7 +6070,6 @@
         function applyEcoMode() {
             const statusEl = document.getElementById('eco-status');
             const btnEl = document.getElementById('eco-toggle-btn');
-            const aiPanel = document.getElementById('ai-panel');
 
             // Remove all eco classes first
             document.body.classList.remove('eco-mode', 'ultra-eco-mode');
@@ -6105,7 +6079,6 @@
                 isEcoMode = false;
                 isUltraEcoMode = false;
 
-                if (aiPanel) aiPanel.style.resize = 'both';
                 if (statusEl) statusEl.innerText = "Turbo";
                 if (btnEl) {
                     btnEl.style.borderColor = "";
@@ -6125,7 +6098,6 @@
                 isUltraEcoMode = false;
                 document.body.classList.add('eco-mode');
 
-                if (aiPanel) aiPanel.style.resize = 'none';
                 if (statusEl) statusEl.innerText = "Eco";
                 if (btnEl) {
                     btnEl.style.borderColor = "#10b981";
@@ -6144,7 +6116,6 @@
                 isUltraEcoMode = true;
                 document.body.classList.add('ultra-eco-mode');
 
-                if (aiPanel) aiPanel.style.resize = 'none';
                 if (statusEl) statusEl.innerText = "Ultra Eco";
                 if (btnEl) {
                     btnEl.style.borderColor = "#eab308";
@@ -6282,14 +6253,16 @@
             const archivePanel = document.getElementById('archive-panel');
             const notesPanel = document.getElementById('notes-panel');
             const goalsPanel = document.getElementById('goals-panel');
-            const aiPanel = document.getElementById('ai-panel');
+            const aiModal = document.getElementById('ai-modal'); // Use aiModal for consistency
 
             if (archivePanel.classList.contains('hidden')) {
                 // Opening Archive: Hide everything else
                 archivePanel.classList.remove('hidden');
                 notesPanel.classList.add('hidden');
                 goalsPanel.classList.add('hidden');
-                aiPanel.classList.add('hidden');
+                if (aiModal.classList.contains('visible')) { // Check if AI modal is open
+                    closeAIModal(); // Close AI modal if open
+                }
                 renderArchiveList();
             } else {
                 archivePanel.classList.add('hidden');
@@ -6323,14 +6296,16 @@
             const notesPanel = document.getElementById('notes-panel');
             const archivePanel = document.getElementById('archive-panel');
             const goalsPanel = document.getElementById('goals-panel');
-            const aiPanel = document.getElementById('ai-panel');
+            const aiModal = document.getElementById('ai-modal'); // Use aiModal for consistency
 
             if (notesPanel.classList.contains('hidden')) {
                 // Opening Notes: Hide everything else
                 notesPanel.classList.remove('hidden');
                 archivePanel.classList.add('hidden');
                 goalsPanel.classList.add('hidden');
-                aiPanel.classList.add('hidden');
+                if (aiModal.classList.contains('visible')) { // Check if AI modal is open
+                    closeAIModal(); // Close AI modal if open
+                }
                 renderNotesList();
             } else {
                 notesPanel.classList.add('hidden');
@@ -6398,48 +6373,52 @@
             const aiModal = document.getElementById('ai-modal');
             const aiHeader = document.getElementById('ai-modal-header');
             makeModalDraggable(aiModal, aiHeader, 'aiModalPosition');
-            
+
             // Inbox Modal
             const inboxModal = document.getElementById('inbox-modal');
             const inboxHeader = document.getElementById('inbox-modal-header');
             makeModalDraggable(inboxModal, inboxHeader, 'inboxModalPosition');
-            
+
             // Health Dashboard
             const healthDash = document.getElementById('health-dashboard');
             makeHealthDashboardDraggable(healthDash);
         }
-        
+
         function makeModalDraggable(modal, handle, positionKey) {
             let isDragging = false;
             let currentX, currentY, initialX, initialY;
-            
+
             handle.addEventListener('mousedown', (e) => {
-                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
-                
+                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.closest('button')) return;
+
                 isDragging = true;
                 const rect = modal.getBoundingClientRect();
                 initialX = e.clientX - rect.left;
                 initialY = e.clientY - rect.top;
-                
+
                 modal.style.transform = 'none';
+                modal.style.transition = 'none'; // Disable transition while dragging
                 e.preventDefault();
             });
-            
+
             document.addEventListener('mousemove', (e) => {
                 if (!isDragging) return;
-                
+
                 e.preventDefault();
                 currentX = e.clientX - initialX;
                 currentY = e.clientY - initialY;
-                
+
                 modal.style.left = currentX + 'px';
                 modal.style.top = currentY + 'px';
+                modal.style.right = 'auto';
+                modal.style.bottom = 'auto';
             });
-            
+
             document.addEventListener('mouseup', () => {
                 if (isDragging) {
                     isDragging = false;
-                    
+                    modal.style.transition = ''; // Restore transition
+
                     // Save position
                     const rect = modal.getBoundingClientRect();
                     const position = {
@@ -6448,54 +6427,60 @@
                         width: rect.width,
                         height: rect.height
                     };
-                    
+
                     if (positionKey === 'aiModalPosition') {
                         aiModalPosition = position;
                     } else if (positionKey === 'inboxModalPosition') {
                         inboxModalPosition = position;
                     }
-                    
+
                     localStorage.setItem(positionKey, JSON.stringify(position));
                 }
             });
         }
-        
+
         function makeHealthDashboardDraggable(element) {
             let isDragging = false;
             let currentX, currentY, initialX, initialY;
-            
+
             element.addEventListener('mousedown', (e) => {
                 // Don't drag if clicking on buttons
                 if (e.target.classList.contains('health-btn') || e.target.closest('.health-btn')) {
                     return;
                 }
-                
+
                 isDragging = true;
-                initialX = e.clientX - element.offsetLeft;
-                initialY = e.clientY - element.offsetTop;
+                const rect = element.getBoundingClientRect();
+                initialX = e.clientX - rect.left;
+                initialY = e.clientY - rect.top;
+
+                element.style.transition = 'none';
                 e.preventDefault();
             });
-            
+
             document.addEventListener('mousemove', (e) => {
                 if (!isDragging) return;
-                
+
                 e.preventDefault();
                 currentX = e.clientX - initialX;
                 currentY = e.clientY - initialY;
-                
+
                 element.style.left = currentX + 'px';
                 element.style.top = currentY + 'px';
                 element.style.bottom = 'auto';
+                element.style.right = 'auto';
             });
-            
+
             document.addEventListener('mouseup', () => {
                 if (isDragging) {
                     isDragging = false;
-                    
+                    element.style.transition = '';
+
                     // Save position
+                    const rect = element.getBoundingClientRect();
                     healthDashboardPosition = {
-                        x: element.offsetLeft,
-                        y: element.offsetTop
+                        x: rect.left,
+                        y: rect.top
                     };
                     localStorage.setItem('healthDashboardPosition', JSON.stringify(healthDashboardPosition));
                 }
@@ -6645,7 +6630,7 @@
                     });
                     return parsed;
                 }
-            } catch (e) { /* not JSON, legacy note */ }
+            } catch (e) { /* not JSON */ }
 
             // Convert legacy string to single block
             return [{ id: Date.now() + Math.random(), text: note.body || "", colorIndex: 0, isEditing: true, bookmarkName: "" }];
@@ -8006,11 +7991,17 @@
         // --- LIFE GOALS LOGIC ---
         function toggleGoals() {
             const panel = document.getElementById('goals-panel');
+            const archivePanel = document.getElementById('archive-panel');
+            const notesPanel = document.getElementById('notes-panel');
+            const aiModal = document.getElementById('ai-modal'); // Use aiModal for consistency
+
             if (panel.classList.contains('hidden')) {
                 panel.classList.remove('hidden');
-                document.getElementById('archive-panel').classList.add('hidden');
-                document.getElementById('notes-panel').classList.add('hidden');
-                document.getElementById('ai-panel').classList.add('hidden');
+                archivePanel.classList.add('hidden');
+                notesPanel.classList.add('hidden');
+                if (aiModal.classList.contains('visible')) { // Check if AI modal is open
+                    closeAIModal(); // Close AI modal if open
+                }
                 renderGoals();
             } else {
                 panel.classList.add('hidden');
@@ -8055,7 +8046,7 @@
         function toggleGoalCollapse(goal) { goal.collapsed = !goal.collapsed; renderGoals(); saveToStorage(); }
         function moveGoalYear(goal) { const yearStr = prompt("Move '" + goal.text + "' to which year?", currentGoalYear + 1); const year = parseInt(yearStr); if (!isNaN(year)) { if (recursiveRemoveGoal(lifeGoals[currentGoalYear], goal.id)) { if (!lifeGoals[year]) lifeGoals[year] = []; lifeGoals[year].push(goal); renderGoals(); saveToStorage(); alert(`Moved to ${year}`); } else { alert("Could not find goal to move."); } } }
         function recursiveRemoveGoal(list, id) { if (!list) return false; for (let i = 0; i < list.length; i++) { if (list[i].id === id) { list.splice(i, 1); return true; } if (list[i].children && list[i].children.length > 0) { if (recursiveRemoveGoal(list[i].children, id)) return true; } } return false; }
-        
+
         let currentGoalFilter = null;
         function filterTasksByGoal(goalId) {
             // Helper to recursively find all goal IDs (including sub-goals)
@@ -8083,7 +8074,7 @@
                 findGoal(goalList, targetId);
                 return result;
             };
-            
+
             if (currentGoalFilter === goalId) {
                 // Clear filter
                 currentGoalFilter = null;
@@ -8494,8 +8485,7 @@
                     closeAllSubtaskBoxes();
                 }
 
-                const aiPanel = document.getElementById('ai-panel'); const aiFab = document.getElementById('fab-ai');
-                if (!aiPanel.classList.contains('hidden')) { if (!aiPanel.contains(e.target) && !aiFab.contains(e.target)) toggleAIModal(); }
+                // (Cleaned up ai-panel references)
 
                 const taskListWindow = document.getElementById('task-list-window');
                 const taskListBtn = document.getElementById('btn-task-list');
@@ -8671,7 +8661,7 @@
             }
             document.getElementById('goals-panel').classList.add('hidden');
             document.getElementById('archive-panel').classList.add('hidden');
-            document.getElementById('ai-panel').classList.add('hidden');
+            // (Cleaned up ai-panel reference)
             deselectNode();
         }
 
@@ -9067,23 +9057,23 @@
                             onchange="linkTaskToGoal('${node.id}', this.value); this.parentElement.style.display='none'; this.value='';">
                             <option value="">Select Goal...</option>
                             ${allGoals.filter(g => !linkedGoalIds.includes(g.goal.id)).map(g => {
-                                const indent = '&nbsp;'.repeat(g.level * 4);
-                                return `<option value='${g.goal.id}'>${indent}${g.goal.text}</option>`;
-                            }).join('')}
+                const indent = '&nbsp;'.repeat(g.level * 4);
+                return `<option value='${g.goal.id}'>${indent}${g.goal.text}</option>`;
+            }).join('')}
                         </select>
                     </div>
 
                     <div style="display:flex; flex-direction:column; gap:8px;">
                         ${linkedGoalIds.map(goalId => {
-                            const goalItem = allGoals.find(g => g.goal.id === goalId);
-                            if (!goalItem) return '';
-                            const indent = '&nbsp;'.repeat(goalItem.level * 4);
-                            return `
+                const goalItem = allGoals.find(g => g.goal.id === goalId);
+                if (!goalItem) return '';
+                const indent = '&nbsp;'.repeat(goalItem.level * 4);
+                return `
                             <div class="linked-note-item" style="padding:10px 12px;">
                                 <span style="font-size:12px; color:#cbd5e1; flex-grow:1;">${indent}${goalItem.goal.text}</span>
                                 <span style="cursor:pointer; color:#ef4444; font-size:14px;" onclick="unlinkTaskFromGoal('${node.id}', '${goalId}')">✕</span>
                             </div>`;
-                        }).join('')}
+            }).join('')}
                         
                         ${linkedGoalIds.length === 0 ?
                     `<div style="text-align:center; padding:12px; border:1px dashed #334155; border-radius:8px; color:#475569; font-size:11px;">
@@ -9809,7 +9799,7 @@
 
         function toggleInboxModal() {
             const modal = document.getElementById('inbox-modal');
-            
+
             if (modal.classList.contains('visible')) {
                 closeInboxModal();
             } else {
@@ -9823,16 +9813,16 @@
                     modal.style.width = inboxModalPosition.width + 'px';
                     modal.style.height = inboxModalPosition.height + 'px';
                 }
-                
+
                 modal.classList.add('visible');
                 renderInboxModal();
                 setTimeout(() => document.getElementById('inbox-modal-input').focus(), 100);
             }
         }
-        
+
         function closeInboxModal() {
             const modal = document.getElementById('inbox-modal');
-            
+
             // Save position before closing
             const rect = modal.getBoundingClientRect();
             inboxModalPosition = {
@@ -9842,19 +9832,19 @@
                 height: rect.height
             };
             localStorage.setItem('inboxModalPosition', JSON.stringify(inboxModalPosition));
-            
+
             modal.classList.remove('visible');
         }
-        
+
         function renderInboxModal() {
             const list = document.getElementById('inbox-modal-list');
             list.innerHTML = '';
-            
+
             if (inbox.length === 0) {
                 list.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:40px 20px; font-size: 13px;">📭<br><br>Your inbox is empty.<br>Capture ideas as they come!</div>';
                 return;
             }
-            
+
             inbox.forEach((item, index) => {
                 const el = document.createElement('div');
                 el.className = 'inbox-item';
@@ -9862,7 +9852,7 @@
                 list.appendChild(el);
             });
         }
-        
+
         function addToInboxModal() {
             const input = document.getElementById('inbox-modal-input');
             const val = input.value.trim();
@@ -10258,7 +10248,7 @@
         // --- AGENDA PANEL FUNCTIONS ---
         function toggleAgenda() {
             const panel = document.getElementById('agenda-panel');
-            const others = ['notes-panel', 'archive-panel', 'goals-panel', 'habits-panel', 'ai-panel'];
+            const others = ['notes-panel', 'archive-panel', 'goals-panel', 'habits-panel'];
             if (panel.classList.contains('hidden')) {
                 others.forEach(id => {
                     const el = document.getElementById(id);
