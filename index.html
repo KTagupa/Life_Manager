@@ -7337,10 +7337,20 @@
             const allTasks = [...(nodes || []), ...(archivedNodes || [])];
             const q = query.toLowerCase();
 
-            const filtered = allTasks.filter(t =>
-                (t.title || "").toLowerCase().includes(q) &&
-                !(note.taskIds && note.taskIds.includes(t.id))
-            ).sort((a, b) => (a.title || "").localeCompare(b.title || "")).slice(0, 20);
+            const filtered = allTasks.filter(t => {
+                const title = (t.title || "").toLowerCase();
+                const words = q.split(' ').filter(w => w.length > 0);
+                // Match if all query words appear anywhere in title
+                return words.every(word => title.includes(word)) &&
+                       !(note.taskIds && note.taskIds.includes(t.id));
+            }).sort((a, b) => {
+                // Prioritize exact matches
+                const aExact = (a.title || "").toLowerCase().startsWith(q);
+                const bExact = (b.title || "").toLowerCase().startsWith(q);
+                if (aExact && !bExact) return -1;
+                if (!aExact && bExact) return 1;
+                return (a.title || "").localeCompare(b.title || "");
+            }).slice(0, 20);
 
             if (filtered.length === 0) {
                 list.innerHTML = '<div style="color:#666; font-size:12px; padding:20px; text-align:center;">No matching tasks found</div>';
@@ -9416,6 +9426,36 @@
                 }
             });
 
+            // NEW: Also collect habit time logs
+            habits.forEach(h => {
+                if (h.type === 'timer' && h.history) {
+                    Object.entries(h.history).forEach(([dateKey, duration]) => {
+                        if (typeof duration === 'number') {
+                            const date = new Date(dateKey);
+                            allLogs.push({
+                                start: date.getTime(),
+                                end: date.getTime() + duration,
+                                duration: duration,
+                                title: h.title + ' (Habit)',
+                                taskId: h.id,
+                                isHabit: true
+                            });
+                        }
+                    });
+                }
+                // Active habit timer
+                if (h.activeTimerStart) {
+                    allLogs.push({
+                        start: h.activeTimerStart,
+                        end: Date.now(),
+                        title: h.title + ' (Habit)',
+                        taskId: h.id,
+                        active: true,
+                        isHabit: true
+                    });
+                }
+            });
+
             if (calendarView === 'day') {
                 title.innerText = calendarDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -9593,10 +9633,26 @@
             const limit = 5 * 1024 * 1024; // 5MB limit for LocalStorage
             const percent = Math.min(100, (bytes / limit) * 100).toFixed(1);
 
-            // 4. Update the Dashboard UI immediately
+            // NEW: Ensure elements exist, otherwise defer update
             const bar = document.getElementById('hd-storage-bar');
             const text = document.getElementById('hd-storage-text');
-
+            
+            if (!bar || !text) {
+                // Elements not ready yet, schedule for next tick
+                setTimeout(() => {
+                    const barRetry = document.getElementById('hd-storage-bar');
+                    const textRetry = document.getElementById('hd-storage-text');
+                    if (barRetry && textRetry) {
+                        textRetry.innerText = percent + '%';
+                        barRetry.style.width = percent + '%';
+                        if (percent > 80) barRetry.style.background = '#ef4444';
+                        else if (percent > 50) barRetry.style.background = '#eab308';
+                        else barRetry.style.background = 'var(--ready-color)';
+                    }
+                }, 100);
+                return;
+            }
+            
             if (bar && text) {
                 text.innerText = percent + '%';
                 bar.style.width = percent + '%';
@@ -9901,8 +9957,26 @@
             const worldX = (window.innerWidth / 2 - panX) / scale - 90;
             const worldY = (window.innerHeight / 2 - panY) / scale - 50;
             const newNode = createNode(worldX, worldY, item.title);
-            inbox.splice(index, 1); nodes.push(newNode);
-            renderInbox(); updateCalculations(); render(); selectNode(newNode.id); saveToStorage();
+            
+            // NEW: Update agenda slots to point to the new real task
+            agenda.forEach(slot => {
+                if (slot.taskId.includes(item.id.split('_')[1])) {
+                    slot.taskId = newNode.id;
+                }
+            });
+            
+            // Remove temp nodes
+            nodes = nodes.filter(n => !n.id.includes(item.id.split('_')[1]) || !n.isInboxItem);
+            
+            inbox.splice(index, 1); 
+            nodes.push(newNode);
+            renderInbox(); 
+            renderAgenda(); // NEW: Refresh agenda
+            updateCalculations(); 
+            render(); 
+            selectNode(newNode.id); 
+            saveToStorage();
+            
             const inboxPanel = document.getElementById('inbox-panel');
             if (!inboxPanel.classList.contains('hidden')) inboxPanel.classList.add('hidden');
         }
@@ -10179,10 +10253,14 @@
 
             // --- NEW: Render "Upcoming" Row ---
             if (upcomingSlot) {
-                hudActive = true;
-                upcomingRow.style.display = 'flex';
-
                 const upcomingTask = nodes.find(n => n.id === upcomingSlot.taskId) || archivedNodes.find(n => n.id === upcomingSlot.taskId);
+                
+                // NEW: Skip if task is completed
+                if (upcomingTask && upcomingTask.completed) {
+                    upcomingRow.style.display = 'none';
+                } else {
+                    hudActive = true;
+                    upcomingRow.style.display = 'flex';
                 // NEW: Check inbox if not found
                 if (!upcomingTask && upcomingSlot.taskId.startsWith('inbox_temp_')) {
                     const inboxItem = inbox.find(item => upcomingSlot.taskId.includes(item.id.split('_')[1]));
@@ -10227,6 +10305,17 @@
                 hud.dataset.activeHabitId = activeHabit.id;
             } else {
                 habitRow.style.display = 'none';
+            }
+            // NEW: Make the habit title clickable to open habits panel
+            const habitTitle = document.getElementById('hud-habit-title');
+            if (habitTitle && activeHabit) {
+                habitTitle.style.cursor = 'pointer';
+                habitTitle.onclick = () => {
+                    const habitsPanel = document.getElementById('habits-panel');
+                    if (habitsPanel.classList.contains('hidden')) {
+                        toggleHabits();
+                    }
+                };
             }
 
             if (hudActive) hud.classList.add('active');
