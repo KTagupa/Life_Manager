@@ -4418,45 +4418,6 @@
         <div id="sync-status" class="sync-status"></div>
     </div>
 
-    <div id="ai-panel-legacy" class="hidden">
-        <div class="panel-header-row">
-            <span>✨ AI Project Assistant</span>
-            <div style="display:flex; gap:5px;">
-                <button class="tool-btn" onclick="toggleAISettings()" title="API Key Settings">⚙️</button>
-                <button class="btn" onclick="toggleAIModal()">✕</button>
-            </div>
-        </div>
-
-        <div id="ai-settings-pane">
-            <label style="margin-bottom:5px; display:block;">Gemini API Key</label>
-            <input type="password" id="gemini-api-key-input" placeholder="Paste API Key here..."
-                onchange="saveGeminiKey(this.value)" style="width:100%; margin-bottom:5px;">
-            <div style="font-size:10px; color:#888;">Key is saved to your browser's Local Storage.</div>
-        </div>
-
-        <div id="ai-chat-history" class="panel-list"
-            style="padding: 15px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
-            <div class="ai-msg bot">Hello! I can analyze your tasks, notes, and life goals to provide strategic
-                insights. <br><br>Please click the ⚙️ icon to set your Google Gemini API Key to get started.</div>
-        </div>
-
-        <div id="ai-loading" class="hidden" style="padding: 0 15px 10px; color: var(--ai-accent); font-size: 11px;">
-            Gemini is thinking...</div>
-
-        <div id="ai-suggestions"
-            style="padding: 5px 10px; display: flex; gap: 5px; flex-wrap: wrap; border-top: 1px solid #333; background: rgba(0,0,0,0.1);">
-            <button class="btn" style="font-size: 10px; padding: 4px 8px;"
-                onclick="quickPrompt('Analyze my Inbox and my current Life Goals. Which ideas should I promote to tasks immediately to maintain momentum?')">🎯
-                Goal Alignment</button>
-            <button class="btn" style="font-size: 10px; padding: 4px 8px;"
-                onclick="quickPrompt('Identify the Critical Path tasks that are currently blocked. What is the single most important thing I must finish today to prevent a cascade of delays?')">⚠️
-                Risk Check</button>
-            <button class="btn" style="font-size: 10px; padding: 4px 8px;"
-                onclick="quickPrompt('Look at my archived and completed tasks and current progress. Write a brief executive summary of what I achieved this week and what my top 3 priorities should be for next week.')">📝
-                Weekly Recap</button>
-        </div>
-    </div>
-
     <!-- AI Assistant Modal -->
     <div id="ai-modal-backdrop"></div>
     <div id="ai-modal">
