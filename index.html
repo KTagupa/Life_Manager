@@ -4080,6 +4080,414 @@
             opacity: 0.6;
         }
 
+        /* --- PROGRESS DASHBOARD STYLES --- */
+        #progress-dashboard {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(10, 15, 12, 0.98);
+            z-index: 160;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        #progress-dashboard.hidden {
+            display: none;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+        }
+
+        .progress-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .progress-view-switch {
+            display: flex;
+            gap: 8px;
+            background: #1a1a1a;
+            padding: 4px;
+            border-radius: 8px;
+        }
+
+        .view-btn {
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .view-btn.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .progress-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* Week Stats Summary */
+        .week-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(145deg, #1a2520, #141b18);
+            border: 1px solid #2a3530;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .stat-subtext {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        /* Timeline Swim Lanes */
+        .timeline-container {
+            margin-bottom: 40px;
+        }
+
+        .timeline-header {
+            font-size: 18px;
+            font-weight: 700;
+            color: #eee;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .timeline-grid {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .timeline-hour-markers {
+            display: flex;
+            position: sticky;
+            top: 0;
+            background: rgba(10, 15, 12, 0.95);
+            z-index: 10;
+            padding: 8px 0 8px 180px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #333;
+        }
+
+        .hour-marker {
+            flex: 1;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            min-width: 40px;
+        }
+
+        .swim-lane {
+            display: flex;
+            align-items: stretch;
+            min-height: 60px;
+            background: #141b18;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #1f2a25;
+            transition: all 0.2s;
+        }
+
+        .swim-lane:hover {
+            border-color: #2a3530;
+            background: #1a2520;
+        }
+
+        .lane-label {
+            width: 180px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-right: 1px solid #1f2a25;
+            flex-shrink: 0;
+        }
+
+        .lane-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #eee;
+            margin-bottom: 4px;
+        }
+
+        .lane-subtitle {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .lane-blocks-container {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .time-block {
+            position: absolute;
+            height: 80%;
+            background: linear-gradient(135deg, var(--accent), #2563eb);
+            border-radius: 6px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .time-block:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            z-index: 5;
+        }
+
+        .time-block.habit-block {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+
+        .time-block.task-block {
+            background: linear-gradient(135deg, var(--accent), #2563eb);
+        }
+
+        .time-block.goal-block {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        }
+
+        .block-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .block-duration {
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: monospace;
+        }
+
+        /* Goal Impact Indicator */
+        .goal-impact-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 700;
+            color: #fbbf24;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        /* Day View Specific */
+        .day-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .day-hour-row {
+            display: flex;
+            height: 60px;
+            border-bottom: 1px solid #1f2a25;
+        }
+
+        .day-hour-label {
+            width: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: #666;
+            border-right: 1px solid #1f2a25;
+        }
+
+        .day-events-column {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        /* Month View */
+        .month-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+        }
+
+        .month-day-cell {
+            aspect-ratio: 1;
+            background: #141b18;
+            border: 1px solid #1f2a25;
+            border-radius: 8px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .month-day-cell:hover {
+            border-color: var(--accent);
+            background: #1a2520;
+        }
+
+        .month-day-cell.dim {
+            opacity: 0.3;
+        }
+
+        .month-day-number {
+            font-size: 12px;
+            font-weight: 600;
+            color: #eee;
+            margin-bottom: 6px;
+        }
+
+        .month-day-summary {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .month-activity-bar {
+            height: 4px;
+            border-radius: 2px;
+            background: var(--accent);
+            opacity: 0.6;
+        }
+
+        .month-activity-bar.habit {
+            background: #10b981;
+        }
+
+        .month-activity-bar.task {
+            background: var(--accent);
+        }
+
+        .month-stats-text {
+            font-size: 9px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        /* Achievements Section */
+        .achievements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .achievement-card {
+            background: linear-gradient(145deg, #1a2520, #141b18);
+            border: 1px solid #2a3530;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .achievement-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .achievement-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+
+        .achievement-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #eee;
+            margin-bottom: 4px;
+        }
+
+        .achievement-desc {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .achievement-unlocked {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: var(--ready-color);
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--ready-color);
+        }
+
+
         /* Hidden video element for PiP streaming */
         #pip-stream-source {
             position: fixed;
@@ -4324,7 +4732,7 @@
             <button class="btn" onclick="fitView()">Recenter / Urgent (Optn+R)</button>
             <button class="btn" onclick="autoArrangeGraph()">🪄 Declutter (Optn+D)</button>
             <button class="btn" onclick="toggleHeatmap()">📅 Heatmap (Optn+M)</button>
-            <button class="btn" onclick="toggleCalendar()">📅 Calendar (Optn+C)</button>
+            <button class="btn" onclick="toggleProgressDashboard()">🏆 Progress (Optn+C)</button>
             <button class="btn" style="border-color: var(--accent); color: var(--accent);"
                 onclick="toggleSyncPanel()">☁️ Sync (Optn+S)</button>
             <button class="btn" onclick="saveData(true)">Save (Optn+V)</button>
@@ -4779,6 +5187,30 @@
             <button class="btn" onclick="toggleHeatmap()">Close</button>
         </div>
         <div id="heatmap-container" class="heatmap-grid" style="display: block;">
+        </div>
+    </div>
+
+    <!-- Progress Dashboard -->
+    <div id="progress-dashboard" class="hidden">
+        <div class="progress-header">
+            <div class="progress-title">
+                <span>🏆</span>
+                <span id="progress-title-text">Weekly Progress</span>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <div class="progress-view-switch">
+                    <button class="view-btn active" onclick="setProgressView('day')">Day</button>
+                    <button class="view-btn" onclick="setProgressView('week')">Week</button>
+                    <button class="view-btn" onclick="setProgressView('month')">Month</button>
+                </div>
+                <button class="btn" onclick="changeProgressDate(-1)">←</button>
+                <button class="btn" onclick="changeProgressDate(1)">→</button>
+                <button class="btn" onclick="toggleProgressDashboard()">Close</button>
+            </div>
+        </div>
+
+        <div class="progress-content" id="progress-content">
+            <!-- Content renders here via JS -->
         </div>
     </div>
 
@@ -5788,10 +6220,10 @@
 
         async function fetchGemini(payload, retries = 5, delay = 1000) {
             if (!geminiApiKey) throw new Error("Missing API Key");
-        
+
             // Update the model string to gemini-2.5-flash
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
-        
+
             for (let i = 0; i < retries; i++) {
                 try {
                     // Optional: Inject thinking budget if not already in payload
@@ -5801,19 +6233,19 @@
                             ...payload.generationConfig,
                             // Allows the model to reason (0-24576 tokens). 
                             // Set to 0 if you want pure speed without "thinking" output.
-                            thinkingBudget: 1024 
+                            thinkingBudget: 1024
                         }
                     };
-        
+
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(body)
                     });
-        
+
                     // Handle success
                     if (response.ok) return await response.json();
-        
+
                     // Handle specific rate limiting (429) or server errors (500)
                     if (response.status === 429 || response.status >= 500) {
                         console.warn(`Retry ${i + 1}: Received status ${response.status}`);
@@ -5822,12 +6254,12 @@
                         const errorData = await response.json();
                         throw new Error(`API Error ${response.status}: ${errorData.error.message}`);
                     }
-        
+
                 } catch (e) {
-                    if (i === retries - 1) throw e; 
+                    if (i === retries - 1) throw e;
                     console.error("Fetch attempt failed:", e.message);
                 }
-        
+
                 // Exponential Backoff
                 await new Promise(r => setTimeout(r, delay));
                 delay *= 2;
@@ -8468,7 +8900,7 @@
                         case 'KeyR': fitView(); break;
                         case 'KeyD': autoArrangeGraph(); break;
                         case 'KeyM': toggleHeatmap(); break;
-                        case 'KeyC': toggleCalendar(); break;
+                        case 'KeyC': toggleProgressDashboard(); break;
                         case 'KeyS': toggleSyncPanel(); break;
                         case 'KeyV': saveData(true); break;
                         case 'KeyL': document.getElementById('file-input').click(); break;
@@ -9392,6 +9824,503 @@
                 }
                 monthDiv.appendChild(grid); container.appendChild(monthDiv);
             });
+        }
+
+        // --- PROGRESS DASHBOARD LOGIC ---
+        let progressView = 'week'; // day, week, month
+        let progressDate = new Date();
+
+        function toggleProgressDashboard() {
+            const panel = document.getElementById('progress-dashboard');
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                renderProgressDashboard();
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        function setProgressView(view) {
+            progressView = view;
+            document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            renderProgressDashboard();
+        }
+
+        function changeProgressDate(delta) {
+            if (progressView === 'day') progressDate.setDate(progressDate.getDate() + delta);
+            else if (progressView === 'week') progressDate.setDate(progressDate.getDate() + (delta * 7));
+            else if (progressView === 'month') progressDate.setMonth(progressDate.getMonth() + delta);
+            renderProgressDashboard();
+        }
+
+        function getWeekBounds(date) {
+            const start = new Date(date);
+            start.setDate(start.getDate() - start.getDay()); // Sunday
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            end.setHours(23, 59, 59, 999);
+            return { start, end };
+        }
+
+        function getDayBounds(date) {
+            const start = new Date(date);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(date);
+            end.setHours(23, 59, 59, 999);
+            return { start, end };
+        }
+
+        function getMonthBounds(date) {
+            const start = new Date(date.getFullYear(), date.getMonth(), 1);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+            end.setHours(23, 59, 59, 999);
+            return { start, end };
+        }
+
+        function calculateGoalImpact(taskId) {
+            const task = nodes.find(n => n.id === taskId) || archivedNodes.find(n => n.id === taskId);
+            if (!task || !task.goalIds || task.goalIds.length === 0) return 0;
+
+            let impact = 0;
+            // Base impact: 20 points per linked goal
+            impact += task.goalIds.length * 20;
+
+            // Bonus: +30 if critical path
+            if (task._isCritical) impact += 30;
+
+            // Bonus: +20 if urgent
+            if (task._isUrgent) impact += 20;
+
+            // Bonus: +10 per dependency (blocking other tasks)
+            impact += (task._downstreamWeight || 0) * 10;
+
+            return Math.min(100, impact); // Cap at 100
+        }
+
+        function renderProgressDashboard() {
+            const content = document.getElementById('progress-content');
+            const titleEl = document.getElementById('progress-title-text');
+
+            let bounds;
+            if (progressView === 'day') {
+                bounds = getDayBounds(progressDate);
+                titleEl.innerText = progressDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+            } else if (progressView === 'week') {
+                bounds = getWeekBounds(progressDate);
+                const endDate = new Date(bounds.end);
+                titleEl.innerText = `Week of ${bounds.start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+            } else {
+                bounds = getMonthBounds(progressDate);
+                titleEl.innerText = progressDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+            }
+
+            if (progressView === 'week') {
+                content.innerHTML = renderWeekProgress(bounds);
+            } else if (progressView === 'day') {
+                content.innerHTML = renderDayProgress(bounds);
+            } else {
+                content.innerHTML = renderMonthProgress(bounds);
+            }
+        }
+
+        function renderWeekProgress(bounds) {
+            // Collect all activities
+            const activities = [];
+
+            // Task timers
+            [...nodes, ...archivedNodes].forEach(task => {
+                if (task.timeLogs) {
+                    task.timeLogs.forEach(log => {
+                        const start = new Date(log.start);
+                        const end = new Date(log.end);
+                        if (start < bounds.end && end > bounds.start) {
+                            activities.push({
+                                type: 'task',
+                                title: task.title,
+                                start: Math.max(start.getTime(), bounds.start.getTime()),
+                                end: Math.min(end.getTime(), bounds.end.getTime()),
+                                duration: log.duration,
+                                goalImpact: calculateGoalImpact(task.id),
+                                taskId: task.id
+                            });
+                        }
+                    });
+                }
+            });
+
+            // Habit timers
+            habits.forEach(habit => {
+                if (habit.type === 'timer' && habit.history) {
+                    for (const [dateKey, value] of Object.entries(habit.history)) {
+                        const date = new Date(dateKey);
+                        if (date >= bounds.start && date <= bounds.end && typeof value === 'number') {
+                            activities.push({
+                                type: 'habit',
+                                title: habit.title,
+                                start: date.getTime(),
+                                end: date.getTime() + value,
+                                duration: value,
+                                goalImpact: habit.goalId ? 30 : 0,
+                                habitId: habit.id
+                            });
+                        }
+                    }
+                }
+            });
+
+            // Check-ins
+            [...nodes, ...archivedNodes].forEach(task => {
+                if (task.checkIns) {
+                    task.checkIns.forEach(ts => {
+                        const date = new Date(ts);
+                        if (date >= bounds.start && date <= bounds.end) {
+                            activities.push({
+                                type: 'checkin',
+                                title: task.title + ' (Check-in)',
+                                start: ts,
+                                end: ts + (5 * 60 * 1000), // 5 min visual block
+                                duration: 0,
+                                goalImpact: calculateGoalImpact(task.id) * 0.5,
+                                taskId: task.id
+                            });
+                        }
+                    });
+                }
+            });
+
+            // Calculate stats
+            const totalTime = activities.reduce((sum, a) => sum + (a.duration || 0), 0);
+            const taskCount = new Set(activities.filter(a => a.type === 'task').map(a => a.taskId)).size;
+            const habitCount = activities.filter(a => a.type === 'habit').length;
+            const checkinCount = activities.filter(a => a.type === 'checkin').length;
+            const avgImpact = activities.length > 0 ? (activities.reduce((sum, a) => sum + a.goalImpact, 0) / activities.length) : 0;
+
+            // Group by project/goal
+            const byProject = {};
+            activities.forEach(a => {
+                const key = a.title.split(' ')[0] || 'Misc';
+                if (!byProject[key]) byProject[key] = [];
+                byProject[key].push(a);
+            });
+
+            let html = `
+                <div class="week-stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Focus Time</div>
+                        <div class="stat-value">${formatTime(totalTime)}</div>
+                        <div class="stat-subtext">${(totalTime / (1000 * 60 * 60)).toFixed(1)} hours this week</div>
+                    </div>
+                    <div class="stat-card" style="--accent: #10b981;">
+                        <div class="stat-label">Tasks Worked On</div>
+                        <div class="stat-value">${taskCount}</div>
+                        <div class="stat-subtext">${checkinCount} check-ins recorded</div>
+                    </div>
+                    <div class="stat-card" style="--accent: #fbbf24;">
+                        <div class="stat-label">Habits Completed</div>
+                        <div class="stat-value">${habitCount}</div>
+                        <div class="stat-subtext">Building consistency</div>
+                    </div>
+                    <div class="stat-card" style="--accent: #a78bfa;">
+                        <div class="stat-label">Goal Impact Score</div>
+                        <div class="stat-value">${avgImpact.toFixed(0)}</div>
+                        <div class="stat-subtext">Average alignment rating</div>
+                    </div>
+                </div>
+            `;
+
+            // Swim lanes by project
+            html += `<div class="timeline-container">
+                <div class="timeline-header">📊 Activity by Project</div>
+                <div class="timeline-grid">
+                    <div class="timeline-hour-markers">
+                        ${generateHourMarkers()}
+                    </div>
+            `;
+
+            for (const [project, acts] of Object.entries(byProject)) {
+                const projectTime = acts.reduce((sum, a) => sum + (a.duration || 0), 0);
+                const avgGoalImpact = acts.reduce((sum, a) => sum + a.goalImpact, 0) / acts.length;
+
+                html += `
+                    <div class="swim-lane">
+                        <div class="lane-label">
+                            <div class="lane-title">${project}</div>
+                            <div class="lane-subtitle">${formatTime(projectTime)} • Impact: ${avgGoalImpact.toFixed(0)}</div>
+                        </div>
+                        <div class="lane-blocks-container">
+                            ${acts.map(a => renderTimeBlock(a, bounds)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div></div>`;
+
+            // Goal-based view
+            const byGoal = {};
+            activities.forEach(a => {
+                if (a.taskId) {
+                    const task = nodes.find(n => n.id === a.taskId) || archivedNodes.find(n => n.id === a.taskId);
+                    if (task && task.goalIds && task.goalIds.length > 0) {
+                        task.goalIds.forEach(gid => {
+                            if (!byGoal[gid]) byGoal[gid] = [];
+                            byGoal[gid].push(a);
+                        });
+                    }
+                }
+            });
+
+            if (Object.keys(byGoal).length > 0) {
+                html += `<div class="timeline-container">
+                    <div class="timeline-header">🎯 Activity by Goal</div>
+                    <div class="timeline-grid">
+                        <div class="timeline-hour-markers">
+                            ${generateHourMarkers()}
+                        </div>
+                `;
+
+                for (const [goalId, acts] of Object.entries(byGoal)) {
+                    const goalName = findGoalName(goalId);
+                    const goalTime = acts.reduce((sum, a) => sum + (a.duration || 0), 0);
+
+                    html += `
+                        <div class="swim-lane">
+                            <div class="lane-label">
+                                <div class="lane-title">${goalName}</div>
+                                <div class="lane-subtitle">${formatTime(goalTime)}</div>
+                            </div>
+                            <div class="lane-blocks-container">
+                                ${acts.map(a => renderTimeBlock(a, bounds, true)).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `</div></div>`;
+            }
+
+            return html;
+        }
+
+        function renderDayProgress(bounds) {
+            const activities = [];
+
+            // Collect all activities for the day
+            [...nodes, ...archivedNodes].forEach(task => {
+                if (task.timeLogs) {
+                    task.timeLogs.forEach(log => {
+                        const start = new Date(log.start);
+                        const end = new Date(log.end);
+                        if (start < bounds.end && end > bounds.start) {
+                            activities.push({
+                                type: 'task',
+                                title: task.title,
+                                start: Math.max(start.getTime(), bounds.start.getTime()),
+                                end: Math.min(end.getTime(), bounds.end.getTime()),
+                                duration: log.duration,
+                                goalImpact: calculateGoalImpact(task.id),
+                                taskId: task.id
+                            });
+                        }
+                    });
+                }
+            });
+
+            habits.forEach(habit => {
+                if (habit.type === 'timer' && habit.history) {
+                    const dateKey = progressDate.toISOString().split('T')[0];
+                    const value = habit.history[dateKey];
+                    if (value && typeof value === 'number') {
+                        const date = new Date(dateKey);
+                        activities.push({
+                            type: 'habit',
+                            title: habit.title,
+                            start: date.getTime(),
+                            end: date.getTime() + value,
+                            duration: value,
+                            goalImpact: habit.goalId ? 30 : 0
+                        });
+                    }
+                }
+            });
+
+            // Stats
+            const totalTime = activities.reduce((sum, a) => sum + (a.duration || 0), 0);
+            const avgImpact = activities.length > 0 ? (activities.reduce((sum, a) => sum + a.goalImpact, 0) / activities.length) : 0;
+
+            let html = `
+                <div class="week-stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Focus Time Today</div>
+                        <div class="stat-value">${formatTime(totalTime)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Activities</div>
+                        <div class="stat-value">${activities.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Goal Impact</div>
+                        <div class="stat-value">${avgImpact.toFixed(0)}</div>
+                    </div>
+                </div>
+
+                <div class="timeline-container">
+                    <div class="timeline-header">📅 Today's Timeline</div>
+                    <div class="day-timeline">
+            `;
+
+            for (let hour = 0; hour < 24; hour++) {
+                html += `
+                    <div class="day-hour-row">
+                        <div class="day-hour-label">${hour}:00</div>
+                        <div class="day-events-column">
+                            ${activities.filter(a => {
+                    const startHour = new Date(a.start).getHours();
+                    return startHour === hour;
+                }).map(a => {
+                    const start = new Date(a.start);
+                    const minutes = start.getMinutes();
+                    const left = (minutes / 60) * 100;
+                    const width = Math.min((a.duration / (1000 * 60 * 60)) * 100, 100 - left);
+
+                    return `
+                                    <div class="time-block ${a.type}-block" style="left: ${left}%; width: ${width}%;">
+                                        <div class="block-title">${a.title}</div>
+                                        <div class="block-duration">${formatTime(a.duration)}</div>
+                                        ${a.goalImpact > 0 ? `<div class="goal-impact-badge">⭐ ${a.goalImpact}</div>` : ''}
+                                    </div>
+                                `;
+                }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div></div>`;
+            return html;
+        }
+
+        function renderMonthProgress(bounds) {
+            const daysInMonth = new Date(bounds.end).getDate();
+            const firstDay = new Date(bounds.start);
+            const startDayOfWeek = firstDay.getDay();
+
+            // Collect daily stats
+            const dailyStats = {};
+
+            [...nodes, ...archivedNodes].forEach(task => {
+                if (task.timeLogs) {
+                    task.timeLogs.forEach(log => {
+                        const date = new Date(log.start);
+                        if (date >= bounds.start && date <= bounds.end) {
+                            const key = date.toISOString().split('T')[0];
+                            if (!dailyStats[key]) dailyStats[key] = { time: 0, habits: 0, tasks: new Set(), impact: 0 };
+                            dailyStats[key].time += log.duration;
+                            dailyStats[key].tasks.add(task.id);
+                            dailyStats[key].impact += calculateGoalImpact(task.id);
+                        }
+                    });
+                }
+            });
+
+            habits.forEach(habit => {
+                if (habit.history) {
+                    for (const [dateKey, value] of Object.entries(habit.history)) {
+                        const date = new Date(dateKey);
+                        if (date >= bounds.start && date <= bounds.end) {
+                            if (!dailyStats[dateKey]) dailyStats[dateKey] = { time: 0, habits: 0, tasks: new Set(), impact: 0 };
+                            dailyStats[dateKey].habits += 1;
+                            if (typeof value === 'number') dailyStats[dateKey].time += value;
+                        }
+                    }
+                }
+            });
+
+            let html = '<div class="month-grid">';
+
+            // Empty cells before month starts
+            for (let i = 0; i < startDayOfWeek; i++) {
+                html += '<div class="month-day-cell dim"></div>';
+            }
+
+            // Days of month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(bounds.start);
+                date.setDate(day);
+                const key = date.toISOString().split('T')[0];
+                const stats = dailyStats[key] || { time: 0, habits: 0, tasks: new Set(), impact: 0 };
+                const hours = stats.time / (1000 * 60 * 60);
+                const avgImpact = stats.tasks.size > 0 ? (stats.impact / stats.tasks.size) : 0;
+
+                html += `
+                    <div class="month-day-cell" onclick="progressDate = new Date('${key}'); setProgressView('day');">
+                        <div class="month-day-number">${day}</div>
+                        <div class="month-day-summary">
+                            ${stats.time > 0 ? `<div class="month-activity-bar task" style="width: ${Math.min(100, hours * 10)}%"></div>` : ''}
+                            ${stats.habits > 0 ? `<div class="month-activity-bar habit"></div>` : ''}
+                        </div>
+                        ${stats.time > 0 || stats.habits > 0 ? `
+                            <div class="month-stats-text">
+                                ${hours > 0 ? hours.toFixed(1) + 'h' : ''} 
+                                ${stats.habits > 0 ? stats.habits + ' habits' : ''}
+                                ${avgImpact > 0 ? ' • ⭐' + avgImpact.toFixed(0) : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function generateHourMarkers() {
+            let html = '';
+            for (let i = 0; i < 24; i++) {
+                html += `<div class="hour-marker">${i}:00</div>`;
+            }
+            return html;
+        }
+
+        function renderTimeBlock(activity, bounds, isGoalView = false) {
+            const weekStart = bounds.start.getTime();
+            const weekDuration = bounds.end.getTime() - weekStart;
+            const blockStart = activity.start;
+            const blockEnd = activity.end;
+
+            const left = ((blockStart - weekStart) / weekDuration) * 100;
+            const width = ((blockEnd - blockStart) / weekDuration) * 100;
+
+            const className = isGoalView ? 'goal-block' : activity.type + '-block';
+
+            return `
+                <div class="time-block ${className}" style="left: ${left}%; width: ${width}%;">
+                    <div class="block-title">${activity.title}</div>
+                    <div class="block-duration">${formatTime(activity.duration || 0)}</div>
+                    ${activity.goalImpact > 0 ? `<div class="goal-impact-badge">⭐ ${activity.goalImpact}</div>` : ''}
+                </div>
+            `;
+        }
+
+        function findGoalName(goalId) {
+            const search = (list) => {
+                for (const g of list) {
+                    if (g.id === goalId) return g.text;
+                    if (g.children) {
+                        const found = search(g.children);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+            for (const year in lifeGoals) {
+                const result = search(lifeGoals[year]);
+                if (result) return result;
+            }
+            return 'Unknown Goal';
         }
 
         // --- CALENDAR LOGIC ---
