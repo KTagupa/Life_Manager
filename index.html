@@ -5791,8 +5791,8 @@
 
             for (let i = 0; i < retries; i++) {
                 try {
-                    // Around line 740 in your script
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${geminiApiKey}`, {
+                    // Corrected model name to gemini-1.5-flash
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
@@ -5810,19 +5810,27 @@
             const msg = document.createElement('div');
             msg.className = `ai-msg ${role}`;
 
-            // 1. Check for Schedule Data
+            // 1. Check for Data Tags
             let cleanText = text;
             let scheduleJson = null;
-            if (text.includes('[SCHEDULE_DATA]')) {
-                const parts = text.split('[SCHEDULE_DATA]');
+            let decompJson = null;
+
+            if (cleanText.includes('[SCHEDULE_DATA]')) {
+                const parts = cleanText.split('[SCHEDULE_DATA]');
                 const dataParts = parts[1].split('[/SCHEDULE_DATA]');
                 scheduleJson = dataParts[0].trim();
-                cleanText = parts[0] + dataParts[1]; // Remove JSON from visible text
+                cleanText = parts[0] + (dataParts[1] || "");
             }
 
-            msg.innerHTML = marked.parse(cleanText);
+            if (cleanText.includes('[DECOMPOSITION_DATA]')) {
+                const parts = cleanText.split('[DECOMPOSITION_DATA]');
+                const dataParts = parts[1].split('[/DECOMPOSITION_DATA]');
+                decompJson = dataParts[0].trim();
+                cleanText = parts[0] + (dataParts[1] || "");
+            }
 
-            // 2. If schedule found, add the "Push" button
+            msg.innerHTML = typeof marked !== 'undefined' ? marked.parse(cleanText) : cleanText;
+
             if (scheduleJson && role === 'bot') {
                 const pushBtn = document.createElement('button');
                 pushBtn.className = 'btn btn-primary';
@@ -5844,14 +5852,6 @@
                 msg.appendChild(pushBtn);
             }
 
-            // 3. Check for Decomposition Data
-            let decompJson = null;
-            if (text.includes('[DECOMPOSITION_DATA]')) {
-                const parts = text.split('[DECOMPOSITION_DATA]');
-                const dataParts = parts[1].split('[/DECOMPOSITION_DATA]');
-                decompJson = dataParts[0].trim();
-            }
-
             if (decompJson && role === 'bot') {
                 const genBtn = document.createElement('button');
                 genBtn.className = 'btn btn-primary';
@@ -5870,6 +5870,7 @@
                 msg.appendChild(genBtn);
             }
 
+            history.appendChild(msg);
             history.scrollTop = history.scrollHeight;
         }
 
