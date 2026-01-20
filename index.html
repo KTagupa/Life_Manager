@@ -5884,52 +5884,47 @@
                 return;
             }
 
+            // Add user message to chat
             addAIChatMessage(query, 'user');
             input.value = '';
-            document.getElementById('ai-loading').classList.remove('hidden');
 
-            // --- EXPANDED CONTEXT BUNDLE ---
+            // Show loading indicator
+            const loadingEl = document.getElementById('ai-loading');
+            if (loadingEl) loadingEl.classList.remove('hidden');
+
+            // Prepare context
             const appState = {
-                // Current Time Context
                 currentTime: new Date().toLocaleString(),
-
-                // Existing Schedule (so AI avoids conflicts)
                 currentAgenda: agenda.map(slot => {
                     const t = nodes.find(n => n.id === slot.taskId);
                     return { task: t ? t.title : 'Unknown', start: slot.start, end: slot.end };
                 }),
-
                 activeTasks: nodes.filter(n => !n.completed).map(n => ({
                     id: n.id,
                     title: n.title,
                     due: n.dueDate,
                     urgent: n.isManualUrgent,
                     progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : '0/0',
-                    // NEW: Give the AI awareness of what this task blocks
                     blocks: nodes.filter(other => other.dependencies.some(d => d.id === n.id)).map(other => other.title),
-                    // NEW: Give awareness of what blocks this task
                     blockedBy: n.dependencies.map(d => {
                         const dep = nodes.find(x => x.id === d.id);
                         return dep ? dep.title : 'Unknown';
                     }),
-                    // Total time spent today (if applicable)
                     timeToday: n.timeLogs ? n.timeLogs.reduce((acc, log) => {
                         const logDate = new Date(log.start).toLocaleDateString();
                         if (logDate === new Date().toLocaleDateString()) return acc + log.duration;
                         return acc;
                     }, 0) : 0
                 })),
-
                 inboxIdeas: inbox.map(i => i.title),
-                notes: notes.map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 500) })), // Increased snippet
+                notes: notes.map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 500) })),
                 goals: lifeGoals[currentGoalYear] || [],
                 habits: habits.map(h => ({ title: h.title, streak: calculateStreak(h) }))
             };
 
-            const systemPrompt = `
-        You are a strategic Project Management Assistant for "Urgency Flow," a productivity app based on a dependency graph.
+            const systemPrompt = `You are a strategic Project Management Assistant for "Urgency Flow," a productivity app based on a dependency graph.
         Your primary objective is to maximize biological ROI—ensuring the user's most difficult tasks align with their highest energy states.
-        
+
         CONTEXT DATA: ${JSON.stringify(appState)}
 
         ENERGY MANAGEMENT PRINCIPLES:
@@ -5937,26 +5932,20 @@
         2. Shallow Work (SW): Low-complexity, logistical tasks.
         3. Peak Window: The first 4 hours of the workday. Prioritize DW here.
         4. Trough Window: The mid-afternoon "Post-Lunch Dip." Prioritize SW or recovery here.
-        
+
         GOAL:
         Analyze the user's active tasks, inbox ideas, and archived history to provide strategic insights.
-        -SUMMARIZATION: Analyze Active, Inbox, Goals, and Archive. Highlight if the current workload exceeds the research-backed 4-hour Deep Work limit.
-        -ENERGY AUDITING: Tag tasks in the appState as "Deep" or "Shallow" based on their title/notes. Identify "Energy Debt" (too many Deep tasks scheduled consecutively).
-        -MOMENTUM: If an 'inboxIdea' is high-impact but low-effort (Shallow), suggest slotting it into a "Trough Window."
-        -BOTTLENECKS: Identify stalled tasks. If a task is stalled, determine if it’s because it’s being attempted during low-energy hours.
-        
+
         SCHEDULING RULES:
         1. The 90-Minute Cap: No Deep Work block can exceed 90 minutes.
         2. Use 30-90 minute blocks based on task complexity.
-        3. Recovery Logic: * After Deep Work: Mandatory 20-minute "Real Break" (no screens).
-        4. After Shallow Work: 5-10 minute "Transition Buffer" to clear Attention Residue.
-        5. Chronotype Alignment: Front-load complex dependencies to the morning. Place routine maintenance in the afternoon.
-        3. Present the schedule as a Markdown table first.
-        4. DATA INTEGRATION: For every schedule you propose, you MUST append a JSON block at the end of your response using these tags so the system can "Push" it to the Agenda:
+        3. Recovery Logic: After Deep Work: Mandatory 20-minute "Real Break" (no screens).
+        4. Present the schedule as a Markdown table first.
+        5. DATA INTEGRATION: For every schedule you propose, you MUST append a JSON block at the end of your response using these tags so the system can "Push" it to the Agenda:
            [SCHEDULE_DATA]
            [{"taskId": "task_id_here", "start": "ISO_STRING", "end": "ISO_STRING"}]
            [/SCHEDULE_DATA]
-           
+
         PROJECT DECOMPOSITION: If the user asks to break down, expand, or decompose a task/goal, provide a structured plan. 
            Present the plan as clear text first, then MUST append a JSON block:
            [DECOMPOSITION_DATA]
@@ -5969,22 +5958,34 @@
         STYLE:
         - Be concise and strategic.
         - Use **bolding** for emphasis.
-        - Use Markdown for lists and tables.
-    `;
+        - Use Markdown for lists and tables.`;
 
+            // Prepare API payload
             const payload = {
-                contents: [{ parts: [{ text: query }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] }
+                contents: [
+                    {
+                        parts: [
+                            { text: systemPrompt + "\n\nUser Query: " + query }
+                        ]
+                    }
+                ]
             };
 
             try {
                 const result = await fetchGemini(payload);
-                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "I couldn't generate a response.";
+
+                if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
+                    throw new Error("Invalid response from Gemini API");
+                }
+
+                const text = result.candidates[0].content.parts[0].text || "I couldn't generate a response.";
                 addAIChatMessage(text, 'bot');
+
             } catch (e) {
-                addAIChatMessage("Error: Could not connect to AI service. Please check your internet or try again later.", 'bot');
+                console.error("AI Error:", e);
+                addAIChatMessage("❌ Error: Could not connect to AI service. Please check your API key and internet connection.", 'bot');
             } finally {
-                document.getElementById('ai-loading').classList.add('hidden');
+                if (loadingEl) loadingEl.classList.add('hidden');
             }
         }
 
