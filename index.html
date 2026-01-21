@@ -6218,44 +6218,46 @@
             showNotification("API Key Saved");
         }
 
-        async function fetchGemini(payload, retries = 5, delay = 1000) {
+        async function fetchGemini(payload, retries = 3, delay = 1000) {
             if (!geminiApiKey) throw new Error("Missing API Key");
 
-            // Use gemini-2.0-flash which is the current reliable model for v1beta
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+            // Use gemini-1.5-flash (stable) via v1beta
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+            let lastError = null;
 
             for (let i = 0; i < retries; i++) {
                 try {
-                    const body = payload;
-
                     const response = await fetch(url, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body)
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
                     });
 
-                    // Handle success
-                    if (response.ok) return await response.json();
+                    const data = await response.json();
 
-                    // Handle specific rate limiting (429) or server errors (500)
+                    if (response.ok) return data;
+
+                    // If not OK, capture details
+                    lastError = data.error ? data.error.message : response.statusText;
+
                     if (response.status === 429 || response.status >= 500) {
-                        console.warn(`Retry ${i + 1}: Received status ${response.status}`);
+                        console.warn(`Retry ${i + 1}: ${response.status} - ${lastError}`);
                     } else {
-                        // If it's a 404 or 400, retrying won't help.
-                        const errorData = await response.json();
-                        throw new Error(`API Error ${response.status}: ${errorData.error.message}`);
+                        throw new Error(`API Error ${response.status}: ${lastError}`);
                     }
 
                 } catch (e) {
+                    lastError = e.message;
                     if (i === retries - 1) throw e;
                     console.error("Fetch attempt failed:", e.message);
                 }
 
-                // Exponential Backoff
                 await new Promise(r => setTimeout(r, delay));
                 delay *= 2;
             }
-            throw new Error("Failed to reach Gemini after maximum retries.");
+            throw new Error(`Failed to reach Gemini: ${lastError}`);
         }
 
         function addAIChatMessage(text, role) {
@@ -6349,31 +6351,23 @@
             // Prepare context
             const appState = {
                 currentTime: new Date().toLocaleString(),
-                currentAgenda: agenda.map(slot => {
+                currentAgenda: agenda.slice(0, 10).map(slot => {
                     const t = nodes.find(n => n.id === slot.taskId);
-                    return { task: t ? t.title : 'Unknown', start: slot.start, end: slot.end };
+                    return { task: t ? t.title : '...', start: slot.start, end: slot.end };
                 }),
-                activeTasks: nodes.filter(n => !n.completed).map(n => ({
+                activeTasks: nodes.filter(n => !n.completed).slice(0, 20).map(n => ({
                     id: n.id,
                     title: n.title,
                     due: n.dueDate,
-                    urgent: n.isManualUrgent,
                     progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : '0/0',
-                    blocks: nodes.filter(other => other.dependencies.some(d => d.id === n.id)).map(other => other.title),
-                    blockedBy: n.dependencies.map(d => {
+                    blockedBy: n.dependencies.slice(0, 3).map(d => {
                         const dep = nodes.find(x => x.id === d.id);
-                        return dep ? dep.title : 'Unknown';
-                    }),
-                    timeToday: n.timeLogs ? n.timeLogs.reduce((acc, log) => {
-                        const logDate = new Date(log.start).toLocaleDateString();
-                        if (logDate === new Date().toLocaleDateString()) return acc + log.duration;
-                        return acc;
-                    }, 0) : 0
+                        return dep ? dep.title : '...';
+                    })
                 })),
-                inboxIdeas: inbox.map(i => i.title),
-                notes: notes.map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 500) })),
-                goals: lifeGoals[currentGoalYear] || [],
-                habits: habits.map(h => ({ title: h.title, streak: calculateStreak(h) }))
+                inboxIdeas: inbox.slice(0, 15).map(i => i.title),
+                notes: notes.slice(0, 5).map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 200) })),
+                habits: habits.slice(0, 5).map(h => ({ title: h.title }))
             };
 
             const systemPrompt = `You are a strategic Project Management Assistant for "Urgency Flow," a productivity app based on a dependency graph.
