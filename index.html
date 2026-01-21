@@ -4946,8 +4946,12 @@
             <button class="btn" onclick="toggleAgenda()">✕</button>
         </div>
         <div style="padding: 15px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border);">
-            <div style="font-size: 11px; color: #888; margin-bottom: 10px;">
-                Plan for: <span id="agenda-date-display"></span>
+            <div
+                style="font-size: 11px; color: #888; margin-bottom: 10px; display: flex; justify-content: space-between;">
+                <span>Plan for: <span id="agenda-date-display"></span></span>
+                <button class="btn" onclick="clearCompletedAgendaSlots()"
+                    style="background:none; border:none; padding:0; color:var(--accent); font-size:10px;">Clear
+                    Done</button>
             </div>
             <button class="btn btn-primary" style="width: 100%;" onclick="addQuickSlot()">+ Block Current Task
                 (30m)</button>
@@ -11217,31 +11221,65 @@
                 container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No agenda set.</div>';
                 return;
             }
+
+            // Sort by start time
             agenda.sort((a, b) => new Date(a.start) - new Date(b.start));
+
             const now = Date.now();
             agenda.forEach((slot, index) => {
                 let task = nodes.find(n => n.id === slot.taskId) || archivedNodes.find(n => n.id === slot.taskId);
-                if (!task && slot.taskId.startsWith('inbox_temp_')) {
-                    const inboxItem = inbox.find(item => slot.taskId.includes(item.id.split('_')[1]));
+                let isDeleted = false;
+                let isInbox = false;
+
+                if (!task && slot.taskId && slot.taskId.startsWith('inbox_temp_')) {
+                    const originalInboxId = slot.taskId.replace('inbox_temp_', 'inbox_');
+                    const inboxItem = inbox.find(item => item.id === originalInboxId);
                     if (inboxItem) {
                         task = { id: slot.taskId, title: inboxItem.title + ' (Inbox)', isInboxItem: true };
+                        isInbox = true;
                     }
                 }
+
+                if (!task) isDeleted = true;
+
                 const isCurrent = now >= new Date(slot.start).getTime() && now <= new Date(slot.end).getTime();
+                const isDone = task && task.completed;
+
                 const el = document.createElement('div');
-                el.className = `agenda-slot ${isCurrent ? 'current' : ''}`;
+                el.className = `agenda-slot ${isCurrent ? 'current' : ''} ${isDone ? 'done' : ''}`;
+                if (isDeleted) el.style.opacity = '0.5';
+
                 el.innerHTML = `
-                <div class="agenda-time">${new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<br>${new Date(slot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="agenda-time" style="${isDone ? 'text-decoration: line-through;' : ''}">
+                    ${new Date(slot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<br>
+                    ${new Date(slot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
                 <div class="agenda-info">
-                    <div class="agenda-task-title">${task ? task.title : 'Deleted Task'}</div>
+                    <div class="agenda-task-title" style="${isDone ? 'text-decoration: line-through; color: var(--ready-color);' : ''}">
+                        ${isDone ? '✅ ' : ''}${task ? task.title : 'Deleted Task'}
+                    </div>
                     <div class="agenda-actions">
-                        <button class="btn" style="padding:2px 5px; font-size:10px" onclick="jumpToTask('${slot.taskId}')">🎯 View</button>
+                        ${!isDeleted ? `<button class="btn" style="padding:2px 5px; font-size:10px" onclick="jumpToTask('${slot.taskId}')">🎯 View</button>` : ''}
                         <button class="btn btn-danger" style="padding:2px 5px; font-size:10px" onclick="deleteAgendaSlot(${index})">✕</button>
                     </div>
                 </div>
             `;
                 container.appendChild(el);
             });
+        }
+
+        function clearCompletedAgendaSlots() {
+            const initialCount = agenda.length;
+            agenda = agenda.filter(slot => {
+                const task = nodes.find(n => n.id === slot.taskId) || archivedNodes.find(n => n.id === slot.taskId);
+                // Keep if task not found (deleted) or task not completed
+                return !task || !task.completed;
+            });
+            if (agenda.length < initialCount) {
+                showNotification(`Cleared ${initialCount - agenda.length} items`);
+                renderAgenda();
+                saveToStorage();
+            }
         }
 
         function addQuickSlot() {
