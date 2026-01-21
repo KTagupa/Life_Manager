@@ -6356,11 +6356,12 @@
             const appState = {
                 currentTime: new Date().toLocaleString(),
                 ecoMode: ecoModeLevel === 0 ? "Turbo" : (ecoModeLevel === 1 ? "Eco" : "Ultra Eco"),
-                currentAgenda: agenda.slice(0, 10).map(slot => {
+                currentAgenda: agenda.slice(0, 15).map(slot => {
                     const t = nodes.find(n => n.id === slot.taskId) || archivedNodes.find(n => n.id === slot.taskId);
-                    return { task: t ? t.title : '...', start: slot.start, end: slot.end };
+                    return { taskId: slot.taskId, task: t ? t.title : (slot.title || 'Unknown'), start: slot.start, end: slot.end };
                 }),
-                activeTasks: nodes.filter(n => !n.completed).slice(0, 25).map(n => ({
+                activeTasks: nodes.filter(n => !n.completed).slice(0, 30).map(n => ({
+                    id: n.id,
                     title: n.title,
                     due: n.dueDate,
                     isUrgent: n.isManualUrgent,
@@ -6372,8 +6373,9 @@
                     checkInsToday: n.checkIns ? n.checkIns.filter(c => new Date(c.date).toLocaleDateString() === new Date().toLocaleDateString()).length : 0
                 })),
                 lastCompletedTasks: archivedNodes.slice(-10).map(n => ({ title: n.title, date: new Date(n.completedDate).toLocaleDateString() })),
-                inboxIdeas: inbox.slice(0, 15).map(i => i.title),
-                habits: habits.slice(0, 10).map(h => ({ title: h.title, streak: calculateStreak(h) }))
+                inboxIdeas: inbox.slice(0, 20).map(i => ({ id: i.id, title: i.title })),
+                habits: habits.slice(0, 10).map(h => ({ title: h.title, streak: calculateStreak(h) })),
+                selectedNodeId: selectedNodeId
             };
 
             const systemPrompt = `You are a strategic Project Management Assistant for "Urgency Flow," a productivity app based on a dependency graph.
@@ -6396,8 +6398,10 @@
         3. Recovery Logic: After Deep Work: Mandatory 20-minute "Real Break" (no screens).
         4. Present the schedule as a Markdown table first.
         5. DATA INTEGRATION: For every schedule you propose, you MUST append a JSON block at the end of your response using these tags so the system can "Push" it to the Agenda:
+           - For existing tasks, use their exact "id" for "taskId".
+           - For breaks or items not in context, use a descriptive string for "taskId" and set "title".
            [SCHEDULE_DATA]
-           [{"taskId": "task_id_here", "start": "ISO_STRING", "end": "ISO_STRING"}]
+           [{"taskId": "task_id_here", "title": "Task Name", "start": "ISO_STRING", "end": "ISO_STRING"}]
            [/SCHEDULE_DATA]
 
         PROJECT DECOMPOSITION: If the user asks to break down, expand, or decompose a task/goal, provide a structured plan. 
@@ -9944,19 +9948,40 @@
 
             // Habit timers
             habits.forEach(habit => {
-                if (habit.type === 'timer' && habit.history) {
-                    for (const [dateKey, value] of Object.entries(habit.history)) {
-                        const date = new Date(dateKey);
-                        if (date >= bounds.start && date <= bounds.end && typeof value === 'number') {
-                            activities.push({
-                                type: 'habit',
-                                title: habit.title,
-                                start: date.getTime(),
-                                end: date.getTime() + value,
-                                duration: value,
-                                goalImpact: habit.goalId ? 30 : 0,
-                                habitId: habit.id
-                            });
+                if (habit.type === 'timer') {
+                    // Use granular logs if available
+                    if (habit.timeLogs) {
+                        habit.timeLogs.forEach(log => {
+                            const start = new Date(log.start);
+                            const end = new Date(log.end);
+                            if (start < bounds.end && end > bounds.start) {
+                                activities.push({
+                                    type: 'habit',
+                                    title: habit.title,
+                                    start: Math.max(start.getTime(), bounds.start.getTime()),
+                                    end: Math.min(end.getTime(), bounds.end.getTime()),
+                                    duration: log.duration,
+                                    goalImpact: habit.goalId ? 30 : 0,
+                                    habitId: habit.id
+                                });
+                            }
+                        });
+                    } else if (habit.history) {
+                        // Fallback to day-wise sum (legacy)
+                        for (const [dateKey, value] of Object.entries(habit.history)) {
+                            const [y, m, d_] = dateKey.split('-').map(Number);
+                            const date = new Date(y, m - 1, d_);
+                            if (date >= bounds.start && date <= bounds.end && typeof value === 'number') {
+                                activities.push({
+                                    type: 'habit',
+                                    title: habit.title,
+                                    start: date.getTime(),
+                                    end: date.getTime() + value,
+                                    duration: value,
+                                    goalImpact: habit.goalId ? 30 : 0,
+                                    habitId: habit.id
+                                });
+                            }
                         }
                     }
                 }
@@ -10121,19 +10146,37 @@
             });
 
             habits.forEach(habit => {
-                if (habit.type === 'timer' && habit.history) {
-                    const dateKey = progressDate.toISOString().split('T')[0];
-                    const value = habit.history[dateKey];
-                    if (value && typeof value === 'number') {
-                        const date = new Date(dateKey);
-                        activities.push({
-                            type: 'habit',
-                            title: habit.title,
-                            start: date.getTime(),
-                            end: date.getTime() + value,
-                            duration: value,
-                            goalImpact: habit.goalId ? 30 : 0
+                if (habit.type === 'timer') {
+                    if (habit.timeLogs) {
+                        habit.timeLogs.forEach(log => {
+                            const start = new Date(log.start);
+                            const end = new Date(log.end);
+                            if (start < bounds.end && end > bounds.start) {
+                                activities.push({
+                                    type: 'habit',
+                                    title: habit.title,
+                                    start: Math.max(start.getTime(), bounds.start.getTime()),
+                                    end: Math.min(end.getTime(), bounds.end.getTime()),
+                                    duration: log.duration,
+                                    goalImpact: habit.goalId ? 30 : 0
+                                });
+                            }
                         });
+                    } else if (habit.history) {
+                        const dateKey = getHabitDateKey(0); // Today local
+                        const value = habit.history[dateKey];
+                        if (value && typeof value === 'number') {
+                            const [y, m, d_] = dateKey.split('-').map(Number);
+                            const date = new Date(y, m - 1, d_);
+                            activities.push({
+                                type: 'habit',
+                                title: habit.title,
+                                start: date.getTime(),
+                                end: date.getTime() + value,
+                                duration: value,
+                                goalImpact: habit.goalId ? 30 : 0
+                            });
+                        }
                     }
                 }
             });
@@ -10207,7 +10250,7 @@
                     task.timeLogs.forEach(log => {
                         const date = new Date(log.start);
                         if (date >= bounds.start && date <= bounds.end) {
-                            const key = date.toISOString().split('T')[0];
+                            const key = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
                             if (!dailyStats[key]) dailyStats[key] = { time: 0, habits: 0, tasks: new Set(), impact: 0 };
                             dailyStats[key].time += log.duration;
                             dailyStats[key].tasks.add(task.id);
@@ -10220,7 +10263,8 @@
             habits.forEach(habit => {
                 if (habit.history) {
                     for (const [dateKey, value] of Object.entries(habit.history)) {
-                        const date = new Date(dateKey);
+                        const [y, m, d_] = dateKey.split('-').map(Number);
+                        const date = new Date(y, m - 1, d_);
                         if (date >= bounds.start && date <= bounds.end) {
                             if (!dailyStats[dateKey]) dailyStats[dateKey] = { time: 0, habits: 0, tasks: new Set(), impact: 0 };
                             dailyStats[dateKey].habits += 1;
@@ -10241,7 +10285,7 @@
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(bounds.start);
                 date.setDate(day);
-                const key = date.toISOString().split('T')[0];
+                const key = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
                 const stats = dailyStats[key] || { time: 0, habits: 0, tasks: new Set(), impact: 0 };
                 const hours = stats.time / (1000 * 60 * 60);
                 const avgImpact = stats.tasks.size > 0 ? (stats.impact / stats.tasks.size) : 0;
@@ -11240,7 +11284,12 @@
                     }
                 }
 
-                if (!task) isDeleted = true;
+                // AI sometimes provides a title or uses the taskId as a title for breaks
+                if (!task) {
+                    const displayTitle = slot.title || (slot.taskId && slot.taskId.length > 15 ? "Untitled Task" : slot.taskId) || "Deleted Task";
+                    task = { title: displayTitle, phantom: true };
+                    isDeleted = false; // It's not "deleted", it's just a placeholder or non-node item
+                }
 
                 const isCurrent = now >= new Date(slot.start).getTime() && now <= new Date(slot.end).getTime();
                 const isDone = task && task.completed;
@@ -11256,10 +11305,10 @@
                 </div>
                 <div class="agenda-info">
                     <div class="agenda-task-title" style="${isDone ? 'text-decoration: line-through; color: var(--ready-color);' : ''}">
-                        ${isDone ? '✅ ' : ''}${task ? task.title : 'Deleted Task'}
+                        ${isDone ? '✅ ' : ''}${task.title}
                     </div>
                     <div class="agenda-actions">
-                        ${!isDeleted ? `<button class="btn" style="padding:2px 5px; font-size:10px" onclick="jumpToTask('${slot.taskId}')">🎯 View</button>` : ''}
+                        ${(!isDeleted && !task.phantom) ? `<button class="btn" style="padding:2px 5px; font-size:10px" onclick="jumpToTask('${slot.taskId}')">🎯 View</button>` : ''}
                         <button class="btn btn-danger" style="padding:2px 5px; font-size:10px" onclick="deleteAgendaSlot(${index})">✕</button>
                     </div>
                 </div>
@@ -11283,10 +11332,19 @@
         }
 
         function addQuickSlot() {
-            if (!selectedNodeId) { alert("Select a task first."); return; }
+            let tid = selectedNodeId;
+            // Fallback 1: selectedIds
+            if (!tid && selectedIds.size > 0) tid = Array.from(selectedIds)[0];
+            // Fallback 2: Focus HUD (Current Task)
+            if (!tid) {
+                const hud = document.getElementById('focus-hud');
+                if (hud) tid = hud.dataset.doingTaskId || hud.dataset.shouldTaskId || hud.dataset.upcomingTaskId;
+            }
+
+            if (!tid) { alert("Select a task first or refer to the Focus HUD."); return; }
             const now = new Date();
             agenda.push({
-                taskId: selectedNodeId,
+                taskId: tid,
                 start: now.toISOString(),
                 end: new Date(now.getTime() + 30 * 60000).toISOString()
             });
@@ -11562,8 +11620,14 @@
             if (!habit) return;
             const key = getHabitDateKey(0);
             if (habit.activeTimerStart) {
-                const duration = Date.now() - habit.activeTimerStart;
+                const now = Date.now();
+                const duration = now - habit.activeTimerStart;
                 habit.history[key] = (habit.history[key] || 0) + duration;
+
+                // Track granular logs for accurate timeline rendering
+                if (!habit.timeLogs) habit.timeLogs = [];
+                habit.timeLogs.push({ start: habit.activeTimerStart, end: now, duration: duration });
+
                 habit.activeTimerStart = null;
                 playAudioFeedback('timer-stop'); // <--- SOUND
             } else {
