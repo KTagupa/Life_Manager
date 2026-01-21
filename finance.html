@@ -275,6 +275,25 @@
                     </div>
                 </div>
 
+                <!-- Money Lent Section (Receivables) -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-emerald-100 text-emerald-600 p-1.5 rounded-lg">
+                                <i data-lucide="hand-coins" class="w-4 h-4"></i>
+                            </div>
+                            <h2 class="font-bold text-slate-800">Money Lent</h2>
+                        </div>
+                        <button onclick="toggleModal('lent-modal')"
+                            class="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full transition-colors">
+                            + Track Person
+                        </button>
+                    </div>
+                    <div id="lent-list" class="space-y-4">
+                        <div class="text-center text-xs text-slate-400 py-2">No money lent out.</div>
+                    </div>
+                </div>
+
                 <!-- Bills Section -->
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
                     <div class="flex justify-between items-center mb-4">
@@ -369,7 +388,7 @@
     <!-- Modal: Add/Edit Debt -->
     <div id="debt-modal"
         class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+        <div class="bg-white rounded-3xl p-8 max-md w-full shadow-2xl">
             <div class="flex items-center gap-3 mb-6">
                 <div class="bg-rose-100 p-2 rounded-xl text-rose-600">
                     <i data-lucide="credit-card" class="w-6 h-6"></i>
@@ -391,6 +410,34 @@
                     <button onclick="saveDebt()"
                         class="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-200">Track
                         Debt</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Lent Person -->
+    <div id="lent-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-emerald-100 p-2 rounded-xl text-emerald-600">
+                    <i data-lucide="user-plus" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-slate-800">Track Money Lent</h3>
+            </div>
+            <p class="text-sm text-slate-500 mb-6">Enter the name of the person. A category will be created. Expenses in
+                this category count as lending, Income counts as repayment.</p>
+
+            <div class="space-y-4">
+                <input type="text" id="l-name" placeholder="Person's Name (e.g. John)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500">
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="toggleModal('lent-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="saveLent()"
+                        class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Start
+                        Tracking</button>
                 </div>
             </div>
         </div>
@@ -785,6 +832,7 @@
         let rawTransactions = [];
         let rawBills = [];
         let rawDebts = [];
+        let rawLent = [];
         let rawCrypto = [];
         let cryptoPrices = {}; // { 'bitcoin': { price: 5000000, updated: 123456789 } }
         let budgets = {};
@@ -822,7 +870,7 @@
 
                     if (doc.exists) {
                         console.log('✅ Loaded from Firebase');
-                        return doc.data().vaultData || { transactions: [], bills: [], debts: [], crypto: [], crypto_prices: {}, budgets: { data: null }, custom_categories: [] };
+                        return doc.data().vaultData || { transactions: [], bills: [], debts: [], lent: [], crypto: [], crypto_prices: {}, budgets: { data: null }, custom_categories: [] };
                     }
                 }
             } catch (error) {
@@ -831,7 +879,7 @@
 
             // Fallback to localStorage
             const str = localStorage.getItem(DB_KEY);
-            return str ? JSON.parse(str) : { transactions: [], bills: [], debts: [], crypto: [], crypto_prices: {}, budgets: { data: null }, custom_categories: [] };
+            return str ? JSON.parse(str) : { transactions: [], bills: [], debts: [], lent: [], crypto: [], crypto_prices: {}, budgets: { data: null }, custom_categories: [] };
         }
 
         async function saveDB(db) {
@@ -948,6 +996,9 @@
 
             rawDebts = db.debts || [];
             await renderDebts(rawDebts);
+
+            rawLent = db.lent || [];
+            await renderLent(rawLent);
 
             // Crypto Loading
             rawCrypto = db.crypto || [];
@@ -1493,25 +1544,85 @@
                     .filter(t => t.type === 'expense' && t.category === d.name)
                     .reduce((acc, curr) => acc + curr.amt, 0);
 
-                const pct = Math.min((paid / d.amount) * 100, 100);
-                const remaining = Math.max(d.amount - paid, 0);
+                const percentage = Math.min(100, Math.round((paid / d.amount) * 100));
+                const remaining = Math.max(0, d.amount - paid);
+
+                if (remaining <= 0.01) return; // Hide completed debts
 
                 const div = document.createElement('div');
-                div.className = "bg-slate-50 p-3 rounded-2xl border border-slate-100";
+                div.className = "group relative";
                 div.innerHTML = `
-                    <div class="flex justify-between items-center mb-2">
-                        <h4 class="font-bold text-slate-700 text-sm">${d.name}</h4>
-                        <button onclick="deleteItem('debts', '${d.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="x" class="w-3 h-3"></i></button>
+                    <div class="flex justify-between items-end mb-1">
+                        <div>
+                            <p class="text-sm font-bold text-slate-700">${d.name}</p>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                Paid: ${fmt(paid)} / ${fmt(d.amount)}
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                             <span class="text-xs font-black text-rose-600">${percentage}%</span>
+                             <button onclick="deleteItem('debts', '${d.id}')" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
+                                <i data-lucide="trash-2" class="w-3 h-3"></i>
+                             </button>
+                        </div>
                     </div>
-                    <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
-                        <span>Paid: ${fmt(paid)}</span>
-                        <span>Goal: ${fmt(d.amount)}</span>
+                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-rose-500 rounded-full" style="width: ${percentage}%"></div>
                     </div>
-                    <div class="w-full h-2 bg-white border border-slate-200 rounded-full overflow-hidden mb-1">
-                         <div class="h-full bg-rose-500 transition-all duration-1000" style="width: ${pct}%"></div>
-                    </div>
-                    <div class="text-right text-xs font-bold text-slate-800">
-                        ${fmt(remaining)} left
+                    <p class="text-[10px] text-slate-400 mt-1 italic text-right">${fmt(remaining)} left</p>
+                `;
+                list.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        async function renderLent(items) {
+            const list = document.getElementById('lent-list');
+            list.innerHTML = '';
+
+            const decryptedLent = (await Promise.all(items.map(async i => {
+                const d = await decryptData(i.data);
+                return d ? { ...d, id: i.id } : null;
+            }))).filter(x => x);
+
+            window.allDecryptedLent = decryptedLent;
+
+            if (decryptedLent.length === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No money lent out.</div>';
+                return;
+            }
+
+            const allTrans = window.allDecryptedTransactions || [];
+
+            decryptedLent.forEach(l => {
+                // Balance = Expenses (lent) - Income (repaid)
+                const expenses = allTrans
+                    .filter(t => t.type === 'expense' && t.category === `Lent: ${l.name}`)
+                    .reduce((acc, curr) => acc + curr.amt, 0);
+
+                const income = allTrans
+                    .filter(t => t.type === 'income' && t.category === `Lent: ${l.name}`)
+                    .reduce((acc, curr) => acc + curr.amt, 0);
+
+                const balance = expenses - income;
+
+                const div = document.createElement('div');
+                div.className = "group relative bg-slate-50 p-3 rounded-2xl border border-slate-100";
+                div.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-sm font-bold text-slate-700">${l.name}</p>
+                            <p class="text-[10px] text-slate-400 font-bold">Total Lent: ${fmt(expenses)} | Repaid: ${fmt(income)}</p>
+                        </div>
+                        <div class="text-right flex items-center gap-3">
+                            <div>
+                                <p class="text-xs font-bold text-slate-400 uppercase">Balance</p>
+                                <p class="font-black ${balance > 0 ? 'text-emerald-600' : 'text-slate-400'}">${fmt(balance)}</p>
+                            </div>
+                            <button onclick="deleteItem('lent', '${l.id}')" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
                     </div>
                 `;
                 list.appendChild(div);
@@ -1604,6 +1715,19 @@
                     const op = document.createElement('option');
                     op.value = d.name; // Important: Value matches Debt name
                     op.innerText = `🏦 Pay: ${d.name}`;
+                    group.appendChild(op);
+                });
+                selectEl.appendChild(group);
+            }
+
+            // 4. Lent Categories
+            if (window.allDecryptedLent && window.allDecryptedLent.length > 0) {
+                const group = document.createElement('optgroup');
+                group.label = "Money Lent (to others)";
+                window.allDecryptedLent.forEach(l => {
+                    const op = document.createElement('option');
+                    op.value = `Lent: ${l.name}`;
+                    op.innerText = `🤝 Lent: ${l.name}`;
                     group.appendChild(op);
                 });
                 selectEl.appendChild(group);
@@ -1931,6 +2055,25 @@
             populateBudgetInputs();
         }
 
+        async function saveLent() {
+            const name = document.getElementById('l-name').value;
+            if (!name) return;
+
+            const encrypted = await encryptData({ name });
+            const db = await getDB();
+            db.lent = db.lent || [];
+            db.lent.push({
+                id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                data: encrypted
+            });
+            await saveDB(db);
+
+            rawLent = db.lent;
+            toggleModal('lent-modal');
+            renderLent(rawLent);
+            populateCategorySelect(document.getElementById('t-category'));
+        }
+
         async function saveBudgets() {
             const inputs = document.querySelectorAll('.budget-input');
             const newBudgets = {};
@@ -1972,6 +2115,11 @@
                 await saveDB(db);
                 renderDebts(rawDebts);
                 populateBudgetInputs();
+            } else if (col === 'lent') {
+                db.lent = db.lent.filter(l => l.id !== id);
+                rawLent = db.lent;
+                await saveDB(db);
+                renderLent(rawLent);
             } else if (col === 'crypto') {
                 db.crypto = db.crypto.filter(c => c.id !== id);
                 rawCrypto = db.crypto;
@@ -1998,6 +2146,7 @@
             loadAndRender();
             renderBills(rawBills);
             renderDebts(rawDebts);
+            renderLent(rawLent);
             renderCryptoWidget(); // Update crypto summary
             if (!document.getElementById('crypto-portfolio-modal').classList.contains('hidden')) {
                 renderCryptoPortfolio();
