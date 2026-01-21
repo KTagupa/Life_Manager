@@ -542,15 +542,26 @@
                             class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
                     </div>
                     <div>
-                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Price per Token (₱)</label>
-                        <input type="number" step="any" id="c-price" placeholder="0.00" oninput="calcCryptoTotal()"
-                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Price per Token</label>
+                        <div class="flex gap-1">
+                            <input type="number" step="any" id="c-price" placeholder="0.00" oninput="calcCryptoTotal()"
+                                class="flex-1 p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                            <select id="c-currency" onchange="calcCryptoTotal()"
+                                class="p-3 bg-slate-50 border rounded-xl outline-none font-bold text-slate-600 text-xs w-20">
+                                <option value="PHP">PHP</option>
+                                <option value="USD">USD</option>
+                                <option value="JPY">JPY</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
                 <div class="bg-indigo-50 p-3 rounded-xl flex justify-between items-center">
                     <span class="text-xs font-bold text-indigo-400">Total Value</span>
-                    <span class="text-lg font-bold text-indigo-700" id="c-total-calc">₱0.00</span>
+                    <div class="text-right">
+                        <span class="text-lg font-bold text-indigo-700 block" id="c-total-calc">₱0.00</span>
+                        <span class="text-[10px] text-indigo-400 font-bold" id="c-total-base-preview"></span>
+                    </div>
                 </div>
 
                 <input type="text" id="c-notes" placeholder="Notes (Exchange, etc.)"
@@ -1027,7 +1038,17 @@
         function calcCryptoTotal() {
             const amt = parseFloat(document.getElementById('c-amount').value) || 0;
             const prc = parseFloat(document.getElementById('c-price').value) || 0;
-            document.getElementById('c-total-calc').innerText = fmt(amt * prc);
+            const cur = document.getElementById('c-currency').value;
+
+            const total = amt * prc;
+            document.getElementById('c-total-calc').innerText = formatCurrency(total, cur);
+
+            if (cur !== 'PHP') {
+                const phpVal = convertToDisplayCurrency(total, cur, 'PHP');
+                document.getElementById('c-total-base-preview').innerText = `≈ ${formatCurrency(phpVal, 'PHP')}`;
+            } else {
+                document.getElementById('c-total-base-preview').innerText = '';
+            }
         }
 
         async function saveCryptoTransaction() {
@@ -1039,9 +1060,15 @@
             const notes = document.getElementById('c-notes').value;
             const dateVal = document.getElementById('c-date').value;
 
+            const currency = document.getElementById('c-currency').value;
+
             if (!tokenId || !amount || !price) { alert("Please fill details"); return; }
 
             const date = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
+
+            // Convert to PHP for base storage consistency
+            const phpPrice = convertToDisplayCurrency(price, currency, 'PHP');
+            const phpTotal = amount * phpPrice;
 
             // Store transaction
             const txData = {
@@ -1049,7 +1076,10 @@
                 symbol: tokenSymbol || tokenId,
                 amount,
                 price,
-                total: amount * price,
+                currency,
+                phpPrice,
+                phpTotal,
+                total: phpTotal, // Maintain compatibility with existing logic which uses .total as PHP
                 type,
                 notes,
                 date: date
@@ -1130,7 +1160,7 @@
 
             try {
                 // Using PHP as base currency since app is PHP-centric
-                const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=php`);
+                const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=php,usd,jpy`);
                 if (!res.ok) throw new Error("API Limit or Error");
                 const data = await res.json();
 
@@ -1138,7 +1168,13 @@
                 const db = await getDB();
                 const now = Date.now();
                 Object.keys(data).forEach(id => {
-                    db.crypto_prices[id] = { price: data[id].php, updated: now };
+                    db.crypto_prices[id] = {
+                        php: data[id].php,
+                        usd: data[id].usd,
+                        jpy: data[id].jpy,
+                        price: data[id].php, // Backward compatibility
+                        updated: now
+                    };
                 });
                 await saveDB(db);
                 cryptoPrices = db.crypto_prices;
@@ -1246,14 +1282,14 @@
                              </div>
                              <div>
                                  <p class="text-sm font-bold text-slate-300">${isBuy ? 'Bought' : 'Sold'} ${tx.symbol.toUpperCase()}</p>
-                                 <p class="text-[10px] text-slate-500">${new Date(tx.date).toLocaleDateString()} • ${fmt(tx.price)}/token</p>
+                                 <p class="text-[10px] text-slate-500">${new Date(tx.date).toLocaleDateString()} • ${formatCurrency(tx.price, tx.currency || 'PHP')}/token</p>
                              </div>
                         </div>
-                        <div class="flex items-center gap-3">
-                             <div class="text-right">
-                                 <p class="text-sm font-bold text-slate-300">${fmt(tx.total)}</p>
-                                 <p class="text-[10px] text-slate-500">${tx.amount} tokens</p>
-                             </div>
+                         <div class="flex items-center gap-3">
+                              <div class="text-right">
+                                  <p class="text-sm font-bold text-slate-300">${formatCurrency(tx.price * tx.amount, tx.currency || 'PHP')}</p>
+                                  <p class="text-[10px] text-slate-500">${tx.amount} tokens</p>
+                              </div>
                              <button onclick="deleteItem('crypto', '${tx.id}')" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                              </button>
