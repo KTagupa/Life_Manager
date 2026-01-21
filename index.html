@@ -6221,8 +6221,8 @@
         async function fetchGemini(payload, retries = 5, delay = 1000) {
             if (!geminiApiKey) throw new Error("Missing API Key");
 
-            // Use gemini-1.5-flash for reliability and speed
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+            // Use gemini-2.0-flash which is the current reliable model for v1beta
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
 
             for (let i = 0; i < retries; i++) {
                 try {
