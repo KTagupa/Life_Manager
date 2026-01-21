@@ -6221,8 +6221,8 @@
         async function fetchGemini(payload, retries = 3, delay = 1000) {
             if (!geminiApiKey) throw new Error("Missing API Key");
 
-            // Use gemini-1.5-flash (stable) via v1beta
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+            // Use the stable v1 API for gemini-1.5-flash
+            const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
             let lastError = null;
 
             for (let i = 0; i < retries; i++) {
@@ -6351,23 +6351,25 @@
             // Prepare context
             const appState = {
                 currentTime: new Date().toLocaleString(),
+                ecoMode: ecoModeLevel === 0 ? "Turbo" : (ecoModeLevel === 1 ? "Eco" : "Ultra Eco"),
                 currentAgenda: agenda.slice(0, 10).map(slot => {
-                    const t = nodes.find(n => n.id === slot.taskId);
+                    const t = nodes.find(n => n.id === slot.taskId) || archivedNodes.find(n => n.id === slot.taskId);
                     return { task: t ? t.title : '...', start: slot.start, end: slot.end };
                 }),
-                activeTasks: nodes.filter(n => !n.completed).slice(0, 20).map(n => ({
-                    id: n.id,
+                activeTasks: nodes.filter(n => !n.completed).slice(0, 25).map(n => ({
                     title: n.title,
                     due: n.dueDate,
-                    progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : '0/0',
+                    isUrgent: n.isManualUrgent,
+                    progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : 'no subtasks',
                     blockedBy: n.dependencies.slice(0, 3).map(d => {
                         const dep = nodes.find(x => x.id === d.id);
                         return dep ? dep.title : '...';
-                    })
+                    }),
+                    checkInsToday: n.checkIns ? n.checkIns.filter(c => new Date(c.date).toLocaleDateString() === new Date().toLocaleDateString()).length : 0
                 })),
+                lastCompletedTasks: archivedNodes.slice(-10).map(n => ({ title: n.title, date: new Date(n.completedDate).toLocaleDateString() })),
                 inboxIdeas: inbox.slice(0, 15).map(i => i.title),
-                notes: notes.slice(0, 5).map(n => ({ title: n.title, bodySnippet: n.body.substring(0, 200) })),
-                habits: habits.slice(0, 5).map(h => ({ title: h.title }))
+                habits: habits.slice(0, 10).map(h => ({ title: h.title, streak: calculateStreak(h) }))
             };
 
             const systemPrompt = `You are a strategic Project Management Assistant for "Urgency Flow," a productivity app based on a dependency graph.
