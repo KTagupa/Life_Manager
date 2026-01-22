@@ -1530,6 +1530,7 @@
 
             // Store cleanly for usage
             window.allDecryptedTransactions = decrypted;
+            updateItemsCount();
             applyFilters();
         }
 
@@ -1549,6 +1550,7 @@
             renderTransactions(filtered);
             updateChart(filtered);
             renderBudgets(filtered);
+            updateItemsCount();
         }
 
         function resetFilters() {
@@ -1604,7 +1606,10 @@
                         </div>
                         <div>
                             <p class="font-bold text-slate-800">${i.desc} ${currencyBadge}</p>
-                            <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${new Date(i.date).toLocaleDateString()} • ${i.category}</p>
+                            <div class="flex items-center gap-2">
+                                <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${new Date(i.date).toLocaleDateString()} • ${i.category}</p>
+                                ${i.item ? `<span class="text-[9px] bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">📦 ${i.item}</span>` : ''}
+                            </div>
                         </div>
                     </div>
                     <div class="flex items-center gap-4">
