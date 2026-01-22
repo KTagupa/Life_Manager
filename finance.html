@@ -176,13 +176,9 @@
                 <p class="text-slate-400 text-sm font-medium mb-1">Monthly Expenses</p>
                 <h3 class="text-2xl font-bold text-rose-600" id="expense-display">₱0.00</h3>
             </div>
-            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover cursor-pointer"
-                onclick="openItemExplorer()">
-                <p class="text-slate-400 text-sm font-medium mb-1">Items Tracked</p>
-                <h3 class="text-2xl font-bold text-indigo-600 flex items-center gap-2">
-                    <i data-lucide="package" class="w-5 h-5"></i>
-                    <span id="items-count-display">0</span>
-                </h3>
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
+                <p class="text-slate-400 text-sm font-medium mb-1">Savings Rate</p>
+                <h3 class="text-2xl font-bold text-slate-800" id="savings-rate-display">0%</h3>
             </div>
         </div>
 
@@ -350,18 +346,8 @@
                         class="py-2 rounded-xl font-bold text-slate-400">Income</button>
                     <input type="hidden" id="t-type" value="expense">
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <input type="text" id="t-desc" placeholder="Desc (e.g. Weekly Groceries)"
-                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 text-sm">
-                    <div class="relative">
-                        <input type="text" id="t-item" placeholder="Specific Item (e.g. Milk)"
-                            class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 text-sm"
-                            oninput="showItemSuggestions()">
-                        <div id="item-suggestions"
-                            class="hidden absolute top-full left-0 right-0 bg-white border shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto z-[120] custom-scrollbar">
-                        </div>
-                    </div>
-                </div>
+                <input type="text" id="t-desc" placeholder="Description (e.g. Lunch)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
                 <div>
                     <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Amount</label>
                     <div class="flex gap-2">
@@ -816,88 +802,6 @@
         </div>
     </div>
 
-    <!-- Modal: Item Explorer -->
-    <div id="item-explorer-modal"
-        class="fixed inset-0 z-[120] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
-        <div
-            class="bg-white border border-slate-200 rounded-3xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh]">
-            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-                <div>
-                    <h2 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <i data-lucide="package" class="text-indigo-600"></i> Item Explorer
-                    </h2>
-                    <p class="text-slate-500 text-xs mt-1">Track price history and frequency of specific items</p>
-                </div>
-                <button onclick="toggleModal('item-explorer-modal')"
-                    class="p-2 bg-slate-100 hover:bg-slate-200 text-slate-400 rounded-lg transition-colors">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-
-            <div class="p-6 overflow-hidden flex-1 flex flex-col md:flex-row gap-6">
-                <!-- Sidebar: Item List -->
-                <div class="w-full md:w-64 flex flex-col gap-4 border-r border-slate-100 pr-6">
-                    <div class="relative">
-                        <input type="text" id="item-search" placeholder="Search items..." oninput="renderItemList()"
-                            class="w-full pl-9 pr-4 py-2 bg-slate-50 border rounded-xl text-sm focus:border-indigo-500 outline-none">
-                        <i data-lucide="search"
-                            class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                    </div>
-                    <div id="item-explorer-list" class="flex-1 overflow-y-auto custom-scrollbar space-y-1 pr-2">
-                        <!-- Populated by JS -->
-                    </div>
-                </div>
-
-                <!-- Main: Visualizer & Table -->
-                <div id="item-details" class="flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-2">
-                    <div id="item-empty-state"
-                        class="flex-1 flex flex-center items-center justify-center flex-col text-slate-400">
-                        <i data-lucide="mouse-pointer-2" class="w-12 h-12 mb-4 opacity-20"></i>
-                        <p class="font-bold">Select an item from the list to view analytics</p>
-                    </div>
-
-                    <div id="item-content" class="hidden space-y-6">
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <p class="text-[10px] font-black text-slate-400 uppercase mb-1">Avg Price</p>
-                                <h3 class="text-xl font-bold text-slate-800" id="item-avg-price">--</h3>
-                            </div>
-                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <p class="text-[10px] font-black text-slate-400 uppercase mb-1">Last Bought</p>
-                                <h3 class="text-xl font-bold text-slate-800" id="item-last-price">--</h3>
-                            </div>
-                            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <p class="text-[10px] font-black text-slate-400 uppercase mb-1">Total Purchases</p>
-                                <h3 class="text-xl font-bold text-slate-800" id="item-count">--</h3>
-                            </div>
-                        </div>
-
-                        <div class="bg-white p-4 rounded-2xl border border-slate-100 h-64">
-                            <canvas id="itemHistoryChart"></canvas>
-                        </div>
-
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-sm">
-                                <thead class="bg-slate-50 rounded-lg">
-                                    <tr>
-                                        <th class="p-3 text-slate-500 font-bold uppercase text-[10px]">Date</th>
-                                        <th class="p-3 text-slate-500 font-bold uppercase text-[10px]">Description</th>
-                                        <th class="p-3 text-slate-500 font-bold uppercase text-[10px]">Category</th>
-                                        <th class="p-3 text-slate-500 font-bold uppercase text-[10px] text-right">Amount
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody id="item-history-table">
-                                    <!-- Populated by JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
         // --- CONFIG ---
         const appId = 'personal-finance-sync-v1';
@@ -934,8 +838,6 @@
         let budgets = {};
         let customCategories = [];
         let spendChart = null;
-        let itemHistoryChart = null;
-        let selectedItem = null;
 
         const standardCategories = ["Food", "Transport", "Bills", "Savings", "Entertainment", "Salary", "Others"];
 
@@ -1111,16 +1013,7 @@
                 budgets = {};
             }
             customCategories = db.custom_categories || [];
-            updateItemsCount();
             renderBudgets(window.allDecryptedTransactions || []);
-        }
-
-        function updateItemsCount() {
-            const items = new Set();
-            (window.allDecryptedTransactions || []).forEach(t => {
-                if (t.item) items.add(t.item.toLowerCase());
-            });
-            document.getElementById('items-count-display').innerText = items.size;
         }
 
         // --- CRYPTO LOGIC & UI ---
@@ -1530,7 +1423,6 @@
 
             // Store cleanly for usage
             window.allDecryptedTransactions = decrypted;
-            updateItemsCount();
             applyFilters();
         }
 
@@ -1550,7 +1442,6 @@
             renderTransactions(filtered);
             updateChart(filtered);
             renderBudgets(filtered);
-            updateItemsCount();
         }
 
         function resetFilters() {
@@ -1606,10 +1497,7 @@
                         </div>
                         <div>
                             <p class="font-bold text-slate-800">${i.desc} ${currencyBadge}</p>
-                            <div class="flex items-center gap-2">
-                                <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${new Date(i.date).toLocaleDateString()} • ${i.category}</p>
-                                ${i.item ? `<span class="text-[9px] bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">📦 ${i.item}</span>` : ''}
-                            </div>
+                            <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${new Date(i.date).toLocaleDateString()} • ${i.category}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-4">
@@ -1883,30 +1771,21 @@
                 const spent = spentMap[c] || 0;
                 const remaining = limit > 0 ? limit - spent : 0;
                 const isOver = limit > 0 && spent > limit;
-                const isCustom = customCategories.includes(c);
 
                 totalBudget += limit;
                 totalSpent += spent;
 
                 return `
-                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 transition-all hover:border-emerald-200 group/cat">
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 transition-all hover:border-emerald-200">
                     <div class="flex items-center justify-between mb-3">
                         <div class="flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full ${limit > 0 ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
-                            <div class="flex items-center gap-2">
-                                <label class="text-sm font-bold text-slate-700">${c}</label>
-                                ${isCustom ? `
-                                    <div class="flex gap-1 opacity-0 group-hover/cat:opacity-100 transition-opacity">
-                                        <button onclick="editCustomCategory('${c}')" class="p-1 text-slate-400 hover:text-indigo-600"><i data-lucide="edit-3" class="w-3 h-3"></i></button>
-                                        <button onclick="deleteCustomCategory('${c}')" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
-                                    </div>
-                                ` : ''}
-                            </div>
+                            <label class="text-sm font-bold text-slate-700">${c}</label>
                         </div>
                         <div class="text-right">
                            <span class="text-[10px] font-black uppercase text-slate-400 block mb-0.5">Budget Limit</span>
                            <input type="number" data-cat="${c}" value="${limit || ''}" oninput="updateBudgetSummaries()" 
-                                placeholder="0" class="budget-input w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm font-bold outline-none focus:border-emerald-500 text-right">
+                               placeholder="0" class="budget-input w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm font-bold outline-none focus:border-emerald-500 text-right">
                         </div>
                     </div>
                     <div class="flex justify-between items-end">
@@ -1959,7 +1838,7 @@
             document.getElementById('total-remaining-display').innerText = fmt(Math.max(0, totalBudget - totalSpent));
         }
 
-        async function addCustomCategory() {
+        function addCustomCategory() {
             const el = document.getElementById('new-category-name');
             const name = el.value.trim();
             if (!name) return;
@@ -1969,90 +1848,7 @@
             }
             customCategories.push(name);
             el.value = '';
-
-            const db = await getDB();
-            db.custom_categories = customCategories;
-            await saveDB(db);
-
             populateBudgetInputs();
-        }
-
-        async function editCustomCategory(oldName) {
-            const newName = prompt("Enter new category name:", oldName);
-            if (!newName || newName === oldName) return;
-            if (standardCategories.includes(newName) || customCategories.includes(newName)) {
-                alert("Category name already exists.");
-                return;
-            }
-
-            const idx = customCategories.indexOf(oldName);
-            if (idx !== -1) {
-                customCategories[idx] = newName;
-
-                // Update existing transactions
-                window.allDecryptedTransactions.forEach(t => {
-                    if (t.category === oldName) t.category = newName;
-                });
-
-                // Update budgets map
-                if (budgets[oldName]) {
-                    budgets[newName] = budgets[oldName];
-                    delete budgets[oldName];
-                }
-
-                // Sync all changes (expensive but safe)
-                const db = await getDB();
-                db.custom_categories = customCategories;
-
-                // We need to re-encrypt and save all affected transactions
-                for (let i = 0; i < db.transactions.length; i++) {
-                    const t = await decryptData(db.transactions[i].data);
-                    if (t && t.category === oldName) {
-                        t.category = newName;
-                        db.transactions[i].data = await encryptData(t);
-                    }
-                }
-
-                db.budgets.data = await encryptData(budgets);
-                await saveDB(db);
-
-                populateBudgetInputs();
-                loadAndRender();
-            }
-        }
-
-        async function deleteCustomCategory(name) {
-            if (!confirm(`Delete category "${name}"? Transactions in this category will be changed to "Others".`)) return;
-
-            const idx = customCategories.indexOf(name);
-            if (idx !== -1) {
-                customCategories.splice(idx, 1);
-
-                // Update existing transactions
-                window.allDecryptedTransactions.forEach(t => {
-                    if (t.category === name) t.category = "Others";
-                });
-
-                // Update budgets map
-                delete budgets[name];
-
-                const db = await getDB();
-                db.custom_categories = customCategories;
-
-                for (let i = 0; i < db.transactions.length; i++) {
-                    const t = await decryptData(db.transactions[i].data);
-                    if (t && t.category === name) {
-                        t.category = "Others";
-                        db.transactions[i].data = await encryptData(t);
-                    }
-                }
-
-                db.budgets.data = await encryptData(budgets);
-                await saveDB(db);
-
-                populateBudgetInputs();
-                loadAndRender();
-            }
         }
 
         function clearAllBudgets() {
@@ -2081,7 +1877,6 @@
             const title = document.getElementById('t-modal-title');
             const tId = document.getElementById('t-id');
             const desc = document.getElementById('t-desc');
-            const itemInp = document.getElementById('t-item');
             const amt = document.getElementById('t-amount');
             const cat = document.getElementById('t-category');
 
@@ -2094,7 +1889,6 @@
                 title.innerText = "Edit Transaction";
                 tId.value = id;
                 desc.value = item.desc;
-                itemInp.value = item.item || "";
 
                 // Show original currency and amount if available
                 if (item.originalCurrency && item.originalAmt) {
@@ -2117,7 +1911,6 @@
                 title.innerText = "New Transaction";
                 tId.value = "";
                 desc.value = "";
-                itemInp.value = "";
                 amt.value = "";
                 document.getElementById('t-currency').value = 'PHP';
                 cat.value = "Food";
@@ -2170,7 +1963,6 @@
         async function saveTransaction() {
             const id = document.getElementById('t-id').value;
             const desc = document.getElementById('t-desc').value;
-            const item = document.getElementById('t-item').value.trim();
             const amt = parseFloat(document.getElementById('t-amount').value);
             const currency = document.getElementById('t-currency').value;
             const type = document.getElementById('t-type').value;
@@ -2187,7 +1979,6 @@
 
             const encrypted = await encryptData({
                 desc,
-                item, // New field
                 amt: amtInPHP,  // Store in PHP
                 originalAmt: amt,  // Store original amount
                 originalCurrency: currency,  // Store original currency
@@ -2212,7 +2003,6 @@
             rawTransactions = db.transactions;
             toggleModal('transaction-modal');
             await loadAndRender(); // Updates transaction list
-            updateItemsCount();
 
             // Re-render debts because a transaction might have been a payment towards a debt
             await renderDebts(rawDebts);
@@ -2304,168 +2094,6 @@
             toggleModal('budget-modal');
             loadAndRender();
         }
-        // --- ITEM EXPLORER LOGIC ---
-        function showItemSuggestions() {
-            const input = document.getElementById('t-item');
-            const query = input.value.toLowerCase().trim();
-            const suggestionsDiv = document.getElementById('item-suggestions');
-
-            if (!query) {
-                suggestionsDiv.classList.add('hidden');
-                return;
-            }
-
-            const items = new Set();
-            (window.allDecryptedTransactions || []).forEach(t => {
-                if (t.item) items.add(t.item);
-            });
-
-            const filtered = Array.from(items).filter(i => i.toLowerCase().includes(query)).slice(0, 5);
-
-            if (filtered.length === 0) {
-                suggestionsDiv.classList.add('hidden');
-                return;
-            }
-
-            suggestionsDiv.innerHTML = filtered.map(i => `
-                <div onclick="selectItemSuggestion('${i}')" class="p-3 hover:bg-slate-50 cursor-pointer text-sm font-bold text-slate-700 border-b border-slate-50 last:border-0">${i}</div>
-            `).join('');
-            suggestionsDiv.classList.remove('hidden');
-        }
-
-        function selectItemSuggestion(name) {
-            document.getElementById('t-item').value = name;
-            document.getElementById('item-suggestions').classList.add('hidden');
-        }
-
-        // Close suggestions when clicking outside
-        document.addEventListener('click', (e) => {
-            const sugg = document.getElementById('item-suggestions');
-            if (sugg && !sugg.contains(e.target) && e.target.id !== 't-item') {
-                sugg.classList.add('hidden');
-            }
-        });
-
-        function openItemExplorer() {
-            toggleModal('item-explorer-modal');
-            renderItemList();
-            if (selectedItem) selectItem(selectedItem);
-        }
-
-        function renderItemList() {
-            const query = document.getElementById('item-search').value.toLowerCase().trim();
-            const list = document.getElementById('item-explorer-list');
-
-            const itemMap = {}; // { name: count }
-            (window.allDecryptedTransactions || []).forEach(t => {
-                if (t.item) {
-                    const name = t.item;
-                    itemMap[name] = (itemMap[name] || 0) + 1;
-                }
-            });
-
-            const items = Object.keys(itemMap).filter(i => i.toLowerCase().includes(query)).sort((a, b) => itemMap[b] - itemMap[a]);
-
-            list.innerHTML = items.map(i => `
-                <button onclick="selectItem('${i}')" class="w-full text-left px-4 py-3 rounded-xl transition-all ${selectedItem === i ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'hover:bg-slate-50 text-slate-700 font-bold'}">
-                    <div class="flex justify-between items-center">
-                        <span class="truncate">${i}</span>
-                        <span class="text-[10px] ${selectedItem === i ? 'text-indigo-200' : 'text-slate-400'}">${itemMap[i]}</span>
-                    </div>
-                </button>
-            `).join('');
-        }
-
-        function selectItem(name) {
-            selectedItem = name;
-            renderItemList(); // Update active state
-
-            document.getElementById('item-empty-state').classList.add('hidden');
-            document.getElementById('item-content').classList.remove('hidden');
-
-            const history = (window.allDecryptedTransactions || [])
-                .filter(t => t.item && t.item.toLowerCase() === name.toLowerCase())
-                .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-            // Stats
-            const total = history.reduce((acc, curr) => acc + curr.amt, 0);
-            const avg = total / history.length;
-            const last = history[history.length - 1];
-
-            document.getElementById('item-avg-price').innerText = fmt(avg);
-            document.getElementById('item-last-price').innerText = fmt(last.amt);
-            document.getElementById('item-count').innerText = history.length;
-
-            // Table
-            const table = document.getElementById('item-history-table');
-            table.innerHTML = history.map(t => `
-                <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                    <td class="p-3 text-slate-500 font-medium">${new Date(t.date).toLocaleDateString()}</td>
-                    <td class="p-3 font-bold text-slate-700">${t.desc}</td>
-                    <td class="p-3"><span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase">${t.category}</span></td>
-                    <td class="p-3 text-right font-bold ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}">${t.type === 'income' ? '+' : '-'}${fmt(t.amt)}</td>
-                </tr>
-            `).reverse().join('');
-
-            // Chart
-            renderItemChart(history);
-        }
-
-        function renderItemChart(history) {
-            const ctx = document.getElementById('itemHistoryChart').getContext('2d');
-
-            if (itemHistoryChart) itemHistoryChart.destroy();
-
-            const labels = history.map(t => new Date(t.date).toLocaleDateString());
-            const data = history.map(t => t.amt);
-
-            itemHistoryChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Amount (' + activeCurrency + ')',
-                        data: data.map(v => convertToDisplayCurrency(v, 'PHP', activeCurrency)),
-                        borderColor: '#4f46e5',
-                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                        fill: true,
-                        tension: 0.3,
-                        pointBackgroundColor: '#fff',
-                        pointBorderColor: '#4f46e5',
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: (ctx) => formatCurrency(ctx.parsed.y, activeCurrency)
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            grid: { color: '#f1f5f9' },
-                            ticks: {
-                                font: { size: 10 },
-                                callback: (val) => formatCurrency(val, activeCurrency)
-                            }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { font: { size: 10 } }
-                        }
-                    }
-                }
-            });
-        }
-
         async function deleteItem(col, id) {
             if (!confirm("Are you sure?")) return;
             const db = await getDB();
