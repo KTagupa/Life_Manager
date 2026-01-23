@@ -639,21 +639,24 @@
             <h3 class="text-2xl font-bold text-slate-800 mb-6">Crypto Transaction</h3>
 
             <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border">
+                <div class="grid grid-cols-3 gap-2 p-1 bg-slate-50 rounded-2xl border">
                     <button onclick="setCType('buy')" id="btn-c-buy"
                         class="py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm">Buy</button>
                     <button onclick="setCType('sell')" id="btn-c-sell"
                         class="py-2 rounded-xl font-bold text-slate-400">Sell</button>
+                    <button onclick="setCType('swap')" id="btn-c-swap"
+                        class="py-2 rounded-xl font-bold text-slate-400">Swap</button>
                     <input type="hidden" id="c-type" value="buy">
                 </div>
 
-                <!-- Token Search -->
+                <!-- Token Search (Source) -->
                 <div class="relative">
-                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Token Name / ID</label>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block" id="lbl-c-token">Token Name /
+                        ID</label>
                     <div class="flex gap-2">
                         <input type="text" id="c-token-search" placeholder="e.g. bitcoin"
                             class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
-                        <button onclick="searchToken()"
+                        <button onclick="searchToken('source')"
                             class="px-4 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl font-bold text-xs"><i
                                 data-lucide="search" class="w-4 h-4"></i></button>
                     </div>
@@ -662,6 +665,23 @@
                     </div>
                     <input type="hidden" id="c-token-id">
                     <input type="hidden" id="c-token-symbol">
+                </div>
+
+                <!-- Target Token (Swap To) -->
+                <div class="relative hidden" id="c-swap-target-container">
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Swap To Token</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="c-target-token-search" placeholder="e.g. ethereum"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                        <button onclick="searchToken('target')"
+                            class="px-4 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl font-bold text-xs"><i
+                                data-lucide="search" class="w-4 h-4"></i></button>
+                    </div>
+                    <div id="target-token-search-results"
+                        class="hidden absolute top-full left-0 right-0 bg-white border shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto z-10 custom-scrollbar">
+                    </div>
+                    <input type="hidden" id="c-target-token-id">
+                    <input type="hidden" id="c-target-token-symbol">
                 </div>
 
                 <!-- Date Input (New) -->
@@ -673,11 +693,19 @@
 
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Quantity</label>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block"
+                            id="lbl-c-amount">Quantity</label>
                         <input type="number" step="any" id="c-amount" placeholder="0.00" oninput="calcCryptoTotal()"
                             class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
                     </div>
-                    <div>
+
+                    <div id="c-target-amount-container" class="hidden">
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Receive Quantity</label>
+                        <input type="number" step="any" id="c-target-amount" placeholder="0.00"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    </div>
+
+                    <div id="c-price-container">
                         <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Price per Token</label>
                         <div class="flex gap-1">
                             <input type="number" step="any" id="c-price" placeholder="0.00" oninput="calcCryptoTotal()"
@@ -692,7 +720,8 @@
                     </div>
                 </div>
 
-                <div class="bg-indigo-50 p-3 rounded-xl flex justify-between items-center">
+                <div class="bg-indigo-50 p-3 rounded-xl flex justify-between items-center"
+                    id="c-total-display-container">
                     <span class="text-xs font-bold text-indigo-400">Total Value</span>
                     <div class="text-right">
                         <span class="text-lg font-bold text-indigo-700 block" id="c-total-calc">₱0.00</span>
@@ -1314,6 +1343,8 @@
             // Reset form
             document.getElementById('c-token-search').value = '';
             document.getElementById('c-token-id').value = '';
+            document.getElementById('c-target-token-search').value = '';
+            document.getElementById('c-target-token-id').value = '';
             document.getElementById('c-amount').value = '';
             document.getElementById('c-price').value = '';
             document.getElementById('c-notes').value = '';
@@ -1330,14 +1361,58 @@
             document.getElementById('c-type').value = t;
             const bB = document.getElementById('btn-c-buy');
             const bS = document.getElementById('btn-c-sell');
-            bB.className = t === 'buy' ? "py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm" : "py-2 rounded-xl font-bold text-slate-400";
-            bS.className = t === 'sell' ? "py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm" : "py-2 rounded-xl font-bold text-slate-400";
+            const bW = document.getElementById('btn-c-swap');
+
+            // Reset classes
+            bB.className = "py-2 rounded-xl font-bold text-slate-400";
+            bS.className = "py-2 rounded-xl font-bold text-slate-400";
+            bW.className = "py-2 rounded-xl font-bold text-slate-400";
+
+            if (t === 'buy') bB.className = "py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm";
+            else if (t === 'sell') bS.className = "py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm";
+            else if (t === 'swap') bW.className = "py-2 rounded-xl font-bold bg-white text-blue-600 shadow-sm";
+
+            // Visibility Toggles
+            const isSwap = t === 'swap';
+            const priceContainer = document.getElementById('c-price-container');
+            const targetContainer = document.getElementById('c-swap-target-container');
+            const targetAmtContainer = document.getElementById('c-target-amount-container');
+            const totalContainer = document.getElementById('c-total-display-container');
+
+            if (isSwap) {
+                priceContainer.classList.add('hidden');
+                totalContainer.classList.add('hidden');
+                targetContainer.classList.remove('hidden');
+                targetAmtContainer.classList.remove('hidden');
+
+                document.getElementById('lbl-c-token').innerText = 'From Token (Sell)';
+                document.getElementById('lbl-c-amount').innerText = 'Sell Quantity';
+
+                // Adjust Grid to fit target amount
+                targetAmtContainer.parentElement.classList.remove('grid-cols-2');
+                targetAmtContainer.parentElement.classList.add('grid-cols-2');
+
+            } else {
+                priceContainer.classList.remove('hidden');
+                totalContainer.classList.remove('hidden');
+                targetContainer.classList.add('hidden');
+                targetAmtContainer.classList.add('hidden');
+
+                document.getElementById('lbl-c-token').innerText = 'Token Name / ID';
+                document.getElementById('lbl-c-amount').innerText = 'Quantity';
+            }
         }
 
-        async function searchToken() {
-            const query = document.getElementById('c-token-search').value;
+        async function searchToken(type = 'source') {
+            const isTarget = type === 'target';
+            const inputId = isTarget ? 'c-target-token-search' : 'c-token-search';
+            const resultsId = isTarget ? 'target-token-search-results' : 'token-search-results';
+            const idInputId = isTarget ? 'c-target-token-id' : 'c-token-id';
+            const symbolInputId = isTarget ? 'c-target-token-symbol' : 'c-token-symbol';
+
+            const query = document.getElementById(inputId).value;
             if (!query) return;
-            const resDiv = document.getElementById('token-search-results');
+            const resDiv = document.getElementById(resultsId);
             resDiv.innerHTML = '<div class="p-3 text-xs text-slate-400">Searching CoinGecko...</div>';
             resDiv.classList.remove('hidden');
 
@@ -1356,9 +1431,9 @@
                     const div = document.createElement('div');
                     div.className = "p-3 hover:bg-slate-50 cursor-pointer flex items-center gap-3 border-b border-slate-50 last:border-0";
                     div.onclick = () => {
-                        document.getElementById('c-token-search').value = c.name;
-                        document.getElementById('c-token-id').value = c.id;
-                        document.getElementById('c-token-symbol').value = c.symbol;
+                        document.getElementById(inputId).value = c.name;
+                        document.getElementById(idInputId).value = c.id;
+                        document.getElementById(symbolInputId).value = c.symbol;
                         resDiv.classList.add('hidden');
                     };
                     div.innerHTML = `
@@ -1395,46 +1470,95 @@
             const tokenId = document.getElementById('c-token-id').value;
             const tokenSymbol = document.getElementById('c-token-symbol').value;
             const amount = parseFloat(document.getElementById('c-amount').value);
-            const price = parseFloat(document.getElementById('c-price').value);
-            const type = document.getElementById('c-type').value;
             const notes = document.getElementById('c-notes').value;
             const dateVal = document.getElementById('c-date').value;
-
-            const currency = document.getElementById('c-currency').value;
+            const type = document.getElementById('c-type').value;
             const exchange = document.getElementById('c-exchange').value;
             const strategy = document.getElementById('c-strategy').value;
-
-            if (!tokenId || !amount || !price) { alert("Please fill details"); return; }
-
             const date = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
 
-            // Convert to PHP for base storage consistency
-            const phpPrice = convertToDisplayCurrency(price, currency, 'PHP');
-            const phpTotal = amount * phpPrice;
-
-            // Store transaction
-            const txData = {
-                tokenId,
-                symbol: tokenSymbol || tokenId,
-                amount,
-                price,
-                currency,
-                phpPrice,
-                phpTotal,
-                total: phpTotal, // Maintain compatibility with existing logic which uses .total as PHP
-                type,
-                notes,
-                exchange,
-                strategy,
-                date: date
-            };
-            const encrypted = await encryptData(txData);
-
             const db = await getDB();
-            db.crypto.push({
-                id: Date.now().toString(36),
-                data: encrypted
-            });
+
+            if (type === 'swap') {
+                const targetTokenId = document.getElementById('c-target-token-id').value;
+                const targetTokenSymbol = document.getElementById('c-target-token-symbol').value;
+                const targetAmount = parseFloat(document.getElementById('c-target-amount').value);
+
+                if (!tokenId || !amount || !targetTokenId || !targetAmount) { alert("Please fill details"); return; }
+
+                const swapId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+
+                // Transaction 1: Swap Out (Sell Source)
+                // We use 'swap_out' type. It behaves like sell but doesn't trigger realized P/L
+                const txOut = {
+                    tokenId,
+                    symbol: tokenSymbol || tokenId,
+                    amount,
+                    price: 0, // Calculated dynamically during swap logic or can be estimated
+                    currency: 'PHP',
+                    phpPrice: 0,
+                    phpTotal: 0,
+                    total: 0,
+                    type: 'swap_out',
+                    swapId,
+                    linkedToken: targetTokenSymbol,
+                    notes, exchange, strategy, date
+                };
+
+                // Transaction 2: Swap In (Buy Target)
+                // We use 'swap_in' type. It inherits cost basis from swap_out.
+                const txIn = {
+                    tokenId: targetTokenId,
+                    symbol: targetTokenSymbol || targetTokenId,
+                    amount: targetAmount,
+                    price: 0,
+                    currency: 'PHP',
+                    phpPrice: 0,
+                    phpTotal: 0, // Will be set equal to cost basis of txOut
+                    total: 0,
+                    type: 'swap_in',
+                    swapId,
+                    linkedToken: tokenSymbol,
+                    notes, exchange, strategy, date
+                };
+
+                db.crypto.push({ id: swapId + '_out', data: await encryptData(txOut) });
+                db.crypto.push({ id: swapId + '_in', data: await encryptData(txIn) });
+
+            } else {
+                // Regular Buy/Sell
+                const price = parseFloat(document.getElementById('c-price').value);
+                const currency = document.getElementById('c-currency').value;
+
+                if (!tokenId || !amount || !price) { alert("Please fill details"); return; }
+
+                // Convert to PHP for base storage consistency
+                const phpPrice = convertToDisplayCurrency(price, currency, 'PHP');
+                const phpTotal = amount * phpPrice;
+
+                // Store transaction
+                const txData = {
+                    tokenId,
+                    symbol: tokenSymbol || tokenId,
+                    amount,
+                    price,
+                    currency,
+                    phpPrice,
+                    phpTotal,
+                    total: phpTotal, // Maintain compatibility with existing logic which uses .total as PHP
+                    type,
+                    notes,
+                    exchange,
+                    strategy,
+                    date: date
+                };
+                const encrypted = await encryptData(txData);
+                db.crypto.push({
+                    id: Date.now().toString(36),
+                    data: encrypted
+                });
+            }
+
             await saveDB(db);
 
             rawCrypto = db.crypto;
@@ -1463,6 +1587,7 @@
 
             // Process oldest first
             const sorted = [...txs].reverse();
+            const pendingSwaps = {}; // Stores cost basis for swaps: { swapId: totalCostTransferred }
 
             sorted.forEach(tx => {
                 if (!holdings[tx.tokenId]) {
@@ -1479,58 +1604,76 @@
                 if (tx.type === 'buy') {
                     h.amount += tx.amount;
                     h.totalCost += tx.total;
-
-                    // Add lot for FIFO/LIFO
                     h.lots.push({
                         amount: tx.amount,
-                        price: tx.phpPrice, // Unit price in PHP
+                        price: tx.phpPrice,
                         total: tx.total,
                         date: tx.date
                     });
 
-                } else {
-                    // SELL LOGIC
+                } else if (tx.type === 'sell' || tx.type === 'swap_out') {
+                    // Sell or Swap Out Logic
                     let costOfSold = 0;
                     let remainingToSell = tx.amount;
+                    let soldAmount = 0;
 
                     if (method === 'avg') {
-                        // Average Cost Basis
                         const avgPrice = h.amount > 0 ? (h.totalCost / h.amount) : 0;
                         costOfSold = avgPrice * tx.amount;
-
-                        // Update total cost (reduce it by the cost of sold items)
                         h.totalCost -= costOfSold;
-
+                        soldAmount = tx.amount;
                     } else {
-                        // FIFO or LIFO
-                        // Clone lots to avoid mutating if we need to rollback (though we don't here)
-                        // Actually we operate on h.lots directly
-
+                        // FIFO/LIFO
                         while (remainingToSell > 0.000001 && h.lots.length > 0) {
-                            // FIFO: Take from start (0). LIFO: Take from end (length-1)
                             const lotIndex = method === 'fifo' ? 0 : h.lots.length - 1;
                             const lot = h.lots[lotIndex];
 
                             if (lot.amount <= remainingToSell) {
-                                // Consume entire lot
                                 costOfSold += (lot.amount * lot.price);
                                 remainingToSell -= lot.amount;
-                                // Remove lot
+                                soldAmount += lot.amount;
                                 h.lots.splice(lotIndex, 1);
                             } else {
-                                // Consume partial lot
-                                costOfSold += (remainingToSell * lot.price);
+                                const lotCost = remainingToSell * lot.price;
+                                costOfSold += lotCost;
                                 lot.amount -= remainingToSell;
+                                soldAmount += remainingToSell;
                                 remainingToSell = 0;
                             }
                         }
-
-                        // Update total cost to reflect remaining lots (for consistency)
+                        // Recalculate total cost from remaining lots to prevent drift
                         h.totalCost = h.lots.reduce((sum, l) => sum + (l.amount * l.price), 0);
                     }
 
-                    h.realizedPL += (tx.total - costOfSold);
-                    h.amount -= tx.amount;
+                    h.amount -= soldAmount;
+
+                    if (tx.type === 'sell') {
+                        h.realizedPL += (tx.total - costOfSold);
+                    } else if (tx.type === 'swap_out') {
+                        // For swap, we defer the P/L.
+                        // We store the 'costOfSold' (which is the cost basis of the tokens leaving)
+                        // to be applied to the incoming token.
+                        if (tx.swapId) {
+                            pendingSwaps[tx.swapId] = costOfSold;
+                        }
+                    }
+
+                } else if (tx.type === 'swap_in') {
+                    // Swap In Logic
+                    const transferredCost = pendingSwaps[tx.swapId] || 0;
+
+                    h.amount += tx.amount;
+                    h.totalCost += transferredCost; // Add the transferred cost basis
+
+                    // The "price" effectively becomes (Transferred Cost / New Amount)
+                    const effectivePrice = tx.amount > 0 ? (transferredCost / tx.amount) : 0;
+
+                    h.lots.push({
+                        amount: tx.amount,
+                        price: effectivePrice,
+                        total: transferredCost,
+                        date: tx.date
+                    });
                 }
             });
 
@@ -1683,19 +1826,31 @@
                     const div = document.createElement('div');
                     div.className = "flex justify-between items-center py-2 px-2 hover:bg-slate-800 rounded-lg group";
                     const isBuy = tx.type === 'buy';
+                    const isSwap = tx.type === 'swap_in' || tx.type === 'swap_out';
+                    let icon = isBuy ? 'arrow-down-left' : 'arrow-up-right';
+                    let colorClass = isBuy ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400';
+                    let actionText = isBuy ? 'Bought' : 'Sold';
+
+                    if (isSwap) {
+                        icon = 'refresh-cw';
+                        colorClass = 'bg-blue-900/30 text-blue-400';
+                        if (tx.type === 'swap_out') actionText = `Swapped ${tx.symbol.toUpperCase()} for ${tx.linkedToken || '?'}`;
+                        else actionText = `Received ${tx.symbol.toUpperCase()} (Swap)`;
+                    }
+
                     div.innerHTML = `
                         <div class="flex items-center gap-3">
-                             <div class="w-8 h-8 rounded-full flex items-center justify-center ${isBuy ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400'}">
-                                 <i data-lucide="${isBuy ? 'arrow-down-left' : 'arrow-up-right'}" class="w-4 h-4"></i>
+                             <div class="w-8 h-8 rounded-full flex items-center justify-center ${colorClass}">
+                                 <i data-lucide="${icon}" class="w-4 h-4"></i>
                              </div>
                              <div>
-                                 <p class="text-sm font-bold text-slate-300">${isBuy ? 'Bought' : 'Sold'} ${tx.symbol.toUpperCase()}</p>
-                                 <p class="text-[10px] text-slate-500">${new Date(tx.date).toLocaleDateString()} • ${formatCurrency(tx.price, tx.currency || 'PHP')}/token</p>
+                                 <p class="text-sm font-bold text-slate-300 mobile-text-clip">${actionText} ${!isSwap && !isBuy ? tx.symbol.toUpperCase() : ''}</p>
+                                 <p class="text-[10px] text-slate-500">${new Date(tx.date).toLocaleDateString()} ${!isSwap ? '• ' + formatCurrency(tx.price, tx.currency || 'PHP') + '/token' : ''}</p>
                              </div>
                         </div>
                          <div class="flex items-center gap-3">
                               <div class="text-right">
-                                  <p class="text-sm font-bold text-slate-300">${formatCurrency(tx.price * tx.amount, tx.currency || 'PHP')}</p>
+                                  <p class="text-sm font-bold text-slate-300">${!isSwap ? formatCurrency(tx.price * tx.amount, tx.currency || 'PHP') : ''}</p>
                                   <p class="text-[10px] text-slate-500">${tx.amount} tokens</p>
                               </div>
                              <button onclick="deleteItem('crypto', '${tx.id}')" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
