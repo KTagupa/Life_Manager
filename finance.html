@@ -505,8 +505,8 @@
             </div>
 
             <div class="p-6 overflow-y-auto custom-scrollbar flex-1">
-                <!-- Top Stats -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <!-- Top Stats Row 1 -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
                         <p class="text-xs text-slate-500 font-bold uppercase">Current Value</p>
                         <h3 class="text-xl font-bold text-white mt-1" id="cp-current-val">--</h3>
@@ -525,6 +525,54 @@
                     </div>
                 </div>
 
+                <!-- Top Stats Row 2 - New Performance Metrics -->
+                <div class="grid grid-cols-3 gap-4 mb-8">
+                    <div
+                        class="bg-gradient-to-br from-indigo-900/50 to-indigo-800/30 p-4 rounded-2xl border border-indigo-700/50">
+                        <p class="text-xs text-indigo-400 font-bold uppercase">ROI</p>
+                        <h3 class="text-xl font-bold text-indigo-300 mt-1" id="cp-roi">--%</h3>
+                    </div>
+                    <div
+                        class="bg-gradient-to-br from-emerald-900/50 to-emerald-800/30 p-4 rounded-2xl border border-emerald-700/50">
+                        <p class="text-xs text-emerald-400 font-bold uppercase">Best Performer</p>
+                        <h3 class="text-lg font-bold text-emerald-300 mt-1" id="cp-best">--</h3>
+                    </div>
+                    <div
+                        class="bg-gradient-to-br from-rose-900/50 to-rose-800/30 p-4 rounded-2xl border border-rose-700/50">
+                        <p class="text-xs text-rose-400 font-bold uppercase">Worst Performer</p>
+                        <h3 class="text-lg font-bold text-rose-300 mt-1" id="cp-worst">--</h3>
+                    </div>
+                </div>
+
+                <!-- Portfolio Allocation Chart -->
+                <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 mb-8">
+                    <h3 class="font-bold text-slate-300 mb-4 flex items-center gap-2">
+                        <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-400"></i>
+                        Portfolio Allocation
+                    </h3>
+                    <div class="relative h-48 w-full">
+                        <canvas id="cryptoAllocationChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Investment Goals Section -->
+                <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-300 flex items-center gap-2">
+                            <i data-lucide="target" class="w-4 h-4 text-amber-400"></i>
+                            Investment Goals
+                        </h3>
+                        <button onclick="openGoalModal()"
+                            class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-full font-bold transition-colors">
+                            + Add Goal
+                        </button>
+                    </div>
+                    <div id="investment-goals-list" class="space-y-3">
+                        <div class="text-center py-4 text-slate-600 text-sm">No goals set. Add one to track your
+                            progress!</div>
+                    </div>
+                </div>
+
                 <!-- Holdings List -->
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="font-bold text-slate-300">Your Holdings</h3>
@@ -539,7 +587,37 @@
                     </div>
                 </div>
 
-                <!-- History List (New) -->
+                <!-- Tax Report Section -->
+                <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-300 flex items-center gap-2">
+                            <i data-lucide="file-text" class="w-4 h-4 text-purple-400"></i>
+                            Tax Summary
+                        </h3>
+                        <select id="cost-basis-method" onchange="renderCryptoPortfolio()"
+                            class="text-xs bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-2 py-1 outline-none">
+                            <option value="average">Average Cost</option>
+                            <option value="fifo">FIFO</option>
+                            <option value="lifo">LIFO</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-slate-900/50 p-3 rounded-xl">
+                            <p class="text-[10px] text-slate-500 font-bold uppercase">Total Gains</p>
+                            <p class="text-sm font-bold text-emerald-400 mt-1" id="tax-gains">₱0</p>
+                        </div>
+                        <div class="bg-slate-900/50 p-3 rounded-xl">
+                            <p class="text-[10px] text-slate-500 font-bold uppercase">Total Losses</p>
+                            <p class="text-sm font-bold text-rose-400 mt-1" id="tax-losses">₱0</p>
+                        </div>
+                        <div class="bg-slate-900/50 p-3 rounded-xl">
+                            <p class="text-[10px] text-slate-500 font-bold uppercase">Net Capital Gain</p>
+                            <p class="text-sm font-bold text-white mt-1" id="tax-net">₱0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History List -->
                 <div class="border-t border-slate-800 pt-6">
                     <h3 class="font-bold text-slate-400 text-sm mb-4 uppercase tracking-widest">Recent History</h3>
                     <div class="space-y-1" id="crypto-history-list">
@@ -621,13 +699,75 @@
                         <span class="text-[10px] text-indigo-400 font-bold" id="c-total-base-preview"></span>
                     </div>
                 </div>
+                <!-- Exchange and Strategy Selects -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Exchange</label>
+                        <select id="c-exchange"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold text-slate-600">
+                            <option value="">Select Exchange</option>
+                            <option value="binance">Binance</option>
+                            <option value="coinbase">Coinbase</option>
+                            <option value="kraken">Kraken</option>
+                            <option value="gcash">GCash</option>
+                            <option value="maya">Maya</option>
+                            <option value="coins.ph">Coins.ph</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Strategy</label>
+                        <select id="c-strategy"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold text-slate-600">
+                            <option value="">Optional</option>
+                            <option value="dca">DCA</option>
+                            <option value="lump-sum">Lump Sum</option>
+                            <option value="dip-buy">Dip Buy</option>
+                            <option value="take-profit">Taking Profit</option>
+                        </select>
+                    </div>
+                </div>
 
-                <input type="text" id="c-notes" placeholder="Notes (Exchange, etc.)"
+                <input type="text" id="c-notes" placeholder="Additional notes..."
                     class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-xs">
 
                 <button onclick="saveCryptoTransaction()"
                     class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 mt-2">Record
                     Transaction</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Investment Goal -->
+    <div id="goal-modal"
+        class="fixed inset-0 z-[140] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
+            <button onclick="toggleModal('goal-modal')"
+                class="absolute top-6 right-6 text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h3 class="text-2xl font-bold text-slate-800 mb-6">Set Investment Goal</h3>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Goal Name</label>
+                    <input type="text" id="goal-name" placeholder="e.g. Emergency Fund, ₱1M Portfolio"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Target Amount (PHP)</label>
+                    <input type="number" id="goal-target" placeholder="100000"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Target Date (Optional)</label>
+                    <input type="date" id="goal-date"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold text-slate-600">
+                </div>
+
+                <button onclick="saveInvestmentGoal()"
+                    class="w-full py-4 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200 mt-2">Save
+                    Goal</button>
             </div>
         </div>
     </div>
@@ -939,7 +1079,9 @@
     </div>
 
     <script>
-        // --- CONFIG ---
+        // =============================================
+        // SECTION 1: CONFIGURATION & STATE
+        // =============================================
         const appId = 'personal-finance-sync-v1';
         // Firebase Configuration
         const firebaseConfig = {
@@ -974,10 +1116,14 @@
         let budgets = {};
         let customCategories = [];
         let spendChart = null;
+        let cryptoAllocationChart = null;
+        let investmentGoals = [];  // Array of { id, name, targetAmount, targetDate, createdAt }
 
         const standardCategories = ["Food", "Transport", "Bills", "Savings", "Entertainment", "Salary", "Others"];
 
-        // --- MOCK DB (LocalStorage) ---
+        // =============================================
+        // SECTION 2: DATABASE & STORAGE
+        // =============================================
         const DB_KEY = 'finance_flow_encrypted_v3';
 
         const BACKUP_SETTINGS_KEY = 'finance_flow_backup_settings_v1';
@@ -1038,7 +1184,9 @@
             }
         }
 
-        // --- CRYPTO HELPER (AES-GCM) ---
+        // =============================================
+        // SECTION 3: AUTHENTICATION & ENCRYPTION
+        // =============================================
         async function deriveKey(password, salt) {
             const enc = new TextEncoder();
             const keyMaterial = await window.crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
@@ -1149,10 +1297,13 @@
                 budgets = {};
             }
             customCategories = db.custom_categories || [];
+            investmentGoals = db.investment_goals || [];
             renderBudgets(window.allDecryptedTransactions || []);
         }
 
-        // --- CRYPTO LOGIC & UI ---
+        // =============================================
+        // SECTION 4: CRYPTO / INVESTING MODULE
+        // =============================================
 
         function openCryptoPortfolio() {
             document.getElementById('crypto-portfolio-modal').classList.remove('hidden');
@@ -1167,6 +1318,8 @@
             document.getElementById('c-price').value = '';
             document.getElementById('c-notes').value = '';
             document.getElementById('c-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('c-exchange').value = '';
+            document.getElementById('c-strategy').value = '';
             document.getElementById('c-total-calc').innerText = fmt(0);
             setCType('buy');
 
@@ -1248,6 +1401,8 @@
             const dateVal = document.getElementById('c-date').value;
 
             const currency = document.getElementById('c-currency').value;
+            const exchange = document.getElementById('c-exchange').value;
+            const strategy = document.getElementById('c-strategy').value;
 
             if (!tokenId || !amount || !price) { alert("Please fill details"); return; }
 
@@ -1269,6 +1424,8 @@
                 total: phpTotal, // Maintain compatibility with existing logic which uses .total as PHP
                 type,
                 notes,
+                exchange,
+                strategy,
                 date: date
             };
             const encrypted = await encryptData(txData);
@@ -1298,33 +1455,85 @@
             return txs.filter(x => x).sort((a, b) => new Date(b.date) - new Date(a.date));
         }
 
-        async function calculateHoldings() {
+        async function calculateHoldings(method = 'fifo') {
             const txs = await getDecryptedCrypto();
-            const holdings = {}; // { 'bitcoin': { amount: 0, costBasis: 0, realizedPL: 0, symbol: 'BTC' } }
+            const holdings = {};
+            // holdings structure: 
+            // { 'bitcoin': { amount: 0, totalCost: 0, realizedPL: 0, symbol: 'BTC', lots: [] } }
 
-            // Process oldest first for correct avg cost calculation
-            // txs is Newest->Oldest, so reverse it
+            // Process oldest first
             const sorted = [...txs].reverse();
 
             sorted.forEach(tx => {
-                if (!holdings[tx.tokenId]) holdings[tx.tokenId] = { amount: 0, totalCost: 0, realizedPL: 0, symbol: tx.symbol };
+                if (!holdings[tx.tokenId]) {
+                    holdings[tx.tokenId] = {
+                        amount: 0,
+                        totalCost: 0,
+                        realizedPL: 0,
+                        symbol: tx.symbol,
+                        lots: [] // For FIFO/LIFO tracking: { amount, price, date }
+                    };
+                }
                 const h = holdings[tx.tokenId];
 
                 if (tx.type === 'buy') {
                     h.amount += tx.amount;
-                    h.totalCost += tx.total; // Add to cost basis
-                } else {
-                    // Sell logic (Weighted Average Cost)
-                    const avgPrice = h.amount > 0 ? (h.totalCost / h.amount) : 0;
-                    const costOfSold = avgPrice * tx.amount;
+                    h.totalCost += tx.total;
 
-                    h.realizedPL += (tx.total - costOfSold); // Proceeds - Cost of those tokens
-                    h.totalCost -= costOfSold; // Remove cost of sold tokens
+                    // Add lot for FIFO/LIFO
+                    h.lots.push({
+                        amount: tx.amount,
+                        price: tx.phpPrice, // Unit price in PHP
+                        total: tx.total,
+                        date: tx.date
+                    });
+
+                } else {
+                    // SELL LOGIC
+                    let costOfSold = 0;
+                    let remainingToSell = tx.amount;
+
+                    if (method === 'avg') {
+                        // Average Cost Basis
+                        const avgPrice = h.amount > 0 ? (h.totalCost / h.amount) : 0;
+                        costOfSold = avgPrice * tx.amount;
+
+                        // Update total cost (reduce it by the cost of sold items)
+                        h.totalCost -= costOfSold;
+
+                    } else {
+                        // FIFO or LIFO
+                        // Clone lots to avoid mutating if we need to rollback (though we don't here)
+                        // Actually we operate on h.lots directly
+
+                        while (remainingToSell > 0.000001 && h.lots.length > 0) {
+                            // FIFO: Take from start (0). LIFO: Take from end (length-1)
+                            const lotIndex = method === 'fifo' ? 0 : h.lots.length - 1;
+                            const lot = h.lots[lotIndex];
+
+                            if (lot.amount <= remainingToSell) {
+                                // Consume entire lot
+                                costOfSold += (lot.amount * lot.price);
+                                remainingToSell -= lot.amount;
+                                // Remove lot
+                                h.lots.splice(lotIndex, 1);
+                            } else {
+                                // Consume partial lot
+                                costOfSold += (remainingToSell * lot.price);
+                                lot.amount -= remainingToSell;
+                                remainingToSell = 0;
+                            }
+                        }
+
+                        // Update total cost to reflect remaining lots (for consistency)
+                        h.totalCost = h.lots.reduce((sum, l) => sum + (l.amount * l.price), 0);
+                    }
+
+                    h.realizedPL += (tx.total - costOfSold);
                     h.amount -= tx.amount;
                 }
             });
 
-            // Cleanup zero balances
             return holdings;
         }
 
@@ -1402,16 +1611,21 @@
         }
 
         async function renderCryptoPortfolio() {
-            const holdings = await calculateHoldings();
+            let taxMethod = document.getElementById('cost-basis-method')?.value || 'fifo';
+            if (taxMethod === 'average') taxMethod = 'avg';
+            const holdings = await calculateHoldings(taxMethod);
             const list = document.getElementById('crypto-holdings-list');
             list.innerHTML = '';
 
             let totalVal = 0, totalInvested = 0, totalRealized = 0, totalUnrealized = 0;
             let lastUpdate = 0;
 
+            let bestPerf = { symbol: '-', pct: -Infinity };
+            let worstPerf = { symbol: '-', pct: Infinity };
+
             // RENDER HOLDINGS
             Object.entries(holdings).forEach(([id, h]) => {
-                if (h.amount <= 0.000001 && Math.abs(h.realizedPL) < 1) return; // Skip empty dust unless there's PL history
+                if (h.amount <= 0.000001 && Math.abs(h.realizedPL) < 1) return;
 
                 const cache = cryptoPrices[id];
                 const currentPrice = cache?.price || 0;
@@ -1420,11 +1634,16 @@
                 const value = h.amount * currentPrice;
                 const avgPrice = h.amount > 0 ? h.totalCost / h.amount : 0;
                 const unrealized = currentPrice > 0 ? (value - h.totalCost) : 0;
+                const pnlPct = h.totalCost > 0 ? (unrealized / h.totalCost) * 100 : 0;
 
                 if (h.amount > 0.000001) {
                     totalVal += value;
                     totalInvested += h.totalCost;
                     totalUnrealized += unrealized;
+
+                    // Track Best/Worst
+                    if (pnlPct > bestPerf.pct) bestPerf = { symbol: h.symbol, pct: pnlPct };
+                    if (pnlPct < worstPerf.pct) worstPerf = { symbol: h.symbol, pct: pnlPct };
                 }
                 totalRealized += h.realizedPL;
 
@@ -1438,19 +1657,21 @@
                                 <span class="text-[10px] bg-slate-700 text-slate-400 px-1.5 rounded">${id}</span>
                             </div>
                             <p class="text-xs text-slate-400 mt-1">${h.amount.toFixed(4)} tokens @ ${fmt(avgPrice)} avg</p>
+                            <p class="text-[10px] text-slate-500 mt-0.5">${taxMethod.toUpperCase()} Basis</p>
                         </div>
                         <div class="text-right">
                             <p class="font-bold text-white">${currentPrice > 0 ? fmt(value) : 'Needs Update'}</p>
                             <p class="text-xs font-bold ${unrealized >= 0 ? 'text-emerald-500' : 'text-rose-500'}">
-                                ${currentPrice > 0 ? ((unrealized / h.totalCost) * 100).toFixed(1) + '%' : '--'}
+                                ${currentPrice > 0 ? pnlPct.toFixed(1) + '%' : '--'}
                             </p>
+                             <p class="text-[10px] text-slate-500">${unrealized >= 0 ? '+' : ''}${fmt(unrealized)}</p>
                         </div>
                     `;
                     list.appendChild(div);
                 }
             });
 
-            // RENDER HISTORY (New)
+            // RENDER HISTORY
             const historyList = document.getElementById('crypto-history-list');
             historyList.innerHTML = '';
             const allTxs = await getDecryptedCrypto();
@@ -1498,16 +1719,197 @@
             uEl.innerText = (totalUnrealized >= 0 ? '+' : '') + fmt(totalUnrealized);
             uEl.className = `text-xl font-bold mt-1 ${totalUnrealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
 
+            // ROI & Best/Worst
+            const roi = totalInvested > 0 ? ((totalVal - totalInvested) / totalInvested) * 100 : 0;
+            const roiEl = document.getElementById('cp-roi');
+            if (roiEl) {
+                roiEl.innerText = (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%';
+                roiEl.className = `text-lg font-bold ${roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+            }
+
+            const bestEl = document.getElementById('cp-best-perf');
+            if (bestEl) bestEl.innerText = bestPerf.symbol !== '-' ? `${bestPerf.symbol} (${bestPerf.pct > 0 ? '+' : ''}${bestPerf.pct.toFixed(0)}%)` : '-';
+
+            const worstEl = document.getElementById('cp-worst-perf');
+            if (worstEl) worstEl.innerText = worstPerf.symbol !== '-' ? `${worstPerf.symbol} (${worstPerf.pct > 0 ? '+' : ''}${worstPerf.pct.toFixed(0)}%)` : '-';
+
             const timeStr = lastUpdate > 0 ? new Date(lastUpdate).toLocaleTimeString() : 'Never';
             document.getElementById('crypto-last-updated').innerText = `Prices updated: ${timeStr}`;
 
             // Sync widget too
             renderCryptoWidget();
+
+            // New Renderers
+            renderCryptoAllocationChart(holdings);
+            renderInvestmentGoals();
+            calculateTaxSummary(holdings);
+
             lucide.createIcons();
         }
 
+        function renderCryptoAllocationChart(holdings) {
+            const ctx = document.getElementById('cryptoAllocationChart');
+            if (!ctx) return;
 
-        // --- CHART & FILTERS ---
+            if (cryptoAllocationChart) {
+                cryptoAllocationChart.destroy();
+            }
+
+            const labels = [];
+            const data = [];
+            const colors = ['#6366f1', '#10b981', '#f43f5e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
+
+            Object.entries(holdings).forEach(([id, h]) => {
+                if (h.amount <= 0.000001) return;
+                const currentPrice = cryptoPrices[id]?.price || 0;
+                const value = h.amount * currentPrice;
+                if (value > 0) {
+                    labels.push(h.symbol.toUpperCase());
+                    data.push(value);
+                }
+            });
+
+            cryptoAllocationChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors.slice(0, data.length),
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true, font: { size: 10 }, color: '#94a3b8' } }
+                    },
+                    cutout: '70%'
+                }
+            });
+        }
+
+        // --- INVESTMENT GOALS ---
+        function openGoalModal() {
+            document.getElementById('goal-name').value = '';
+            document.getElementById('goal-target').value = '';
+            document.getElementById('goal-date').value = '';
+            toggleModal('goal-modal');
+        }
+
+        async function saveInvestmentGoal() {
+            const name = document.getElementById('goal-name').value;
+            const target = parseFloat(document.getElementById('goal-target').value);
+            const date = document.getElementById('goal-date').value;
+
+            if (!name || !target) return;
+
+            const newGoal = {
+                id: 'goal_' + Date.now(),
+                name,
+                targetAmount: target,
+                targetDate: date,
+                createdAt: new Date().toISOString()
+            };
+
+            investmentGoals.push(newGoal);
+
+            // Save to DB
+            const db = await getDB();
+            db.investment_goals = investmentGoals;
+            await saveDB(db);
+
+            toggleModal('goal-modal');
+            renderInvestmentGoals();
+        }
+
+        async function deleteGoal(id) {
+            if (!confirm('Delete this goal?')) return;
+            investmentGoals = investmentGoals.filter(g => g.id !== id);
+
+            const db = await getDB();
+            db.investment_goals = investmentGoals;
+            await saveDB(db);
+
+            renderInvestmentGoals();
+        }
+
+        async function renderInvestmentGoals() {
+            const list = document.getElementById('investment-goals-list');
+            if (!list) return;
+
+            list.innerHTML = '';
+
+            if (investmentGoals.length === 0) {
+                list.innerHTML = '<div class="text-center py-4 text-slate-600 text-sm">No goals set. Add one to track your progress!</div>';
+                return;
+            }
+
+            // Calculate current total crypto value for progress checking
+            // In a real app, you might want goals to link to specific assets, but for now we track against total portfolio value
+            const holdings = await calculateHoldings();
+            let currentTotalValue = 0;
+            Object.entries(holdings).forEach(([id, h]) => {
+                const price = cryptoPrices[id]?.price || 0;
+                currentTotalValue += h.amount * price;
+            });
+
+            investmentGoals.forEach(g => {
+                const progress = Math.min((currentTotalValue / g.targetAmount) * 100, 100);
+                const isMet = currentTotalValue >= g.targetAmount;
+                const dateStr = g.targetDate ? new Date(g.targetDate).toLocaleDateString() : 'No deadline';
+
+                const div = document.createElement('div');
+                div.className = "bg-slate-900/40 p-3 rounded-xl border border-slate-700/50 relative group";
+                div.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <div>
+                            <p class="font-bold text-slate-300 text-sm">${g.name}</p>
+                            <p class="text-[10px] text-slate-500">Target: ${fmt(g.targetAmount)} • ${dateStr}</p>
+                        </div>
+                        <button onclick="deleteGoal('${g.id}')" class="text-slate-500 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                    <div class="relative h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div class="absolute top-0 left-0 h-full ${isMet ? 'bg-emerald-500' : 'bg-amber-500'} transition-all duration-1000" style="width: ${progress}%"></div>
+                    </div>
+                    <div class="flex justify-between mt-1">
+                        <span class="text-[10px] text-slate-500">${progress.toFixed(1)}%</span>
+                        <span class="text-[10px] ${isMet ? 'text-emerald-400 font-bold' : 'text-slate-500'}">${isMet ? 'GOAL MET! 🎉' : fmt(g.targetAmount - currentTotalValue) + ' to go'}</span>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        // --- TAX & METRICS ---
+        function calculateTaxSummary(holdings) {
+            let totalGains = 0;
+            let totalLosses = 0;
+
+            Object.values(holdings).forEach(h => {
+                if (h.realizedPL > 0) totalGains += h.realizedPL;
+                else totalLosses += Math.abs(h.realizedPL);
+            });
+
+            const net = totalGains - totalLosses;
+
+            document.getElementById('tax-gains').innerText = fmt(totalGains);
+            document.getElementById('tax-losses').innerText = fmt(totalLosses);
+
+            const netEl = document.getElementById('tax-net');
+            netEl.innerText = (net >= 0 ? '+' : '-') + fmt(Math.abs(net));
+            netEl.className = `text-sm font-bold mt-1 ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+        }
+
+
+
+        // =============================================
+        // SECTION 5: CHARTS & FILTERS
+        // =============================================
         function initFilters() {
             const mSel = document.getElementById('filter-month');
             const ySel = document.getElementById('filter-year');
@@ -1599,7 +2001,9 @@
             spendChart.update();
         }
 
-        // --- RENDERERS ---
+        // =============================================
+        // SECTION 6: RENDERERS
+        // =============================================
         function renderTransactions(items) {
             const list = document.getElementById('transaction-list');
             let bal = 0, inc = 0, exp = 0;
@@ -1824,7 +2228,9 @@
             });
         }
 
-        // --- CRUD LOGIC ---
+        // =============================================
+        // SECTION 7: CRUD OPERATIONS
+        // =============================================
         function populateCategorySelect(selectEl) {
             selectEl.innerHTML = '';
             // 1. Standard Categories
@@ -2462,7 +2868,10 @@
         }
 
         function toggleModal(id) { document.getElementById(id).classList.toggle('hidden'); }
-        // --- BACKUP FUNCTIONS ---
+
+        // =============================================
+        // SECTION 8: BACKUP & RESTORE
+        // =============================================
         // Toggle backup dropdown menu
         function toggleBackupMenu() {
             const dropdown = document.getElementById('backup-dropdown');
@@ -2674,7 +3083,9 @@
             }, 3000);
         }
 
-        // --- ITEM TRACKING FUNCTIONS ---
+        // =============================================
+        // SECTION 9: ITEM TRACKING
+        // =============================================
 
         let itemPriceChart = null;
 
