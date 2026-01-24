@@ -426,6 +426,55 @@
         </div>
     </div>
 
+    <!-- Modal: Update Debt (Clicking a debt item) -->
+    <div id="update-debt-modal"
+        class="fixed inset-0 z-[115] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
+            <button onclick="toggleModal('update-debt-modal')"
+                class="absolute top-6 right-6 text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h3 class="text-2xl font-bold text-slate-800 mb-2" id="ud-title">Update Debt</h3>
+            <p class="text-sm text-slate-500 mb-6">Record a repayment or add to this loan.</p>
+
+            <input type="hidden" id="ud-debt-id">
+            <input type="hidden" id="ud-category">
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border mb-4">
+                    <button onclick="setUDType('repayment')" id="btn-ud-repay"
+                        class="py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm">Repayment</button>
+                    <button onclick="setUDType('loan')" id="btn-ud-loan"
+                        class="py-2 rounded-xl font-bold text-slate-400">Borrow More</button>
+                    <input type="hidden" id="ud-type" value="repayment">
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Amount</label>
+                    <input type="number" id="ud-amount" placeholder="0.00" step="0.01"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 font-bold text-slate-700">
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Date</label>
+                    <input type="date" id="ud-date"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 text-slate-700 font-bold">
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Notes</label>
+                    <input type="text" id="ud-desc" placeholder="Details..."
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
+                </div>
+
+                <button onclick="saveDebtTransaction()"
+                    class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 mt-2">
+                    Save Transaction
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Add Lent Person -->
     <div id="lent-modal"
         class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
@@ -2168,9 +2217,17 @@
 
             items.forEach(i => {
                 const isInc = i.type === 'income';
-                if (isInc) { inc += i.amt; bal += i.amt; }
-                else {
-                    exp += i.amt; bal -= i.amt;
+                const isDebtInc = i.type === 'debt_increase';
+
+                if (isInc) {
+                    inc += i.amt;
+                    bal += i.amt;
+                } else if (isDebtInc) {
+                    // Debt increase adds to balance but NOT to monthly income stats
+                    bal += i.amt;
+                } else {
+                    exp += i.amt;
+                    bal -= i.amt;
                     catExp[i.category] = (catExp[i.category] || 0) + i.amt;
                 }
 
@@ -2185,9 +2242,22 @@
                     ? `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold">${i.originalCurrency}</span>`
                     : '';
 
+                // Icon & Color Logic
+                let iconBg, iconText, amountColor, sign;
+                if (isInc) {
+                    iconBg = 'bg-emerald-50'; iconText = 'text-emerald-600';
+                    amountColor = 'text-emerald-600'; sign = '+';
+                } else if (isDebtInc) {
+                    iconBg = 'bg-blue-50'; iconText = 'text-blue-600';
+                    amountColor = 'text-blue-600'; sign = '+';
+                } else {
+                    iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
+                    amountColor = 'text-rose-600'; sign = '-';
+                }
+
                 div.innerHTML = `
                     <div class="flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${isInc ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${iconBg} ${iconText}">
                             ${i.category ? i.category.substring(0, 2).toUpperCase() : '??'}
                         </div>
                         <div>
@@ -2196,7 +2266,7 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-4">
-                        <p class="font-bold ${isInc ? 'text-emerald-600' : 'text-rose-600'}">${isInc ? '+' : '-'}${fmt(i.amt)}</p>
+                        <p class="font-bold ${amountColor}">${sign}${fmt(i.amt)}</p>
                         <button onclick="deleteItem('transactions', '${i.id}')" class="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </div>`;
                 list.appendChild(div);
@@ -2234,38 +2304,48 @@
             const allTrans = window.allDecryptedTransactions || [];
 
             decryptedDebts.forEach(d => {
-                // Sum expenses that match debt name
+                // Sum expenses that match debt name (Repayments)
                 const paid = allTrans
                     .filter(t => t.type === 'expense' && t.category === d.name)
                     .reduce((acc, curr) => acc + curr.amt, 0);
 
-                const percentage = Math.min(100, Math.round((paid / d.amount) * 100));
-                const remaining = Math.max(0, d.amount - paid);
+                // Sum income or debt_increase that matches debt name (Additional Loans)
+                const borrowedMore = allTrans
+                    .filter(t => (t.type === 'income' || t.type === 'debt_increase') && t.category === d.name)
+                    .reduce((acc, curr) => acc + curr.amt, 0);
 
-                if (remaining <= 0.01) return; // Hide completed debts
+                const totalDebt = d.amount + borrowedMore;
+                const percentage = totalDebt > 0 ? Math.min(100, Math.round((paid / totalDebt) * 100)) : 100;
+                const remaining = Math.max(0, totalDebt - paid);
+
+                if (remaining <= 0.01 && percentage >= 100) return; // Hide completed debts
 
                 const div = document.createElement('div');
-                div.className = "group relative";
+                div.className = "group relative cursor-pointer hover:bg-slate-50 p-2 -mx-2 rounded-xl transition-colors";
+                div.onclick = (e) => {
+                    if (e.target.closest('button')) return;
+                    openUpdateDebtModal(d.id);
+                };
                 div.innerHTML = `
-                    <div class="flex justify-between items-end mb-1">
-                        <div>
-                            <p class="text-sm font-bold text-slate-700">${d.name}</p>
-                            <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                                Paid: ${fmt(paid)} / ${fmt(d.amount)}
-                            </p>
+                        <div class="flex justify-between items-end mb-1">
+                            <div>
+                                <p class="text-sm font-bold text-slate-700">${d.name}</p>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                    Paid: ${fmt(paid)} / ${fmt(totalDebt)}
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-black text-rose-600">${percentage}%</span>
+                                <button onclick="deleteItem('debts', '${d.id}')" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
+                                    <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                             <span class="text-xs font-black text-rose-600">${percentage}%</span>
-                             <button onclick="deleteItem('debts', '${d.id}')" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
-                                <i data-lucide="trash-2" class="w-3 h-3"></i>
-                             </button>
+                        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-rose-500 rounded-full" style="width: ${percentage}%"></div>
                         </div>
-                    </div>
-                    <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div class="h-full bg-rose-500 rounded-full" style="width: ${percentage}%"></div>
-                    </div>
-                    <p class="text-[10px] text-slate-400 mt-1 italic text-right">${fmt(remaining)} left</p>
-                `;
+                        <p class="text-[10px] text-slate-400 mt-1 italic text-right">${fmt(remaining)} left</p>
+                    `;
                 list.appendChild(div);
             });
             lucide.createIcons();
@@ -2404,18 +2484,8 @@
                 selectEl.appendChild(op);
             });
 
-            // 3. Debt Categories
-            if (window.allDecryptedDebts && window.allDecryptedDebts.length > 0) {
-                const group = document.createElement('optgroup');
-                group.label = "Debts / Loans";
-                window.allDecryptedDebts.forEach(d => {
-                    const op = document.createElement('option');
-                    op.value = d.name; // Important: Value matches Debt name
-                    op.innerText = `🏦 Pay: ${d.name}`;
-                    group.appendChild(op);
-                });
-                selectEl.appendChild(group);
-            }
+            // 3. Debt Categories - REMOVED to prevent adding via standard modal
+            // (Debts should be managed via the Debt/Loan interface)
 
             // 4. Lent Categories
             if (window.allDecryptedLent && window.allDecryptedLent.length > 0) {
@@ -2695,6 +2765,24 @@
             if (id) {
                 const item = window.allDecryptedTransactions.find(t => t.id === id);
                 if (!item) return;
+
+                // Guard: Prevent editing Debt transactions or specialized types not supported by this modal
+                // 'debt_increase' is not supported (no UI toggle)
+                // If category is not in the dropdown (because we removed Debts), we shouldn't allow editing as it would reset category
+
+                // Check if category exists in dropdown
+                const categoryExists = Array.from(cat.options).some(o => o.value === item.category);
+
+                if (item.type === 'debt_increase' || !categoryExists) {
+                    alert("This transaction typically belongs to a restricted category (e.g. Debt) or type. Please manage it within its specific section (e.g. Debts to Pay).");
+                    toggleModal('transaction-modal'); // Re-toggle to close if it was just opened, or simply don't show
+                    // Since toggleModal flips the class, and we are currently visible? No, "openTransactionModal" is called to SHOW it.
+                    // The modal is currently HIDDEN when this function is called (before validity check).
+                    // Actually checking the logic: openTransactionModal calls modal.classList.remove('hidden') at the END.
+                    // So we just return here.
+                    return;
+                }
+
                 title.innerText = "Edit Transaction";
                 tId.value = id;
                 desc.value = item.desc;
@@ -2869,6 +2957,81 @@
             renderDebts(rawDebts);
             // Refresh budget inputs to include new debt category
             populateBudgetInputs();
+        }
+
+        // New Logic for Update Debt Modal
+        function openUpdateDebtModal(id) {
+            const debt = window.allDecryptedDebts.find(d => d.id === id);
+            if (!debt) return;
+
+            document.getElementById('ud-title').innerText = debt.name;
+            document.getElementById('ud-debt-id').value = id;
+            document.getElementById('ud-category').value = debt.name; // Category matches debt name
+            document.getElementById('ud-amount').value = '';
+            document.getElementById('ud-desc').value = '';
+            document.getElementById('ud-date').value = new Date().toISOString().split('T')[0];
+
+            setUDType('repayment'); // Default
+            document.getElementById('update-debt-modal').classList.remove('hidden');
+        }
+
+        function setUDType(type) {
+            document.getElementById('ud-type').value = type;
+            const btnRepay = document.getElementById('btn-ud-repay');
+            const btnLoan = document.getElementById('btn-ud-loan');
+
+            if (type === 'repayment') {
+                btnRepay.className = "py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm";
+                btnLoan.className = "py-2 rounded-xl font-bold text-slate-400";
+            } else {
+                btnRepay.className = "py-2 rounded-xl font-bold text-slate-400";
+                btnLoan.className = "py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm";
+            }
+        }
+
+        async function saveDebtTransaction() {
+            const category = document.getElementById('ud-category').value;
+            const amount = parseFloat(document.getElementById('ud-amount').value);
+            const typeKey = document.getElementById('ud-type').value; // 'repayment' or 'loan'
+            const dateVal = document.getElementById('ud-date').value;
+            let desc = document.getElementById('ud-desc').value;
+
+            if (isNaN(amount) || amount <= 0) { alert("Invalid amount"); return; }
+
+            // Map to Transaction Type
+            // Repayment -> Expense (Reduces debt remaining)
+            // Loan -> Debt Increase (Increases debt remaining, adds to balance, but NOT income)
+            const type = typeKey === 'repayment' ? 'expense' : 'debt_increase';
+
+            if (!desc) {
+                desc = typeKey === 'repayment' ? `Repayment for ${category}` : `Added loan for ${category}`;
+            }
+
+            const date = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
+
+            // Reuse generic save logic via manual construction
+            const encrypted = await encryptData({
+                desc,
+                amt: amount, // Assuming base currency for simplicity
+                quantity: 1,
+                type,
+                category,
+                date
+            });
+
+            const db = await getDB();
+            db.transactions.push({
+                id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                data: encrypted,
+                createdAt: Date.now()
+            });
+
+            await saveDB(db);
+
+            rawTransactions = db.transactions;
+            toggleModal('update-debt-modal');
+            await loadAndRender(); // Updates transaction list
+            await renderDebts(rawDebts); // Update debt progress
         }
 
         async function saveLent() {
