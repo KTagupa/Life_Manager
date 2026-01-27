@@ -5127,6 +5127,10 @@
                     style="color:var(--accent)">
                     🔗 Link Tasks
                 </button>
+                <button class="note-toolbar-btn" onclick="toggleNoteHabitSearch()" title="Link Note to Habits"
+                    style="color:#10b981">
+                    ✅ Link Habits
+                </button>
             </div>
 
             <div class="note-toolbar-group">
@@ -5180,12 +5184,37 @@
             </div>
         </div>
 
+        <!-- Habit Search Overlay -->
+        <div id="note-habit-search-overlay"
+            style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.95); z-index: 200; padding: 2rem; justify-content: center; align-items: flex-start;">
+            <div class="note-search-window">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem">
+                    <h3>Link Note to Habit</h3>
+                    <button class="icon-btn" style="color:white" onclick="toggleNoteHabitSearch()">✕</button>
+                </div>
+                <div style="position:relative">
+                    <span style="position:absolute; left:12px; top:10px; color:var(--text-muted)">🔍</span>
+                    <input type="text" id="note-habit-search-input" class="note-search-input"
+                        placeholder="Search habits by name..." oninput="filterNoteHabitSearch(this.value)"
+                        onkeydown="if(event.key==='Escape'){ toggleNoteHabitSearch(); event.stopPropagation(); }">
+                </div>
+                <div id="note-habit-search-results-list">
+                    <!-- Search results render here -->
+                </div>
+            </div>
+        </div>
+
         <!-- Footer -->
         <div class="note-modal-footer">
             <div class="note-footer-top">
                 <div class="note-linked-tasks-container" id="note-linked-tasks-list">
                     <span class="note-linked-label">Linked Tasks:</span>
                     <!-- Linked task tags render here -->
+                </div>
+
+                <div class="note-linked-tasks-container" id="note-linked-habits-list" style="margin-top: 10px;">
+                    <span class="note-linked-label">Linked Habits:</span>
+                    <!-- Linked habit tags render here -->
                 </div>
                 <div class="note-footer-status-group">
                     <div class="note-status-indicator">
@@ -8199,6 +8228,82 @@ User Query: `;
             }
         }
 
+        function toggleNoteHabitSearch() {
+            const overlay = document.getElementById('note-habit-search-overlay');
+            const isVisible = overlay.style.display === 'flex';
+            overlay.style.display = isVisible ? 'none' : 'flex';
+            if (!isVisible) {
+                document.getElementById('note-habit-search-input').value = '';
+                filterNoteHabitSearch('');
+                document.getElementById('note-habit-search-input').focus();
+            }
+        }
+
+        function filterNoteHabitSearch(query) {
+            const list = document.getElementById('note-habit-search-results-list');
+            if (!list || !currentEditingNoteId) return;
+
+            list.innerHTML = '';
+            const q = query.toLowerCase();
+
+            const filtered = habits.filter(h =>
+                (h.title || "").toLowerCase().includes(q) &&
+                !(h.noteIds && h.noteIds.includes(currentEditingNoteId))
+            ).sort((a, b) => (a.title || "").localeCompare(b.title || "")).slice(0, 20);
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<div style="color:#666; font-size:12px; padding:20px; text-align:center;">No matching habits found</div>';
+                return;
+            }
+
+            filtered.forEach(h => {
+                const item = document.createElement('div');
+                item.className = 'note-search-result-item';
+                const freq = h.frequency || 'daily';
+                const type = h.type || 'checkbox';
+                item.innerHTML = `<strong>✅ ${h.title || "Untitled Habit"}</strong><small>${freq} • ${type}</small>`;
+                item.onclick = () => {
+                    linkNoteToHabit(currentEditingNoteId, h.id);
+                    toggleNoteHabitSearch();
+                };
+                list.appendChild(item);
+            });
+        }
+
+        function showHabitNotes(habitId) {
+            const habit = habits.find(h => h.id === habitId);
+            if (!habit || !habit.noteIds || habit.noteIds.length === 0) return;
+
+            // If only one note, open it directly
+            if (habit.noteIds.length === 1) {
+                const noteId = habit.noteIds[0];
+                const note = notes.find(n => n.id === noteId);
+                if (note) {
+                    openNoteEditor(noteId);
+                }
+                return;
+            }
+
+            // Multiple notes: show selection dialog
+            const notesList = habit.noteIds
+                .map((nid, index) => {
+                    const n = notes.find(note => note.id === nid);
+                    return n ? `${index + 1}. ${n.title || 'Untitled Note'}` : null;
+                })
+                .filter(n => n)
+                .join('\n');
+
+            const selection = prompt(`This habit is linked to ${habit.noteIds.length} notes:\n\n${notesList}\n\nEnter the number of the note to open (1-${habit.noteIds.length}):`);
+
+            if (selection) {
+                const index = parseInt(selection) - 1;
+                if (index >= 0 && index < habit.noteIds.length) {
+                    const noteId = habit.noteIds[index];
+                    openNoteEditor(noteId);
+                }
+            }
+        }
+
         function filterNoteTaskSearch(query) {
             const list = document.getElementById('note-search-results-list');
             if (!list || !currentEditingNoteId) return;
@@ -8255,32 +8360,62 @@ User Query: `;
         }
 
         // Render linked tasks in footer
-        function renderNoteLinkedTasksFooter() {
-            const container = document.getElementById('note-linked-tasks-list');
-            if (!container || !currentEditingNoteId) return;
+        function renderNoteLinkedItemsFooter() {
+            // Render Linked Tasks
+            const tasksContainer = document.getElementById('note-linked-tasks-list');
+            if (tasksContainer && currentEditingNoteId) {
+                const note = notes.find(n => n.id === currentEditingNoteId);
+                if (note) {
+                    tasksContainer.innerHTML = '<span class="note-linked-label">Linked Tasks:</span>';
 
-            const note = notes.find(n => n.id === currentEditingNoteId);
-            if (!note) return;
+                    if (!note.taskIds || note.taskIds.length === 0) {
+                        tasksContainer.innerHTML += '<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">None</span>';
+                    } else {
+                        note.taskIds.forEach(tid => {
+                            const task = nodes.find(n => n.id === tid) || archivedNodes.find(n => n.id === tid);
+                            if (!task) return;
 
-            container.innerHTML = '<span class="note-linked-label">Linked Tasks:</span>';
-
-            if (!note.taskIds || note.taskIds.length === 0) {
-                container.innerHTML += '<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">None</span>';
-                return;
+                            const tag = document.createElement('div');
+                            tag.className = 'note-task-tag';
+                            tag.innerHTML = `
+                                <span onclick="closeNoteEditor(); jumpToTask('${tid}')">${task.title}</span>
+                                <span class="unlink-btn" onclick="event.stopPropagation(); unlinkTaskFromNoteFooter('${tid}')">✕</span>
+                            `;
+                            tasksContainer.appendChild(tag);
+                        });
+                    }
+                }
             }
 
-            note.taskIds.forEach(tid => {
-                const task = nodes.find(n => n.id === tid) || archivedNodes.find(n => n.id === tid);
-                if (!task) return;
+            // Render Linked Habits
+            const habitsContainer = document.getElementById('note-linked-habits-list');
+            if (habitsContainer && currentEditingNoteId) {
+                habitsContainer.innerHTML = '<span class="note-linked-label">Linked Habits:</span>';
 
-                const tag = document.createElement('div');
-                tag.className = 'note-task-tag';
-                tag.innerHTML = `
-                    <span onclick="closeNoteEditor(); jumpToTask('${tid}')">${task.title}</span>
-                    <span class="unlink-btn" onclick="event.stopPropagation(); unlinkTaskFromNoteFooter('${tid}')">✕</span>
-                `;
-                container.appendChild(tag);
-            });
+                const linkedHabits = habits.filter(h => h.noteIds && h.noteIds.includes(currentEditingNoteId));
+
+                if (linkedHabits.length === 0) {
+                    habitsContainer.innerHTML += '<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">None</span>';
+                } else {
+                    linkedHabits.forEach(habit => {
+                        const tag = document.createElement('div');
+                        tag.className = 'note-task-tag';
+                        tag.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                        tag.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+                        tag.style.color = '#10b981';
+                        tag.innerHTML = `
+                            <span onclick="closeNoteEditor(); toggleHabits();">✅ ${habit.title}</span>
+                            <span class="unlink-btn" onclick="event.stopPropagation(); unlinkNoteFromHabit('${currentEditingNoteId}', '${habit.id}')">✕</span>
+                        `;
+                        habitsContainer.appendChild(tag);
+                    });
+                }
+            }
+        }
+
+        // Keep old function name as alias for backward compatibility
+        function renderNoteLinkedTasksFooter() {
+            renderNoteLinkedItemsFooter();
         }
 
         // Trigger save with debounce and status update
@@ -8617,6 +8752,9 @@ User Query: `;
             // Render blocks
             renderNoteBlocks();
 
+            // Render linked items footer
+            renderNoteLinkedItemsFooter();
+
             // Focus the first block for immediate typing
             if (currentNoteBlocks.length > 0 && !isNoteGlobalViewMode) {
                 setTimeout(() => {
@@ -8843,6 +8981,7 @@ User Query: `;
             if (!noteId || !taskId) return;
             const note = notes.find(n => n.id === noteId);
             if (!note) return;
+
             if (!note.taskIds) note.taskIds = [];
             if (!note.taskIds.includes(taskId)) {
                 note.taskIds.push(taskId);
@@ -8850,6 +8989,40 @@ User Query: `;
                 updateInspector();
                 showNotification("Note Linked to Task");
             }
+        }
+
+        function linkNoteToHabit(noteId, habitId) {
+            if (!noteId || !habitId) return;
+            const habit = habits.find(h => h.id === habitId);
+            if (!habit) return;
+            if (!habit.noteIds) habit.noteIds = [];
+            if (!habit.noteIds.includes(noteId)) {
+                habit.noteIds.push(noteId);
+                saveToStorage();
+                if (currentEditingNoteId === noteId) {
+                    renderNoteLinkedItemsFooter();
+                }
+                if (!document.getElementById('habits-panel').classList.contains('hidden')) {
+                    renderHabits();
+                }
+                showNotification("Note Linked to Habit");
+            }
+        }
+
+        function unlinkNoteFromHabit(noteId, habitId) {
+            if (!noteId || !habitId) return;
+            const habit = habits.find(h => h.id === habitId);
+            if (!habit) return;
+            if (!habit.noteIds) habit.noteIds = [];
+            habit.noteIds = habit.noteIds.filter(id => id !== noteId);
+            saveToStorage();
+            if (currentEditingNoteId === noteId) {
+                renderNoteLinkedItemsFooter();
+            }
+            if (!document.getElementById('habits-panel').classList.contains('hidden')) {
+                renderHabits();
+            }
+            showNotification("Note Unlinked from Habit");
         }
 
         function linkTaskToGoal(taskId, goalId) {
@@ -11157,6 +11330,7 @@ User Query: `;
                 if (h.activeTimerStart === undefined) h.activeTimerStart = null;
                 if (h.activeTimerStart !== null) h.activeTimerStart = Number(h.activeTimerStart);
                 if (!h.type) h.type = 'checkbox';
+                if (!h.noteIds) h.noteIds = [];
             });
             if (!Array.isArray(agenda)) agenda = [];
             // Remove agenda slots for deleted tasks (except inbox items)
@@ -12003,7 +12177,8 @@ User Query: `;
                     goalId: goalSelect.value || null,
                     history: {},
                     activeTimerStart: null,
-                    created: Date.now()
+                    created: Date.now(),
+                    noteIds: []
                 });
 
                 // Reset UI
@@ -12215,6 +12390,7 @@ User Query: `;
                         <div class="habit-meta">
                             <span class="habit-streak">🔥 ${streak}</span>
                             <span class="habit-goal-link">${goalName}</span>
+                            ${h.noteIds && h.noteIds.length > 0 ? `<span style="color:#3b82f6; font-size:10px; cursor:pointer;" onclick="event.stopPropagation(); showHabitNotes('${h.id}')" title="View linked notes">📝 ${h.noteIds.length}</span>` : ''}
                         </div>
                     </div>
                     <div class="habit-actions">
@@ -12711,7 +12887,10 @@ User Query: `;
                 <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('habit', '${habitId}')">✕</button>
                 ${h.type === 'checkbox' ? controlsHtml : ''}
                 <div style="flex-grow:1; min-width:0;">
-                    <div style="font-weight:600; font-size:11px; color:#eee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${h.title}</div>
+                    <div style="font-weight:600; font-size:11px; color:#eee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${h.title}
+                        ${h.noteIds && h.noteIds.length > 0 ? `<span style="color:#3b82f6; font-size:9px; margin-left:4px; cursor:pointer;" onclick="event.stopPropagation(); showHabitNotes('${habitId}')" title="View linked notes">📝${h.noteIds.length}</span>` : ''}
+                    </div>
                     ${h.type !== 'checkbox' ? `
                         <div style="height:3px; background:#333; border-radius:2px; margin-top:3px; overflow:hidden;">
                             <div style="height:100%; background:${isDone ? 'var(--ready-color)' : 'var(--accent)'}; width:${percent}%; transition:width 0.3s;"></div>
