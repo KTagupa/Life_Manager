@@ -2197,6 +2197,60 @@
             /* Optional: This highlights the header with your purple AI theme */
         }
 
+        /* AI Preset Buttons */
+        .ai-preset-btn {
+            background: linear-gradient(135deg, rgba(167, 139, 250, 0.1), rgba(139, 92, 246, 0.15));
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            color: #c4b5fd;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ai-preset-btn:hover {
+            background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(139, 92, 246, 0.25));
+            border-color: rgba(167, 139, 250, 0.5);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .ai-preset-btn:active {
+            transform: translateY(0);
+        }
+
+        /* AI Data Toggle Buttons */
+        .ai-data-toggle {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #888;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .ai-data-toggle:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: #aaa;
+        }
+
+        .ai-data-toggle.active {
+            background: linear-gradient(135deg, var(--ai-accent), #8b5cf6);
+            border-color: var(--ai-accent);
+            color: white;
+            box-shadow: 0 0 10px rgba(167, 139, 250, 0.3);
+        }
+
         /* SELECTION MENU (Contextual) */
         #selection-menu {
             position: fixed;
@@ -4809,6 +4863,8 @@
                 <span>AI Project Assistant</span>
             </div>
             <div style="display: flex; gap: 8px;">
+                <button class="modal-close-btn" onclick="toggleAIPresets()" title="Quick Tasks"
+                    style="width: auto; padding: 0 12px; font-size: 14px;">✨</button>
                 <button class="modal-close-btn" onclick="toggleAISettings()" title="Settings"
                     style="width: auto; padding: 0 12px; font-size: 14px;">⚙️</button>
                 <button class="modal-close-btn" onclick="closeAIModal()">✕</button>
@@ -4820,6 +4876,69 @@
             <input type="password" id="gemini-api-key-input" placeholder="Paste API Key here..."
                 onchange="saveGeminiKey(this.value)" style="width:100%; margin-bottom:5px;">
             <div style="font-size:10px; color:#888;">Key is saved to your browser's Local Storage.</div>
+        </div>
+
+        <!-- AI Task Presets Panel -->
+        <div id="ai-presets-pane"
+            style="padding: 12px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border); display: none;">
+            <div
+                style="margin-bottom: 8px; font-size: 10px; font-weight: 700; color: var(--ai-accent); letter-spacing: 0.5px;">
+                QUICK TASKS
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px;">
+                <button class="ai-preset-btn" onclick="selectAIPreset('analyze-risks')">
+                    ⚠️ Analyze Risks
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('goal-alignment')">
+                    🎯 Goal Alignment
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('weekly-summary')">
+                    📊 Weekly Summary
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('schedule-optimization')">
+                    ⏰ Optimize Schedule
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('unblock-tasks')">
+                    🔓 Unblock Tasks
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('habit-insights')">
+                    💪 Habit Insights
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('next-action')">
+                    ➡️ What's Next?
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('search-notes')">
+                    🔍 Search Notes
+                </button>
+            </div>
+
+            <div
+                style="margin-bottom: 8px; font-size: 10px; font-weight: 700; color: var(--ai-accent); letter-spacing: 0.5px;">
+                INCLUDE DATA
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <button class="ai-data-toggle active" data-type="tasks" onclick="toggleAIData('tasks')">
+                    📋 Tasks
+                </button>
+                <button class="ai-data-toggle" data-type="goals" onclick="toggleAIData('goals')">
+                    🎯 Goals
+                </button>
+                <button class="ai-data-toggle" data-type="habits" onclick="toggleAIData('habits')">
+                    ✅ Habits
+                </button>
+                <button class="ai-data-toggle" data-type="schedule" onclick="toggleAIData('schedule')">
+                    📅 Schedule
+                </button>
+                <button class="ai-data-toggle" data-type="notes" onclick="toggleAIData('notes')">
+                    📝 Notes
+                </button>
+                <button class="ai-data-toggle" data-type="archive" onclick="toggleAIData('archive')">
+                    🗄️ Archive
+                </button>
+                <button class="ai-data-toggle" data-type="inbox" onclick="toggleAIData('inbox')">
+                    📥 Inbox
+                </button>
+            </div>
         </div>
 
         <div id="ai-chat-history" class="panel-list"
@@ -5826,6 +5945,23 @@
             // Load API Key into input if exists
             if (geminiApiKey) document.getElementById('gemini-api-key-input').value = geminiApiKey;
 
+            // Load saved AI data preferences
+            const savedAIData = localStorage.getItem('ai_selected_data');
+            if (savedAIData) {
+                try {
+                    selectedAIData = new Set(JSON.parse(savedAIData));
+                    // Update button states
+                    setTimeout(() => {
+                        selectedAIData.forEach(type => {
+                            const btn = document.querySelector(`.ai-data-toggle[data-type="${type}"]`);
+                            if (btn) btn.classList.add('active');
+                        });
+                    }, 100);
+                } catch (e) {
+                    selectedAIData = new Set(['tasks']); // Default
+                }
+            }
+
             checkAutoArchive();
             updateCalculations();
             render();
@@ -6228,6 +6364,108 @@
             pane.classList.toggle('visible');
         }
 
+        function toggleAIPresets() {
+            const pane = document.getElementById('ai-presets-pane');
+            if (pane.style.display === 'none' || pane.style.display === '') {
+                pane.style.display = 'block';
+            } else {
+                pane.style.display = 'none';
+            }
+        }
+
+        // Track selected data types
+        let selectedAIData = new Set(['tasks']); // Default to tasks
+
+        function toggleAIData(type) {
+            const btn = document.querySelector(`.ai-data-toggle[data-type="${type}"]`);
+            if (!btn) return;
+
+            if (selectedAIData.has(type)) {
+                selectedAIData.delete(type);
+                btn.classList.remove('active');
+            } else {
+                selectedAIData.add(type);
+                btn.classList.add('active');
+            }
+
+            // Save preference
+            localStorage.setItem('ai_selected_data', JSON.stringify(Array.from(selectedAIData)));
+        }
+
+        // AI Task Presets
+        const aiPresets = {
+            'analyze-risks': {
+                prompt: 'Analyze my Critical Path tasks that are currently blocked. What is the single most important thing I must finish today to prevent a cascade of delays?',
+                requiredData: ['tasks']
+            },
+            'goal-alignment': {
+                prompt: 'Look at my Inbox ideas and current Life Goals. Which inbox items should I promote to tasks immediately to maintain momentum toward my goals?',
+                requiredData: ['inbox', 'goals']
+            },
+            'weekly-summary': {
+                prompt: 'Review my archived tasks, current progress, and habits. Write a brief executive summary of what I achieved this week and suggest my top 3 priorities for next week.',
+                requiredData: ['tasks', 'archive', 'habits']
+            },
+            'schedule-optimization': {
+                prompt: 'Analyze my current agenda and task list. Suggest an optimized schedule for today following the 90-minute Deep Work rule and energy management principles.',
+                requiredData: ['tasks', 'schedule']
+            },
+            'unblock-tasks': {
+                prompt: 'Show me all blocked tasks and their dependencies. What specific actions can I take right now to unblock the most critical tasks?',
+                requiredData: ['tasks']
+            },
+            'habit-insights': {
+                prompt: 'Analyze my habit streaks and completion rates. What patterns do you see? Which habits need attention and which are going strong?',
+                requiredData: ['habits']
+            },
+            'next-action': {
+                prompt: 'Based on my current schedule, what should I be working on right now? Consider urgency, energy levels, and my agenda.',
+                requiredData: ['tasks', 'schedule']
+            },
+            'search-notes': {
+                prompt: 'Search through my notes and find information related to: ',
+                requiredData: ['notes'],
+                needsInput: true
+            }
+        };
+
+        function selectAIPreset(presetKey) {
+            const preset = aiPresets[presetKey];
+            if (!preset) return;
+
+            // Auto-select required data
+            selectedAIData.clear();
+            preset.requiredData.forEach(type => {
+                selectedAIData.add(type);
+                const btn = document.querySelector(`.ai-data-toggle[data-type="${type}"]`);
+                if (btn) btn.classList.add('active');
+            });
+
+            // Deselect unrequired data
+            document.querySelectorAll('.ai-data-toggle').forEach(btn => {
+                const type = btn.dataset.type;
+                if (!preset.requiredData.includes(type)) {
+                    btn.classList.remove('active');
+                }
+            });
+
+            const input = document.getElementById('ai-input');
+
+            if (preset.needsInput) {
+                // For search, allow user to add their query
+                input.value = preset.prompt;
+                input.focus();
+                input.setSelectionRange(preset.prompt.length, preset.prompt.length);
+            } else {
+                // Auto-execute for complete presets
+                input.value = preset.prompt;
+                askAI();
+            }
+
+            // Close presets panel
+            document.getElementById('ai-presets-pane').style.display = 'none';
+        }
+
         function saveGeminiKey(val) {
             geminiApiKey = val.trim();
             localStorage.setItem('urgency_flow_gemini_key', geminiApiKey);
@@ -6345,6 +6583,99 @@
             history.scrollTop = history.scrollHeight;
         }
 
+        function buildContextFromSelection(dataTypes) {
+            const context = {
+                currentTime: new Date().toLocaleString(),
+                includedData: Array.from(dataTypes)
+            };
+
+            if (dataTypes.has('tasks')) {
+                context.activeTasks = nodes.filter(n => !n.completed).slice(0, 50).map(n => ({
+                    id: n.id,
+                    title: n.title,
+                    due: n.dueDate,
+                    isUrgent: n.isManualUrgent,
+                    isCritical: n._isCritical,
+                    isBlocked: n._isBlocked,
+                    isReady: n._isReady,
+                    subtaskProgress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : 'none',
+                    dependencies: n.dependencies.map(d => {
+                        const dep = nodes.find(x => x.id === d.id);
+                        return dep ? dep.title : 'unknown';
+                    }).slice(0, 3),
+                    downstreamWeight: n._downstreamWeight
+                }));
+            }
+
+            if (dataTypes.has('goals')) {
+                context.lifeGoals = lifeGoals[currentGoalYear] || [];
+                context.currentYear = currentGoalYear;
+            }
+
+            if (dataTypes.has('habits')) {
+                context.habits = habits.map(h => ({
+                    title: h.title,
+                    type: h.type,
+                    frequency: h.frequency,
+                    streak: calculateStreak(h),
+                    target: h.target
+                }));
+            }
+
+            if (dataTypes.has('schedule')) {
+                context.agenda = agenda.slice(0, 30).map(slot => {
+                    const t = nodes.find(n => n.id === slot.taskId) || archivedNodes.find(n => n.id === slot.taskId);
+                    return {
+                        taskId: slot.taskId,
+                        task: t ? t.title : (slot.title || 'Unknown'),
+                        start: slot.start,
+                        end: slot.end
+                    };
+                });
+            }
+
+            if (dataTypes.has('notes')) {
+                context.notes = notes.slice(0, 50).map(n => ({
+                    id: n.id,
+                    title: n.title,
+                    preview: (n.body || '').substring(0, 300),
+                    linkedTaskCount: (n.taskIds || []).length,
+                    isPinned: n.isPinned
+                }));
+            }
+
+            if (dataTypes.has('archive')) {
+                context.completedTasks = archivedNodes.slice(-30).map(n => ({
+                    title: n.title,
+                    completedDate: n.completedDate ? new Date(n.completedDate).toLocaleDateString() : 'unknown'
+                }));
+            }
+
+            if (dataTypes.has('inbox')) {
+                context.inboxIdeas = inbox.map(i => ({
+                    id: i.id,
+                    title: i.title
+                }));
+            }
+
+            return context;
+        }
+
+        function buildSmartContext(contextLevel, query) {
+            const q = query.toLowerCase();
+
+            // MINIMAL - Just counts and IDs
+            if (contextLevel === 'minimal') {
+                return {
+                    currentTime: new Date().toLocaleString(),
+                    activeTaskCount: nodes.filter(n => !n.completed).length,
+                    completedTaskCount: archivedNodes.length
+                };
+            }
+            // Add other logic if needed, but the instructions focus on selection-based context
+            return buildContextFromSelection(new Set(['tasks']));
+        }
+
         async function askAI() {
             const input = document.getElementById('ai-input');
             const query = input.value.trim();
@@ -6364,71 +6695,35 @@
             const loadingEl = document.getElementById('ai-loading');
             if (loadingEl) loadingEl.classList.remove('hidden');
 
-            // Prepare context
-            const appState = {
-                currentTime: new Date().toLocaleString(),
-                ecoMode: ecoModeLevel === 0 ? "Turbo" : (ecoModeLevel === 1 ? "Eco" : "Ultra Eco"),
-                currentAgenda: agenda.slice(0, 15).map(slot => {
-                    const t = nodes.find(n => n.id === slot.taskId) || archivedNodes.find(n => n.id === slot.taskId);
-                    return { taskId: slot.taskId, task: t ? t.title : (slot.title || 'Unknown'), start: slot.start, end: slot.end };
-                }),
-                activeTasks: nodes.filter(n => !n.completed).slice(0, 30).map(n => ({
-                    id: n.id,
-                    title: n.title,
-                    due: n.dueDate,
-                    isUrgent: n.isManualUrgent,
-                    progress: n.subtasks.length > 0 ? `${n.subtasks.filter(s => s.done).length}/${n.subtasks.length}` : 'no subtasks',
-                    blockedBy: n.dependencies.slice(0, 3).map(d => {
-                        const dep = nodes.find(x => x.id === d.id);
-                        return dep ? dep.title : '...';
-                    }),
-                    checkInsToday: n.checkIns ? n.checkIns.filter(c => new Date(c.date).toLocaleDateString() === new Date().toLocaleDateString()).length : 0
-                })),
-                lastCompletedTasks: archivedNodes.slice(-10).map(n => ({ title: n.title, date: new Date(n.completedDate).toLocaleDateString() })),
-                inboxIdeas: inbox.slice(0, 20).map(i => ({ id: i.id, title: i.title })),
-                habits: habits.slice(0, 10).map(h => ({ title: h.title, streak: calculateStreak(h) })),
-                selectedNodeId: selectedNodeId
+            // Build context from selected data types
+            const appState = buildContextFromSelection(selectedAIData);
+
+            // Build system prompt based on selected data
+            const dataLabels = {
+                tasks: 'Tasks (active nodes)',
+                goals: 'Life Goals',
+                habits: 'Daily Habits',
+                schedule: 'Agenda/Calendar',
+                notes: 'Knowledge Base Notes',
+                archive: 'Completed Tasks',
+                inbox: 'Inbox Ideas'
             };
 
-            const systemPrompt = `You are a strategic Project Management Assistant for "Urgency Flow," a productivity app based on a dependency graph.
-        Your primary objective is to maximize biological ROI—ensuring the user's most difficult tasks align with their highest energy states.
+            const includedDataList = Array.from(selectedAIData).map(d => dataLabels[d]).join(', ');
 
-        CONTEXT DATA: ${JSON.stringify(appState)}
+            const systemPrompt = `You are an AI assistant for "Urgency Flow," a productivity app.
 
-        ENERGY MANAGEMENT PRINCIPLES:
-        1. Deep Work (DW): High-complexity tasks requiring intense focus. Max 4 hours/day.
-        2. Shallow Work (SW): Low-complexity, logistical tasks.
-        3. Peak Window: The first 4 hours of the workday. Prioritize DW here.
-        4. Trough Window: The mid-afternoon "Post-Lunch Dip." Prioritize SW or recovery here.
+DATA PROVIDED: ${includedDataList}
 
-        GOAL:
-        Analyze the user's active tasks, inbox ideas, and archived history to provide strategic insights.
+CONTEXT: ${JSON.stringify(appState)}
 
-        SCHEDULING RULES:
-        1. The 90-Minute Cap: No Deep Work block can exceed 90 minutes.
-        2. Use 30-90 minute blocks based on task complexity.
-        3. Recovery Logic: After Deep Work: Mandatory 20-minute "Real Break" (no screens).
-        4. Present the schedule as a Markdown table first.
-        5. DATA INTEGRATION: For every schedule you propose, you MUST append a JSON block at the end of your response using these tags so the system can "Push" it to the Agenda:
-           - For existing tasks, use their exact "id" for "taskId".
-           - For breaks or items not in context, use a descriptive string for "taskId" and set "title".
-           [SCHEDULE_DATA]
-           [{"taskId": "task_id_here", "title": "Task Name", "start": "ISO_STRING", "end": "ISO_STRING"}]
-           [/SCHEDULE_DATA]
+INSTRUCTIONS:
+- Answer concisely and actionably
+- Focus only on the data types provided above
+- If asked about data not included, politely mention it wasn't included in this query
+- Prioritize practical next steps over general advice
 
-        PROJECT DECOMPOSITION: If the user asks to break down, expand, or decompose a task/goal, provide a structured plan. 
-           Present the plan as clear text first, then MUST append a JSON block:
-           [DECOMPOSITION_DATA]
-           [
-             {"tempId": "node1", "title": "First Step", "duration": 1, "dependencies": []},
-             {"tempId": "node2", "title": "Second Step", "duration": 2, "dependencies": ["node1"]}
-           ]
-           [/DECOMPOSITION_DATA]
-
-        STYLE:
-        - Be concise and strategic.
-        - Use **bolding** for emphasis.
-        - Use Markdown for lists and tables.`;
+User Query: `;
 
             // Prepare API payload
             const payload = {
@@ -8977,23 +9272,20 @@
                         case 'KeyE': cycleEcoMode(); break;
                         case 'KeyP': togglePinnedWindow(); break; // I added this own my own
                         case 'KeyF': toggleTaskListWindow(); break;
-                        case 'Space':
-                            if (e.altKey) {
-                                e.preventDefault();
-                                toggleAIModal();
-                            }
-                            break;
-                        case 'KeyI':
-                            if (e.altKey) {
-                                e.preventDefault();
-                                toggleInboxModal();
-                            }
-                            break;
                         case 'KeyW':
                             const noteEditor = document.getElementById('note-editor');
                             if (noteEditor && !noteEditor.classList.contains('hidden')) {
                                 toggleNoteEditorSize();
                             }
+                            break;
+                        case 'KeyI':
+                            toggleAIModal();
+                            break;
+                        case 'KeyB':
+                            toggleInboxModal();
+                            break;
+                        case 'KeyJ':
+                            centerHealthDashboard();
                             break;
                     }
                 }
@@ -12351,6 +12643,35 @@
             `;
 
             container.appendChild(el);
+        }
+
+        function centerHealthDashboard() {
+            const healthDash = document.getElementById('health-dashboard');
+            if (!healthDash) return;
+
+            // Calculate center position
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const dashWidth = healthDash.offsetWidth;
+            const dashHeight = healthDash.offsetHeight;
+
+            const centerX = (windowWidth - dashWidth) / 2;
+            const centerY = (windowHeight - dashHeight) / 2;
+
+            // Apply centered position
+            healthDash.style.setProperty('left', centerX + 'px', 'important');
+            healthDash.style.setProperty('top', centerY + 'px', 'important');
+            healthDash.style.setProperty('bottom', 'auto', 'important');
+            healthDash.style.setProperty('right', 'auto', 'important');
+
+            // Save the new position
+            healthDashboardPosition = {
+                x: centerX,
+                y: centerY
+            };
+            localStorage.setItem('healthDashboardPosition', JSON.stringify(healthDashboardPosition));
+
+            showNotification("Health Dashboard Centered (Opt+J)");
         }
 
         document.addEventListener('mousedown', (e) => {
