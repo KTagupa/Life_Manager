@@ -5963,6 +5963,7 @@
             }
 
             checkAutoArchive();
+            checkExpiredTasks();
             updateCalculations();
             render();
             renderInbox();
@@ -5998,6 +5999,7 @@
 
             window.timerInterval = setInterval(tickTimers, 1000);
             setInterval(checkAutoArchive, 60000);
+            setInterval(checkExpiredTasks, 60000);
 
             // --- AUTOMATED BACKUP STARTUP ---
             updateBackupStatusUI();
@@ -6928,6 +6930,7 @@ User Query: `;
                 y: y || 100,
                 duration: 1,
                 dueDate: '',
+                expiresOnDue: false,
                 syncDurationDate: true,
                 completed: false,
                 completedDate: null,
@@ -7012,6 +7015,63 @@ User Query: `;
                 if (selectedNodeId && !nodes.find(n => n.id === selectedNodeId) && !archivedNodes.find(n => n.id === selectedNodeId)) {
                     deselectNode();
                 }
+            }
+        }
+
+        function checkExpiredTasks() {
+            const now = Date.now();
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // End of today
+
+            let expiredCount = 0;
+            const activeNodes = [];
+
+            nodes.forEach(n => {
+                // Check if task should expire
+                if (!n.completed && n.expiresOnDue && n.dueDate) {
+                    const dueDate = new Date(n.dueDate);
+                    dueDate.setHours(23, 59, 59, 999); // End of due date
+
+                    if (now > dueDate.getTime()) {
+                        // Task has expired - mark as completed and archive
+                        n.completed = true;
+                        n.completedDate = now;
+                        archivedNodes.push(n);
+                        expiredCount++;
+
+                        // Remove from agenda if scheduled
+                        agenda = agenda.filter(slot => slot.taskId !== n.id);
+                    } else {
+                        activeNodes.push(n);
+                    }
+                } else {
+                    activeNodes.push(n);
+                }
+            });
+
+            if (expiredCount > 0) {
+                nodes = activeNodes;
+
+                // Clean up dependencies referencing expired tasks
+                nodes.forEach(n => {
+                    n.dependencies = n.dependencies.filter(d => {
+                        return nodes.some(x => x.id === d.id) || archivedNodes.some(x => x.id === d.id && !x.completed);
+                    });
+                });
+
+                saveToStorage();
+                updateCalculations();
+                render();
+
+                if (!document.getElementById('archive-panel').classList.contains('hidden')) {
+                    renderArchiveList();
+                }
+
+                if (selectedNodeId && !nodes.find(n => n.id === selectedNodeId)) {
+                    deselectNode();
+                }
+
+                showNotification(`⏰ ${expiredCount} expired task${expiredCount > 1 ? 's' : ''} auto-archived`);
             }
         }
 
@@ -9148,6 +9208,16 @@ User Query: `;
                     if (node._isUrgent) badgesHtml += `<span class="badge urgent-badge">URGENT</span>`;
                     else if (node._isCritical) badgesHtml += `<span class="badge critical-badge">CP</span>`;
                     if (node._downstreamWeight > 0) badgesHtml += `<span class="badge weight">⚡${node._downstreamWeight}</span>`;
+
+                    // Expiration Warning
+                    if (node.expiresOnDue && node.dueDate) {
+                        const dueTime = new Date(node.dueDate).getTime();
+                        const now = Date.now();
+                        const hoursLeft = (dueTime - now) / (1000 * 60 * 60);
+                        if (hoursLeft > 0 && hoursLeft < 24) {
+                            badgesHtml += `<span class="badge" style="background:#dc2626; color:white; border-color:#dc2626;">⏰ EXPIRES</span>`;
+                        }
+                    }
                 }
 
                 const totalTime = getTotalTime(node);
@@ -9735,6 +9805,14 @@ User Query: `;
                         <input type="date" value="${node.dueDate || ''}" 
                             style="background:transparent; border:none; color:white; width:100%; font-family:inherit; font-size:13px; outline:none;" 
                             onchange="updateNodeField('dueDate', this.value)">
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-top:8px; padding:8px; background:rgba(239,68,68,0.1); border-radius:6px;">
+                        <input type="checkbox" id="expires-checkbox" ${node.expiresOnDue ? 'checked' : ''} 
+                            onchange="updateNodeField('expiresOnDue', this.checked)" 
+                            style="width:16px; height:16px; cursor:pointer;">
+                        <label for="expires-checkbox" style="font-size:11px; color:#ef4444; cursor:pointer; user-select:none;">
+                            ⚠️ Auto-archive if not completed by due date
+                        </label>
                     </div>
                 </div>`;
 
@@ -11019,6 +11097,7 @@ User Query: `;
                 if (!n.dependencies) n.dependencies = [];
                 if (!n.subtasks) n.subtasks = [];
                 if (!n.dueDate) n.dueDate = '';
+                if (n.expiresOnDue === undefined) n.expiresOnDue = false;
                 if (n.syncDurationDate === undefined) n.syncDurationDate = true;
                 if (n.isManualUrgent === undefined) n.isManualUrgent = false;
                 if (!n.goalIds) n.goalIds = [];
