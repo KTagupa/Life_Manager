@@ -9037,53 +9037,83 @@ User Query: `;
             showNotification("Note Unlinked from Habit");
         }
 
-        function linkTaskToGoal(taskId, goalId, applyToDeps = null) {
+        function linkTaskToGoal(taskId, goalId, applyToDownstream = null) {
             if (!taskId || !goalId) return;
 
-            // If applyToDeps is null, ask user
-            if (applyToDeps === null) {
-                const node = nodes.find(n => n.id === taskId);
-                if (node && node.dependencies && node.dependencies.filter(d => d.type === 'hard').length > 0) {
-                    const choice = confirm(
-                        "Apply this goal to hard dependencies too?\n\n" +
-                        "• OK = Link goal to this task AND its hard dependencies\n" +
-                        "• Cancel = Link goal only to this task"
-                    );
-                    applyToDeps = choice;
-                } else {
-                    applyToDeps = false;
-                }
+            const node = nodes.find(n => n.id === taskId);
+            if (!node) return;
+
+            // Find all downstream tasks (tasks that depend on this one)
+            const downstreamTasks = nodes.filter(n =>
+                n.dependencies.some(d => d.id === taskId && d.type === 'hard')
+            );
+
+            // If applyToDownstream is null and there are downstream tasks, ask user
+            if (applyToDownstream === null && downstreamTasks.length > 0) {
+                const choice = confirm(
+                    `Apply this goal to ${downstreamTasks.length} subsequent task(s)?\n\n` +
+                    "• OK = Link goal to this task AND all tasks that come after it\n" +
+                    "• Cancel = Link goal only to this task"
+                );
+                applyToDownstream = choice;
+            } else if (downstreamTasks.length === 0) {
+                applyToDownstream = false;
             }
 
             // Link to current task
-            const node = nodes.find(n => n.id === taskId);
-            if (!node) return;
             if (!node.goalIds) node.goalIds = [];
             if (!node.goalIds.includes(goalId)) {
                 node.goalIds.push(goalId);
                 showNotification("Goal Linked to Task");
             }
 
-            // Apply to hard dependencies if requested
-            if (applyToDeps && node.dependencies) {
-                const hardDeps = node.dependencies.filter(d => d.type === 'hard');
-                hardDeps.forEach(dep => {
-                    const depNode = nodes.find(n => n.id === dep.id);
-                    if (depNode) {
-                        if (!depNode.goalIds) depNode.goalIds = [];
-                        if (!depNode.goalIds.includes(goalId)) {
-                            depNode.goalIds.push(goalId);
+            // Apply to downstream tasks if requested (recursive)
+            if (applyToDownstream && downstreamTasks.length > 0) {
+                const linkDownstream = (currentTaskId) => {
+                    const downstream = nodes.filter(n =>
+                        n.dependencies.some(d => d.id === currentTaskId && d.type === 'hard')
+                    );
+
+                    downstream.forEach(downNode => {
+                        if (!downNode.goalIds) downNode.goalIds = [];
+                        if (!downNode.goalIds.includes(goalId)) {
+                            downNode.goalIds.push(goalId);
                         }
-                    }
-                });
-                if (hardDeps.length > 0) {
-                    showNotification(`Goal linked to task + ${hardDeps.length} dependencies`);
-                }
+                        // Recursively apply to their downstream tasks too
+                        linkDownstream(downNode.id);
+                    });
+                };
+
+                linkDownstream(taskId);
+                showNotification(`Goal linked to task + ${countAllDownstream(taskId)} subsequent task(s)`);
             }
 
             saveToStorage();
             updateInspector();
             render();
+        }
+
+        // Helper function to count all downstream tasks recursively
+        function countAllDownstream(taskId) {
+            let count = 0;
+            const visited = new Set();
+
+            const countRecursive = (currentId) => {
+                const downstream = nodes.filter(n =>
+                    n.dependencies.some(d => d.id === currentId && d.type === 'hard')
+                );
+
+                downstream.forEach(n => {
+                    if (!visited.has(n.id)) {
+                        visited.add(n.id);
+                        count++;
+                        countRecursive(n.id);
+                    }
+                });
+            };
+
+            countRecursive(taskId);
+            return count;
         }
 
         function unlinkTaskFromGoal(taskId, goalId) {
