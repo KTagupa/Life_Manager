@@ -2866,6 +2866,18 @@
             }
         }
 
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+
         .checkin-glow {
             animation: checkin-glow 0.5s ease-out;
         }
@@ -9025,17 +9037,53 @@ User Query: `;
             showNotification("Note Unlinked from Habit");
         }
 
-        function linkTaskToGoal(taskId, goalId) {
+        function linkTaskToGoal(taskId, goalId, applyToDeps = null) {
             if (!taskId || !goalId) return;
+
+            // If applyToDeps is null, ask user
+            if (applyToDeps === null) {
+                const node = nodes.find(n => n.id === taskId);
+                if (node && node.dependencies && node.dependencies.filter(d => d.type === 'hard').length > 0) {
+                    const choice = confirm(
+                        "Apply this goal to hard dependencies too?\n\n" +
+                        "• OK = Link goal to this task AND its hard dependencies\n" +
+                        "• Cancel = Link goal only to this task"
+                    );
+                    applyToDeps = choice;
+                } else {
+                    applyToDeps = false;
+                }
+            }
+
+            // Link to current task
             const node = nodes.find(n => n.id === taskId);
             if (!node) return;
             if (!node.goalIds) node.goalIds = [];
             if (!node.goalIds.includes(goalId)) {
                 node.goalIds.push(goalId);
-                saveToStorage();
-                updateInspector();
-                showNotification("Task Linked to Goal");
+                showNotification("Goal Linked to Task");
             }
+
+            // Apply to hard dependencies if requested
+            if (applyToDeps && node.dependencies) {
+                const hardDeps = node.dependencies.filter(d => d.type === 'hard');
+                hardDeps.forEach(dep => {
+                    const depNode = nodes.find(n => n.id === dep.id);
+                    if (depNode) {
+                        if (!depNode.goalIds) depNode.goalIds = [];
+                        if (!depNode.goalIds.includes(goalId)) {
+                            depNode.goalIds.push(goalId);
+                        }
+                    }
+                });
+                if (hardDeps.length > 0) {
+                    showNotification(`Goal linked to task + ${hardDeps.length} dependencies`);
+                }
+            }
+
+            saveToStorage();
+            updateInspector();
+            render();
         }
 
         function unlinkTaskFromGoal(taskId, goalId) {
@@ -9382,13 +9430,18 @@ User Query: `;
                     else if (node._isCritical) badgesHtml += `<span class="badge critical-badge">CP</span>`;
                     if (node._downstreamWeight > 0) badgesHtml += `<span class="badge weight">⚡${node._downstreamWeight}</span>`;
 
-                    // Expiration Warning
-                    if (node.expiresOnDue && node.dueDate) {
+                    // Expiration Warning - ENHANCED
+                    if (node.expiresOnDue && node.dueDate && !node.completed) {
                         const dueTime = new Date(node.dueDate).getTime();
                         const now = Date.now();
                         const hoursLeft = (dueTime - now) / (1000 * 60 * 60);
-                        if (hoursLeft > 0 && hoursLeft < 24) {
-                            badgesHtml += `<span class="badge" style="background:#dc2626; color:white; border-color:#dc2626;">⏰ EXPIRES</span>`;
+
+                        if (hoursLeft <= 24 && hoursLeft > 0) {
+                            // Less than 24 hours - show hours remaining
+                            badgesHtml += `<span class="badge" style="background:#dc2626; color:white; border-color:#dc2626; font-weight:800; animation: pulse 2s infinite;">⏰ ${Math.floor(hoursLeft)}h LEFT</span>`;
+                        } else if (hoursLeft <= 0) {
+                            // Already expired
+                            badgesHtml += `<span class="badge" style="background:#7f1d1d; color:white; border-color:#991b1b; font-weight:800; animation: pulse 2s infinite;">⏰ EXPIRED</span>`;
                         }
                     }
                 }
@@ -9407,6 +9460,15 @@ User Query: `;
                     const dateStr = due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                     const style = isOverdue ? 'background:#ef4444; color:white; border-color:#ef4444' : '';
                     badgesHtml += `<span class="badge date-badge" style="${style}">📅 ${dateStr}</span>`;
+                }
+
+                // Display linked goals
+                if (node.goalIds && node.goalIds.length > 0) {
+                    const goalNames = node.goalIds.map(gid => {
+                        const name = findGoalName(gid);
+                        return name ? name.substring(0, 15) + (name.length > 15 ? '...' : '') : 'Goal';
+                    });
+                    badgesHtml += `<span class="badge" style="background:rgba(251,191,36,0.2); color:#fbbf24; border-color:rgba(251,191,36,0.3);">🎯 ${goalNames.join(', ')}</span>`;
                 }
 
                 let icon = '';
@@ -10130,7 +10192,7 @@ User Query: `;
                     
                     <div id="goal-link-select-wrap" style="display:none; margin-bottom:8px;">
                         <select style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:white; border-radius:6px; outline:none; font-size:12px;" 
-                            onchange="linkTaskToGoal('${node.id}', this.value); this.parentElement.style.display='none'; this.value='';">
+                            onchange="linkTaskToGoal('${node.id}', this.value, null); this.parentElement.style.display='none'; this.value='';">
                             <option value="">Select Goal...</option>
                             ${allGoals.filter(g => !linkedGoalIds.includes(g.goal.id)).map(g => {
                 const indent = '&nbsp;'.repeat(g.level * 4);
@@ -10144,11 +10206,15 @@ User Query: `;
                 const goalItem = allGoals.find(g => g.goal.id === goalId);
                 if (!goalItem) return '';
                 const indent = '&nbsp;'.repeat(goalItem.level * 4);
+                const goalPath = getGoalPath(goalItem.goal.id);
                 return `
-                            <div class="linked-note-item" style="padding:10px 12px;">
-                                <span style="font-size:12px; color:#cbd5e1; flex-grow:1;">${indent}${goalItem.goal.text}</span>
-                                <span style="cursor:pointer; color:#ef4444; font-size:14px;" onclick="unlinkTaskFromGoal('${node.id}', '${goalId}')">✕</span>
-                            </div>`;
+                    <div class="linked-note-item" style="padding:10px 12px;">
+                        <div style="flex-grow:1;">
+                            <span style="font-size:12px; color:#cbd5e1;">${indent}🎯 ${goalItem.goal.text}</span>
+                            ${goalPath ? `<div style="font-size:9px; color:#64748b; margin-top:2px;">${goalPath}</div>` : ''}
+                        </div>
+                        <span style="cursor:pointer; color:#ef4444; font-size:14px;" onclick="unlinkTaskFromGoal('${node.id}', '${goalId}')">✕</span>
+                    </div>`;
             }).join('')}
                         
                         ${linkedGoalIds.length === 0 ?
@@ -10973,6 +11039,27 @@ User Query: `;
                 if (result) return result;
             }
             return 'Unknown Goal';
+        }
+
+        function getGoalPath(goalId) {
+            const buildPath = (list, targetId, path = []) => {
+                for (const g of list) {
+                    if (g.id === targetId) {
+                        return [...path, g.text].join(' → ');
+                    }
+                    if (g.children) {
+                        const result = buildPath(g.children, targetId, [...path, g.text]);
+                        if (result) return result;
+                    }
+                }
+                return null;
+            };
+
+            for (const year in lifeGoals) {
+                const result = buildPath(lifeGoals[year], goalId);
+                if (result) return result;
+            }
+            return null;
         }
 
         // --- CALENDAR LOGIC ---
