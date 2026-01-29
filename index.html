@@ -3923,6 +3923,112 @@
             display: flex;
         }
 
+        /* --- NODE GROUPS MODAL --- */
+        #node-groups-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 420px;
+            height: 600px;
+            min-width: 350px;
+            min-height: 450px;
+            max-width: 90vw;
+            max-height: 90vh;
+            background: linear-gradient(145deg, #1a2520, #0f1814);
+            border: 2px solid var(--accent);
+            border-radius: 16px;
+            box-shadow: 0 25px 60px rgba(59, 130, 246, 0.3), 0 0 100px rgba(0, 0, 0, 0.8);
+            z-index: 2500;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            resize: both;
+            transition: opacity 0.3s ease;
+        }
+
+        #node-groups-modal.visible {
+            display: flex;
+        }
+
+        .node-group-item {
+            background: var(--node-bg);
+            border: 1px solid var(--node-border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .node-group-item:hover {
+            border-color: var(--accent-border);
+            background: var(--node-bg-hover);
+        }
+
+        .node-group-item.hidden-group {
+            opacity: 0.5;
+            border-style: dashed;
+        }
+
+        .node-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .node-group-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-main);
+            flex-grow: 1;
+        }
+
+        .node-group-count {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-right: 10px;
+        }
+
+        .node-group-toggle {
+            width: 40px;
+            height: 20px;
+            background: #333;
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .node-group-toggle.active {
+            background: var(--ready-color);
+        }
+
+        .node-group-toggle::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: left 0.2s;
+        }
+
+        .node-group-toggle.active::after {
+            left: 22px;
+        }
+
+        .node-group-stats {
+            font-size: 10px;
+            color: var(--text-muted);
+            display: flex;
+            gap: 10px;
+            margin-top: 6px;
+        }
+
         .modal-header-enhanced {
             padding: 16px 20px;
             background: rgba(0, 0, 0, 0.3);
@@ -4795,6 +4901,7 @@
             <button class="btn" onclick="toggleAgenda()">📅 Agenda (Optn+A)</button>
             <button class="btn" onclick="toggleNotesPanel()">📝 Knowledge Base (Optn+N)</button>
             <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive (Optn+X)</button>
+            <button class="btn" onclick="toggleNodeGroupsModal()">🗂️ Node Groups (Optn+O)</button>
             <button class="btn" onclick="fitView()">Recenter / Urgent (Optn+R)</button>
             <button class="btn" onclick="autoArrangeGraph()">🪄 Declutter (Optn+D)</button>
             <button class="btn" onclick="toggleHeatmap()">📅 Heatmap (Optn+M)</button>
@@ -5339,6 +5446,26 @@
         </div>
         <div class="task-list-content" id="task-list-content">
             <!-- Tasks render here -->
+        </div>
+    </div>
+
+    <!-- Node Groups Modal -->
+    <div id="node-groups-modal">
+        <div class="modal-header-enhanced" id="node-groups-header">
+            <div class="modal-title-enhanced">
+                <span style="font-size: 24px;">🗂️</span>
+                <span>Connected Node Groups</span>
+            </div>
+            <button class="modal-close-btn" onclick="closeNodeGroupsModal()">✕</button>
+        </div>
+
+        <div
+            style="padding: 12px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); font-size: 11px; color: var(--text-muted);">
+            Groups are automatically detected based on dependencies. Toggle visibility to declutter your workspace.
+        </div>
+
+        <div class="panel-list" id="node-groups-list" style="flex-grow: 1; overflow-y: auto; padding: 10px;">
+            <!-- Groups render here -->
         </div>
     </div>
 
@@ -5924,6 +6051,8 @@
         let currentEditingNoteId = null;
         let noteEditorState = 'normal'; // 'normal' or 'maximized'
         let pinnedItems = []; // {type: 'task'|'note'|'habit', id: string}
+        let hiddenNodeGroups = new Set(); // Set of group IDs that are hidden
+        let nodeGroupsModalPosition = { x: null, y: null, width: 420, height: 600 };
         let aiModalPosition = { x: null, y: null, width: 450, height: 600 };
         let inboxModalPosition = { x: null, y: null, width: 380, height: 500 };
         let healthDashboardPosition = { x: null, y: null };
@@ -6035,6 +6164,13 @@
                         healthDash.style.setProperty('bottom', 'auto', 'important');
                         healthDash.style.setProperty('right', 'auto', 'important');
                     }
+                } catch (e) { }
+            }
+
+            const savedNodeGroupsPos = localStorage.getItem('nodeGroupsModalPosition');
+            if (savedNodeGroupsPos) {
+                try {
+                    nodeGroupsModalPosition = JSON.parse(savedNodeGroupsPos);
                 } catch (e) { }
             }
 
@@ -7249,6 +7385,11 @@ User Query: `;
             // Health Dashboard
             const healthDash = document.getElementById('health-dashboard');
             makeHealthDashboardDraggable(healthDash);
+
+            // Node Groups Modal
+            const nodeGroupsModal = document.getElementById('node-groups-modal');
+            const nodeGroupsHeader = document.getElementById('node-groups-header');
+            makeModalDraggable(nodeGroupsModal, nodeGroupsHeader, 'nodeGroupsModalPosition');
         }
 
         function makeModalDraggable(modal, handle, positionKey) {
@@ -9351,8 +9492,23 @@ User Query: `;
             container.innerHTML = '';
             svg.innerHTML = '';
 
-            // Filter nodes by goal if filter is active
+            // Filter out hidden groups
             let nodesToRender = nodes;
+
+            // Apply hidden groups filter
+            const groups = detectConnectedGroups();
+            const hiddenNodeIds = new Set();
+
+            groups.forEach((group, index) => {
+                const groupId = `group_${index}`;
+                if (hiddenNodeGroups.has(groupId)) {
+                    group.nodes.forEach(n => hiddenNodeIds.add(n.id));
+                }
+            });
+
+            nodesToRender = nodesToRender.filter(n => !hiddenNodeIds.has(n.id));
+
+            // Filter nodes by goal if filter is active
             if (currentGoalFilter) {
                 // Helper to recursively find all goal IDs (including sub-goals)
                 const getAllGoalIds = (goalList, targetId) => {
@@ -9379,7 +9535,7 @@ User Query: `;
                     return result;
                 };
                 const goalIds = getAllGoalIds(lifeGoals[currentGoalYear] || [], currentGoalFilter);
-                nodesToRender = nodes.filter(n => n.goalIds && n.goalIds.some(gid => goalIds.includes(gid)));
+                nodesToRender = nodesToRender.filter(n => n.goalIds && n.goalIds.some(gid => goalIds.includes(gid)));
             }
 
             // Ensure arrow marker exists at the start
@@ -9621,6 +9777,9 @@ User Query: `;
                             break;
                         case 'KeyJ':
                             centerHealthDashboard();
+                            break;
+                        case 'KeyO':
+                            toggleNodeGroupsModal();
                             break;
                     }
                 }
@@ -11302,7 +11461,7 @@ User Query: `;
 
         function saveToStorageImmediate() {
             // 1. Serialize Data ONCE
-            const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits, agenda, pinnedItems, noteSettings };
+            const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits, agenda, pinnedItems, noteSettings, hiddenNodeGroups: Array.from(hiddenNodeGroups) };
             const rawString = JSON.stringify(data);
 
             // 2. Save to Browser Storage
@@ -11367,6 +11526,7 @@ User Query: `;
                         gistId = parsed.gistId || '';
                         agenda = parsed.agenda || [];
                         pinnedItems = parsed.pinnedItems || [];
+                        hiddenNodeGroups = parsed.hiddenNodeGroups ? new Set(parsed.hiddenNodeGroups) : new Set();
                         if (parsed.noteSettings) {
                             noteSettings = parsed.noteSettings;
                         }
@@ -11566,6 +11726,161 @@ User Query: `;
             localStorage.setItem('inboxModalPosition', JSON.stringify(inboxModalPosition));
 
             modal.classList.remove('visible');
+        }
+
+        // --- NODE GROUPS LOGIC ---
+        function toggleNodeGroupsModal() {
+            const modal = document.getElementById('node-groups-modal');
+
+            if (modal.classList.contains('visible')) {
+                closeNodeGroupsModal();
+            } else {
+                // Restore saved position
+                if (nodeGroupsModalPosition.x !== null && nodeGroupsModalPosition.y !== null) {
+                    modal.style.left = nodeGroupsModalPosition.x + 'px';
+                    modal.style.top = nodeGroupsModalPosition.y + 'px';
+                    modal.style.transform = 'none';
+                }
+                if (nodeGroupsModalPosition.width && nodeGroupsModalPosition.height) {
+                    modal.style.width = nodeGroupsModalPosition.width + 'px';
+                    modal.style.height = nodeGroupsModalPosition.height + 'px';
+                }
+
+                modal.classList.add('visible');
+                detectAndRenderNodeGroups();
+            }
+        }
+
+        function closeNodeGroupsModal() {
+            const modal = document.getElementById('node-groups-modal');
+
+            // Save position before closing
+            const rect = modal.getBoundingClientRect();
+            nodeGroupsModalPosition = {
+                x: rect.left,
+                y: rect.top,
+                width: rect.width,
+                height: rect.height
+            };
+            localStorage.setItem('nodeGroupsModalPosition', JSON.stringify(nodeGroupsModalPosition));
+
+            modal.classList.remove('visible');
+        }
+
+        function detectAndRenderNodeGroups() {
+            const groups = detectConnectedGroups();
+            const container = document.getElementById('node-groups-list');
+            if (!container) return;
+
+            container.innerHTML = '';
+
+            if (groups.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:#666; padding:40px 20px; font-size:13px;">No connected node groups found.<br><br>Create tasks with dependencies to see groups.</div>';
+                return;
+            }
+
+            groups.forEach((group, index) => {
+                const groupId = `group_${index}`;
+                const isHidden = hiddenNodeGroups.has(groupId);
+
+                // Find first active (non-completed) node for title
+                const firstActive = group.nodes.find(n => !n.completed);
+                const titleNode = firstActive || group.nodes[0];
+                const groupTitle = titleNode ? titleNode.title : 'Unnamed Group';
+
+                const completedCount = group.nodes.filter(n => n.completed).length;
+                const totalCount = group.nodes.length;
+                const urgentCount = group.nodes.filter(n => n._isUrgent && !n.completed).length;
+                const criticalCount = group.nodes.filter(n => n._isCritical && !n.completed).length;
+
+                const el = document.createElement('div');
+                el.className = `node-group-item ${isHidden ? 'hidden-group' : ''}`;
+
+                el.innerHTML = `
+                    <div class="node-group-header">
+                        <div class="node-group-title">${groupTitle}</div>
+                        <div class="node-group-count">${totalCount} tasks</div>
+                        <div class="node-group-toggle ${!isHidden ? 'active' : ''}" 
+                             onclick="event.stopPropagation(); toggleNodeGroupVisibility('${groupId}', ${index})"></div>
+                    </div>
+                    <div class="node-group-stats">
+                        <span>✓ ${completedCount}/${totalCount}</span>
+                        ${urgentCount > 0 ? `<span style="color:var(--blocked-color)">⚡ ${urgentCount} urgent</span>` : ''}
+                        ${criticalCount > 0 ? `<span style="color:var(--critical-path)">⭐ ${criticalCount} critical</span>` : ''}
+                    </div>
+                `;
+
+                el.onclick = () => {
+                    if (!isHidden && titleNode) {
+                        closeNodeGroupsModal();
+                        jumpToTask(titleNode.id);
+                    }
+                };
+
+                container.appendChild(el);
+            });
+        }
+
+        function detectConnectedGroups() {
+            const visited = new Set();
+            const groups = [];
+
+            nodes.forEach(node => {
+                if (!visited.has(node.id)) {
+                    const group = collectConnectedNodes(node.id, visited);
+                    if (group.length > 1) { // Only groups with 2+ nodes
+                        groups.push({ nodes: group });
+                    }
+                }
+            });
+
+            return groups;
+        }
+
+        function collectConnectedNodes(startId, visited) {
+            const group = [];
+            const queue = [startId];
+            const localVisited = new Set();
+
+            while (queue.length > 0) {
+                const id = queue.shift();
+                if (localVisited.has(id)) continue;
+
+                const node = nodes.find(n => n.id === id);
+                if (!node) continue;
+
+                localVisited.add(id);
+                visited.add(id);
+                group.push(node);
+
+                // Add parents
+                node.dependencies.forEach(dep => {
+                    if (!localVisited.has(dep.id)) {
+                        queue.push(dep.id);
+                    }
+                });
+
+                // Add children
+                nodes.forEach(other => {
+                    if (other.dependencies.some(d => d.id === id) && !localVisited.has(other.id)) {
+                        queue.push(other.id);
+                    }
+                });
+            }
+
+            return group;
+        }
+
+        function toggleNodeGroupVisibility(groupId, groupIndex) {
+            if (hiddenNodeGroups.has(groupId)) {
+                hiddenNodeGroups.delete(groupId);
+            } else {
+                hiddenNodeGroups.add(groupId);
+            }
+
+            saveToStorage();
+            render();
+            detectAndRenderNodeGroups();
         }
 
         function renderInboxModal() {
