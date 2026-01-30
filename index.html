@@ -4908,6 +4908,7 @@
             <button class="btn" onclick="toggleProgressDashboard()">🏆 Progress (Optn+C)</button>
             <button class="btn" style="border-color: var(--accent); color: var(--accent);"
                 onclick="toggleSyncPanel()">☁️ Sync (Optn+S)</button>
+            <button class="btn" onclick="toggleGlobalSearch()">🔍 Search (Optn+Space)</button>
             <button class="btn" onclick="saveData(true)">Save (Optn+V)</button>
             <button class="btn" onclick="document.getElementById('file-input').click()">Load (Optn+L)</button>
             <button class="btn btn-danger" onclick="clearData()">Reset (Optn+K)</button>
@@ -4937,7 +4938,11 @@
     <div id="sync-panel" class="hidden">
         <div class="sync-header">
             <span>☁️ GitHub Gist Sync</span>
-            <span style="cursor:pointer" onclick="toggleSyncPanel()">✕</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="connection-status"
+                    style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #333;">Checking...</span>
+                <span style="cursor:pointer" onclick="toggleSyncPanel()">✕</span>
+            </div>
         </div>
         <div class="sync-info">
             Enter your GitHub Personal Access Token to sync data across devices via a private Gist.
@@ -6339,12 +6344,201 @@
             menu.style.top = top + 'px';
         }
 
+        function toggleGlobalSearch() {
+            let modal = document.getElementById('global-search-modal');
+            if (modal) {
+                modal.remove();
+                return;
+            }
+
+            modal = document.createElement('div');
+            modal.id = 'global-search-modal';
+            modal.style.cssText = `
+                position: fixed; top: 20%; left: 50%; transform: translateX(-50%);
+                width: 600px; max-width: 90vw; max-height: 60vh;
+                background: var(--panel-bg-elevated); border: 1px solid var(--accent);
+                border-radius: 12px; z-index: 3000; box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+                display: flex; flex-direction: column; overflow: hidden;
+            `;
+
+            modal.innerHTML = `
+                <div style=\"padding: 16px; border-bottom: 1px solid var(--border);\">
+                    <input type=\"text\" id=\"global-search-input\" placeholder=\"Search tasks, notes, goals...\" 
+                        style=\"width: 100%; background: var(--node-bg); border: 1px solid var(--border); 
+                        color: white; padding: 12px; border-radius: 8px; font-size: 16px; outline: none;\">
+                </div>
+                <div id=\"global-search-results\" style=\"flex: 1; overflow-y: auto; padding: 8px;\"></div>
+                <div style=\"padding: 8px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted);\">
+                    ↑↓ navigate • Enter open • Esc close
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            const input = document.getElementById('global-search-input');
+            input.focus();
+
+            let selectedIndex = 0;
+            let results = [];
+
+            const performSearch = (query) => {
+                const q = query.toLowerCase();
+                if (!q) {
+                    document.getElementById('global-search-results').innerHTML = '';
+                    return;
+                }
+
+                results = [];
+
+                // Search tasks
+                [...nodes, ...archivedNodes].forEach(n => {
+                    if (n.title.toLowerCase().includes(q) || (n.description || '').toLowerCase().includes(q)) {
+                        results.push({ type: 'task', title: n.title, obj: n, icon: n.completed ? '✅' : (n._isUrgent ? '⚡' : '📋') });
+                    }
+                });
+
+                // Search notes
+                notes.forEach(n => {
+                    let bodyText = '';
+                    try {
+                        const blocks = JSON.parse(n.body);
+                        bodyText = blocks.map(b => b.text).join(' ');
+                    } catch (e) { bodyText = n.body || ''; }
+
+                    if ((n.title || '').toLowerCase().includes(q) || bodyText.toLowerCase().includes(q)) {
+                        results.push({ type: 'note', title: n.title, obj: n, icon: '📝' });
+                    }
+                });
+
+                // Search goals
+                const searchGoals = (goals) => {
+                    goals.forEach(g => {
+                        if (g.text.toLowerCase().includes(q)) {
+                            results.push({ type: 'goal', title: g.text, obj: g, icon: '🎯' });
+                        }
+                        if (g.children) searchGoals(g.children);
+                    });
+                };
+                if (lifeGoals[currentGoalYear]) searchGoals(lifeGoals[currentGoalYear]);
+
+                renderResults();
+            };
+
+            const renderResults = () => {
+                const container = document.getElementById('global-search-results');
+                container.innerHTML = results.map((r, idx) => `
+                    <div class=\"search-result-item ${idx === selectedIndex ? 'selected' : ''}\" 
+                         style=\"padding: 10px; cursor: pointer; border-radius: 6px; ${idx === selectedIndex ? 'background: var(--accent-light); border-left: 3px solid var(--accent);' : 'hover:background: rgba(255,255,255,0.05);'}\"
+                         onclick=\"openSearchResult('${r.type}', '${r.obj.id}'); toggleGlobalSearch();\">
+                        <span style=\"margin-right: 8px;\">${r.icon}</span>
+                        <span style=\"${r.type === 'task' && r.obj.completed ? 'text-decoration: line-through; opacity: 0.6;' : ''}\">${r.title}</span>
+                        <span style=\"float: right; font-size: 11px; color: var(--text-muted); text-transform: uppercase;\">${r.type}</span>
+                    </div>
+                `).join('');
+
+                // Scroll selected into view
+                const selected = container.children[selectedIndex];
+                if (selected) selected.scrollIntoView({ block: 'nearest' });
+            };
+
+            input.addEventListener('input', (e) => {
+                selectedIndex = 0;
+                performSearch(e.target.value);
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    selectedIndex = Math.min(selectedIndex + 1, results.length - 1);
+                    renderResults();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    selectedIndex = Math.max(selectedIndex - 1, 0);
+                    renderResults();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (results[selectedIndex]) {
+                        openSearchResult(results[selectedIndex].type, results[selectedIndex].obj.id);
+                        toggleGlobalSearch();
+                    }
+                } else if (e.key === 'Escape') {
+                    toggleGlobalSearch();
+                }
+            });
+
+            // Close on backdrop
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) toggleGlobalSearch();
+            });
+        }
+
+        function openSearchResult(type, id) {
+            if (type === 'task') {
+                jumpToTask(id);
+            } else if (type === 'note') {
+                openNoteEditor(id);
+            } else if (type === 'goal') {
+                if (!isGoalsOpen) toggleGoals();
+                // Flash the goal in the list (you'd need to add IDs to goal elements)
+                setTimeout(() => {
+                    const goalEl = document.querySelector(`[data-goal-id=\"${id}\"]`);
+                    if (goalEl) {
+                        goalEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        goalEl.style.background = 'var(--accent-light)';
+                        setTimeout(() => goalEl.style.background = '', 1000);
+                    }
+                }, 100);
+            }
+        }
+
         // --- GITHUB SYNC LOGIC ---
         function toggleSyncPanel() {
             const panel = document.getElementById('sync-panel');
             if (panel.classList.contains('hidden')) panel.classList.remove('hidden');
             else panel.classList.add('hidden');
         }
+
+        // --- CONNECTION MONITORING ---
+        function updateConnectionStatus() {
+            const statusEl = document.getElementById('connection-status');
+            if (!statusEl) return;
+
+            if (navigator.onLine) {
+                // Test actual GitHub connectivity
+                fetch('https://api.github.com', { method: 'HEAD', mode: 'no-cors' })
+                    .then(() => {
+                        statusEl.innerText = '🟢 Online';
+                        statusEl.style.background = 'var(--ready-color)';
+                        statusEl.style.color = '#000';
+                    })
+                    .catch(() => {
+                        statusEl.innerText = '🟡 No API';
+                        statusEl.style.background = '#f59e0b';
+                        statusEl.style.color = '#000';
+                    });
+            } else {
+                statusEl.innerText = '🔴 Offline';
+                statusEl.style.background = '#ef4444';
+                statusEl.style.color = '#fff';
+            }
+        }
+
+        // Update on changes
+        window.addEventListener('online', () => {
+            updateConnectionStatus();
+            showNotification('Back online - ready to sync');
+            // Auto-attempt sync if we have pending changes
+            if (githubToken && gistId) pushToGist();
+        });
+
+        window.addEventListener('offline', () => {
+            updateConnectionStatus();
+            showNotification('Offline mode - changes saved locally');
+        });
+
+        // Check every 30 seconds
+        setInterval(updateConnectionStatus, 30000);
+        updateConnectionStatus(); // Initial check
 
         function saveGithubToken(val) {
             githubToken = val.trim();
@@ -6422,9 +6616,11 @@
                     notes: notes || [],
                     habits: typeof habits !== 'undefined' ? habits : [],
                     agenda: agenda || [],
-                    noteSettings: noteSettings || { categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`) }
+                    noteSettings: noteSettings || { categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`) },
+                    timestamp: Date.now()
                 };
                 content = JSON.stringify(appState, null, 2);
+                localStorage.setItem('urgencyFlow_lastSave', appState.timestamp);
             } catch (e) {
                 alert("❌ DATA ERROR: Could not format your data. " + e.message);
                 return;
@@ -6494,6 +6690,75 @@
             }
         }
 
+        function mergeStates(local, remote) {
+            const merged = {
+                nodes: [],
+                archivedNodes: [...(local.archivedNodes || [])],
+                inbox: [...(local.inbox || [])],
+                lifeGoals: local.lifeGoals || {},
+                habits: local.habits || [],
+                notes: [],
+                agenda: local.agenda || []
+            };
+
+            // Merge tasks: prefer completed status if either is done, use latest modification
+            const allTaskIds = new Set([
+                ...(local.nodes || []).map(n => n.id),
+                ...(remote.nodes || []).map(n => n.id)
+            ]);
+
+            allTaskIds.forEach(id => {
+                const localTask = (local.nodes || []).find(n => n.id === id);
+                const remoteTask = (remote.nodes || []).find(n => n.id === id);
+
+                if (!localTask) {
+                    merged.nodes.push(remoteTask);
+                } else if (!remoteTask) {
+                    merged.nodes.push(localTask);
+                } else {
+                    // Both exist - pick the one with more recent activity or completed status
+                    const pickLocal =
+                        localTask.completed && !remoteTask.completed ||
+                        (localTask.timeLogs || []).length > (remoteTask.timeLogs || []).length ||
+                        (localTask.checkIns || []).length > (remoteTask.checkIns || []).length;
+
+                    const chosen = pickLocal ? localTask : remoteTask;
+
+                    // But merge time logs from both!
+                    if (localTask !== chosen && localTask.timeLogs) {
+                        chosen.timeLogs = [...(chosen.timeLogs || []), ...localTask.timeLogs];
+                    }
+                    if (remoteTask !== chosen && remoteTask.timeLogs) {
+                        chosen.timeLogs = [...(chosen.timeLogs || []), ...remoteTask.timeLogs];
+                    }
+
+                    merged.nodes.push(chosen);
+                }
+            });
+
+            // Merge notes by timestamp
+            const allNoteIds = new Set([
+                ...(local.notes || []).map(n => n.id),
+                ...(remote.notes || []).map(n => n.id)
+            ]);
+
+            allNoteIds.forEach(id => {
+                const localNote = (local.notes || []).find(n => n.id === id);
+                const remoteNote = (remote.notes || []).find(n => n.id === id);
+
+                if (!localNote) merged.notes.push(remoteNote);
+                else if (!remoteNote) merged.notes.push(localNote);
+                else {
+                    // Pick newer note
+                    merged.notes.push(
+                        (localNote.timestamp || 0) > (remoteNote.timestamp || 0) ? localNote : remoteNote
+                    );
+                }
+            });
+
+            return merged;
+        }
+
         async function pullFromGist() {
             if (!githubToken) githubToken = document.getElementById('github-token').value.trim();
 
@@ -6536,20 +6801,51 @@
                 if (!data.files[GIST_FILENAME]) throw new Error("Target data file missing in Gist.");
 
                 // 3. Parse the appState from the Gist
-                const appState = JSON.parse(data.files[GIST_FILENAME].content);
+                const remoteState = JSON.parse(data.files[GIST_FILENAME].content);
+                const localState = {
+                    nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda
+                };
 
-                // 4. Map the appState back to local variables
-                // Using logical OR (||) ensures we don't overwrite with nulls
-                nodes = appState.nodes || [];
-                archivedNodes = appState.archivedNodes || [];
-                inbox = appState.inbox || [];
-                lifeGoals = appState.lifeGoals || {};
-                notes = appState.notes || [];
-                habits = appState.habits || [];
-                agenda = appState.agenda || [];
-                if (appState.noteSettings && appState.noteSettings.categoryNames) {
-                    noteSettings = appState.noteSettings;
+                // Check timestamps
+                const remoteTime = remoteState.timestamp || 0;
+                const localTime = localStorage.getItem('urgencyFlow_lastSave') || Date.now();
+
+                const timeDiff = Math.abs(remoteTime - localTime);
+                const isSignificantDiff = timeDiff > 60000; // 1 minute difference threshold
+
+                if (isSignificantDiff && remoteTime > localTime && nodes.length > 0) {
+                    // Conflict detected!
+                    const choice = confirm(
+                        `⚠️ Sync Conflict Detected\n\n` +
+                        `Local: ${nodes.length} tasks, last edited ${new Date(parseInt(localTime)).toLocaleTimeString()}\n` +
+                        `Remote: ${(remoteState.nodes || []).length} tasks, last edited ${new Date(remoteTime).toLocaleTimeString()}\n\n` +
+                        `Click OK to use REMOTE (GitHub) version\n` +
+                        `Click Cancel to keep LOCAL version and overwrite remote`
+                    );
+
+                    if (!choice) {
+                        // User wants local - push local to GitHub instead
+                        pushToGist();
+                        setSyncStatus('Kept local version');
+                        return;
+                    }
+                    // Otherwise proceed with remote below
                 }
+
+                // Proceed with remote merge (with smart combining)
+                const mergedState = mergeStates(localState, remoteState);
+
+                // Restore merged
+                nodes = mergedState.nodes || [];
+                archivedNodes = mergedState.archivedNodes || [];
+                inbox = mergedState.inbox || [];
+                lifeGoals = mergedState.lifeGoals || {};
+                notes = mergedState.notes || [];
+                habits = mergedState.habits || [];
+                agenda = mergedState.agenda || [];
+
+                // Save merge timestamp
+                localStorage.setItem('urgencyFlow_lastSave', Date.now());
 
                 // 5. Cleanup & UI Refresh
                 sanitizeLoadedData(); // Fixes missing properties in old data
@@ -9426,6 +9722,7 @@ User Query: `;
                 const wrapper = document.createElement('div');
                 goalList.forEach(goal => {
                     const nodeDiv = document.createElement('div'); nodeDiv.className = 'goal-node';
+                    nodeDiv.dataset.goalId = goal.id;
                     const content = document.createElement('div'); content.className = 'goal-content';
                     const caret = document.createElement('span'); caret.className = 'goal-caret';
                     if (goal.children.length === 0) caret.classList.add('invisible');
@@ -9499,7 +9796,80 @@ User Query: `;
         // --- LOGIC ENGINE ---
         function getDaysFromToday(dateStr) { if (!dateStr) return Infinity; const today = new Date(); today.setHours(0, 0, 0, 0); const due = new Date(dateStr); return Math.ceil((due - today) / (1000 * 60 * 60 * 24)); }
         function updateCalculations() {
-            nodes.forEach(n => { n._isBlocked = false; n._isReady = false; n._isCritical = false; n._isUrgent = false; n._isManualUrgentPath = false; n._downstreamWeight = 0; n._earliestStart = 0; n._earliestFinish = 0; n._latestFinish = Infinity; n._slack = 0; });
+            // --- CIRCULAR DEPENDENCY CHECK ---
+            const detectCycles = () => {
+                const visited = new Set();
+                const recursionStack = new Set();
+
+                const hasCycle = (nodeId, path = []) => {
+                    if (recursionStack.has(nodeId)) {
+                        // Found cycle - return the path to show user
+                        const cycleStart = path.indexOf(nodeId);
+                        return path.slice(cycleStart).concat([nodeId]);
+                    }
+                    if (visited.has(nodeId)) return false;
+
+                    visited.add(nodeId);
+                    recursionStack.add(nodeId);
+                    path.push(nodeId);
+
+                    const node = nodes.find(n => n.id === nodeId);
+                    if (node) {
+                        for (const dep of node.dependencies) {
+                            if (dep.type === 'hard') {
+                                const cycle = hasCycle(dep.id, [...path]);
+                                if (cycle) return cycle;
+                            }
+                        }
+                    }
+
+                    recursionStack.delete(nodeId);
+                    return false;
+                };
+
+                // Check all nodes
+                for (const node of nodes) {
+                    if (!visited.has(node.id)) {
+                        const cycle = hasCycle(node.id);
+                        if (cycle) return cycle;
+                    }
+                }
+                return false;
+            };
+
+            const cycle = detectCycles();
+            if (cycle) {
+                const cycleNames = cycle.map(id => {
+                    const n = nodes.find(x => x.id === id);
+                    return n ? n.title : id;
+                }).join(' → ');
+
+                showNotification(`⚠️ Circular dependency detected: ${cycleNames}. Please fix this.`);
+
+                // Highlight problematic nodes in red
+                cycle.forEach((id, idx) => {
+                    if (idx < cycle.length - 1) { // Don't duplicate the join node
+                        const node = nodes.find(n => n.id === id);
+                        if (node) node._hasCycleError = true;
+                    }
+                });
+            } else {
+                nodes.forEach(n => delete n._hasCycleError);
+            }
+
+            // Reset calculations (original code continues but cleaner)
+            nodes.forEach(n => {
+                n._isBlocked = false;
+                n._isReady = false;
+                n._isCritical = false;
+                n._isUrgent = false;
+                n._isManualUrgentPath = false;
+                n._downstreamWeight = 0;
+                n._earliestStart = 0;
+                n._earliestFinish = 0;
+                n._latestFinish = Infinity;
+                n._slack = 0;
+            });
             nodes.forEach(n => { if (n.completed) return; const hardParents = n.dependencies.filter(d => d.type === 'hard').map(d => nodes.find(p => p.id === d.id)).filter(p => p); if (hardParents.length === 0) n._isReady = true; else { const allDone = hardParents.every(p => p.completed); n._isBlocked = !allDone; n._isReady = allDone; } });
             const getDescendants = (id, visited = new Set()) => { let count = 0; nodes.forEach(n => { if (n.dependencies.some(d => d.id === id) && !visited.has(n.id)) { visited.add(n.id); count += 1 + getDescendants(n.id, visited); } }); return count; };
             nodes.forEach(n => { n._downstreamWeight = getDescendants(n.id); });
@@ -9612,12 +9982,41 @@ User Query: `;
 
         // --- RENDERING ---
         function render() {
-            const startRender = performance.now(); // Start timer
+            const startRender = performance.now();
 
             const container = document.getElementById('nodes-layer');
             const svg = document.getElementById('connections');
-            container.innerHTML = '';
-            svg.innerHTML = '';
+
+            // --- VIEWPORT CULLING (Performance Optimization) ---
+            const viewportBuffer = 200; // pixels outside viewport to still render
+            const viewportLeft = (-panX / scale) - viewportBuffer;
+            const viewportTop = (-panY / scale) - viewportBuffer;
+            const viewportRight = viewportLeft + (window.innerWidth / scale) + (viewportBuffer * 2);
+            const viewportBottom = viewportTop + (window.innerHeight / scale) + (viewportBuffer * 2);
+
+            let visibleCount = 0;
+            let culledCount = 0;
+
+            // Only clear and re-render changed nodes (optimization)
+            if (!window.lastRenderScale || Math.abs(window.lastRenderScale - scale) > 0.1 || !window.lastPanX || Math.abs(window.lastPanX - panX) > 100) {
+                // Significant view change - full clear needed
+                container.innerHTML = '';
+                svg.innerHTML = '';
+                window.fullRenderNeeded = true;
+            } else {
+                window.fullRenderNeeded = false;
+            }
+
+            window.lastRenderScale = scale;
+            window.lastPanX = panX;
+            window.lastPanY = panY;
+
+            // If full render, set up defs
+            if (window.fullRenderNeeded) {
+                const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+                defs.innerHTML = `<marker id=\"arrow\" markerWidth=\"10\" markerHeight=\"7\" refX=\"10\" refY=\"3.5\" orient=\"auto\"><polygon points=\"0 0, 10 3.5, 0 7\" fill=\"#666\"/></marker>`;
+                svg.appendChild(defs);
+            }
 
             // Filter out hidden groups
             let nodesToRender = nodes;
@@ -9721,6 +10120,20 @@ User Query: `;
 
             // --- Render Nodes ---
             nodesToRender.forEach(node => {
+                // Before creating DOM element for node:
+                const nodeVisible = (
+                    node.x + 200 > viewportLeft &&
+                    node.x < viewportRight &&
+                    node.y + 100 > viewportTop &&
+                    node.y < viewportBottom
+                );
+
+                if (!nodeVisible) {
+                    culledCount++;
+                    return; // Skip rendering this node
+                }
+                visibleCount++;
+
                 const el = document.createElement('div');
                 el.className = 'node';
                 el.style.left = node.x + 'px';
@@ -9733,6 +10146,15 @@ User Query: `;
                     if (node._isUrgent) el.classList.add('critical-urgent');
                     else if (node._isCritical) el.classList.add('critical');
                     if (node._isBlocked) el.classList.add('blocked');
+                }
+
+                if (node._hasCycleError) {
+                    el.style.border = '3px solid #ff0000';
+                    el.style.boxShadow = '0 0 20px rgba(255,0,0,0.5)';
+                    const warning = document.createElement('div');
+                    warning.innerText = '⚠️ CIRCULAR';
+                    warning.style.cssText = 'position: absolute; top: -20px; left: 0; background: #ff0000; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold;';
+                    el.appendChild(warning);
                 }
                 if (node.completed) el.classList.add('completed');
 
@@ -9928,6 +10350,11 @@ User Query: `;
                             toggleNodeGroupsModal();
                             break;
                     }
+                }
+
+                if (e.code === 'Space' && e.altKey) {
+                    e.preventDefault();
+                    toggleGlobalSearch();
                 }
             });
 
@@ -10205,6 +10632,7 @@ User Query: `;
             } else if (selectedIds.size > 1) {
                 selectedNodeId = null;
                 document.getElementById('inspector').classList.add('hidden');
+                showBulkOperationsBar();
                 render();
             } else {
                 deselectNode();
@@ -10299,8 +10727,129 @@ User Query: `;
             selectedNodeId = null;
             selectedIds.clear();
             document.getElementById('inspector').classList.add('hidden');
+            const bar = document.getElementById('bulk-ops-bar');
+            if (bar) bar.remove();
             render();
             if (document.getElementById('archive-panel').classList.contains('hidden') === false) renderArchiveList();
+        }
+
+        function showBulkOperationsBar() {
+            let bar = document.getElementById('bulk-ops-bar');
+            if (bar) bar.remove();
+
+            bar = document.createElement('div');
+            bar.id = 'bulk-ops-bar';
+            bar.style.cssText = `
+                position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+                background: var(--panel-bg-elevated); border: 1px solid var(--accent);
+                border-radius: 30px; padding: 8px 16px; z-index: 2000;
+                display: flex; gap: 10px; box-shadow: var(--shadow-xl);
+                animation: slideUp 0.3s ease;
+            `;
+
+            const count = selectedIds.size;
+
+            bar.innerHTML = `
+                <span style=\"align-self: center; color: var(--text-muted); font-size: 12px; margin-right: 8px;\">${count} selected</span>
+                <button class=\"btn\" onclick=\"bulkComplete()\" style=\"background: var(--ready-color); color: white; border-radius: 20px; padding: 6px 12px; font-size: 12px;\">✓ Complete</button>
+                <button class=\"btn\" onclick=\"bulkArchive()\" style=\"background: var(--soft-dep-color); color: white; border-radius: 20px; padding: 6px 12px; font-size: 12px;\">🗄 Archive</button>
+                <button class=\"btn\" onclick=\"bulkDelete()\" style=\"background: var(--blocked-color); color: white; border-radius: 20px; padding: 6px 12px; font-size: 12px;\">🗑 Delete</button>
+                <button class=\"btn\" onclick=\"bulkAddToAgenda()\" style=\"background: var(--accent); color: white; border-radius: 20px; padding: 6px 12px; font-size: 12px;\">📅 Agenda</button>
+                <button class=\"btn\" onclick=\"clearSelection()\" style=\"border-radius: 20px; padding: 6px 12px; font-size: 12px;\">✕ Clear</button>
+            `;
+
+            document.body.appendChild(bar);
+        }
+
+        function clearSelection() {
+            selectedIds.clear();
+            selectedNodeId = null;
+            const bar = document.getElementById('bulk-ops-bar');
+            if (bar) bar.remove();
+            render();
+        }
+
+        function bulkComplete() {
+            let count = 0;
+            selectedIds.forEach(id => {
+                const node = nodes.find(n => n.id === id);
+                if (node && !node.completed) {
+                    node.completed = true;
+                    node.completedDate = Date.now();
+                    count++;
+                }
+            });
+            clearSelection();
+            updateCalculations();
+            render();
+            saveToStorage();
+            showNotification(`Completed ${count} tasks`);
+        }
+
+        function bulkArchive() {
+            const now = Date.now();
+            let count = 0;
+            selectedIds.forEach(id => {
+                const node = nodes.find(n => n.id === id);
+                if (node) {
+                    node.completed = true;
+                    node.completedDate = now;
+                    archivedNodes.push(node);
+                    count++;
+                }
+            });
+            nodes = nodes.filter(n => !selectedIds.has(n.id));
+            clearSelection();
+            updateCalculations();
+            render();
+            saveToStorage();
+            showNotification(`Archived ${count} tasks`);
+        }
+
+        function bulkDelete() {
+            if (!confirm(`Delete ${selectedIds.size} tasks permanently? This cannot be undone.`)) return;
+
+            nodes = nodes.filter(n => !selectedIds.has(n.id));
+            archivedNodes = archivedNodes.filter(n => !selectedIds.has(n.id));
+
+            // Clean up dependencies
+            nodes.forEach(n => {
+                n.dependencies = n.dependencies.filter(d => !selectedIds.has(d.id));
+            });
+
+            clearSelection();
+            updateCalculations();
+            render();
+            saveToStorage();
+            showNotification('Tasks deleted');
+        }
+
+        function bulkAddToAgenda() {
+            // Show quick agenda add modal
+            const duration = prompt(`Add ${selectedIds.size} tasks to agenda for how many minutes each?`, "30");
+            if (!duration || isNaN(duration)) return;
+
+            const startTime = new Date();
+
+            selectedIds.forEach((id, index) => {
+                const node = nodes.find(n => n.id === id);
+                if (!node) return;
+
+                const slotStart = new Date(startTime.getTime() + (index * duration * 60000));
+                const slotEnd = new Date(slotStart.getTime() + (duration * 60000));
+
+                agenda.push({
+                    taskId: node.id,
+                    start: slotStart.toISOString(),
+                    end: slotEnd.toISOString(),
+                    title: node.title
+                });
+            });
+
+            clearSelection();
+            saveToStorage();
+            renderAgenda();
+            showNotification(`Added ${selectedIds.size} slots to agenda`);
         }
 
         // --- CHECK-IN LOGIC ---
