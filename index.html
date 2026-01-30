@@ -6174,8 +6174,8 @@
         let noteSelectionRange = null; // Store indices for note replacement
 
         // --- INITIALIZATION ---
-        document.addEventListener('DOMContentLoaded', () => {
-            loadFromStorage();
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadFromStorage(); // Make it wait for IndexedDB
             if (nodes.length === 0 && inbox.length === 0 && Object.keys(lifeGoals).length === 0 && archivedNodes.length === 0) {
                 initDemoData();
             }
@@ -6244,6 +6244,15 @@
                     nodeGroupsModalPosition = JSON.parse(savedNodeGroupsPos);
                 } catch (e) { }
             }
+
+            // Verify data loaded successfully
+            console.log('📊 App initialized with:', {
+                nodes: nodes.length,
+                archived: archivedNodes.length,
+                inbox: inbox.length,
+                notes: notes.length,
+                habits: habits.length
+            });
 
             window.timerInterval = setInterval(tickTimers, 1000);
             setInterval(checkAutoArchive, 60000);
@@ -11672,7 +11681,10 @@ User Query: `;
             const request = indexedDB.open('urgencyFlowDB', 1);
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
-                db.createObjectStore('appState', { keyPath: 'id' });
+                // Only create if it doesn't exist
+                if (!db.objectStoreNames.contains('appState')) {
+                    db.createObjectStore('appState', { keyPath: 'id' });
+                }
             };
 
             request.onsuccess = (event) => {
@@ -11680,6 +11692,15 @@ User Query: `;
                 const tx = db.transaction(['appState'], 'readwrite');
                 const store = tx.objectStore('appState');
                 store.put({ id: 'main', data: data });
+
+                // Add transaction completion handler
+                tx.oncomplete = () => {
+                    console.log('✅ Data saved to IndexedDB successfully');
+                };
+
+                tx.onerror = (err) => {
+                    console.error('❌ IndexedDB transaction error:', err);
+                };
 
                 // Also keep localStorage as fallback/cache
                 try {
@@ -11705,40 +11726,69 @@ User Query: `;
         }
 
         function loadFromStorage() {
-            const request = indexedDB.open('urgencyFlowDB', 1);
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('urgencyFlowDB', 1);
 
-            request.onsuccess = (event) => {
-                const db = event.target.result;
-                const tx = db.transaction(['appState'], 'readonly');
-                const store = tx.objectStore('appState');
-                const getReq = store.get('main');
-
-                getReq.onsuccess = () => {
-                    if (getReq.result && getReq.result.data) {
-                        restoreStateData(getReq.result.data);
-                    } else {
-                        // Try localStorage fallback
-                        const legacy = localStorage.getItem('urgencyFlowData') || localStorage.getItem('urgencyFlowData_backup');
-                        if (legacy) {
-                            try {
-                                restoreStateData(JSON.parse(legacy));
-                            } catch (e) { console.error(e); }
-                        }
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('appState')) {
+                        db.createObjectStore('appState', { keyPath: 'id' });
                     }
                 };
-            };
 
-            request.onerror = () => {
-                // Fallback to legacy localStorage only
-                const data = localStorage.getItem('urgencyFlowData');
-                if (data) {
-                    try { restoreStateData(JSON.parse(data)); }
-                    catch (e) { console.error(e); }
-                }
-            };
+                request.onsuccess = (event) => {
+                    const db = event.target.result;
+                    const tx = db.transaction(['appState'], 'readonly');
+                    const store = tx.objectStore('appState');
+                    const getReq = store.get('main');
+
+                    getReq.onsuccess = () => {
+                        if (getReq.result && getReq.result.data) {
+                            restoreStateData(getReq.result.data);
+                            resolve(); // Signal completion
+                        } else {
+                            // Try localStorage fallback
+                            const legacy = localStorage.getItem('urgencyFlowData') || localStorage.getItem('urgencyFlowData_backup');
+                            if (legacy) {
+                                try {
+                                    restoreStateData(JSON.parse(legacy));
+                                } catch (e) {
+                                    console.error('localStorage parse error:', e);
+                                }
+                            }
+                            resolve(); // Still resolve even if no data
+                        }
+                    };
+
+                    getReq.onerror = () => {
+                        console.error('IndexedDB read error');
+                        resolve(); // Don't block app initialization
+                    };
+                };
+
+                request.onerror = (event) => {
+                    console.error('IndexedDB open error:', event);
+                    // Fallback to legacy localStorage only
+                    const data = localStorage.getItem('urgencyFlowData');
+                    if (data) {
+                        try {
+                            restoreStateData(JSON.parse(data));
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }
+                    resolve(); // Don't block app initialization
+                };
+            });
         }
 
         function restoreStateData(parsed) {
+            console.log('🔄 Restoring data from storage:', {
+                nodesCount: (parsed.nodes || []).length,
+                archivedCount: (parsed.archivedNodes || []).length,
+                inboxCount: (parsed.inbox || []).length,
+                notesCount: (parsed.notes || []).length
+            });
             // Extract all fields safely
             nodes = parsed.nodes || [];
             archivedNodes = parsed.archivedNodes || [];
