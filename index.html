@@ -4911,7 +4911,6 @@
             <button class="btn" onclick="saveData(true)">Save (Optn+V)</button>
             <button class="btn" onclick="document.getElementById('file-input').click()">Load (Optn+L)</button>
             <button class="btn btn-danger" onclick="clearData()">Reset (Optn+K)</button>
-            <button class="btn" onclick="exportNotesAsMarkdown()">📄 Export Notes</button>
             <button class="btn" id="eco-toggle-btn" onclick="cycleEcoMode()">🚀 Mode: <span id="eco-status">Turbo</span>
                 (Optn+E)</button>
         </div>
@@ -6033,78 +6032,8 @@
         let archivedNodes = [];
         let inbox = [];
         let lifeGoals = {};
-        let habits = [];
+        let habits = []; // Add this line
         let notes = [];
-
-        // --- HISTORY MANAGEMENT ---
-        const MAX_HISTORY = 50;
-        let historyStack = [];
-        let historyIndex = -1;
-        let lastHistoryState = null;
-
-        function pushHistory() {
-            const currentState = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda });
-            if (currentState === lastHistoryState) return;
-
-            if (historyIndex < historyStack.length - 1) {
-                historyStack = historyStack.slice(0, historyIndex + 1);
-            }
-
-            historyStack.push(currentState);
-            if (historyStack.length > MAX_HISTORY) historyStack.shift();
-            else historyIndex++;
-
-            lastHistoryState = currentState;
-
-            // Update UI indicators if they exist
-            const undoBtn = document.getElementById('undo-btn');
-            if (undoBtn) {
-                undoBtn.style.opacity = historyIndex >= 0 ? '1' : '0.3';
-            }
-        }
-
-        function undo() {
-            if (historyIndex > 0) {
-                historyIndex--;
-                restoreHistory();
-            }
-        }
-
-        function redo() {
-            if (historyIndex < historyStack.length - 1) {
-                historyIndex++;
-                restoreHistory();
-            }
-        }
-
-        function restoreHistory() {
-            const state = JSON.parse(historyStack[historyIndex]);
-            nodes = state.nodes || [];
-            archivedNodes = state.archivedNodes || [];
-            inbox = state.inbox || [];
-            lifeGoals = state.lifeGoals || {};
-            habits = state.habits || [];
-            notes = state.notes || [];
-            agenda = state.agenda || [];
-
-            sanitizeLoadedData();
-            updateCalculations();
-            render();
-
-            // Refresh all panels
-            renderGoals();
-            renderHabits();
-            renderNotesList();
-            if (selectedNodeId) updateInspector();
-
-            saveToStorage();
-        }
-
-        // --- HELPER: GET SELECTED NODE ---
-        function getSelectedNode() {
-            if (!selectedNodeId) return null;
-            return nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
-        }
         let noteSettings = {
             categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`)
         };
@@ -7577,7 +7506,12 @@ User Query: `;
                 return;
             }
 
-            let node = nodes.find(n => n.id === id) || archivedNodes.find(n => n.id === id);
+            let node = nodes.find(n => n.id === id);
+            let isArchived = false;
+            if (!node) {
+                node = archivedNodes.find(n => n.id === id);
+                isArchived = true;
+            }
             if (!node) return;
             selectNode(id);
 
@@ -8306,58 +8240,6 @@ User Query: `;
             });
         }
 
-        function exportNotesAsMarkdown() {
-            let md = `# Urgency Flow Notes Export\nGenerated: ${new Date().toLocaleString()}\n\n`;
-
-            notes.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-            notes.forEach(note => {
-                md += `## ${note.title || 'Untitled'}\n`;
-                md += `*Created: ${new Date(note.timestamp || Date.now()).toLocaleDateString()}*\n\n`;
-
-                // Parse blocks
-                try {
-                    const blocks = JSON.parse(note.body);
-                    if (Array.isArray(blocks)) {
-                        blocks.forEach((block, idx) => {
-                            const category = noteSettings.categoryNames[block.colorIndex] || 'Note';
-                            if (block.bookmarkName) {
-                                md += `### ${block.bookmarkName}\n`;
-                            }
-                            md += `${block.text || ''}\n\n`;
-
-                            // Add separator between blocks except last
-                            if (idx < blocks.length - 1) {
-                                md += `---\n\n`;
-                            }
-                        });
-                    }
-                } catch (e) {
-                    // Legacy string format
-                    md += `${note.body || ''}\n\n`;
-                }
-
-                if (note.taskIds && note.taskIds.length > 0) {
-                    md += `**Linked Tasks:** ${note.taskIds.join(', ')}\n`;
-                }
-
-                md += `\n---\n\n`;
-            });
-
-            // Download file
-            const blob = new Blob([md], { type: 'text/markdown' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `urgency-flow-notes-${new Date().toISOString().split('T')[0]}.md`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            showNotification("Exported as Markdown!");
-        }
-
         function copyEntireNote() {
             if (!currentEditingNoteId || currentNoteBlocks.length === 0) {
                 showNotification("Note is empty");
@@ -8852,7 +8734,7 @@ User Query: `;
             }
 
             if (currentSelectionSource === 'node' && selectedNodeId) {
-                const p = getSelectedNode();
+                const p = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
                 if (p) {
                     originText = `**From Task:** [[${p.title}]]\n\n`;
                     if (!parentTaskIDs.includes(selectedNodeId)) parentTaskIDs.push(selectedNodeId);
@@ -9857,25 +9739,6 @@ User Query: `;
 
                 if (isTyping) return; // If typing, don't run any of the shortcuts below
 
-                // Add new shortcuts
-                if (e.key === '?') {
-                    e.preventDefault();
-                    toggleShortcutsHelp();
-                    return;
-                }
-
-                if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-                    e.preventDefault();
-                    undo();
-                    return;
-                }
-
-                if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
-                    e.preventDefault();
-                    redo();
-                    return;
-                }
-
                 // 3. Shortcuts (Option + Key)
                 if (e.altKey) {
                     e.preventDefault();
@@ -10026,7 +9889,7 @@ User Query: `;
                     }
                     dragStartX = currentX;
                     dragStartY = currentY;
-                    renderThrottled();
+                    render();
                 }
             });
 
@@ -10080,7 +9943,7 @@ User Query: `;
                         if (node) {
                             node.x = (touch.clientX - panX) / scale - dragStartX;
                             node.y = (touch.clientY - panY) / scale - dragStartY;
-                            renderThrottled();
+                            render();
                         }
                     } else if (isPanning) {
                         panX = touch.clientX - dragStartX;
@@ -10106,60 +9969,6 @@ User Query: `;
                 if (e.touches.length < 2) initialPinchDist = null;
                 if (e.touches.length === 0) isPanning = false;
             });
-        }
-
-        function toggleShortcutsHelp() {
-            let modal = document.getElementById('shortcuts-modal');
-            if (modal) {
-                modal.remove();
-                return;
-            }
-
-            modal = document.createElement('div');
-            modal.id = 'shortcuts-modal';
-            modal.style.cssText = `
-                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                background: var(--panel-bg-elevated); border: 1px solid var(--border);
-                border-radius: 12px; padding: 24px; z-index: 3000; max-width: 600px;
-                max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow-xl);
-            `;
-
-            modal.innerHTML = `
-                <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-                    <h2 style="margin:0; font-size:18px; color:var(--text-main)">⌨️ Keyboard Shortcuts</h2>
-                    <button onclick="toggleShortcutsHelp()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:20px;">✕</button>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:13px;">
-                    <div><b>?</b> - Show this help</div>
-                    <div><b>Ctrl+S</b> - Sync to GitHub</div>
-                    <div><b>Ctrl+Z</b> - Undo</div>
-                    <div><b>Ctrl+Shift+Z</b> - Redo</div>
-                    <div><b>Alt+T</b> - New Task</div>
-                    <div><b>Alt+N</b> - Notes Panel</div>
-                    <div><b>Alt+G</b> - Goals Panel</div>
-                    <div><b>Alt+H</b> - Habits Panel</div>
-                    <div><b>Alt+A</b> - Agenda</div>
-                    <div><b>Alt+R</b> - Recenter/Focus</div>
-                    <div><b>Alt+D</b> - Smart Declutter</div>
-                    <div><b>Alt+M</b> - Heatmap</div>
-                    <div><b>Alt+C</b> - Progress Dashboard</div>
-                    <div><b>Alt+O</b> - Node Groups</div>
-                    <div><b>Alt+B</b> - Inbox</div>
-                    <div><b>Alt+I</b> - AI Assistant</div>
-                    <div><b>Alt+E</b> - Cycle Eco Mode</div>
-                    <div><b>Esc</b> - Close panels</div>
-                </div>
-                <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border); font-size:11px; color:var(--text-muted);">
-                    Tip: Press ? anytime to see this menu. Use Ctrl+Z to undo accidental task deletions.
-                </div>
-            `;
-
-            // Close on backdrop click
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) toggleShortcutsHelp();
-            });
-
-            document.body.appendChild(modal);
         }
 
         function closeAllSidePanels() {
@@ -10236,32 +10045,7 @@ User Query: `;
         }
 
         function getPinchDistance(e) { return Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
-        function getPinchCenter(e) { return { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientY) / 2 }; }
-
-        // --- OPTIMIZED RENDERING ---
-        let renderTimeout = null;
-        let queuedRender = false;
-
-        function renderThrottled() {
-            if (isUltraEcoMode) {
-                // In eco mode, only render every 2 seconds maximum
-                if (!queuedRender) {
-                    queuedRender = true;
-                    setTimeout(() => {
-                        queuedRender = false;
-                        render();
-                    }, 2000);
-                }
-                return;
-            }
-
-            // Standard debounce for normal mode
-            if (renderTimeout) clearTimeout(renderTimeout);
-            renderTimeout = setTimeout(() => {
-                render();
-                renderTimeout = null;
-            }, 16); // 60fps cap
-        }
+        function getPinchCenter(e) { return { x: (e.touches[0].clientX + e.touches[1].clientX) / 2, y: (e.touches[0].clientY + e.touches[1].clientX) / 2 }; }
         function updateTransform() { document.getElementById('transform-layer').style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`; }
         function fitView() {
             let target = nodes.find(n => n.isManualUrgent && !n.completed); if (!target) target = nodes.find(n => n._isUrgent && !n.completed); if (!target) target = nodes.find(n => n._isCritical && !n.completed); if (!target) target = nodes.find(n => !n.completed); if (!target && nodes.length > 0) target = nodes[0];
@@ -10379,9 +10163,13 @@ User Query: `;
             const panel = document.getElementById('insp-content');
             if (!selectedNodeId) return;
 
-            let node = getSelectedNode();
+            let node = nodes.find(n => n.id === selectedNodeId);
+            let isArchived = false;
+            if (!node) {
+                node = archivedNodes.find(n => n.id === selectedNodeId);
+                isArchived = true;
+            }
             if (!node) return;
-            const isArchived = archivedNodes.some(n => n.id === node.id);
 
             const isRunning = !!node.activeTimerStart;
             const linkedNotes = notes.filter(n => n.taskIds && n.taskIds.includes(node.id));
@@ -10693,7 +10481,7 @@ User Query: `;
         }
 
         function updateNodeField(field, value) {
-            let node = getSelectedNode();
+            let node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
             if (node) {
                 node[field] = value;
                 const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -10732,9 +10520,9 @@ User Query: `;
         function addDependency(parentId) { if (!parentId) return; const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies.push({ id: parentId, type: 'hard' }); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function removeDependency(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies = node.dependencies.filter(d => d.id !== parentId); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function toggleDepType(parentId) { const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; updateCalculations(); render(); updateInspector(); saveToStorage(); } }
-        function addSubtask() { const node = getSelectedNode(); if (node) { node.subtasks.push({ text: 'New Step', done: false }); render(); updateInspector(); saveToStorage(); } }
+        function addSubtask() { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); if (node) { node.subtasks.push({ text: 'New Step', done: false }); render(); updateInspector(); saveToStorage(); } }
         function toggleSubtask(index) {
-            const node = getSelectedNode();
+            const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
             if (node) {
                 node.subtasks[index].done = !node.subtasks[index].done;
                 render();
@@ -10827,11 +10615,11 @@ User Query: `;
         }
 
         function closeInspector() { selectedNodeId = null; selectedIds.clear(); document.getElementById('inspector').classList.add('hidden'); render(); }
-        function updateSubtaskText(index, val) { const node = getSelectedNode(); node.subtasks[index].text = val; saveToStorage(); }
-        function removeSubtask(index) { const node = getSelectedNode(); node.subtasks.splice(index, 1); render(); updateInspector(); saveToStorage(); }
+        function updateSubtaskText(index, val) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks[index].text = val; saveToStorage(); }
+        function removeSubtask(index) { const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId); node.subtasks.splice(index, 1); render(); updateInspector(); saveToStorage(); }
 
         function promoteSubtaskToNode(index) {
-            const parentNode = getSelectedNode();
+            const parentNode = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
             if (!parentNode) return;
             const subtask = parentNode.subtasks[index];
             parentNode.subtasks.splice(index, 1);
@@ -11657,106 +11445,101 @@ User Query: `;
 
         // --- STORAGE & PERSISTENCE ---
         function saveToStorage() {
+            // In Ultra Eco Mode, batch saves every 30 seconds
+            if (isUltraEcoMode) {
+                if (!window.ultraEcoSaveTimeout) {
+                    window.ultraEcoSaveTimeout = setTimeout(() => {
+                        window.ultraEcoSaveTimeout = null;
+                        saveToStorageImmediate();
+                    }, 30000); // 30 seconds
+                }
+                return; // Exit early, will save later
+            }
+
             saveToStorageImmediate();
         }
 
         function saveToStorageImmediate() {
-            const data = {
-                nodes, archivedNodes, inbox, lifeGoals, notes, githubToken,
-                gistId, habits, agenda, pinnedItems, noteSettings,
-                hiddenNodeGroups: Array.from(hiddenNodeGroups),
-                timestamp: Date.now()
-            };
+            // 1. Serialize Data ONCE
+            const data = { nodes, archivedNodes, inbox, lifeGoals, notes, githubToken, gistId, habits, agenda, pinnedItems, noteSettings, hiddenNodeGroups: Array.from(hiddenNodeGroups) };
+            const rawString = JSON.stringify(data);
 
-            // Save to IndexedDB (asynchronous, large capacity)
-            const request = indexedDB.open('urgencyFlowDB', 1);
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                db.createObjectStore('appState', { keyPath: 'id' });
-            };
+            // 2. Save to Browser Storage
+            localStorage.setItem('urgencyFlowData', rawString);
 
-            request.onsuccess = (event) => {
-                const db = event.target.result;
-                const tx = db.transaction(['appState'], 'readwrite');
-                const store = tx.objectStore('appState');
-                store.put({ id: 'main', data: data });
+            // 3. Calculate Storage Usage HERE (Heavy operation moved out of render loop)
+            const bytes = new Blob([rawString]).size;
+            const limit = 5 * 1024 * 1024; // 5MB limit for LocalStorage
+            const percent = Math.min(100, (bytes / limit) * 100).toFixed(1);
 
-                // Also keep localStorage as fallback/cache
-                try {
-                    const compressed = JSON.stringify(data);
-                    localStorage.setItem('urgencyFlowData_backup', compressed);
-                } catch (e) {
-                    console.warn('localStorage backup failed (size limit exceeded, but IndexedDB has it)');
-                }
+            // 4. Update the Dashboard UI immediately
+            const bar = document.getElementById('hd-storage-bar');
+            const text = document.getElementById('hd-storage-text');
 
-                pushHistory();
-                updateHealthMonitor();
-            };
+            if (bar && text) {
+                text.innerText = percent + '%';
+                bar.style.width = percent + '%';
 
-            request.onerror = (event) => {
-                console.error('IndexedDB error:', event);
-                // Fallback to localStorage only
-                try {
-                    localStorage.setItem('urgencyFlowData', JSON.stringify(data));
-                } catch (e) {
-                    alert('Storage full! Please export and clear old data.');
-                }
-            };
+                // Color coding
+                if (percent > 80) bar.style.background = '#ef4444';
+                else if (percent > 50) bar.style.background = '#eab308';
+                else bar.style.background = 'var(--ready-color)';
+            }
+
+            // 5. Update Dashboard Sync Text
+            const time = new Date().toLocaleTimeString();
+            const syncEl = document.getElementById('hd-sync');
+            if (syncEl) {
+                syncEl.innerText = "Saved " + time;
+                syncEl.style.color = "var(--ready-color)";
+            }
+
+            // 6. Trigger Toast Notification
+            showNotification(`Sync Ready (${percent}%)`);
+
+            // 7. Update Metrics
+            updateDataMetrics();
         }
 
         function loadFromStorage() {
-            const request = indexedDB.open('urgencyFlowDB', 1);
-
-            request.onsuccess = (event) => {
-                const db = event.target.result;
-                const tx = db.transaction(['appState'], 'readonly');
-                const store = tx.objectStore('appState');
-                const getReq = store.get('main');
-
-                getReq.onsuccess = () => {
-                    if (getReq.result && getReq.result.data) {
-                        restoreStateData(getReq.result.data);
+            const data = localStorage.getItem('urgencyFlowData');
+            if (data) {
+                try {
+                    const parsed = JSON.parse(data);
+                    // Handle legacy array format or new object format
+                    if (Array.isArray(parsed)) {
+                        nodes = parsed;
+                        inbox = [];
+                        lifeGoals = {};
+                        notes = [];
+                        archivedNodes = [];
+                        habits = [];
+                        agenda = [];  // ADD THIS LINE
                     } else {
-                        // Try localStorage fallback
-                        const legacy = localStorage.getItem('urgencyFlowData') || localStorage.getItem('urgencyFlowData_backup');
-                        if (legacy) {
-                            try {
-                                restoreStateData(JSON.parse(legacy));
-                            } catch (e) { console.error(e); }
+                        nodes = parsed.nodes || [];
+                        inbox = parsed.inbox || [];
+                        lifeGoals = parsed.lifeGoals || {};
+                        habits = parsed.habits || [];
+                        notes = parsed.notes || [];
+                        archivedNodes = parsed.archivedNodes || [];
+                        githubToken = parsed.githubToken || '';
+                        gistId = parsed.gistId || '';
+                        agenda = parsed.agenda || [];
+                        pinnedItems = parsed.pinnedItems || [];
+                        hiddenNodeGroups = parsed.hiddenNodeGroups ? new Set(parsed.hiddenNodeGroups) : new Set();
+                        if (parsed.noteSettings) {
+                            noteSettings = parsed.noteSettings;
                         }
                     }
-                };
-            };
 
-            request.onerror = () => {
-                // Fallback to legacy localStorage only
-                const data = localStorage.getItem('urgencyFlowData');
-                if (data) {
-                    try { restoreStateData(JSON.parse(data)); }
-                    catch (e) { console.error(e); }
+                    // CALL THE CLEANER HERE
+                    sanitizeLoadedData();
+                    updateDataMetrics();
+
+                } catch (e) {
+                    console.error("Save data corrupted", e);
                 }
-            };
-        }
-
-        function restoreStateData(parsed) {
-            // Extract all fields safely
-            nodes = parsed.nodes || [];
-            archivedNodes = parsed.archivedNodes || [];
-            inbox = parsed.inbox || [];
-            lifeGoals = parsed.lifeGoals || {};
-            habits = parsed.habits || [];
-            notes = parsed.notes || [];
-            githubToken = parsed.githubToken || '';
-            gistId = parsed.gistId || '';
-            agenda = parsed.agenda || [];
-            pinnedItems = parsed.pinnedItems || [];
-            hiddenNodeGroups = parsed.hiddenNodeGroups ? new Set(parsed.hiddenNodeGroups) : new Set();
-            if (parsed.noteSettings) noteSettings = parsed.noteSettings;
-
-            sanitizeLoadedData();
-            updateDataMetrics();
-            updateCalculations();
-            render();
+            }
         }
 
         function sanitizeLoadedData() {
