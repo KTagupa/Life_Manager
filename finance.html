@@ -10,6 +10,8 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
     <style>
         .glass-morphism {
@@ -84,6 +86,10 @@
                 <span>FinanceFlow</span>
             </div>
             <div class="flex items-center gap-4">
+                <button onclick="toggleDarkMode()" id="dark-mode-toggle"
+                    class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs font-bold text-slate-600 transition-all border border-slate-200">
+                    <i data-lucide="moon" class="w-3 h-3"></i>
+                </button>
                 <button onclick="toggleCurrency()" id="currency-toggle"
                     class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs font-bold text-slate-600 transition-all border border-slate-200">
                     <i data-lucide="refresh-cw" class="w-3 h-3"></i>
@@ -172,18 +178,22 @@
                 class="bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-100 text-white relative overflow-hidden card-hover">
                 <p class="text-indigo-100 text-sm font-medium mb-1">Total Balance</p>
                 <h3 class="text-3xl font-bold" id="balance-display">₱0.00</h3>
+                <p class="text-xs text-indigo-200 mt-2" id="balance-trend">—</p>
             </div>
             <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
                 <p class="text-slate-400 text-sm font-medium mb-1">Monthly Income</p>
                 <h3 class="text-2xl font-bold text-emerald-600" id="income-display">₱0.00</h3>
+                <p class="text-xs mt-2" id="income-trend">—</p>
             </div>
             <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
                 <p class="text-slate-400 text-sm font-medium mb-1">Monthly Expenses</p>
                 <h3 class="text-2xl font-bold text-rose-600" id="expense-display">₱0.00</h3>
+                <p class="text-xs mt-2" id="expense-trend">—</p>
             </div>
             <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
                 <p class="text-slate-400 text-sm font-medium mb-1">Savings Rate</p>
                 <h3 class="text-2xl font-bold text-slate-800" id="savings-rate-display">0%</h3>
+                <p class="text-xs text-slate-400 mt-2" id="avg-daily-spend">—</p>
             </div>
         </div>
 
@@ -207,6 +217,9 @@
                     </select>
                     <button onclick="resetFilters()"
                         class="text-xs font-bold text-indigo-500 hover:text-indigo-700 ml-auto">Reset</button>
+                    <input type="text" id="search-transactions" placeholder="Search transactions..."
+                        oninput="applyFilters()"
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 w-64">
                 </div>
 
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -216,6 +229,10 @@
                             <button onclick="exportToCSV()"
                                 class="text-xs font-bold text-indigo-500 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
                                 <i data-lucide="download" class="w-3 h-3 inline mr-1"></i> Export CSV
+                            </button>
+                            <button onclick="exportToPDF()"
+                                class="text-xs font-bold text-purple-500 hover:bg-purple-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                <i data-lucide="file-text" class="w-3 h-3 inline mr-1"></i> Export PDF
                             </button>
                         </div>
                         <div class="flex gap-2">
@@ -234,6 +251,24 @@
 
             <!-- Right: Bills, Debts & Rate Info -->
             <div class="lg:col-span-4 space-y-6">
+
+                <!-- Spending Trends Chart -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
+                            Monthly Trends
+                        </h2>
+                        <select id="trend-period" onchange="renderTrendsChart()"
+                            class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none font-bold">
+                            <option value="6">Last 6 Months</option>
+                            <option value="12">Last 12 Months</option>
+                        </select>
+                    </div>
+                    <div class="relative h-48 w-full">
+                        <canvas id="trendsChart"></canvas>
+                    </div>
+                </div>
 
                 <!-- Crypto Portfolio Widget -->
                 <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl p-6 relative overflow-hidden text-white group cursor-pointer"
@@ -384,6 +419,11 @@
                     <select id="t-category" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
                         <!-- Populated by JS -->
                     </select>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Notes (Optional)</label>
+                    <textarea id="t-notes" placeholder="Add any additional notes..." rows="2"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 resize-none text-sm"></textarea>
                 </div>
 
                 <div class="flex gap-3 pt-4">
@@ -1192,6 +1232,7 @@
         let rawCrypto = [];
         let cryptoPrices = {}; // { 'bitcoin': { price: 5000000, updated: 123456789 } }
         let budgets = {};
+        let recurringTransactions = [];
         let customCategories = [];
         let spendChart = null;
         let cryptoAllocationChart = null;
@@ -1376,12 +1417,57 @@
             }
             customCategories = db.custom_categories || [];
             investmentGoals = db.investment_goals || [];
+            recurringTransactions = db.recurring_transactions || [];
+            await checkAndCreateRecurringTransactions();
             renderBudgets(window.allDecryptedTransactions || []);
         }
 
         // =============================================
         // SECTION 4: CRYPTO / INVESTING MODULE
         // =============================================
+
+        async function checkAndCreateRecurringTransactions() {
+            if (recurringTransactions.length === 0) return;
+
+            const today = new Date();
+            let needsSave = false;
+
+            for (const recurring of recurringTransactions) {
+                const lastCreated = recurring.lastCreated ? new Date(recurring.lastCreated) : null;
+                const shouldCreate = !lastCreated ||
+                    (recurring.frequency === 'daily' && lastCreated.toDateString() !== today.toDateString()) ||
+                    (recurring.frequency === 'weekly' && (today - lastCreated) >= 7 * 24 * 60 * 60 * 1000) ||
+                    (recurring.frequency === 'monthly' && lastCreated.getMonth() !== today.getMonth());
+
+                if (shouldCreate) {
+                    const encrypted = await encryptData({
+                        desc: recurring.desc,
+                        amt: recurring.amt,
+                        quantity: recurring.quantity || 1,
+                        type: recurring.type,
+                        category: recurring.category,
+                        date: today.toISOString()
+                    });
+
+                    const db = await getDB();
+                    db.transactions.push({
+                        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                        data: encrypted,
+                        createdAt: Date.now()
+                    });
+
+                    recurring.lastCreated = today.toISOString();
+                    needsSave = true;
+                }
+            }
+
+            if (needsSave) {
+                const db = await getDB();
+                db.recurring_transactions = recurringTransactions;
+                await saveDB(db);
+                rawTransactions = db.transactions;
+            }
+        }
 
         function openCryptoPortfolio() {
             document.getElementById('crypto-portfolio-modal').classList.remove('hidden');
@@ -2131,6 +2217,8 @@
             mSel.value = new Date().getMonth() + 1;
         }
 
+        let trendsChart = null;
+
         function initChart() {
             const ctx = document.getElementById('spendChart').getContext('2d');
             spendChart = new Chart(ctx, {
@@ -2156,6 +2244,72 @@
             });
         }
 
+        async function renderTrendsChart() {
+            const period = parseInt(document.getElementById('trend-period')?.value || 6);
+            const ctx = document.getElementById('trendsChart');
+            if (!ctx) return;
+
+            if (trendsChart) trendsChart.destroy();
+
+            const transactions = window.allDecryptedTransactions || [];
+            const monthlyData = {};
+            const now = new Date();
+
+            // Initialize last N months
+            for (let i = period - 1; i >= 0; i--) {
+                const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                monthlyData[key] = { income: 0, expense: 0 };
+            }
+
+            // Aggregate data
+            transactions.forEach(t => {
+                const date = new Date(t.date);
+                const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                if (monthlyData[key]) {
+                    if (t.type === 'income') monthlyData[key].income += t.amt;
+                    else if (t.type === 'expense') monthlyData[key].expense += t.amt;
+                }
+            });
+
+            const labels = Object.keys(monthlyData).map(k => {
+                const [y, m] = k.split('-');
+                return new Date(y, m - 1).toLocaleDateString('en', { month: 'short', year: '2-digit' });
+            });
+
+            trendsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Income',
+                        data: Object.values(monthlyData).map(d => d.income),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }, {
+                        label: 'Expenses',
+                        data: Object.values(monthlyData).map(d => d.expense),
+                        borderColor: '#f43f5e',
+                        backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
         async function loadAndRender() {
             // Decrypt all first
             const decrypted = (await Promise.all(rawTransactions.map(async i => {
@@ -2166,11 +2320,13 @@
             // Store cleanly for usage
             window.allDecryptedTransactions = decrypted;
             applyFilters();
+            renderTrendsChart();
         }
 
         function applyFilters() {
             const m = document.getElementById('filter-month').value;
             const y = document.getElementById('filter-year').value;
+            const searchQuery = document.getElementById('search-transactions')?.value.toLowerCase() || '';
 
             let filtered = window.allDecryptedTransactions || [];
 
@@ -2179,6 +2335,12 @@
             }
             if (m !== 'all') {
                 filtered = filtered.filter(t => (new Date(t.date).getMonth() + 1) == m);
+            }
+            if (searchQuery) {
+                filtered = filtered.filter(t =>
+                    t.desc.toLowerCase().includes(searchQuery) ||
+                    t.category.toLowerCase().includes(searchQuery)
+                );
             }
 
             renderTransactions(filtered);
@@ -2276,6 +2438,9 @@
             document.getElementById('income-display').innerText = fmt(inc);
             document.getElementById('expense-display').innerText = fmt(exp);
             document.getElementById('savings-rate-display').innerText = inc > 0 ? Math.round(((inc - exp) / inc) * 100) + '%' : '0%';
+
+            // Calculate trends
+            calculateTrends(items);
 
             // Update Budget Inputs UI to include Debt categories if any
             populateBudgetInputs();
@@ -2807,6 +2972,7 @@
                 document.getElementById('t-date').value = existingDate.toISOString().split('T')[0];
 
                 updateConversionPreview();
+                document.getElementById('t-notes').value = item.notes || '';
             } else {
                 title.innerText = "New Transaction";
                 tId.value = "";
@@ -2819,6 +2985,7 @@
 
                 // Default to today
                 document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
+                document.getElementById('t-notes').value = '';
             }
             modal.classList.remove('hidden');
         }
@@ -2880,12 +3047,15 @@
 
             const quantity = parseFloat(document.getElementById('t-quantity').value) || 1;
 
+            const notes = document.getElementById('t-notes').value;
+
             const encrypted = await encryptData({
                 desc,
-                amt: amtInPHP,  // Store in PHP
-                originalAmt: amt,  // Store original amount
-                originalCurrency: currency,  // Store original currency
-                quantity: quantity,  // NEW: Store quantity
+                amt: amtInPHP,
+                originalAmt: amt,
+                originalCurrency: currency,
+                quantity: quantity,
+                notes: notes,
                 type,
                 category,
                 date
@@ -3668,6 +3838,107 @@
             a.setAttribute('href', url);
             a.setAttribute('download', `finance_backup_${new Date().toISOString().split('T')[0]}.csv`);
             a.click();
+        }
+
+        async function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Title
+            doc.setFontSize(20);
+            doc.text('FinanceFlow Report', 14, 20);
+
+            // Date range
+            doc.setFontSize(10);
+            const m = document.getElementById('filter-month').value;
+            const y = document.getElementById('filter-year').value;
+            const dateRange = `Period: ${m === 'all' ? 'All Months' : new Date(2000, m - 1).toLocaleString('en', { month: 'long' })} ${y === 'all' ? 'All Years' : y}`;
+            doc.text(dateRange, 14, 28);
+
+            // Summary
+            const balance = document.getElementById('balance-display').innerText;
+            const income = document.getElementById('income-display').innerText;
+            const expense = document.getElementById('expense-display').innerText;
+            const savings = document.getElementById('savings-rate-display').innerText;
+
+            doc.setFontSize(12);
+            doc.text(`Balance: ${balance}`, 14, 40);
+            doc.text(`Income: ${income}`, 14, 47);
+            doc.text(`Expenses: ${expense}`, 14, 54);
+            doc.text(`Savings Rate: ${savings}`, 14, 61);
+
+            // Transactions table
+            const transactions = window.allDecryptedTransactions || [];
+            const tableData = transactions.map(t => [
+                new Date(t.date).toLocaleDateString(),
+                t.desc,
+                t.category,
+                t.type,
+                fmt(t.amt)
+            ]);
+
+            doc.autoTable({
+                startY: 70,
+                head: [['Date', 'Description', 'Category', 'Type', 'Amount']],
+                body: tableData,
+                theme: 'grid',
+                headStyles: { fillColor: [79, 70, 229] },
+                styles: { fontSize: 8 }
+            });
+
+            doc.save(`FinanceFlow_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+            showToast('✅ PDF exported successfully!');
+        }
+
+        function calculateTrends(currentMonthItems) {
+            const allTxs = window.allDecryptedTransactions || [];
+            const now = new Date();
+            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+            const lastMonthTxs = allTxs.filter(t => {
+                const d = new Date(t.date);
+                return d.getMonth() === lastMonth.getMonth() && d.getFullYear() === lastMonth.getFullYear();
+            });
+
+            const currentInc = currentMonthItems.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amt, 0);
+            const currentExp = currentMonthItems.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amt, 0);
+
+            const lastInc = lastMonthTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amt, 0);
+            const lastExp = lastMonthTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amt, 0);
+
+            const incChange = lastInc > 0 ? ((currentInc - lastInc) / lastInc) * 100 : 0;
+            const expChange = lastExp > 0 ? ((currentExp - lastExp) / lastExp) * 100 : 0;
+
+            const incTrend = document.getElementById('income-trend');
+            const expTrend = document.getElementById('expense-trend');
+
+            if (incChange !== 0) {
+                incTrend.innerHTML = `<span class="${incChange > 0 ? 'text-emerald-600' : 'text-rose-600'}">${incChange > 0 ? '↑' : '↓'} ${Math.abs(incChange).toFixed(1)}%</span> vs last month`;
+            }
+
+            if (expChange !== 0) {
+                expTrend.innerHTML = `<span class="${expChange > 0 ? 'text-rose-600' : 'text-emerald-600'}">${expChange > 0 ? '↑' : '↓'} ${Math.abs(expChange).toFixed(1)}%</span> vs last month`;
+            }
+
+            // Average daily spend
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            const avgDaily = currentExp / daysInMonth;
+            document.getElementById('avg-daily-spend').innerText = `Avg ${fmt(avgDaily)}/day`;
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark');
+            const icon = document.querySelector('#dark-mode-toggle i');
+            const isDark = document.body.classList.contains('dark');
+
+            icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+            localStorage.setItem('darkMode', isDark);
+            lucide.createIcons();
+        }
+
+        // Initialize dark mode on load
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.body.classList.add('dark');
         }
 
         window.onload = () => lucide.createIcons();
