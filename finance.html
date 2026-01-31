@@ -1488,6 +1488,8 @@
 
             rawBills = db.bills || [];
             await renderBills(rawBills);
+            // AUTO-SYNC: Sync all bills to reminders on load
+            await syncAllBillsToReminders();
 
             rawDebts = db.debts || [];
             await renderDebts(rawDebts);
@@ -3142,21 +3144,30 @@
             const encrypted = await encryptData({ name, day, amt });
 
             const db = await getDB();
+            let billId = id;
+
             if (id) {
                 const idx = db.bills.findIndex(b => b.id === id);
                 if (idx !== -1) db.bills[idx] = { id, data: encrypted };
             } else {
+                billId = Date.now().toString(36) + Math.random().toString(36).substr(2);
                 db.bills.push({
-                    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                    id: billId,
                     data: encrypted
                 });
             }
+
+            // AUTO-SYNC: Create or update corresponding reminder
+            await syncBillToReminder(billId, name, day, amt);
+
             await saveDB(db);
 
             rawBills = db.bills;
             toggleModal('bill-modal');
             renderBills(rawBills);
+            checkRecurringReminders(); // Check if any reminders are due now
         }
+
 
         async function saveDebt() {
             const name = document.getElementById('d-name').value;
@@ -3306,8 +3317,14 @@
             } else if (col === 'bills') {
                 db.bills = db.bills.filter(b => b.id !== id);
                 rawBills = db.bills;
+
+                // AUTO-SYNC: Remove corresponding reminder
+                recurringTransactions = recurringTransactions.filter(r => r.linkedBillId !== id);
+                db.recurring_transactions = recurringTransactions;
+
                 await saveDB(db);
                 renderBills(rawBills);
+                checkRecurringReminders(); // Update reminder banner
             } else if (col === 'debts') {
                 db.debts = db.debts.filter(d => d.id !== id);
                 rawDebts = db.debts;
@@ -3878,6 +3895,51 @@
         // RECURRING REMINDERS SYSTEM
         // =============================================
 
+        async function syncBillToReminder(billId, billName, dayOfMonth, estimatedAmount) {
+            // Check if reminder already exists for this bill
+            const existingReminderIndex = recurringTransactions.findIndex(r => r.linkedBillId === billId);
+
+            const reminderData = {
+                id: existingReminderIndex >= 0 ? recurringTransactions[existingReminderIndex].id : `bill_${billId}`,
+                desc: billName,
+                type: 'expense',
+                frequency: 'monthly',
+                category: 'Bills',
+                dayOfMonth: dayOfMonth,
+                estimatedAmount: estimatedAmount, // Store estimate for reference
+                linkedBillId: billId, // Link back to original bill
+                lastDismissed: existingReminderIndex >= 0 ? recurringTransactions[existingReminderIndex].lastDismissed : null,
+                createdAt: existingReminderIndex >= 0 ? recurringTransactions[existingReminderIndex].createdAt : new Date().toISOString(),
+                autoSynced: true // Flag to indicate this was auto-created from a bill
+            };
+
+            if (existingReminderIndex >= 0) {
+                // Update existing reminder
+                recurringTransactions[existingReminderIndex] = reminderData;
+            } else {
+                // Add new reminder
+                recurringTransactions.push(reminderData);
+            }
+
+            const db = await getDB();
+            db.recurring_transactions = recurringTransactions;
+            await saveDB(db);
+        }
+
+        async function syncAllBillsToReminders() {
+            if (rawBills.length === 0) return;
+
+            const decryptedBills = await Promise.all(rawBills.map(async b => {
+                const data = await decryptData(b.data);
+                return data ? { ...data, id: b.id } : null;
+            }));
+
+            for (const bill of decryptedBills.filter(b => b)) {
+                await syncBillToReminder(bill.id, bill.name, bill.day, bill.amt);
+            }
+        }
+
+
         function openRecurringModal() {
             populateCategorySelect(document.getElementById('rec-category'));
             renderRecurringList();
@@ -3923,6 +3985,14 @@
         }
 
         async function deleteRecurringReminder(id) {
+            const reminder = recurringTransactions.find(r => r.id === id);
+
+            // Prevent deletion of auto-synced bill reminders
+            if (reminder && reminder.autoSynced) {
+                alert('This reminder is auto-synced from your Recurring Bills.\n\nTo remove it, delete the bill from the "Recurring Bills" section instead.');
+                return;
+            }
+
             if (!confirm('Delete this reminder?')) return;
 
             recurringTransactions = recurringTransactions.filter(r => r.id !== id);
@@ -3950,21 +4020,30 @@
                 const freqLabel = r.frequency.charAt(0).toUpperCase() + r.frequency.slice(1);
                 const dayLabel = r.dayOfMonth ? ` (${r.dayOfMonth}${getDaySuffix(r.dayOfMonth)})` : '';
 
+                const autoSyncBadge = r.autoSynced ? '<span class="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">AUTO-SYNCED</span>' : '';
+                const estimateText = r.estimatedAmount ? ` • Est. ${fmt(r.estimatedAmount)}` : '';
+                const deleteButton = r.autoSynced
+                    ? `<span class="text-[10px] text-slate-400 italic">Edit via Bills</span>`
+                    : `<button onclick="deleteRecurringReminder('${r.id}')" 
+                        class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-all">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>`;
+
                 return `
                     <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl group hover:bg-slate-100">
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-3 flex-1">
                             <div class="w-8 h-8 rounded-lg bg-${color}-100 text-${color}-600 flex items-center justify-center">
                                 <i data-lucide="${icon}" class="w-4 h-4"></i>
                             </div>
-                            <div>
-                                <p class="font-bold text-slate-800 text-sm">${r.desc}</p>
-                                <p class="text-xs text-slate-500">${freqLabel}${dayLabel} • ${r.category}</p>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <p class="font-bold text-slate-800 text-sm">${r.desc}</p>
+                                    ${autoSyncBadge}
+                                </div>
+                                <p class="text-xs text-slate-500">${freqLabel}${dayLabel} • ${r.category}${estimateText}</p>
                             </div>
                         </div>
-                        <button onclick="deleteRecurringReminder('${r.id}')" 
-                            class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-all">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
+                        ${deleteButton}
                     </div>
                 `;
             }).join('');
@@ -4030,12 +4109,17 @@
                 const icon = r.type === 'income' ? 'arrow-down-left' : 'arrow-up-right';
                 const color = r.type === 'income' ? 'emerald' : 'amber';
 
+                const estimateText = r.estimatedAmount ? `~${fmt(r.estimatedAmount)}` : '';
+                const autoSyncBadge = r.autoSynced ? '<span class="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold ml-1">BILL</span>' : '';
+
                 return `
                     <div class="flex items-center justify-between bg-white/50 p-2 rounded-lg">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 flex-1">
                             <i data-lucide="${icon}" class="w-4 h-4 text-${color}-600"></i>
                             <span class="text-sm font-bold text-slate-700">${r.desc}</span>
                             <span class="text-xs text-slate-500">• ${r.category}</span>
+                            ${autoSyncBadge}
+                            ${estimateText ? `<span class="text-xs text-slate-400 ml-auto">${estimateText}</span>` : ''}
                         </div>
                         <div class="flex gap-2">
                             <button onclick="quickAddFromReminder('${r.id}')" 
@@ -4072,9 +4156,18 @@
             setTType(reminder.type);
             document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
 
-            // Focus on amount field (the only thing user needs to fill)
+            // If this is from a bill, pre-fill the estimated amount as a helpful starting point
+            if (reminder.estimatedAmount && reminder.autoSynced) {
+                document.getElementById('t-amount').value = reminder.estimatedAmount;
+                // Add a visual hint
+                showToast(`💡 Estimated: ${fmt(reminder.estimatedAmount)} (you can adjust)`);
+            }
+
+            // Focus on amount field
             setTimeout(() => {
-                document.getElementById('t-amount').focus();
+                const amountField = document.getElementById('t-amount');
+                amountField.focus();
+                amountField.select(); // Select the pre-filled amount for easy editing
             }, 100);
 
             // Mark as used today (dismiss)
