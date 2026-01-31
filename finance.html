@@ -100,6 +100,11 @@
                     <i data-lucide="target" class="w-3 h-3"></i>
                     <span class="hidden sm:inline">Budgets</span>
                 </button>
+                <button onclick="openRecurringModal()"
+                    class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 rounded-full text-xs font-bold text-amber-600 transition-all border border-amber-200">
+                    <i data-lucide="repeat" class="w-3 h-3"></i>
+                    <span class="hidden sm:inline">Reminders</span>
+                </button>
                 <button onclick="openItemTracker()"
                     class="flex items-center gap-2 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 rounded-full text-xs font-bold text-purple-600 transition-all border border-purple-200">
                     <i data-lucide="package" class="w-3 h-3"></i>
@@ -220,6 +225,30 @@
                     <input type="text" id="search-transactions" placeholder="Search transactions..."
                         oninput="applyFilters()"
                         class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 w-64">
+                </div>
+
+                <!-- Recurring Reminders Banner -->
+                <div id="recurring-reminders-banner"
+                    class="hidden bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-3xl p-4 mb-6 shadow-sm">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="flex items-start gap-3 flex-1">
+                            <div
+                                class="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <i data-lucide="bell" class="w-5 h-5 text-white"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-bold text-amber-900 mb-1">Pending Transactions</h3>
+                                <p class="text-xs text-amber-700 mb-3">Don't forget to log these recurring items:</p>
+                                <div id="reminder-items-list" class="space-y-2">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="dismissAllReminders()"
+                            class="text-amber-600 hover:text-amber-800 text-xs font-bold">
+                            Dismiss All
+                        </button>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -432,6 +461,68 @@
                     <button onclick="saveTransaction()"
                         class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">Save</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Manage Recurring Reminders -->
+    <div id="recurring-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="bg-amber-100 p-2 rounded-xl text-amber-600">
+                        <i data-lucide="repeat" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-slate-800">Recurring Reminders</h3>
+                </div>
+                <button onclick="toggleModal('recurring-modal')" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <p class="text-sm text-slate-500 mb-6">Set up reminders for regular transactions. The app will prompt you to
+                add them when due.</p>
+
+            <!-- List of existing reminders -->
+            <div id="recurring-list" class="mb-6 space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                <div class="text-center text-xs text-slate-400 py-4">No recurring reminders set</div>
+            </div>
+
+            <!-- Add new reminder form -->
+            <div class="border-t pt-4 space-y-3">
+                <input type="text" id="rec-desc" placeholder="Description (e.g., Salary, Netflix)"
+                    class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-amber-500 text-sm font-bold">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <select id="rec-type" class="p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                    </select>
+
+                    <select id="rec-frequency" class="p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                </div>
+
+                <select id="rec-category"
+                    class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    <!-- Populated by JS -->
+                </select>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Remind me on (optional)</label>
+                    <input type="number" id="rec-day" placeholder="Day of month (1-31)" min="1" max="31"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    <p class="text-[10px] text-slate-500 mt-1 ml-2">Leave blank for daily/weekly reminders</p>
+                </div>
+
+                <button onclick="addRecurringReminder()"
+                    class="w-full py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200">
+                    Add Reminder
+                </button>
             </div>
         </div>
     </div>
@@ -1383,6 +1474,7 @@
 
             // Check for auto-backup
             await checkAndPerformAutoBackup();
+            checkRecurringReminders();
 
             // Setup hourly check for auto-backup (in case app stays open past 8 PM)
             setInterval(checkAndPerformAutoBackup, 60 * 60 * 1000); // Every hour
@@ -1418,7 +1510,7 @@
             customCategories = db.custom_categories || [];
             investmentGoals = db.investment_goals || [];
             recurringTransactions = db.recurring_transactions || [];
-            await checkAndCreateRecurringTransactions();
+            checkRecurringReminders();
             renderBudgets(window.allDecryptedTransactions || []);
         }
 
@@ -1426,48 +1518,6 @@
         // SECTION 4: CRYPTO / INVESTING MODULE
         // =============================================
 
-        async function checkAndCreateRecurringTransactions() {
-            if (recurringTransactions.length === 0) return;
-
-            const today = new Date();
-            let needsSave = false;
-
-            for (const recurring of recurringTransactions) {
-                const lastCreated = recurring.lastCreated ? new Date(recurring.lastCreated) : null;
-                const shouldCreate = !lastCreated ||
-                    (recurring.frequency === 'daily' && lastCreated.toDateString() !== today.toDateString()) ||
-                    (recurring.frequency === 'weekly' && (today - lastCreated) >= 7 * 24 * 60 * 60 * 1000) ||
-                    (recurring.frequency === 'monthly' && lastCreated.getMonth() !== today.getMonth());
-
-                if (shouldCreate) {
-                    const encrypted = await encryptData({
-                        desc: recurring.desc,
-                        amt: recurring.amt,
-                        quantity: recurring.quantity || 1,
-                        type: recurring.type,
-                        category: recurring.category,
-                        date: today.toISOString()
-                    });
-
-                    const db = await getDB();
-                    db.transactions.push({
-                        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-                        data: encrypted,
-                        createdAt: Date.now()
-                    });
-
-                    recurring.lastCreated = today.toISOString();
-                    needsSave = true;
-                }
-            }
-
-            if (needsSave) {
-                const db = await getDB();
-                db.recurring_transactions = recurringTransactions;
-                await saveDB(db);
-                rawTransactions = db.transactions;
-            }
-        }
 
         function openCryptoPortfolio() {
             document.getElementById('crypto-portfolio-modal').classList.remove('hidden');
@@ -3822,6 +3872,241 @@
                     }
                 }
             });
+        }
+
+        // =============================================
+        // RECURRING REMINDERS SYSTEM
+        // =============================================
+
+        function openRecurringModal() {
+            populateCategorySelect(document.getElementById('rec-category'));
+            renderRecurringList();
+            toggleModal('recurring-modal');
+        }
+
+        async function addRecurringReminder() {
+            const desc = document.getElementById('rec-desc').value.trim();
+            const type = document.getElementById('rec-type').value;
+            const frequency = document.getElementById('rec-frequency').value;
+            const category = document.getElementById('rec-category').value;
+            const day = document.getElementById('rec-day').value;
+
+            if (!desc) {
+                alert('Please enter a description');
+                return;
+            }
+
+            const newReminder = {
+                id: Date.now().toString(36),
+                desc,
+                type,
+                frequency,
+                category,
+                dayOfMonth: day ? parseInt(day) : null,
+                lastDismissed: null,
+                createdAt: new Date().toISOString()
+            };
+
+            recurringTransactions.push(newReminder);
+
+            const db = await getDB();
+            db.recurring_transactions = recurringTransactions;
+            await saveDB(db);
+
+            // Clear form
+            document.getElementById('rec-desc').value = '';
+            document.getElementById('rec-day').value = '';
+
+            renderRecurringList();
+            checkRecurringReminders();
+            showToast('✅ Reminder added!');
+        }
+
+        async function deleteRecurringReminder(id) {
+            if (!confirm('Delete this reminder?')) return;
+
+            recurringTransactions = recurringTransactions.filter(r => r.id !== id);
+
+            const db = await getDB();
+            db.recurring_transactions = recurringTransactions;
+            await saveDB(db);
+
+            renderRecurringList();
+            checkRecurringReminders();
+            showToast('🗑️ Reminder deleted');
+        }
+
+        function renderRecurringList() {
+            const list = document.getElementById('recurring-list');
+
+            if (recurringTransactions.length === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-4">No recurring reminders set</div>';
+                return;
+            }
+
+            list.innerHTML = recurringTransactions.map(r => {
+                const icon = r.type === 'income' ? 'arrow-down-left' : 'arrow-up-right';
+                const color = r.type === 'income' ? 'emerald' : 'rose';
+                const freqLabel = r.frequency.charAt(0).toUpperCase() + r.frequency.slice(1);
+                const dayLabel = r.dayOfMonth ? ` (${r.dayOfMonth}${getDaySuffix(r.dayOfMonth)})` : '';
+
+                return `
+                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl group hover:bg-slate-100">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-${color}-100 text-${color}-600 flex items-center justify-center">
+                                <i data-lucide="${icon}" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-800 text-sm">${r.desc}</p>
+                                <p class="text-xs text-slate-500">${freqLabel}${dayLabel} • ${r.category}</p>
+                            </div>
+                        </div>
+                        <button onclick="deleteRecurringReminder('${r.id}')" 
+                            class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-all">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+
+            lucide.createIcons();
+        }
+
+        function getDaySuffix(day) {
+            if (day > 3 && day < 21) return 'th';
+            switch (day % 10) {
+                case 1: return 'st';
+                case 2: return 'nd';
+                case 3: return 'rd';
+                default: return 'th';
+            }
+        }
+
+        function checkRecurringReminders() {
+            const today = new Date();
+            const currentDay = today.getDate();
+            const currentDayOfWeek = today.getDay();
+
+            const dueReminders = recurringTransactions.filter(r => {
+                const lastDismissed = r.lastDismissed ? new Date(r.lastDismissed) : null;
+
+                // Check if already dismissed today
+                if (lastDismissed && lastDismissed.toDateString() === today.toDateString()) {
+                    return false;
+                }
+
+                // Check if due based on frequency
+                if (r.frequency === 'daily') {
+                    return true;
+                }
+
+                if (r.frequency === 'weekly') {
+                    // If no specific day set, remind every Monday (1)
+                    const targetDay = r.dayOfMonth || 1;
+                    return currentDayOfWeek === targetDay;
+                }
+
+                if (r.frequency === 'monthly') {
+                    // If no specific day set, remind on 1st
+                    const targetDay = r.dayOfMonth || 1;
+                    return currentDay === targetDay;
+                }
+
+                return false;
+            });
+
+            if (dueReminders.length > 0) {
+                showReminderBanner(dueReminders);
+            } else {
+                hideReminderBanner();
+            }
+        }
+
+        function showReminderBanner(reminders) {
+            const banner = document.getElementById('recurring-reminders-banner');
+            const list = document.getElementById('reminder-items-list');
+
+            list.innerHTML = reminders.map(r => {
+                const icon = r.type === 'income' ? 'arrow-down-left' : 'arrow-up-right';
+                const color = r.type === 'income' ? 'emerald' : 'amber';
+
+                return `
+                    <div class="flex items-center justify-between bg-white/50 p-2 rounded-lg">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="${icon}" class="w-4 h-4 text-${color}-600"></i>
+                            <span class="text-sm font-bold text-slate-700">${r.desc}</span>
+                            <span class="text-xs text-slate-500">• ${r.category}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="quickAddFromReminder('${r.id}')" 
+                                class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors">
+                                Quick Add
+                            </button>
+                            <button onclick="dismissReminder('${r.id}')" 
+                                class="px-2 py-1 text-slate-400 hover:text-slate-600 text-xs">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            banner.classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function hideReminderBanner() {
+            document.getElementById('recurring-reminders-banner').classList.add('hidden');
+        }
+
+        async function quickAddFromReminder(reminderId) {
+            const reminder = recurringTransactions.find(r => r.id === reminderId);
+            if (!reminder) return;
+
+            // Open transaction modal with pre-filled data
+            openTransactionModal();
+
+            // Pre-fill fields
+            document.getElementById('t-desc').value = reminder.desc;
+            document.getElementById('t-category').value = reminder.category;
+            setTType(reminder.type);
+            document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
+
+            // Focus on amount field (the only thing user needs to fill)
+            setTimeout(() => {
+                document.getElementById('t-amount').focus();
+            }, 100);
+
+            // Mark as used today (dismiss)
+            await dismissReminder(reminderId);
+        }
+
+        async function dismissReminder(reminderId) {
+            const reminder = recurringTransactions.find(r => r.id === reminderId);
+            if (!reminder) return;
+
+            reminder.lastDismissed = new Date().toISOString();
+
+            const db = await getDB();
+            db.recurring_transactions = recurringTransactions;
+            await saveDB(db);
+
+            checkRecurringReminders();
+        }
+
+        async function dismissAllReminders() {
+            const today = new Date().toISOString();
+
+            recurringTransactions.forEach(r => {
+                r.lastDismissed = today;
+            });
+
+            const db = await getDB();
+            db.recurring_transactions = recurringTransactions;
+            await saveDB(db);
+
+            hideReminderBanner();
+            showToast('✅ All reminders dismissed');
         }
 
         function exportToCSV() {
