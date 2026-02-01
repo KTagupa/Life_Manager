@@ -9993,19 +9993,6 @@ User Query: `;
             const svg = document.getElementById('connections');
 
             // --- CONDITIONAL VIRTUALIZATION ---
-            const VIRTUALIZATION_THRESHOLD = 100;
-            const shouldVirtualize = nodes.length > VIRTUALIZATION_THRESHOLD;
-
-            // Track state change to force full refresh when crossing threshold
-            const wasVirtualizing = window.isVirtualizing || false;
-            window.isVirtualizing = shouldVirtualize;
-
-            if (wasVirtualizing && !shouldVirtualize) {
-                // Just dropped below 100 - force full clear to render culled nodes
-                container.innerHTML = '';
-                svg.innerHTML = '';
-            }
-
             window.visibleCount = 0;
             window.culledCount = 0;
 
@@ -10024,16 +10011,8 @@ User Query: `;
             window.lastPanY = panY;
 
             // --- VIEWPORT CULLING (Performance Optimization) ---
+            // Virtualization removed per user request
             let viewportLeft, viewportTop, viewportRight, viewportBottom;
-
-            if (shouldVirtualize) {
-                // Only calculate viewport when needed
-                const viewportBuffer = 200;
-                viewportLeft = (-panX / scale) - viewportBuffer;
-                viewportTop = (-panY / scale) - viewportBuffer;
-                viewportRight = viewportLeft + (window.innerWidth / scale) + (viewportBuffer * 2);
-                viewportBottom = viewportTop + (window.innerHeight / scale) + (viewportBuffer * 2);
-            }
 
             // If full render, set up defs
             if (window.fullRenderNeeded) {
@@ -10099,24 +10078,7 @@ User Query: `;
                     const parent = nodes.find(n => n.id === dep.id);
                     if (!parent) return;
 
-                    // Skip connection rendering if virtualizing and both nodes off-screen
-                    if (shouldVirtualize) {
-                        const parentVisible = (
-                            parent.x + 220 > viewportLeft &&
-                            parent.x < viewportRight &&
-                            parent.y + 160 > viewportTop &&
-                            parent.y < viewportBottom
-                        );
-                        const childVisible = (
-                            node.x + 220 > viewportLeft &&
-                            node.x < viewportRight &&
-                            node.y + 160 > viewportTop &&
-                            node.y < viewportBottom
-                        );
 
-                        // Skip if both are off-screen
-                        if (!parentVisible && !childVisible) return;
-                    }
 
                     // Only show connection if both nodes are in the filtered set
                     if (currentGoalFilter && !nodesToRender.includes(parent)) return;
@@ -10164,20 +10126,7 @@ User Query: `;
 
             // --- Render Nodes ---
             nodesToRender.forEach(node => {
-                // Apply culling only when threshold exceeded
-                if (shouldVirtualize) {
-                    const nodeVisible = (
-                        node.x + 220 > viewportLeft &&
-                        node.x < viewportRight &&
-                        node.y + 160 > viewportTop &&
-                        node.y < viewportBottom
-                    );
 
-                    if (!nodeVisible) {
-                        window.culledCount++;
-                        return;
-                    }
-                }
                 window.visibleCount++;
 
                 const el = document.createElement('div');
@@ -13322,26 +13271,7 @@ User Query: `;
                 }
             }
 
-            // Add virtualization status
-            const virtStatus = document.getElementById('hd-virt-status');
-            if (virtStatus) {
-                if (nodes.length > 100) {
-                    virtStatus.innerText = 'ON';
-                    virtStatus.style.color = 'var(--accent)';
-                } else {
-                    virtStatus.innerText = 'OFF';
-                    virtStatus.style.color = 'var(--text-muted)';
-                }
-            }
 
-            // Optional: Show visible count when active
-            if (window.isVirtualizing && typeof window.visibleCount !== 'undefined') {
-                const countText = `${window.visibleCount}/${nodes.length}`;
-                if (fpsText) {
-                    const originalText = isUltraEcoMode ? 'FROZEN' : lastRenderTime.toFixed(1) + 'ms';
-                    fpsText.innerText = originalText + ` (${countText})`;
-                }
-            }
         }
 
         // --- HABIT TRACKER LOGIC ---
