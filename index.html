@@ -9996,15 +9996,10 @@ User Query: `;
             window.visibleCount = 0;
             window.culledCount = 0;
 
-            // Only clear and re-render changed nodes (optimization)
-            if (!window.lastRenderScale || Math.abs(window.lastRenderScale - scale) > 0.1 || !window.lastPanX || Math.abs(window.lastPanX - panX) > 100) {
-                // Significant view change - full clear needed
-                container.innerHTML = '';
-                svg.innerHTML = '';
-                window.fullRenderNeeded = true;
-            } else {
-                window.fullRenderNeeded = false;
-            }
+            // Always clear for fresh render
+            container.innerHTML = '';
+            svg.innerHTML = '';
+            window.fullRenderNeeded = true;
 
             window.lastRenderScale = scale;
             window.lastPanX = panX;
