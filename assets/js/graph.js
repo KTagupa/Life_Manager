@@ -1208,6 +1208,12 @@
             document.getElementById('inspector').classList.remove('hidden');
             render();
             if (document.getElementById('archive-panel').classList.contains('hidden') === false) renderArchiveList();
+            
+            // NEW: Update Agenda Panel if visible
+            if (!document.getElementById('agenda-panel').classList.contains('hidden')) {
+                renderAgendaPanelUI();
+            }
+
             updateInspector();
         }
 
