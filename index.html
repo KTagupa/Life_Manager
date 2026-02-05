@@ -76,11 +76,14 @@
     </div>
 
     <div id="toolbar" class="collapsed">
-        <div style="display: flex; gap: 8px;">
+        <div class="toolbar-actions">
             <button id="menu-btn" onclick="toggleMenu()">☰</button>
-            <a href="finance.html" id="btn-finance-link" title="Go to Finance">💰</a>
-            <button id="btn-task-list" title="Task List (Opt+F)" onclick="toggleTaskListWindow()">📋</button>
-            <a href="#" id="btn-pinned" title="Pinned Window" onclick="togglePinnedWindow()">📌</a>
+            <button id="btn-task-list" class="toolbar-icon-btn" title="Task List (Opt+F)"
+                onclick="toggleTaskListWindow()">📋</button>
+            <button id="btn-pinned" class="toolbar-icon-btn" title="Pinned Window" onclick="togglePinnedWindow()">📌</button>
+            <div id="quick-links-container" class="quick-links"></div>
+            <button id="btn-add-quick-link" class="toolbar-icon-btn" title="Add Link"
+                onclick="openQuickLinkModal()">+</button>
         </div>
         <div id="toolbar-content">
             <button class="btn btn-primary" onclick="addNode()">+ New Task (Optn+T)</button>
@@ -596,6 +599,19 @@
             <div class="bookmark-actions">
                 <button class="bookmark-cancel-btn" onclick="closeBookmarkModal()">Cancel</button>
                 <button class="bookmark-save-btn" onclick="saveBookmark()">Save Bookmark</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Link Modal -->
+    <div id="quick-link-modal">
+        <div class="quick-link-window">
+            <h3>Add Quick Link</h3>
+            <input type="text" id="quick-link-label" placeholder="Label (optional)">
+            <input type="text" id="quick-link-url" placeholder="URL or path (e.g. https://example.com or finance.html)">
+            <div class="quick-link-actions">
+                <button class="quick-link-cancel-btn" onclick="closeQuickLinkModal()">Cancel</button>
+                <button class="quick-link-save-btn" onclick="saveQuickLink()">Save Link</button>
             </div>
         </div>
     </div>

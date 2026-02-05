@@ -33,6 +33,152 @@ function toggleMenu() {
     }
 }
 
+// --- QUICK LINKS ---
+const MAX_QUICK_LINKS = 5;
+
+function openQuickLinkModal() {
+    if (Array.isArray(quickLinks) && quickLinks.length >= MAX_QUICK_LINKS) {
+        showNotification('Quick link limit reached (5 max).');
+        return;
+    }
+    const modal = document.getElementById('quick-link-modal');
+    const labelInput = document.getElementById('quick-link-label');
+    const urlInput = document.getElementById('quick-link-url');
+    if (!modal || !labelInput || !urlInput) return;
+    labelInput.value = '';
+    urlInput.value = '';
+    modal.style.display = 'flex';
+    setTimeout(() => urlInput.focus(), 0);
+}
+
+function closeQuickLinkModal() {
+    const modal = document.getElementById('quick-link-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function normalizeQuickLinkUrl(input) {
+    const trimmed = (input || '').trim();
+    if (!trimmed) return '';
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) return trimmed;
+    if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../')) return trimmed;
+    if (/\.(html?|pdf|md)$/i.test(trimmed)) return trimmed;
+    const firstSegment = trimmed.split('/')[0];
+    if (firstSegment.includes('.') && !/\.(html?|pdf|md)$/i.test(firstSegment)) {
+        return 'https://' + trimmed;
+    }
+    return trimmed;
+}
+
+function deriveQuickLinkLabel(url) {
+    if (!url) return 'LINK';
+    let cleaned = url.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '');
+    cleaned = cleaned.replace(/^www\./, '');
+    cleaned = cleaned.split(/[?#]/)[0];
+    const parts = cleaned.split('/');
+    let base = parts[0] || cleaned;
+    if (cleaned.startsWith('/') || cleaned.startsWith('./') || cleaned.startsWith('../')) {
+        base = parts[parts.length - 1] || cleaned;
+    }
+    base = base.replace(/\\.[a-z0-9]+$/i, '');
+    base = base.replace(/[^a-zA-Z0-9]/g, '');
+    if (!base) return 'LINK';
+    return base.toUpperCase();
+}
+
+function getQuickLinkDisplayLabel(link) {
+    const label = (link && link.label && link.label.trim()) ? link.label.trim() : deriveQuickLinkLabel(link.url);
+    const cleaned = label.replace(/[^a-zA-Z0-9]/g, '');
+    const display = cleaned || label;
+    return display.length > 4 ? display.slice(0, 4).toUpperCase() : display.toUpperCase();
+}
+
+function renderQuickLinks() {
+    const container = document.getElementById('quick-links-container');
+    const addBtn = document.getElementById('btn-add-quick-link');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const links = Array.isArray(quickLinks) ? quickLinks.slice(0, MAX_QUICK_LINKS) : [];
+    links.forEach(link => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'quick-link-wrapper';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'quick-link-btn';
+        btn.title = `${link.label || deriveQuickLinkLabel(link.url)} • ${link.url}`;
+        btn.innerText = getQuickLinkDisplayLabel(link);
+        btn.addEventListener('click', () => {
+            if (!link.url) return;
+            const isExternal = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(link.url);
+            if (isExternal) {
+                window.open(link.url, '_blank', 'noopener,noreferrer');
+            } else {
+                window.location.href = link.url;
+            }
+        });
+
+        const removeBtn = document.createElement('div');
+        removeBtn.className = 'quick-link-remove';
+        removeBtn.title = 'Remove link';
+        removeBtn.innerText = '✕';
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteQuickLink(link.id);
+        });
+
+        wrapper.appendChild(btn);
+        wrapper.appendChild(removeBtn);
+        container.appendChild(wrapper);
+    });
+
+    if (addBtn) {
+        addBtn.style.display = links.length >= MAX_QUICK_LINKS ? 'none' : 'flex';
+    }
+}
+
+function saveQuickLink() {
+    const labelInput = document.getElementById('quick-link-label');
+    const urlInput = document.getElementById('quick-link-url');
+    if (!labelInput || !urlInput) return;
+
+    if (Array.isArray(quickLinks) && quickLinks.length >= MAX_QUICK_LINKS) {
+        showNotification('Quick link limit reached (5 max).');
+        closeQuickLinkModal();
+        return;
+    }
+
+    const label = labelInput.value.trim();
+    const normalizedUrl = normalizeQuickLinkUrl(urlInput.value);
+    if (!normalizedUrl) {
+        showNotification('Please enter a valid link.');
+        return;
+    }
+
+    const link = {
+        id: 'ql_' + Date.now() + Math.random().toString(36).substr(2, 5),
+        label: label,
+        url: normalizedUrl
+    };
+
+    if (!Array.isArray(quickLinks)) quickLinks = [];
+    quickLinks.push(link);
+    if (quickLinks.length > MAX_QUICK_LINKS) quickLinks = quickLinks.slice(0, MAX_QUICK_LINKS);
+
+    saveToStorage();
+    renderQuickLinks();
+    closeQuickLinkModal();
+    showNotification('Quick link added.');
+}
+
+function deleteQuickLink(id) {
+    if (!Array.isArray(quickLinks)) return;
+    quickLinks = quickLinks.filter(link => link.id !== id);
+    saveToStorage();
+    renderQuickLinks();
+    showNotification('Quick link removed.');
+}
+
 // --- CONTEXTUAL MENU LOGIC ---
 function setupContextualMenu() {
     const menu = document.getElementById('selection-menu');

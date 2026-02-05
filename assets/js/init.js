@@ -38,6 +38,7 @@
             setupPanelDrag();
             setupContextualMenu();
             renderPinnedWindow();
+            renderQuickLinks();
 
             // Setup modal dragging
             setupModalDragging();

@@ -93,6 +93,7 @@
         let currentEditingNoteId = null;
         let noteEditorState = 'normal'; // 'normal' or 'maximized'
         let pinnedItems = []; // {type: 'task'|'note'|'habit', id: string}
+        let quickLinks = []; // {id: string, label: string, url: string}
         let hiddenNodeGroups = new Set(); // Set of group IDs that are hidden
         let nodeGroupsModalPosition = { x: null, y: null, width: 420, height: 600 };
         let aiModalPosition = { x: null, y: null, width: 450, height: 600 };
@@ -225,7 +226,7 @@
         function saveToStorageImmediate() {
             const data = {
                 nodes, archivedNodes, inbox, lifeGoals, notes, githubToken,
-                gistId, habits, agenda, pinnedItems, noteSettings,
+                gistId, habits, agenda, pinnedItems, quickLinks, noteSettings,
                 hiddenNodeGroups: Array.from(hiddenNodeGroups),
                 timestamp: Date.now()
             };
@@ -353,6 +354,7 @@
             gistId = parsed.gistId || '';
             agenda = parsed.agenda || [];
             pinnedItems = parsed.pinnedItems || [];
+            quickLinks = parsed.quickLinks || [];
             hiddenNodeGroups = parsed.hiddenNodeGroups ? new Set(parsed.hiddenNodeGroups) : new Set();
             if (parsed.noteSettings) noteSettings = parsed.noteSettings;
 
@@ -407,6 +409,17 @@
                     noteSettings.categoryNames.push(`Category ${noteSettings.categoryNames.length + 1}`);
                 }
             }
+
+            // --- QUICK LINKS CLEANUP ---
+            if (!Array.isArray(quickLinks)) quickLinks = [];
+            quickLinks = quickLinks
+                .filter(link => link && typeof link.url === 'string' && link.url.trim().length > 0)
+                .slice(0, 5)
+                .map(link => ({
+                    id: link.id || ('ql_' + Date.now() + Math.random().toString(36).substr(2, 5)),
+                    label: typeof link.label === 'string' ? link.label.trim() : '',
+                    url: link.url.trim()
+                }));
 
             // --- NOTES CLEANUP (Many-to-Many Linkage) ---
             if (!Array.isArray(notes)) notes = [];
@@ -510,7 +523,7 @@
         }
 
 
-        function saveData(download = false) { const data = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, habits, agenda }, null, 2); if (download) { const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
+        function saveData(download = false) { const data = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, habits, agenda, quickLinks }, null, 2); if (download) { const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
         function loadFile(input) {
             const file = input.files[0];
             if (!file) return;
@@ -540,15 +553,18 @@
                         notes = parsed.notes || [];
                         archivedNodes = parsed.archivedNodes || [];
                         agenda = parsed.agenda || [];
+                        quickLinks = parsed.quickLinks || [];
                         // Do NOT load tokens from file for security, unless specifically desired
                     }
 
                     // 3. Post-load updates
+                    sanitizeLoadedData();
                     updateCalculations();
                     render();
                     renderInbox();
                     renderGoals();
                     renderAgenda();
+                    renderQuickLinks();
 
                     // 4. Save to local storage immediately so a refresh keeps the data
                     saveToStorage();
@@ -572,6 +588,7 @@
                 notes = [];
                 habits = [];
                 agenda = [];
+                quickLinks = [];
                 noteSettings = {
                     categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`)
                 };
@@ -580,6 +597,7 @@
                 renderInbox();
                 renderGoals();
                 renderAgenda();
+                renderQuickLinks();
                 deselectNode();
             }
         }
