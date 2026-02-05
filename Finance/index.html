@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinanceFlow | Life Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+    
+    <link rel="stylesheet" href="assets/css/app.css">
+</head>
+
+<body class="bg-slate-50 min-h-screen pb-10">
+
+    <!-- Navigation -->
+    <nav class="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2 font-black text-indigo-600 text-2xl tracking-tight">
+                <div class="bg-indigo-600 text-white p-1 rounded-lg">
+                    <i data-lucide="wallet" class="w-6 h-6"></i>
+                </div>
+                <span>FinanceFlow</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <button onclick="toggleDarkMode()" id="dark-mode-toggle"
+                    class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs font-bold text-slate-600 transition-all border border-slate-200">
+                    <i data-lucide="moon" class="w-3 h-3"></i>
+                </button>
+                <button onclick="toggleCurrency()" id="currency-toggle"
+                    class="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-xs font-bold text-slate-600 transition-all border border-slate-200">
+                    <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                    <span id="active-currency">PHP (₱)</span>
+                </button>
+                <button onclick="openBudgetModal()"
+                    class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 rounded-full text-xs font-bold text-emerald-600 transition-all border border-emerald-200">
+                    <i data-lucide="target" class="w-3 h-3"></i>
+                    <span class="hidden sm:inline">Budgets</span>
+                </button>
+                <button onclick="openRecurringModal()"
+                    class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 rounded-full text-xs font-bold text-amber-600 transition-all border border-amber-200">
+                    <i data-lucide="repeat" class="w-3 h-3"></i>
+                    <span class="hidden sm:inline">Reminders</span>
+                </button>
+                <button onclick="openItemTracker()"
+                    class="flex items-center gap-2 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 rounded-full text-xs font-bold text-purple-600 transition-all border border-purple-200">
+                    <i data-lucide="package" class="w-3 h-3"></i>
+                    <span class="hidden sm:inline">Item Tracker</span>
+                </button>
+                <div class="relative">
+                    <button onclick="toggleBackupMenu()" id="backup-menu-btn"
+                        class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-full text-xs font-bold text-blue-600 transition-all border border-blue-200">
+                        <i data-lucide="hard-drive" class="w-3 h-3"></i>
+                        <span class="hidden sm:inline">Backups</span>
+                        <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                    </button>
+                    <div id="backup-dropdown"
+                        class="hidden absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50">
+                        <button onclick="downloadBackupNow()"
+                            class="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3">
+                            <i data-lucide="download" class="w-4 h-4 text-blue-600"></i>
+                            Download Backup Now
+                        </button>
+                        <button onclick="openRestoreModal()"
+                            class="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3">
+                            <i data-lucide="upload" class="w-4 h-4 text-emerald-600"></i>
+                            Restore from File
+                        </button>
+                        <div class="border-t border-slate-100 my-2"></div>
+                        <button onclick="openBackupSettingsModal()"
+                            class="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3">
+                            <i data-lucide="settings" class="w-4 h-4 text-slate-400"></i>
+                            Backup Settings
+                        </button>
+                    </div>
+                </div>
+                <div
+                    class="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-medium transition-all group cursor-pointer">
+                    <i data-lucide="layout-list" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
+                    <span class="hidden sm:inline">Life Manager</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Master Key Entry Overlay -->
+    <div id="auth-overlay"
+        class="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center border border-white/20">
+            <div
+                class="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-inner">
+                <i data-lucide="shield-check" class="w-10 h-10"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Vault Locked</h2>
+            <p class="text-slate-500 text-sm mb-8">Data is encrypted locally. Enter your <strong>Master Key</strong> to
+                decrypt and sync across devices.</p>
+
+            <div class="relative mb-4">
+                <input type="password" id="master-key-input" placeholder="Enter your secret key..."
+                    class="w-full p-4 pl-12 bg-slate-50 border-2 border-slate-100 rounded-2xl text-lg focus:border-indigo-500 focus:ring-0 outline-none transition-all">
+                <i data-lucide="key" class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            </div>
+
+            <button onclick="unlockApp()" id="unlock-btn"
+                class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-2">
+                <span>Unlock Vault</span>
+                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+            </button>
+            <p id="auth-status" class="mt-6 text-xs font-semibold uppercase tracking-widest text-slate-400">System Ready
+            </p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto p-4 md:p-6 space-y-6 opacity-0 transition-opacity duration-700" id="main-content">
+
+        <!-- Summary Dashboard -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div
+                class="bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-100 text-white relative overflow-hidden card-hover">
+                <p class="text-indigo-100 text-sm font-medium mb-1">Total Balance</p>
+                <h3 class="text-3xl font-bold" id="balance-display">₱0.00</h3>
+                <p class="text-xs text-indigo-200 mt-2" id="balance-trend">—</p>
+            </div>
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
+                <p class="text-slate-400 text-sm font-medium mb-1">Monthly Income</p>
+                <h3 class="text-2xl font-bold text-emerald-600" id="income-display">₱0.00</h3>
+                <p class="text-xs mt-2" id="income-trend">—</p>
+            </div>
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
+                <p class="text-slate-400 text-sm font-medium mb-1">Monthly Expenses</p>
+                <h3 class="text-2xl font-bold text-rose-600" id="expense-display">₱0.00</h3>
+                <p class="text-xs mt-2" id="expense-trend">—</p>
+            </div>
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
+                <p class="text-slate-400 text-sm font-medium mb-1">Savings Rate</p>
+                <h3 class="text-2xl font-bold text-slate-800" id="savings-rate-display">0%</h3>
+                <p class="text-xs text-slate-400 mt-2" id="avg-daily-spend">—</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Left: Transactions & Tools -->
+            <div class="lg:col-span-8 space-y-6">
+                <!-- Filters -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 flex items-center gap-4">
+                    <div class="flex items-center gap-2 text-slate-500">
+                        <i data-lucide="calendar" class="w-5 h-5"></i>
+                        <span class="font-bold text-sm hidden sm:inline">Filter:</span>
+                    </div>
+                    <select id="filter-month" onchange="applyFilters()"
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500">
+                        <!-- Populated by JS -->
+                    </select>
+                    <select id="filter-year" onchange="applyFilters()"
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500">
+                        <!-- Populated by JS -->
+                    </select>
+                    <button onclick="resetFilters()"
+                        class="text-xs font-bold text-indigo-500 hover:text-indigo-700 ml-auto">Reset</button>
+                    <input type="text" id="search-transactions" placeholder="Search transactions..."
+                        oninput="applyFilters()"
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 w-64">
+                </div>
+
+                <!-- Recurring Reminders Banner -->
+                <div id="recurring-reminders-banner"
+                    class="hidden bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-3xl p-4 mb-6 shadow-sm">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="flex items-start gap-3 flex-1">
+                            <div
+                                class="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <i data-lucide="bell" class="w-5 h-5 text-white"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-bold text-amber-900 mb-1">Pending Transactions</h3>
+                                <p class="text-xs text-amber-700 mb-3">Don't forget to log these recurring items:</p>
+                                <div id="reminder-items-list" class="space-y-2">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="dismissAllReminders()"
+                            class="text-amber-600 hover:text-amber-800 text-xs font-bold">
+                            Dismiss All
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <h2 class="text-xl font-bold text-slate-800">Recent Movements</h2>
+                            <button onclick="exportToCSV()"
+                                class="text-xs font-bold text-indigo-500 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                <i data-lucide="download" class="w-3 h-3 inline mr-1"></i> Export CSV
+                            </button>
+                            <button onclick="exportToPDF()"
+                                class="text-xs font-bold text-purple-500 hover:bg-purple-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                <i data-lucide="file-text" class="w-3 h-3 inline mr-1"></i> Export PDF
+                            </button>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="openTransactionModal()"
+                                class="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">
+                                <i data-lucide="plus" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="transaction-list"
+                        class="divide-y divide-slate-50 max-h-[500px] overflow-y-auto custom-scrollbar">
+                        <div class="p-10 text-center text-slate-400">Decrypting vault...</div>
+                    </div>
+                </div>
+
+                <!-- Wishlist -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-indigo-50 text-indigo-600 p-2 rounded-xl">
+                                <i data-lucide="heart" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-slate-800">Wishlist</h2>
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Option + W</p>
+                            </div>
+                        </div>
+                        <button onclick="openWishlistModal()"
+                            class="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full transition-colors">
+                            + Add
+                        </button>
+                    </div>
+                    <div id="wishlist-list" class="p-4 space-y-3">
+                        <div class="text-center text-xs text-slate-400 py-4">No wishlist items yet.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Bills, Debts & Rate Info -->
+            <div class="lg:col-span-4 space-y-6">
+
+                <!-- Spending Trends Chart -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
+                            Monthly Trends
+                        </h2>
+                        <select id="trend-period" onchange="renderTrendsChart()"
+                            class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none font-bold">
+                            <option value="6">Last 6 Months</option>
+                            <option value="12">Last 12 Months</option>
+                        </select>
+                    </div>
+                    <div class="relative h-48 w-full">
+                        <canvas id="trendsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Crypto Portfolio Widget -->
+                <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl p-6 relative overflow-hidden text-white group cursor-pointer"
+                    onclick="openCryptoPortfolio()">
+                    <div
+                        class="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500 rounded-full blur-[60px] opacity-20 group-hover:opacity-30 transition-opacity">
+                    </div>
+                    <div class="flex justify-between items-start mb-4 relative z-10">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-indigo-500/20 text-indigo-300 p-1.5 rounded-lg border border-indigo-500/30">
+                                <i data-lucide="bitcoin" class="w-4 h-4"></i>
+                            </div>
+                            <h2 class="font-bold text-slate-100">Crypto Assets</h2>
+                        </div>
+                        <span
+                            class="text-xs font-bold bg-slate-800 px-2 py-1 rounded-full border border-slate-700 text-slate-300">Live</span>
+                    </div>
+                    <div class="relative z-10">
+                        <p class="text-slate-400 text-xs font-bold mb-1">Portfolio Value</p>
+                        <h3 class="text-3xl font-black text-white" id="crypto-total-display">₱0.00</h3>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span id="crypto-pnl-display" class="text-xs font-bold text-slate-400">--</span>
+                            <span class="text-[10px] text-slate-500">Unrealized P/L</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Debts Section -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-rose-100 text-rose-600 p-1.5 rounded-lg">
+                                <i data-lucide="credit-card" class="w-4 h-4"></i>
+                            </div>
+                            <h2 class="font-bold text-slate-800">Debts to Pay</h2>
+                        </div>
+                        <button onclick="openDebtModal()"
+                            class="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-3 py-1 rounded-full transition-colors">
+                            + Add
+                        </button>
+                    </div>
+                    <div id="debt-list" class="space-y-4">
+                        <div class="text-center text-xs text-slate-400 py-2">No debts tracked. Good job!</div>
+                    </div>
+                </div>
+
+                <!-- Money Lent Section (Receivables) -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-emerald-100 text-emerald-600 p-1.5 rounded-lg">
+                                <i data-lucide="hand-coins" class="w-4 h-4"></i>
+                            </div>
+                            <h2 class="font-bold text-slate-800">Money Lent</h2>
+                        </div>
+                        <button onclick="toggleModal('lent-modal')"
+                            class="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full transition-colors">
+                            + Track Person
+                        </button>
+                    </div>
+                    <div id="lent-list" class="space-y-4">
+                        <div class="text-center text-xs text-slate-400 py-2">No money lent out.</div>
+                    </div>
+                </div>
+
+                <!-- Bills Section -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-amber-100 text-amber-600 p-1.5 rounded-lg">
+                                <i data-lucide="bell" class="w-4 h-4"></i>
+                            </div>
+                            <h2 class="font-bold text-slate-800">Recurring Bills</h2>
+                        </div>
+                        <button onclick="openBillModal()"
+                            class="text-slate-400 hover:text-indigo-600 transition-colors">
+                            <i data-lucide="plus" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div id="bill-list" class="space-y-3"></div>
+                </div>
+
+                <!-- Analytics -->
+                <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
+                        <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-600"></i>
+                        Spend Breakdown
+                    </h2>
+                    <div class="relative h-64 w-full mb-6">
+                        <canvas id="spendChart"></canvas>
+                    </div>
+
+                    <div class="border-t border-slate-100 pt-4">
+                        <h3 class="text-sm font-bold text-slate-500 mb-3">Budget Adherence</h3>
+                        <div id="budget-breakdown" class="space-y-4">
+                            <p class="text-xs text-slate-400 italic text-center">Set budgets to see progress.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal: Add/Edit Transaction -->
+    <div id="transaction-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h3 class="text-2xl font-bold text-slate-800 mb-6" id="t-modal-title">New Entry</h3>
+            <div class="space-y-4">
+                <input type="hidden" id="t-id">
+                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border">
+                    <button onclick="setTType('expense')" id="btn-expense"
+                        class="py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm">Expense</button>
+                    <button onclick="setTType('income')" id="btn-income"
+                        class="py-2 rounded-xl font-bold text-slate-400">Income</button>
+                    <input type="hidden" id="t-type" value="expense">
+                </div>
+                <input type="text" id="t-desc" placeholder="Description (e.g. Lunch)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Quantity</label>
+                    <input type="number" id="t-quantity" placeholder="1" step="0.01" value="1"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 font-bold text-slate-700">
+                    <p class="text-xs text-slate-400 mt-1 ml-2">Number of items purchased (for price tracking)</p>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Amount</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="t-amount" placeholder="0.00" step="0.01"
+                            oninput="updateConversionPreview()"
+                            class="flex-1 p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 font-bold text-slate-700">
+                        <select id="t-currency" onchange="updateConversionPreview()"
+                            class="p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-slate-600 w-24">
+                            <option value="PHP">PHP</option>
+                            <option value="USD">USD</option>
+                            <option value="JPY">JPY</option>
+                        </select>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1 ml-2" id="amount-converted-preview"></p>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Date</label>
+                    <input type="date" id="t-date"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 text-slate-700 font-bold">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Category</label>
+                    <select id="t-category" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Notes (Optional)</label>
+                    <textarea id="t-notes" placeholder="Add any additional notes..." rows="2"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 resize-none text-sm"></textarea>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="closeTransactionModal()"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="saveTransaction()"
+                        class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Wishlist -->
+    <div id="wishlist-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h3 class="text-2xl font-bold text-slate-800 mb-6" id="w-modal-title">Add Wishlist Item</h3>
+            <div class="space-y-4">
+                <input type="hidden" id="w-id">
+                <input type="text" id="w-desc" placeholder="Description (e.g. Headphones)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Quantity (Optional)</label>
+                    <input type="number" id="w-quantity" placeholder="1" step="0.01" value="1"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 font-bold text-slate-700">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Planned Price (Optional)</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="w-amount" placeholder="0.00" step="0.01"
+                            oninput="updateWishlistConversionPreview()"
+                            class="flex-1 p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 font-bold text-slate-700">
+                        <select id="w-currency" onchange="updateWishlistConversionPreview()"
+                            class="p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-slate-600 w-24">
+                            <option value="PHP">PHP</option>
+                            <option value="USD">USD</option>
+                            <option value="JPY">JPY</option>
+                        </select>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1 ml-2" id="wishlist-amount-preview"></p>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Target Purchase Date</label>
+                    <input type="date" id="w-date"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 text-slate-700 font-bold">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Category (Optional)</label>
+                    <select id="w-category" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Notes (Optional)</label>
+                    <textarea id="w-notes" placeholder="Add any additional notes..." rows="2"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 resize-none text-sm"></textarea>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="toggleModal('wishlist-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="saveWishlistItem()"
+                        class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Manage Recurring Reminders -->
+    <div id="recurring-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="bg-amber-100 p-2 rounded-xl text-amber-600">
+                        <i data-lucide="repeat" class="w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-slate-800">Recurring Reminders</h3>
+                </div>
+                <button onclick="toggleModal('recurring-modal')" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <p class="text-sm text-slate-500 mb-6">Set up reminders for regular transactions. The app will prompt you to
+                add them when due.</p>
+
+            <!-- List of existing reminders -->
+            <div id="recurring-list" class="mb-6 space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                <div class="text-center text-xs text-slate-400 py-4">No recurring reminders set</div>
+            </div>
+
+            <!-- Add new reminder form -->
+            <div class="border-t pt-4 space-y-3">
+                <input type="text" id="rec-desc" placeholder="Description (e.g., Salary, Netflix)"
+                    class="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:border-amber-500 text-sm font-bold">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <select id="rec-type" class="p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                        <option value="income">Income</option>
+                        <option value="expense">Expense</option>
+                    </select>
+
+                    <select id="rec-frequency" class="p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                </div>
+
+                <select id="rec-category"
+                    class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    <!-- Populated by JS -->
+                </select>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Remind me on (optional)</label>
+                    <input type="number" id="rec-day" placeholder="Day of month (1-31)" min="1" max="31"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    <p class="text-[10px] text-slate-500 mt-1 ml-2">Leave blank for daily/weekly reminders</p>
+                </div>
+
+                <button onclick="addRecurringReminder()"
+                    class="w-full py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200">
+                    Add Reminder
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add/Edit Debt -->
+    <div id="debt-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-md w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-rose-100 p-2 rounded-xl text-rose-600">
+                    <i data-lucide="credit-card" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-slate-800">Add Loan</h3>
+            </div>
+            <p class="text-sm text-slate-500 mb-6">This will create a new category. Expenses added to this category will
+                reduce the debt balance.</p>
+
+            <div class="space-y-4">
+                <input type="text" id="d-name" placeholder="Debt Name (e.g. Student Loan)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-rose-500">
+                <input type="number" id="d-amount" placeholder="Total Amount Owed (₱)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-rose-500">
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="toggleModal('debt-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="saveDebt()"
+                        class="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-200">Track
+                        Debt</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Update Debt (Clicking a debt item) -->
+    <div id="update-debt-modal"
+        class="fixed inset-0 z-[115] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
+            <button onclick="toggleModal('update-debt-modal')"
+                class="absolute top-6 right-6 text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h3 class="text-2xl font-bold text-slate-800 mb-2" id="ud-title">Update Debt</h3>
+            <p class="text-sm text-slate-500 mb-6">Record a repayment or add to this loan.</p>
+
+            <input type="hidden" id="ud-debt-id">
+            <input type="hidden" id="ud-category">
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border mb-4">
+                    <button onclick="setUDType('repayment')" id="btn-ud-repay"
+                        class="py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm">Repayment</button>
+                    <button onclick="setUDType('loan')" id="btn-ud-loan"
+                        class="py-2 rounded-xl font-bold text-slate-400">Borrow More</button>
+                    <input type="hidden" id="ud-type" value="repayment">
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Amount</label>
+                    <input type="number" id="ud-amount" placeholder="0.00" step="0.01"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 font-bold text-slate-700">
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Date</label>
+                    <input type="date" id="ud-date"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 text-slate-700 font-bold">
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Notes</label>
+                    <input type="text" id="ud-desc" placeholder="Details..."
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
+                </div>
+
+                <button onclick="saveDebtTransaction()"
+                    class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 mt-2">
+                    Save Transaction
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add Lent Person -->
+    <div id="lent-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-emerald-100 p-2 rounded-xl text-emerald-600">
+                    <i data-lucide="user-plus" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-slate-800">Track Money Lent</h3>
+            </div>
+            <p class="text-sm text-slate-500 mb-6">Enter the name of the person. A category will be created. Expenses in
+                this category count as lending, Income counts as repayment.</p>
+
+            <div class="space-y-4">
+                <input type="text" id="l-name" placeholder="Person's Name (e.g. John)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500">
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="toggleModal('lent-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="saveLent()"
+                        class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Start
+                        Tracking</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add/Edit Bill -->
+    <div id="bill-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h3 class="text-2xl font-bold text-slate-800 mb-6" id="b-modal-title">Add Bill</h3>
+            <input type="hidden" id="b-id">
+            <div class="space-y-4">
+                <input type="text" id="b-name" placeholder="Bill Name (e.g. Meralco)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="number" id="b-day" placeholder="Day (1-31)"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                    <input type="number" id="b-amount" placeholder="Estimate (₱)"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button onclick="toggleModal('bill-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="saveBill()"
+                        class="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200">Set
+                        Reminder</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Crypto Portfolio -->
+    <div id="crypto-portfolio-modal"
+        class="fixed inset-0 z-[120] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
+        <div
+            class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-t-3xl">
+                <div>
+                    <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                        <i data-lucide="bitcoin" class="text-indigo-500"></i> Crypto Portfolio
+                    </h2>
+                    <p class="text-slate-400 text-xs mt-1" id="crypto-last-updated">Prices not fetched yet</p>
+                </div>
+                <div class="flex gap-3">
+                    <button id="btn-refresh-crypto" onclick="fetchCryptoPrices()"
+                        class="p-2 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded-lg transition-colors border border-slate-700">
+                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                    </button>
+                    <button onclick="toggleModal('crypto-portfolio-modal')"
+                        class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg transition-colors border border-slate-700">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-6 overflow-y-auto custom-scrollbar flex-1">
+                <!-- Top Stats Row 1 -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                        <p class="text-xs text-slate-500 font-bold uppercase">Current Value</p>
+                        <h3 class="text-xl font-bold text-white mt-1" id="cp-current-val">--</h3>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                        <p class="text-xs text-slate-500 font-bold uppercase">Total Invested</p>
+                        <h3 class="text-xl font-bold text-slate-300 mt-1" id="cp-invested">--</h3>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                        <p class="text-xs text-slate-500 font-bold uppercase">Realized P/L</p>
+                        <h3 class="text-xl font-bold text-slate-300 mt-1" id="cp-realized">--</h3>
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                        <p class="text-xs text-slate-500 font-bold uppercase">Unrealized P/L</p>
+                        <h3 class="text-xl font-bold text-slate-300 mt-1" id="cp-unrealized">--</h3>
+                    </div>
+                </div>
+
+                <!-- Top Stats Row 2 - New Performance Metrics -->
+                <div class="grid grid-cols-3 gap-4 mb-8">
+                    <div
+                        class="bg-gradient-to-br from-indigo-900/50 to-indigo-800/30 p-4 rounded-2xl border border-indigo-700/50">
+                        <p class="text-xs text-indigo-400 font-bold uppercase">ROI</p>
+                        <h3 class="text-xl font-bold text-indigo-300 mt-1" id="cp-roi">--%</h3>
+                    </div>
+                    <div
+                        class="bg-gradient-to-br from-emerald-900/50 to-emerald-800/30 p-4 rounded-2xl border border-emerald-700/50">
+                        <p class="text-xs text-emerald-400 font-bold uppercase">Best Performer</p>
+                        <h3 class="text-lg font-bold text-emerald-300 mt-1" id="cp-best">--</h3>
+                    </div>
+                    <div
+                        class="bg-gradient-to-br from-rose-900/50 to-rose-800/30 p-4 rounded-2xl border border-rose-700/50">
+                        <p class="text-xs text-rose-400 font-bold uppercase">Worst Performer</p>
+                        <h3 class="text-lg font-bold text-rose-300 mt-1" id="cp-worst">--</h3>
+                    </div>
+                </div>
+
+                <!-- Portfolio Allocation Chart -->
+                <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 mb-8">
+                    <h3 class="font-bold text-slate-300 mb-4 flex items-center gap-2">
+                        <i data-lucide="pie-chart" class="w-4 h-4 text-indigo-400"></i>
+                        Portfolio Allocation
+                    </h3>
+                    <div class="relative h-48 w-full">
+                        <canvas id="cryptoAllocationChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Investment Goals Section -->
+                <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-300 flex items-center gap-2">
+                            <i data-lucide="target" class="w-4 h-4 text-amber-400"></i>
+                            Investment Goals
+                        </h3>
+                        <button onclick="openGoalModal()"
+                            class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-full font-bold transition-colors">
+                            + Add Goal
+                        </button>
+                    </div>
+                    <div id="investment-goals-list" class="space-y-3">
+                        <div class="text-center py-4 text-slate-600 text-sm">No goals set. Add one to track your
+                            progress!</div>
+                    </div>
+                </div>
+
+                <!-- Holdings List -->
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-slate-300">Your Holdings</h3>
+                    <button onclick="openCryptoTransaction()"
+                        class="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full font-bold transition-colors shadow-lg shadow-indigo-900/20">
+                        + Record Transaction
+                    </button>
+                </div>
+                <div class="space-y-2 mb-8" id="crypto-holdings-list">
+                    <!-- Populated by JS -->
+                    <div class="text-center py-10 text-slate-600">No crypto assets found. Add a transaction to start.
+                    </div>
+                </div>
+
+                <!-- Tax Report Section -->
+                <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-300 flex items-center gap-2">
+                            <i data-lucide="file-text" class="w-4 h-4 text-purple-400"></i>
+                            Tax Summary
+                        </h3>
+                        <select id="cost-basis-method" onchange="renderCryptoPortfolio()"
+                            class="text-xs bg-slate-700 border border-slate-600 text-slate-300 rounded-lg px-2 py-1 outline-none">
+                            <option value="average">Average Cost</option>
+                            <option value="fifo">FIFO</option>
+                            <option value="lifo">LIFO</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-slate-900/50 p-3 rounded-xl">
+                            <p class="text-[10px] text-slate-500 font-bold uppercase">Total Gains</p>
+                            <p class="text-sm font-bold text-emerald-400 mt-1" id="tax-gains">₱0</p>
+                        </div>
+                        <div class="bg-slate-900/50 p-3 rounded-xl">
+                            <p class="text-[10px] text-slate-500 font-bold uppercase">Total Losses</p>
+                            <p class="text-sm font-bold text-rose-400 mt-1" id="tax-losses">₱0</p>
+                        </div>
+                        <div class="bg-slate-900/50 p-3 rounded-xl">
+                            <p class="text-[10px] text-slate-500 font-bold uppercase">Net Capital Gain</p>
+                            <p class="text-sm font-bold text-white mt-1" id="tax-net">₱0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History List -->
+                <div class="border-t border-slate-800 pt-6">
+                    <h3 class="font-bold text-slate-400 text-sm mb-4 uppercase tracking-widest">Recent History</h3>
+                    <div class="space-y-1" id="crypto-history-list">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Crypto Transaction -->
+    <div id="crypto-transaction-modal"
+        class="fixed inset-0 z-[130] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
+            <button onclick="toggleModal('crypto-transaction-modal')"
+                class="absolute top-6 right-6 text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h3 class="text-2xl font-bold text-slate-800 mb-6">Crypto Transaction</h3>
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-3 gap-2 p-1 bg-slate-50 rounded-2xl border">
+                    <button onclick="setCType('buy')" id="btn-c-buy"
+                        class="py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm">Buy</button>
+                    <button onclick="setCType('sell')" id="btn-c-sell"
+                        class="py-2 rounded-xl font-bold text-slate-400">Sell</button>
+                    <button onclick="setCType('swap')" id="btn-c-swap"
+                        class="py-2 rounded-xl font-bold text-slate-400">Swap</button>
+                    <input type="hidden" id="c-type" value="buy">
+                </div>
+
+                <!-- Token Search (Source) -->
+                <div class="relative">
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block" id="lbl-c-token">Token Name /
+                        ID</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="c-token-search" placeholder="e.g. bitcoin"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                        <button onclick="searchToken('source')"
+                            class="px-4 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl font-bold text-xs"><i
+                                data-lucide="search" class="w-4 h-4"></i></button>
+                    </div>
+                    <div id="token-search-results"
+                        class="hidden absolute top-full left-0 right-0 bg-white border shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto z-10 custom-scrollbar">
+                    </div>
+                    <input type="hidden" id="c-token-id">
+                    <input type="hidden" id="c-token-symbol">
+                </div>
+
+                <!-- Target Token (Swap To) -->
+                <div class="relative hidden" id="c-swap-target-container">
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Swap To Token</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="c-target-token-search" placeholder="e.g. ethereum"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                        <button onclick="searchToken('target')"
+                            class="px-4 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-xl font-bold text-xs"><i
+                                data-lucide="search" class="w-4 h-4"></i></button>
+                    </div>
+                    <div id="target-token-search-results"
+                        class="hidden absolute top-full left-0 right-0 bg-white border shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto z-10 custom-scrollbar">
+                    </div>
+                    <input type="hidden" id="c-target-token-id">
+                    <input type="hidden" id="c-target-token-symbol">
+                </div>
+
+                <!-- Date Input (New) -->
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Date</label>
+                    <input type="date" id="c-date"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold text-slate-600">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block"
+                            id="lbl-c-amount">Quantity</label>
+                        <input type="number" step="any" id="c-amount" placeholder="0.00" oninput="calcCryptoTotal()"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    </div>
+
+                    <div id="c-target-amount-container" class="hidden">
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Receive Quantity</label>
+                        <input type="number" step="any" id="c-target-amount" placeholder="0.00"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    </div>
+
+                    <div id="c-price-container">
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Price per Token</label>
+                        <div class="flex gap-1">
+                            <input type="number" step="any" id="c-price" placeholder="0.00" oninput="calcCryptoTotal()"
+                                class="flex-1 p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                            <select id="c-currency" onchange="calcCryptoTotal()"
+                                class="p-3 bg-slate-50 border rounded-xl outline-none font-bold text-slate-600 text-xs w-20">
+                                <option value="PHP">PHP</option>
+                                <option value="USD">USD</option>
+                                <option value="JPY">JPY</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-indigo-50 p-3 rounded-xl flex justify-between items-center"
+                    id="c-total-display-container">
+                    <span class="text-xs font-bold text-indigo-400">Total Value</span>
+                    <div class="text-right">
+                        <span class="text-lg font-bold text-indigo-700 block" id="c-total-calc">₱0.00</span>
+                        <span class="text-[10px] text-indigo-400 font-bold" id="c-total-base-preview"></span>
+                    </div>
+                </div>
+                <!-- Exchange and Strategy Selects -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Exchange</label>
+                        <select id="c-exchange"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold text-slate-600">
+                            <option value="">Select Exchange</option>
+                            <option value="binance">Binance</option>
+                            <option value="coinbase">Coinbase</option>
+                            <option value="kraken">Kraken</option>
+                            <option value="gcash">GCash</option>
+                            <option value="maya">Maya</option>
+                            <option value="coins.ph">Coins.ph</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Strategy</label>
+                        <select id="c-strategy"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold text-slate-600">
+                            <option value="">Optional</option>
+                            <option value="dca">DCA</option>
+                            <option value="lump-sum">Lump Sum</option>
+                            <option value="dip-buy">Dip Buy</option>
+                            <option value="take-profit">Taking Profit</option>
+                        </select>
+                    </div>
+                </div>
+
+                <input type="text" id="c-notes" placeholder="Additional notes..."
+                    class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-xs">
+
+                <button onclick="saveCryptoTransaction()"
+                    class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 mt-2">Record
+                    Transaction</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Investment Goal -->
+    <div id="goal-modal"
+        class="fixed inset-0 z-[140] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
+            <button onclick="toggleModal('goal-modal')"
+                class="absolute top-6 right-6 text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h3 class="text-2xl font-bold text-slate-800 mb-6">Set Investment Goal</h3>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Goal Name</label>
+                    <input type="text" id="goal-name" placeholder="e.g. Emergency Fund, ₱1M Portfolio"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Target Amount (PHP)</label>
+                    <input type="number" id="goal-target" placeholder="100000"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Target Date (Optional)</label>
+                    <input type="date" id="goal-date"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold text-slate-600">
+                </div>
+
+                <button onclick="saveInvestmentGoal()"
+                    class="w-full py-4 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200 mt-2">Save
+                    Goal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Backup Settings -->
+    <div id="backup-settings-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-blue-100 p-2 rounded-xl text-blue-600">
+                    <i data-lucide="hard-drive" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-slate-800">Backup Settings</h3>
+            </div>
+
+            <div class="space-y-4">
+                <div class="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
+                    <div>
+                        <p class="font-bold text-slate-700">Auto-backup</p>
+                        <p class="text-xs text-slate-400">Daily automatic backups</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="auto-backup-toggle" class="sr-only peer" checked>
+                        <div
+                            class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600">
+                        </div>
+                    </label>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-2xl">
+                    <label class="text-xs font-bold text-slate-400 mb-2 block">Daily backup time</label>
+                    <select id="backup-hour-select"
+                        class="w-full p-3 bg-white border rounded-xl outline-none font-bold text-slate-700">
+                        <option value="20" selected>8:00 PM</option>
+                        <option value="21">9:00 PM</option>
+                        <option value="22">10:00 PM</option>
+                        <option value="0">12:00 AM (Midnight)</option>
+                        <option value="1">1:00 AM</option>
+                        <option value="6">6:00 AM</option>
+                        <option value="12">12:00 PM (Noon)</option>
+                    </select>
+                </div>
+
+                <div class="bg-blue-50 p-4 rounded-2xl">
+                    <p class="text-xs font-bold text-blue-400 mb-1">LAST BACKUP</p>
+                    <p class="font-bold text-blue-700" id="last-backup-display">Never</p>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-6">
+                <button onclick="toggleModal('backup-settings-modal')"
+                    class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Close</button>
+                <button onclick="saveBackupSettingsModal()"
+                    class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">Save
+                    Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Restore Backup -->
+    <div id="restore-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-emerald-100 p-2 rounded-xl text-emerald-600">
+                    <i data-lucide="upload" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-slate-800">Restore Backup</h3>
+            </div>
+
+            <input type="file" id="restore-file-input" accept=".json" class="hidden"
+                onchange="previewBackupFile(event)">
+
+            <div id="restore-preview" class="hidden space-y-4">
+                <div class="bg-slate-50 p-4 rounded-2xl">
+                    <p class="text-xs font-bold text-slate-400 mb-1">FILE NAME</p>
+                    <p class="font-bold text-slate-700" id="restore-filename">-</p>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-2xl">
+                    <p class="text-xs font-bold text-slate-400 mb-1">BACKUP DATE</p>
+                    <p class="font-bold text-slate-700" id="restore-date">-</p>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-2xl">
+                    <p class="text-xs font-bold text-slate-400 mb-3">PREVIEW</p>
+                    <div class="space-y-2 text-sm" id="restore-stats">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div class="bg-amber-50 border-2 border-amber-200 p-4 rounded-2xl flex items-start gap-3">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
+                    <div>
+                        <p class="font-bold text-amber-800 text-sm">Warning</p>
+                        <p class="text-xs text-amber-700">This will REPLACE all current data and sync to Firebase.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="restore-select" class="text-center py-8">
+                <div class="w-20 h-20 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="file-json" class="w-10 h-10 text-slate-400"></i>
+                </div>
+                <p class="text-slate-500 mb-4">Select a backup file to restore</p>
+                <button onclick="document.getElementById('restore-file-input').click()"
+                    class="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">
+                    Choose File
+                </button>
+            </div>
+
+            <div class="flex gap-3 pt-6">
+                <button onclick="closeRestoreModal()"
+                    class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                <button onclick="confirmRestore()" id="restore-confirm-btn"
+                    class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 hidden">
+                    Restore & Sync
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Budget Settings -->
+    <div id="budget-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-4xl w-full shadow-2xl max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">Budget Manager</h3>
+                    <p class="text-xs text-slate-500 mt-1">Set monthly limits and track spending visually</p>
+                </div>
+                <button onclick="toggleModal('budget-modal')" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- Budget Overview Cards -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 p-4 rounded-2xl border border-emerald-200">
+                    <p class="text-xs font-bold text-emerald-600 uppercase">Total Budget</p>
+                    <h3 class="text-2xl font-bold text-emerald-700 mt-1" id="total-budget-display">₱0</h3>
+                </div>
+                <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-2xl border border-blue-200">
+                    <p class="text-xs font-bold text-blue-600 uppercase">Total Spent</p>
+                    <h3 class="text-2xl font-bold text-blue-700 mt-1" id="total-spent-display">₱0</h3>
+                </div>
+                <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-2xl border border-purple-200">
+                    <p class="text-xs font-bold text-purple-600 uppercase">Remaining</p>
+                    <h3 class="text-2xl font-bold text-purple-700 mt-1" id="total-remaining-display">₱0</h3>
+                </div>
+            </div>
+
+            <!-- Budget Items -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar mb-6">
+                <div id="budget-inputs" class="space-y-4">
+                    <!-- Populated via JS -->
+                    <div class="text-center text-slate-400 py-8">Loading categories...</div>
+                </div>
+            </div>
+
+            <!-- Add Custom Category -->
+            <div class="border-t border-slate-200 pt-4 mb-4">
+                <div class="flex gap-3">
+                    <input type="text" id="new-category-name" placeholder="Custom category name..."
+                        class="flex-1 p-3 bg-slate-50 border rounded-xl outline-none focus:border-emerald-500 text-sm font-bold">
+                    <button onclick="addCustomCategory()"
+                        class="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 flex items-center gap-2">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        Add Category
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="clearAllBudgets()"
+                    class="px-6 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200 text-slate-600">Clear
+                    All</button>
+                <button onclick="saveBudgets()"
+                    class="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-2xl font-bold hover:from-emerald-700 hover:to-emerald-600 shadow-lg shadow-emerald-200">
+                    Save Budget Plan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Item Tracker -->
+    <div id="item-tracker-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-6xl w-full shadow-2xl max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">Item Price Tracker</h3>
+                    <p class="text-xs text-slate-500 mt-1">Track price changes and purchase frequency of items</p>
+                </div>
+                <button onclick="toggleModal('item-tracker-modal')" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Type</label>
+                        <select id="item-type-filter" onchange="filterItems()"
+                            class="w-full p-3 bg-white border rounded-xl outline-none font-bold text-slate-700">
+                            <option value="all">All Items</option>
+                            <option value="expense">Expenses Only</option>
+                            <option value="income">Income Only</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Category</label>
+                        <select id="item-category-filter" onchange="filterItems()"
+                            class="w-full p-3 bg-white border rounded-xl outline-none font-bold text-slate-700">
+                            <option value="all">All Categories</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Search Item</label>
+                        <input type="text" id="item-search" oninput="filterItems()" placeholder="Search by name..."
+                            class="w-full p-3 bg-white border rounded-xl outline-none text-sm font-bold">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Items List -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar mb-6">
+                <div id="items-list" class="space-y-3">
+                    <div class="text-center text-slate-400 py-8">Loading items...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Item Details -->
+    <div id="item-details-modal"
+        class="fixed inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-5xl w-full shadow-2xl max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800" id="item-detail-name">Item Name</h3>
+                    <p class="text-xs text-slate-500 mt-1" id="item-detail-subtitle">Purchase history and analytics</p>
+                </div>
+                <button onclick="toggleModal('item-details-modal')" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- Statistics Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 p-4 rounded-2xl border border-indigo-200">
+                    <p class="text-xs font-bold text-indigo-600 uppercase">Total Purchases</p>
+                    <h3 class="text-2xl font-bold text-indigo-700 mt-1" id="item-stat-count">0</h3>
+                </div>
+                <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 p-4 rounded-2xl border border-emerald-200">
+                    <p class="text-xs font-bold text-emerald-600 uppercase">Total Spent</p>
+                    <h3 class="text-2xl font-bold text-emerald-700 mt-1" id="item-stat-total">₱0</h3>
+                </div>
+                <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-2xl border border-purple-200">
+                    <p class="text-xs font-bold text-purple-600 uppercase">Avg Price</p>
+                    <h3 class="text-2xl font-bold text-purple-700 mt-1" id="item-stat-avg">₱0</h3>
+                </div>
+                <div class="bg-gradient-to-br from-rose-50 to-rose-100 p-4 rounded-2xl border border-rose-200">
+                    <p class="text-xs font-bold text-rose-600 uppercase">Highest</p>
+                    <h3 class="text-2xl font-bold text-rose-700 mt-1" id="item-stat-max">₱0</h3>
+                </div>
+                <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-2xl border border-blue-200">
+                    <p class="text-xs font-bold text-blue-600 uppercase">Lowest</p>
+                    <h3 class="text-2xl font-bold text-blue-700 mt-1" id="item-stat-min">₱0</h3>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="bg-slate-50 p-6 rounded-2xl mb-6">
+                <h4 class="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                    <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
+                    Price History Over Time
+                </h4>
+                <div class="relative h-64">
+                    <canvas id="item-price-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Transaction History Table -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                <h4 class="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                    <i data-lucide="list" class="w-5 h-5 text-slate-600"></i>
+                    Purchase History
+                </h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-100 text-slate-600 text-xs font-bold uppercase">
+                            <tr>
+                                <th class="p-3 text-left rounded-l-xl">Date</th>
+                                <th class="p-3 text-left">Category</th>
+                                <th class="p-3 text-right">Quantity</th>
+                                <th class="p-3 text-right">Unit Price</th>
+                                <th class="p-3 text-right rounded-r-xl">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="item-history-table" class="divide-y divide-slate-100">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/storage.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/crypto.js"></script>
+    <script src="assets/js/charts.js"></script>
+    <script src="assets/js/renderers.js"></script>
+    <script src="assets/js/crud.js"></script>
+    <script src="assets/js/backup.js"></script>
+    <script src="assets/js/item-tracking.js"></script>
+    <script src="assets/js/reminders.js"></script>
+    <script src="assets/js/reports.js"></script>
+    <script src="assets/js/analytics.js"></script>
+    <script src="assets/js/preferences.js"></script>
+</body>
+
+</html>
