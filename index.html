@@ -80,7 +80,8 @@
             <button id="menu-btn" onclick="toggleMenu()">☰</button>
             <button id="btn-task-list" class="toolbar-icon-btn" title="Task List (Opt+F)"
                 onclick="toggleTaskListWindow()">📋</button>
-            <button id="btn-pinned" class="toolbar-icon-btn" title="Pinned Window" onclick="togglePinnedWindow()">📌</button>
+            <button id="btn-pinned" class="toolbar-icon-btn" title="Pinned Window"
+                onclick="togglePinnedWindow()">📌</button>
             <div id="quick-links-container" class="quick-links"></div>
             <button id="btn-add-quick-link" class="toolbar-icon-btn" title="Add Link"
                 onclick="openQuickLinkModal()">+</button>
@@ -778,8 +779,8 @@
             <span class="health-label">Task Load</span>
             <span class="health-val" id="hd-load">0 / 0</span>
         </div>
-        <div class="health-row" title="Browser LocalStorage Usage (~5MB Limit)">
-            <span class="health-label">Storage</span>
+        <div class="health-row" title="IndexedDB Storage (High Capacity)">
+            <span class="health-label">DB Size</span>
             <div style="display:flex; align-items:center;">
                 <span class="health-val" id="hd-storage-text">0%</span>
                 <div class="health-bar-bg">
