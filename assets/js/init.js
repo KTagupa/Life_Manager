@@ -39,6 +39,7 @@
             setupContextualMenu();
             renderPinnedWindow();
             renderQuickLinks();
+            if (typeof renderReminderStrip === 'function') renderReminderStrip();
 
             // Setup modal dragging
             setupModalDragging();
@@ -49,6 +50,9 @@
 
             const savedInboxPos = localStorage.getItem('inboxModalPosition');
             if (savedInboxPos) inboxModalPosition = JSON.parse(savedInboxPos);
+
+            const savedRemindersPos = localStorage.getItem('remindersModalPosition');
+            if (savedRemindersPos) remindersModalPosition = JSON.parse(savedRemindersPos);
 
             const savedHealthPos = localStorage.getItem('healthDashboardPosition');
             if (savedHealthPos) {
@@ -83,6 +87,10 @@
             window.timerInterval = setInterval(tickTimers, 1000);
             setInterval(checkAutoArchive, 60000);
             setInterval(checkExpiredTasks, 60000);
+            if (typeof checkReminderTriggers === 'function') {
+                checkReminderTriggers();
+                setInterval(checkReminderTriggers, 30000);
+            }
 
             // --- AUTOMATED BACKUP STARTUP ---
             updateBackupStatusUI();

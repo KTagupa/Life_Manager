@@ -87,6 +87,11 @@
             const inboxHeader = document.getElementById('inbox-modal-header');
             makeModalDraggable(inboxModal, inboxHeader, 'inboxModalPosition');
 
+            // Reminders Modal
+            const remindersModal = document.getElementById('reminders-modal');
+            const remindersHeader = document.getElementById('reminders-modal-header');
+            makeModalDraggable(remindersModal, remindersHeader, 'remindersModalPosition');
+
             // Health Dashboard
             const healthDash = document.getElementById('health-dashboard');
             makeHealthDashboardDraggable(healthDash);
@@ -145,6 +150,8 @@
                         aiModalPosition = position;
                     } else if (positionKey === 'inboxModalPosition') {
                         inboxModalPosition = position;
+                    } else if (positionKey === 'remindersModalPosition') {
+                        remindersModalPosition = position;
                     }
 
                     localStorage.setItem(positionKey, JSON.stringify(position));
@@ -1562,6 +1569,9 @@
 
                 const linkedCount = (note.taskIds || []).length;
                 const linkIndicator = linkedCount > 0 ? `<span style="font-size:10px; color:#3b82f6; margin-left:6px;">🔗 ${linkedCount}</span>` : '';
+                const reminderIcon = hasReminderForItem('note', note.id) ?
+                    `<button class="btn reminder-note-btn active" style="padding:1px 4px; font-size:9px; margin-left:4px;" onclick="event.stopPropagation(); openRemindersModal('note', '${note.id}');">⏰</button>` :
+                    `<button class="btn reminder-note-btn" style="padding:1px 4px; font-size:9px; margin-left:4px; opacity:0.5;" onclick="event.stopPropagation(); openRemindersModal('note', '${note.id}');">⏰</button>`;
 
                 const pinIcon = isPinned('note', note.id) ?
                     `<button class="btn" style="padding:1px 4px; font-size:9px; margin-left:4px; border-color:var(--accent); color:var(--accent);" onclick="event.stopPropagation(); togglePinItem('note', '${note.id}'); renderNotesList();">📌</button>` :
@@ -1571,7 +1581,7 @@
                 <div class="note-card-title">${note.isPinned ? '📌 ' : ''}${note.title || '(Untitled)'}${linkIndicator}</div>
                 <div class="note-card-preview">${previewText}...</div>
                 <div style="margin-top:5px;">${tagsHtml}</div>
-                <div class="note-card-meta"><span>${new Date(note.timestamp || Date.now()).toLocaleDateString()}</span>${pinIcon}</div>
+                <div class="note-card-meta"><span>${new Date(note.timestamp || Date.now()).toLocaleDateString()}</span><span style="display:flex; align-items:center;">${reminderIcon}${pinIcon}</span></div>
             `;
                 el.onclick = () => openNoteEditor(note.id);
                 container.appendChild(el);
@@ -1743,6 +1753,7 @@
             if (!currentEditingNoteId) return;
 
             if (confirm("Delete this note?")) {
+                discardReminderByItem('note', currentEditingNoteId);
                 // Remove from array
                 notes = notes.filter(n => n.id !== currentEditingNoteId);
 

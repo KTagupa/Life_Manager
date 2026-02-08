@@ -180,6 +180,17 @@ async function playAudioFeedback(type) {
             osc.start(now);
             osc.stop(now + 0.4);
             break;
+
+        case 'reminder':
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(880, now);
+            osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
+            osc.frequency.exponentialRampToValueAtTime(990, now + 0.2);
+            gain.gain.setValueAtTime(0.18, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+            osc.start(now);
+            osc.stop(now + 0.25);
+            break;
     }
 }
 

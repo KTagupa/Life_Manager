@@ -263,6 +263,7 @@
 
         function deleteHabit(id) {
             if (confirm("Delete this habit and its history?")) {
+                discardReminderByItem('habit', id);
                 habits = habits.filter(h => h.id !== id);
                 renderHabits();
                 saveToStorage();
@@ -466,6 +467,7 @@
                         </div>
                     </div>
                     <div class="habit-actions">
+                        <button class="btn ${hasReminderForItem('habit', h.id) ? '' : ''}" style="padding: 2px 6px; font-size:10px; ${hasReminderForItem('habit', h.id) ? 'border-color:var(--critical-path); color:var(--critical-path);' : ''}" onclick="openRemindersModal('habit', '${h.id}')">⏰</button>
                         <button class="btn" style="padding: 2px 6px; font-size:10px; ${isPinned('habit', h.id) ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="togglePinItem('habit', '${h.id}'); renderHabits();">📌</button>
                         <button class="btn btn-danger" style="padding: 2px 6px; font-size:10px;" onclick="deleteHabit('${h.id}')">✕</button>
                     </div>

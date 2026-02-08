@@ -1408,7 +1408,7 @@ function updateHealthMonitor() {
     try {
         const dataPayload = {
             nodes, archivedNodes, inbox, lifeGoals, notes,
-            habits, agenda, pinnedItems, quickLinks,
+            habits, agenda, pinnedItems, quickLinks, reminders,
             hiddenNodeGroups: (typeof hiddenNodeGroups !== 'undefined') ? Array.from(hiddenNodeGroups) : [],
             timestamp: Date.now()
         };

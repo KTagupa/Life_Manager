@@ -282,6 +282,41 @@
                     </div>
                 </div>`;
 
+            const taskReminder = getReminderForItem('task', node.id);
+            const reminderHtml = taskReminder ? `
+                <div style="margin-bottom:16px;">
+                    <label class="field-label">⏰ REMINDER</label>
+                    <div style="display:flex; gap:8px; margin-bottom:8px;">
+                        <div class="field-box" style="padding: 8px 12px; flex:1;">
+                            <input type="date" value="${taskReminder.date || ''}" 
+                                style="background:transparent; border:none; color:white; width:100%; font-family:inherit; font-size:13px; outline:none;" 
+                                onchange="updateReminderFieldByItem('task', '${node.id}', 'date', this.value)">
+                        </div>
+                        <div class="field-box" style="padding: 8px 12px; width:120px;">
+                            <input type="time" value="${getReminderEffectiveTime(taskReminder)}" ${taskReminder.allDay ? 'disabled' : ''}
+                                style="background:transparent; border:none; color:white; width:100%; font-family:inherit; font-size:13px; outline:none;" 
+                                onchange="updateReminderFieldByItem('task', '${node.id}', 'time', this.value)">
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                        <label style="font-size:11px; color:#cbd5e1; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                            <input type="checkbox" ${taskReminder.allDay ? 'checked' : ''} onchange="toggleReminderAllDayByItem('task', '${node.id}', this.checked)">
+                            All day (6:25 AM)
+                        </label>
+                        <div style="display:flex; gap:8px;">
+                            <button class="add-subtask-btn" style="color:#f59e0b;" onclick="openRemindersModal('task', '${node.id}')">Manage</button>
+                            <button class="add-subtask-btn" style="color:#ef4444;" onclick="discardReminder('${taskReminder.id}'); updateInspector();">Discard</button>
+                        </div>
+                    </div>
+                </div>` : `
+                <div style="margin-bottom:16px;">
+                    <label class="field-label">⏰ REMINDER</label>
+                    <div class="linked-note-item" style="border-style:dashed; justify-content:space-between; color:#94a3b8;">
+                        <span style="font-size:12px;">No reminder set</span>
+                        <button class="add-subtask-btn" style="color:#f59e0b;" onclick="openRemindersModal('task', '${node.id}')">+ ADD</button>
+                    </div>
+                </div>`;
+
             // 3. External Link
             const externalLinkHtml = `
                 <div style="margin-bottom:16px;">
@@ -495,6 +530,7 @@
                 <div style="padding: 16px 20px; overflow-y: auto; flex-grow:1;">
                     ${durationStatusHtml}
                     ${dueDateHtml}
+                    ${reminderHtml}
                     ${externalLinkHtml}
                     ${subtasksHtml}
                     ${linkedNotesHtml}
@@ -684,6 +720,7 @@
             const parentNode = nodes.find(n => n.id === parentId);
             if (!parentNode) return;
             parentNode.subtasks.push({ text: targetNode.title, done: targetNode.completed });
+            discardReminderByItem('task', targetId);
             nodes = nodes.filter(n => n.id !== targetId);
             archivedNodes = archivedNodes.filter(n => n.id !== targetId);
             nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== targetId); });
@@ -697,6 +734,7 @@
         function deleteSelectedNode() {
             if (!selectedNodeId) return;
             if (!confirm('Delete this task completely?')) return;
+            discardReminderByItem('task', selectedNodeId);
             nodes = nodes.filter(n => n.id !== selectedNodeId);
             archivedNodes = archivedNodes.filter(n => n.id !== selectedNodeId);
             nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); });

@@ -125,6 +125,7 @@ async function pushToGist() {
             notes: notes || [],
             habits: typeof habits !== 'undefined' ? habits : [],
             agenda: agenda || [],
+            reminders: reminders || [],
             noteSettings: noteSettings || { categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`) },
             timestamp: Date.now()
         };
@@ -207,7 +208,8 @@ function mergeStates(local, remote) {
         lifeGoals: local.lifeGoals || {},
         habits: local.habits || [],
         notes: [],
-        agenda: local.agenda || []
+        agenda: local.agenda || [],
+        reminders: []
     };
 
     // Merge tasks: prefer completed status if either is done, use latest modification
@@ -265,6 +267,18 @@ function mergeStates(local, remote) {
         }
     });
 
+    // Merge reminders: one reminder per item key, keep most recently updated
+    const reminderByKey = new Map();
+    [...(local.reminders || []), ...(remote.reminders || [])].forEach(rem => {
+        if (!rem || !rem.itemType || !rem.itemId) return;
+        const key = `${rem.itemType}::${rem.itemId}`;
+        const prev = reminderByKey.get(key);
+        if (!prev || (Number(rem.updatedAt || 0) >= Number(prev.updatedAt || 0))) {
+            reminderByKey.set(key, rem);
+        }
+    });
+    merged.reminders = Array.from(reminderByKey.values());
+
     return merged;
 }
 
@@ -312,7 +326,7 @@ async function pullFromGist() {
         // 3. Parse the appState from the Gist
         const remoteState = JSON.parse(data.files[GIST_FILENAME].content);
         const localState = {
-            nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda
+            nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda, reminders
         };
 
         // Check timestamps
@@ -352,6 +366,7 @@ async function pullFromGist() {
         notes = mergedState.notes || [];
         habits = mergedState.habits || [];
         agenda = mergedState.agenda || [];
+        reminders = mergedState.reminders || [];
 
         // Save merge timestamp
         localStorage.setItem('urgencyFlow_lastSave', Date.now());
@@ -364,6 +379,8 @@ async function pullFromGist() {
         render();             // Redraw the graph
         renderInbox();        // Update fab inbox list
         renderGoals();        // Update goals panel
+        if (typeof renderReminderStrip === 'function') renderReminderStrip();
+        if (typeof renderRemindersModal === 'function') renderRemindersModal();
 
         setSyncStatus('Pull Complete!');
         showNotification('GitHub Sync Successful!');

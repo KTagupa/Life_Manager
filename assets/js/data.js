@@ -6,6 +6,7 @@
         let lifeGoals = {};
         let habits = [];
         let notes = [];
+        let reminders = [];
 
         // --- HISTORY MANAGEMENT ---
         const MAX_HISTORY = 50;
@@ -14,7 +15,7 @@
         let lastHistoryState = null;
 
         function pushHistory() {
-            const currentState = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda });
+            const currentState = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda, reminders });
             if (currentState === lastHistoryState) return;
 
             if (historyIndex < historyStack.length - 1) {
@@ -57,6 +58,7 @@
             habits = state.habits || [];
             notes = state.notes || [];
             agenda = state.agenda || [];
+            reminders = state.reminders || [];
 
             sanitizeLoadedData();
             updateCalculations();
@@ -66,6 +68,8 @@
             renderGoals();
             renderHabits();
             renderNotesList();
+            if (typeof renderReminderStrip === 'function') renderReminderStrip();
+            if (typeof renderRemindersModal === 'function') renderRemindersModal();
             if (selectedNodeId) updateInspector();
 
             saveToStorage();
@@ -98,6 +102,7 @@
         let nodeGroupsModalPosition = { x: null, y: null, width: 420, height: 600 };
         let aiModalPosition = { x: null, y: null, width: 450, height: 600 };
         let inboxModalPosition = { x: null, y: null, width: 380, height: 500 };
+        let remindersModalPosition = { x: null, y: null, width: 560, height: 620 };
         let healthDashboardPosition = { x: null, y: null };
         let scale = 1;
         let panX = 0;
@@ -226,7 +231,7 @@
         function saveToStorageImmediate() {
             const data = {
                 nodes, archivedNodes, inbox, lifeGoals, notes, githubToken,
-                gistId, habits, agenda, pinnedItems, quickLinks, noteSettings,
+                gistId, habits, agenda, pinnedItems, quickLinks, reminders, noteSettings, remindersModalPosition,
                 hiddenNodeGroups: Array.from(hiddenNodeGroups),
                 timestamp: Date.now()
             };
@@ -350,11 +355,13 @@
             lifeGoals = parsed.lifeGoals || {};
             habits = parsed.habits || [];
             notes = parsed.notes || [];
+            reminders = parsed.reminders || [];
             githubToken = parsed.githubToken || '';
             gistId = parsed.gistId || '';
             agenda = parsed.agenda || [];
             pinnedItems = parsed.pinnedItems || [];
             quickLinks = parsed.quickLinks || [];
+            remindersModalPosition = parsed.remindersModalPosition || remindersModalPosition;
             hiddenNodeGroups = parsed.hiddenNodeGroups ? new Set(parsed.hiddenNodeGroups) : new Set();
             if (parsed.noteSettings) noteSettings = parsed.noteSettings;
 
@@ -442,6 +449,42 @@
                 if (!h.type) h.type = 'checkbox';
                 if (!h.noteIds) h.noteIds = [];
             });
+            // --- REMINDERS CLEANUP ---
+            if (!Array.isArray(reminders)) reminders = [];
+            const isValidType = (type) => ['task', 'note', 'habit', 'inbox'].includes(type);
+            const itemExists = (type, id) => {
+                if (!id) return false;
+                if (type === 'task') return nodes.some(n => n.id === id) || archivedNodes.some(n => n.id === id);
+                if (type === 'note') return notes.some(n => n.id === id);
+                if (type === 'habit') return habits.some(h => h.id === id);
+                if (type === 'inbox') return inbox.some(i => i.id === id);
+                return false;
+            };
+            const normalized = new Map();
+            reminders.forEach(rem => {
+                if (!rem || !isValidType(rem.itemType) || !rem.itemId) return;
+                const key = `${rem.itemType}::${rem.itemId}`;
+                const allDay = !!rem.allDay;
+                const date = /^\d{4}-\d{2}-\d{2}$/.test(rem.date || '') ? rem.date : new Date(rem.createdAt || Date.now()).toISOString().slice(0, 10);
+                const time = /^\d{2}:\d{2}$/.test(rem.time || '') ? rem.time : '06:25';
+                const candidate = {
+                    id: rem.id || ('rem_' + Date.now() + Math.random().toString(36).substr(2, 5)),
+                    itemType: rem.itemType,
+                    itemId: rem.itemId,
+                    date: date,
+                    time: allDay ? '06:25' : time,
+                    allDay: allDay,
+                    createdAt: Number(rem.createdAt || Date.now()),
+                    updatedAt: Number(rem.updatedAt || Date.now()),
+                    firedAt: rem.firedAt ? Number(rem.firedAt) : null,
+                    firstFiredAt: rem.firstFiredAt ? Number(rem.firstFiredAt) : null,
+                    kept: !!rem.kept,
+                    lastFiredOccurrenceTs: rem.lastFiredOccurrenceTs ? Number(rem.lastFiredOccurrenceTs) : null
+                };
+                const prev = normalized.get(key);
+                if (!prev || candidate.updatedAt >= prev.updatedAt) normalized.set(key, candidate);
+            });
+            reminders = Array.from(normalized.values()).filter(rem => itemExists(rem.itemType, rem.itemId));
             if (!Array.isArray(agenda)) agenda = [];
             // Remove agenda slots for deleted tasks (except inbox items)
             agenda = agenda.filter(slot => {
@@ -484,6 +527,7 @@
                 'Notes': notes,
                 'Tasks': { nodes, archivedNodes, inbox, agenda },
                 'Habits': habits,
+                'Reminders': reminders,
                 'Finance': financeData,
                 'Goals': lifeGoals
             };
@@ -523,7 +567,7 @@
         }
 
 
-        function saveData(download = false) { const data = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, habits, agenda, quickLinks }, null, 2); if (download) { const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
+        function saveData(download = false) { const data = JSON.stringify({ nodes, archivedNodes, inbox, lifeGoals, notes, habits, agenda, quickLinks, reminders }, null, 2); if (download) { const blob = new Blob([data], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'life-tasks-backup.json'; a.click(); } }
         function loadFile(input) {
             const file = input.files[0];
             if (!file) return;
@@ -544,6 +588,7 @@
                         archivedNodes = [];
                         habits = [];
                         agenda = [];
+                        reminders = [];
                     } else {
                         // Modern support: Wrapper object
                         nodes = parsed.nodes || [];
@@ -554,6 +599,7 @@
                         archivedNodes = parsed.archivedNodes || [];
                         agenda = parsed.agenda || [];
                         quickLinks = parsed.quickLinks || [];
+                        reminders = parsed.reminders || [];
                         // Do NOT load tokens from file for security, unless specifically desired
                     }
 
@@ -565,6 +611,8 @@
                     renderGoals();
                     renderAgenda();
                     renderQuickLinks();
+                    if (typeof renderReminderStrip === 'function') renderReminderStrip();
+                    if (typeof renderRemindersModal === 'function') renderRemindersModal();
 
                     // 4. Save to local storage immediately so a refresh keeps the data
                     saveToStorage();
@@ -589,6 +637,7 @@
                 habits = [];
                 agenda = [];
                 quickLinks = [];
+                reminders = [];
                 noteSettings = {
                     categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`)
                 };
@@ -598,6 +647,8 @@
                 renderGoals();
                 renderAgenda();
                 renderQuickLinks();
+                if (typeof renderReminderStrip === 'function') renderReminderStrip();
+                if (typeof renderRemindersModal === 'function') renderRemindersModal();
                 deselectNode();
             }
         }

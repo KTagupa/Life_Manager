@@ -83,8 +83,11 @@
             <button id="btn-pinned" class="toolbar-icon-btn" title="Pinned Window"
                 onclick="togglePinnedWindow()">📌</button>
             <div id="quick-links-container" class="quick-links"></div>
+            <div id="reminder-alert-strip" class="reminder-strip"></div>
             <button id="btn-add-quick-link" class="toolbar-icon-btn" title="Add Link"
                 onclick="openQuickLinkModal()">+</button>
+            <button id="btn-reminders-modal" class="toolbar-icon-btn" title="All Reminders"
+                onclick="toggleRemindersModal()">🔔</button>
         </div>
         <div id="toolbar-content">
             <button class="btn btn-primary" onclick="addNode()">+ New Task (Optn+T)</button>
@@ -100,6 +103,7 @@
             <button class="btn" onclick="toggleProgressDashboard()">🏆 Progress (Optn+C)</button>
             <button class="btn" style="border-color: var(--accent); color: var(--accent);"
                 onclick="toggleSyncPanel()">☁️ Sync (Optn+S)</button>
+            <button class="btn" onclick="toggleRemindersModal()">🔔 All Reminders</button>
             <button class="btn" onclick="toggleGlobalSearch()">🔍 Search (Optn+Space)</button>
             <button class="btn" onclick="saveData(true)">Save (Optn+V)</button>
             <button class="btn" onclick="document.getElementById('file-input').click()">Load (Optn+L)</button>
@@ -663,6 +667,24 @@
                 onkeypress="if(event.key==='Enter') addToInboxModal()" style="flex: 1;">
             <button class="btn btn-primary" onclick="addToInboxModal()"
                 style="background: var(--ready-color); border-color: var(--ready-color);">Add</button>
+        </div>
+    </div>
+
+    <!-- Reminders Modal -->
+    <div id="reminders-modal">
+        <div class="modal-header-enhanced" id="reminders-modal-header">
+            <div class="modal-title-enhanced">
+                <span style="font-size: 24px;">🔔</span>
+                <span>All Reminders</span>
+            </div>
+            <button class="modal-close-btn" onclick="closeRemindersModal()">✕</button>
+        </div>
+        <div
+            style="padding: 10px 12px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); font-size: 11px; color: var(--text-muted);">
+            Edit date/time/all-day here. Fired reminders can be kept or discarded.
+        </div>
+        <div id="reminders-modal-list" class="panel-list" style="flex-grow: 1; overflow-y: auto; padding: 10px;">
+            <!-- Reminder cards -->
         </div>
     </div>
 
