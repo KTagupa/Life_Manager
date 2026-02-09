@@ -566,7 +566,7 @@ function render() {
 
     // --- Render Connections (Lines) ---
     nodesToRender.forEach(node => {
-        node.dependencies.forEach(dep => {
+        node.dependencies.forEach((dep, depIndex) => {
             const parent = nodes.find(n => n.id === dep.id);
             if (!parent) return;
 
@@ -586,6 +586,7 @@ function render() {
             const width = (isCritical || isUrgentPath) ? 3 : 2;
 
             const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.classList.add('connection-line');
             const startX = parent.x + 180 + 2;
             const startY = parent.y + 40;
             const endX = node.x - 2;
@@ -593,14 +594,25 @@ function render() {
 
             // --- Updated Eco Rendering ---
             let d;
+            let midX;
+            let midY;
             if (isEcoMode) {
                 // ECO: Straight Line + No Arrowheads = Minimum CPU usage
                 d = `M ${startX} ${startY} L ${endX} ${endY}`;
                 path.setAttribute('marker-end', '');
+                midX = (startX + endX) / 2;
+                midY = (startY + endY) / 2;
             } else {
                 // TURBO: Smooth Curves + Arrowheads
-                d = `M ${startX} ${startY} C ${startX + 50} ${startY}, ${endX - 50} ${endY}, ${endX} ${endY}`;
+                const c1x = startX + 50;
+                const c1y = startY;
+                const c2x = endX - 50;
+                const c2y = endY;
+                d = `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}`;
                 path.setAttribute('marker-end', 'url(#arrow)');
+                // Cubic Bezier midpoint at t=0.5
+                midX = (startX + (3 * c1x) + (3 * c2x) + endX) / 8;
+                midY = (startY + (3 * c1y) + (3 * c2y) + endY) / 8;
             }
 
             path.setAttribute('d', d);
@@ -609,8 +621,63 @@ function render() {
 
             if (dep.type === 'soft') path.classList.add('soft');
             if (isCritical || isUrgentPath) path.classList.add('critical');
-            path.setAttribute('marker-end', 'url(#arrow)');
             svg.appendChild(path);
+
+            const hitPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            hitPath.classList.add('connection-hit-area');
+            hitPath.setAttribute('d', d);
+            svg.appendChild(hitPath);
+
+            const insertBtn = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            insertBtn.classList.add('connection-insert-btn');
+            insertBtn.setAttribute('transform', `translate(${midX} ${midY})`);
+
+            const insertBtnCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            insertBtnCircle.setAttribute('cx', '0');
+            insertBtnCircle.setAttribute('cy', '0');
+            insertBtnCircle.setAttribute('r', '11');
+
+            const plusLineH = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            plusLineH.setAttribute('x1', '-4');
+            plusLineH.setAttribute('y1', '0');
+            plusLineH.setAttribute('x2', '4');
+            plusLineH.setAttribute('y2', '0');
+
+            const plusLineV = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            plusLineV.setAttribute('x1', '0');
+            plusLineV.setAttribute('y1', '-4');
+            plusLineV.setAttribute('x2', '0');
+            plusLineV.setAttribute('y2', '4');
+
+            insertBtn.appendChild(insertBtnCircle);
+            insertBtn.appendChild(plusLineH);
+            insertBtn.appendChild(plusLineV);
+            svg.appendChild(insertBtn);
+
+            let hideInsertBtnTimeout = null;
+            const showInsertBtn = () => {
+                if (hideInsertBtnTimeout) {
+                    clearTimeout(hideInsertBtnTimeout);
+                    hideInsertBtnTimeout = null;
+                }
+                insertBtn.classList.add('visible');
+            };
+            const hideInsertBtn = () => {
+                if (hideInsertBtnTimeout) clearTimeout(hideInsertBtnTimeout);
+                hideInsertBtnTimeout = setTimeout(() => {
+                    insertBtn.classList.remove('visible');
+                }, 120);
+            };
+
+            hitPath.addEventListener('mouseenter', showInsertBtn);
+            hitPath.addEventListener('mouseleave', hideInsertBtn);
+            insertBtn.addEventListener('mouseenter', showInsertBtn);
+            insertBtn.addEventListener('mouseleave', hideInsertBtn);
+            insertBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+            insertBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                insertTaskBetweenDependency(node.id, depIndex);
+            });
         });
     });
 
@@ -897,7 +964,9 @@ function setupInteractions() {
     });
 
     container.addEventListener('mousedown', (e) => {
-        if (e.target === container || e.target.tagName === 'svg' || e.target.id === 'nodes-layer') {
+        const clickedInsertBtn = e.target.closest && e.target.closest('.connection-insert-btn');
+        const clickedConnection = e.target.closest && (e.target.closest('.connection-hit-area') || e.target.closest('.connection-line'));
+        if (!clickedInsertBtn && (e.target === container || e.target.tagName === 'svg' || e.target.id === 'nodes-layer' || clickedConnection)) {
             if (e.shiftKey) {
                 isBoxSelecting = true;
                 boxSelectStart = { x: e.clientX, y: e.clientY };
@@ -1193,6 +1262,45 @@ function fitView() {
 }
 
 // --- NODE MANAGEMENT ---
+function insertTaskBetweenDependency(childId, depIndex) {
+    const childNode = nodes.find(n => n.id === childId);
+    if (!childNode) return;
+
+    const existingDep = childNode.dependencies[depIndex];
+    if (!existingDep) return;
+
+    const parentNode = nodes.find(n => n.id === existingDep.id);
+    if (!parentNode) return;
+
+    const newX = Math.round((parentNode.x + childNode.x) / 2);
+    let newY = Math.round((parentNode.y + childNode.y) / 2);
+
+    const isSpotBusy = (x, y) => nodes.some(n => Math.abs(n.x - x) < 170 && Math.abs(n.y - y) < 100);
+    let placementAttempts = 0;
+    while (isSpotBusy(newX, newY) && placementAttempts < 6) {
+        newY += 120;
+        placementAttempts++;
+    }
+
+    const newNode = createNode(newX, newY, 'New Task');
+    const depType = existingDep.type || 'hard';
+    newNode.dependencies.push({ id: parentNode.id, type: depType });
+
+    const inheritedGoalIds = Array.from(new Set([
+        ...(Array.isArray(parentNode.goalIds) ? parentNode.goalIds : []),
+        ...(Array.isArray(childNode.goalIds) ? childNode.goalIds : [])
+    ]));
+    newNode.goalIds = inheritedGoalIds;
+
+    childNode.dependencies[depIndex] = { id: newNode.id, type: depType };
+    nodes.push(newNode);
+
+    updateCalculations();
+    selectNode(newNode.id);
+    saveToStorage();
+    showNotification(`Inserted task between "${parentNode.title}" and "${childNode.title}"`);
+}
+
 function addNode() { const worldX = (window.innerWidth / 2 - panX) / scale - 90 + (Math.random() * 40 - 20); const worldY = (window.innerHeight / 2 - panY) / scale - 50 + (Math.random() * 40 - 20); const n = createNode(worldX, worldY); nodes.push(n); selectNode(n.id); updateCalculations(); render(); saveToStorage(); }
 
 function selectNode(id) {

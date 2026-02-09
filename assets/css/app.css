@@ -2738,19 +2738,59 @@
             overflow: visible !important;
         }
 
-        path {
+        #connections {
+            pointer-events: auto;
+        }
+
+        #connections path {
             fill: none;
             stroke-width: 2;
             transition: stroke 0.3s, stroke-width 0.3s;
+            pointer-events: none;
         }
 
-        path.soft {
+        #connections path.soft {
             stroke-dasharray: 5, 5;
         }
 
-        path.critical {
+        #connections path.critical {
             stroke-width: 3;
             filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.4));
+        }
+
+        #connections path.connection-hit-area {
+            stroke: transparent;
+            stroke-width: 18;
+            pointer-events: stroke;
+            cursor: pointer;
+        }
+
+        #connections .connection-insert-btn {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity var(--transition-fast);
+        }
+
+        #connections .connection-insert-btn.visible {
+            opacity: 1;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+        #connections .connection-insert-btn circle {
+            fill: var(--panel-bg-elevated);
+            stroke: var(--accent);
+            stroke-width: 1.5;
+        }
+
+        #connections .connection-insert-btn line {
+            stroke: var(--accent);
+            stroke-width: 2;
+            stroke-linecap: round;
+        }
+
+        #connections .connection-insert-btn:hover circle {
+            fill: var(--accent-light);
         }
 
         /* SELECTION BOX */
