@@ -1604,8 +1604,16 @@
         function createNewNote(taskId = null) {
             // Safe check for task ID
             const safeTaskId = (typeof taskId === 'string') ? taskId : null;
+            let noteTitle = "New Note";
 
-            const newNote = createNoteObject("New Note", "", safeTaskId);
+            if (safeTaskId) {
+                const task = nodes.find(n => n.id === safeTaskId) || archivedNodes.find(n => n.id === safeTaskId);
+                if (task && task.title) {
+                    noteTitle = `Note for ${task.title}`;
+                }
+            }
+
+            const newNote = createNoteObject(noteTitle, "", safeTaskId);
             notes.push(newNote);
 
             // Save immediately
