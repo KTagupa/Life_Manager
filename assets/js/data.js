@@ -479,6 +479,8 @@
                     firedAt: rem.firedAt ? Number(rem.firedAt) : null,
                     firstFiredAt: rem.firstFiredAt ? Number(rem.firstFiredAt) : null,
                     kept: !!rem.kept,
+                    keepUntilTs: rem.keepUntilTs ? Number(rem.keepUntilTs) : null,
+                    discarded: !!rem.discarded,
                     lastFiredOccurrenceTs: rem.lastFiredOccurrenceTs ? Number(rem.lastFiredOccurrenceTs) : null
                 };
                 const prev = normalized.get(key);

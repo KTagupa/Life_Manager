@@ -181,7 +181,6 @@ function deleteQuickLink(id) {
 
 // --- REMINDERS ---
 const REMINDER_ALL_DAY_TIME = '06:25';
-const REMINDER_AUTO_REMOVE_MS = 24 * 60 * 60 * 1000;
 let reminderFocusKey = null;
 
 function getLocalDateString(date = new Date()) {
@@ -256,6 +255,8 @@ function createOrUpdateReminderForItem(itemType, itemId, payload = {}) {
         if (typeof payload.firedAt !== 'undefined') existing.firedAt = payload.firedAt;
         if (typeof payload.firstFiredAt !== 'undefined') existing.firstFiredAt = payload.firstFiredAt;
         if (typeof payload.kept !== 'undefined') existing.kept = !!payload.kept;
+        if (typeof payload.keepUntilTs !== 'undefined') existing.keepUntilTs = payload.keepUntilTs;
+        if (typeof payload.discarded !== 'undefined') existing.discarded = !!payload.discarded;
         if (typeof payload.lastFiredOccurrenceTs !== 'undefined') existing.lastFiredOccurrenceTs = payload.lastFiredOccurrenceTs;
         return existing;
     }
@@ -273,6 +274,8 @@ function createOrUpdateReminderForItem(itemType, itemId, payload = {}) {
         firedAt: null,
         firstFiredAt: null,
         kept: false,
+        keepUntilTs: null,
+        discarded: false,
         lastFiredOccurrenceTs: null
     };
     reminders.push(reminder);
@@ -455,6 +458,9 @@ function getReminderNextOccurrence(reminder, nowTs = Date.now()) {
 
 function formatReminderWhen(reminder) {
     const nextTs = getReminderNextOccurrence(reminder, Date.now());
+    if (reminder.discarded && reminder.itemType !== 'habit') {
+        return 'Discarded';
+    }
     if (reminder.firedAt && reminder.itemType !== 'habit') {
         return `Fired: ${new Date(reminder.firedAt).toLocaleString()}`;
     }
@@ -475,7 +481,12 @@ function renderReminderStrip() {
     if (!strip) return;
     strip.innerHTML = '';
 
-    const activeFired = reminders.filter(rem => !!rem.firedAt);
+    const nowTs = Date.now();
+    const activeFired = reminders.filter(rem => {
+        if (!rem.firedAt || rem.discarded) return false;
+        if (rem.kept && rem.keepUntilTs && nowTs > rem.keepUntilTs) return false;
+        return true;
+    });
     activeFired.sort((a, b) => Number(b.firedAt || 0) - Number(a.firedAt || 0));
 
     if (activeFired.length === 0) {
@@ -556,6 +567,8 @@ function updateReminderField(reminderId, field, value) {
     if (field === 'time') reminder.time = value || reminder.time;
     reminder.firedAt = null;
     reminder.kept = false;
+    reminder.keepUntilTs = null;
+    reminder.discarded = false;
     reminder.lastFiredOccurrenceTs = null;
     if (reminder.itemType !== 'habit') reminder.firstFiredAt = null;
     reminder.updatedAt = Date.now();
@@ -580,6 +593,8 @@ function toggleReminderAllDay(reminderId, checked) {
     reminder.time = checked ? REMINDER_ALL_DAY_TIME : (reminder.time || getNextDefaultReminderTime());
     reminder.firedAt = null;
     reminder.kept = false;
+    reminder.keepUntilTs = null;
+    reminder.discarded = false;
     reminder.lastFiredOccurrenceTs = null;
     if (reminder.itemType !== 'habit') reminder.firstFiredAt = null;
     reminder.updatedAt = Date.now();
@@ -598,7 +613,11 @@ function toggleReminderAllDayByItem(itemType, itemId, checked) {
 function keepReminder(reminderId) {
     const reminder = reminders.find(rem => rem.id === reminderId);
     if (!reminder) return;
-    reminder.kept = !reminder.kept ? true : reminder.kept;
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+    reminder.kept = true;
+    reminder.keepUntilTs = endOfDay.getTime();
+    reminder.discarded = false;
     reminder.updatedAt = Date.now();
     saveToStorage();
     renderReminderStrip();
@@ -607,10 +626,21 @@ function keepReminder(reminderId) {
 
 function discardReminder(reminderId) {
     ensureRemindersArray();
-    const idx = reminders.findIndex(rem => rem.id === reminderId);
-    if (idx < 0) return;
-    const removed = reminders[idx];
-    reminders.splice(idx, 1);
+    const reminder = reminders.find(rem => rem.id === reminderId);
+    if (!reminder) return;
+    if (reminder.itemType === 'habit') {
+        reminder.firedAt = null;
+        reminder.kept = false;
+        reminder.keepUntilTs = null;
+        reminder.discarded = false;
+    } else {
+        reminder.firedAt = null;
+        reminder.kept = false;
+        reminder.keepUntilTs = null;
+        reminder.discarded = true;
+    }
+    const removed = reminder;
+    reminder.updatedAt = Date.now();
     saveToStorage();
     renderReminderStrip();
     renderRemindersModal();
@@ -658,6 +688,8 @@ function fireReminder(reminder, occurrenceTs, nowTs) {
     reminder.firedAt = nowTs;
     reminder.lastFiredOccurrenceTs = occurrenceTs;
     reminder.kept = false;
+    reminder.keepUntilTs = null;
+    reminder.discarded = false;
     if (reminder.itemType !== 'habit' && !reminder.firstFiredAt) {
         reminder.firstFiredAt = nowTs;
     }
@@ -676,6 +708,16 @@ function checkReminderTriggers() {
     let changed = false;
 
     reminders.forEach(reminder => {
+        if (reminder.kept && reminder.keepUntilTs && nowTs > reminder.keepUntilTs) {
+            reminder.kept = false;
+            reminder.keepUntilTs = null;
+            reminder.firedAt = null;
+            if (reminder.itemType !== 'habit') reminder.discarded = true;
+            reminder.updatedAt = nowTs;
+            changed = true;
+            return;
+        }
+
         if (reminder.itemType === 'habit') {
             const occurrenceTs = getHabitOccurrenceAtOrBefore(reminder, nowTs);
             if (occurrenceTs && occurrenceTs !== reminder.lastFiredOccurrenceTs) {
@@ -685,20 +727,14 @@ function checkReminderTriggers() {
             return;
         }
 
+        if (reminder.discarded) return;
+
         const dueTs = parseReminderBaseTimestamp(reminder);
         if (dueTs && dueTs <= nowTs && !reminder.firedAt) {
             fireReminder(reminder, dueTs, nowTs);
             changed = true;
         }
     });
-
-    const beforeCleanup = reminders.length;
-    reminders = reminders.filter(reminder => {
-        if (reminder.itemType === 'habit') return true;
-        if (!reminder.firstFiredAt) return true;
-        return (nowTs - reminder.firstFiredAt) < REMINDER_AUTO_REMOVE_MS;
-    });
-    if (reminders.length !== beforeCleanup) changed = true;
 
     if (changed) {
         saveToStorage();
@@ -826,6 +862,13 @@ function toggleGlobalSearch() {
             }
         });
 
+        // Search inbox
+        inbox.forEach(item => {
+            if ((item.title || '').toLowerCase().includes(q)) {
+                results.push({ type: 'inbox', title: item.title, obj: item, icon: '📥' });
+            }
+        });
+
         // Search notes
         notes.forEach(n => {
             let bodyText = '';
@@ -906,6 +949,9 @@ function openSearchResult(type, id) {
         jumpToTask(id);
     } else if (type === 'note') {
         openNoteEditor(id);
+    } else if (type === 'inbox') {
+        const modal = document.getElementById('inbox-modal');
+        if (modal && !modal.classList.contains('visible')) toggleInboxModal();
     } else if (type === 'goal') {
         if (!isGoalsOpen) toggleGoals();
         // Flash the goal in the list (you'd need to add IDs to goal elements)
