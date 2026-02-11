@@ -28,6 +28,9 @@
                 }
             }
 
+            if (typeof loadAINoteSelection === 'function') loadAINoteSelection();
+            if (typeof pruneAINoteSelection === 'function') pruneAINoteSelection();
+
             checkAutoArchive();
             checkExpiredTasks();
             updateCalculations();
@@ -39,6 +42,7 @@
             setupContextualMenu();
             renderPinnedWindow();
             renderQuickLinks();
+            if (typeof updateAINoteSelectionSummary === 'function') updateAINoteSelectionSummary();
             if (typeof renderReminderStrip === 'function') renderReminderStrip();
 
             // Setup modal dragging

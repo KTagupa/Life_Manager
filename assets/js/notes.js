@@ -340,7 +340,8 @@
                 const parsed = JSON.parse(note.body);
                 if (Array.isArray(parsed)) {
                     // Initialize bookmarkName if missing
-                    parsed.forEach(b => {
+                    parsed.forEach((b, index) => {
+                        if (typeof b.id === 'undefined') b.id = Date.now() + Math.random() + index;
                         if (typeof b.bookmarkName === 'undefined') b.bookmarkName = "";
                     });
                     return parsed;
@@ -354,6 +355,7 @@
         // Serialize blocks to JSON for storage
         function serializeNoteBlocks() {
             return JSON.stringify(currentNoteBlocks.map(b => ({
+                id: b.id,
                 text: b.text,
                 colorIndex: b.colorIndex,
                 isEditing: b.isEditing,
@@ -380,12 +382,16 @@
             const list = document.getElementById('blocks-list');
             if (!list) return;
             list.innerHTML = '';
+            const noteId = currentEditingNoteId;
 
             currentNoteBlocks.forEach((block, idx) => {
                 const blockDiv = document.createElement('div');
                 const isCurrentBlockEditing = !isNoteGlobalViewMode && block.isEditing;
+                const wholeNoteSelected = typeof aiNoteSelection !== 'undefined' && aiNoteSelection.notes.has(noteId);
+                const blockSelected = wholeNoteSelected || (typeof aiNoteSelection !== 'undefined' && aiNoteSelection.blocks.has(makeBlockSelectionKey(noteId, block.id)));
 
                 blockDiv.className = `note-block ${activeBlockId === block.id && !isNoteGlobalViewMode ? 'active-block' : ''}`;
+                if (blockSelected) blockDiv.classList.add('ai-selected-block');
                 blockDiv.id = `block-${block.id}`;
                 blockDiv.style.backgroundColor = noteCategoryColors[block.colorIndex] || noteCategoryColors[0];
                 blockDiv.onclick = () => { if (!isNoteGlobalViewMode) setActiveBlock(block.id); };
@@ -420,6 +426,10 @@
                             ${catListHtml}
                         </div>
                         <div class="block-controls">
+                            <label class="ai-block-select" title="Include this block in AI context">
+                                <input type="checkbox" ${blockSelected ? 'checked' : ''} onchange="event.stopPropagation(); toggleAIBlockSelection('${noteId}', ${block.id}, this.checked)" ${wholeNoteSelected ? 'disabled' : ''}>
+                                AI
+                            </label>
                             <button class="note-toolbar-btn" onclick="event.stopPropagation(); maximizeBlock(${block.id})" title="Maximize Block">
                                 <i class="fas fa-expand"></i>
                             </button>
@@ -486,6 +496,9 @@
 
         // Delete block
         function deleteNoteBlock(id) {
+            if (typeof toggleAIBlockSelection === 'function' && currentEditingNoteId) {
+                toggleAIBlockSelection(currentEditingNoteId, id, false);
+            }
             currentNoteBlocks = currentNoteBlocks.filter(b => b.id !== id);
             if (activeBlockId === id) activeBlockId = null;
             renderNoteBlocks();
@@ -1544,6 +1557,7 @@
 
             if (filteredNotes.length === 0) {
                 container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No matching notes found.</div>';
+                updateAINoteSelectionSummary();
                 return;
             }
 
@@ -1551,6 +1565,8 @@
                 const el = document.createElement('div');
                 el.className = `note-card ${note.isPinned ? 'pinned-note' : ''}`;
                 if (note.id === currentEditingNoteId) el.classList.add('active');
+                const wholeNoteSelected = typeof aiNoteSelection !== 'undefined' && aiNoteSelection.notes.has(note.id);
+                if (wholeNoteSelected) el.classList.add('ai-selected-note');
 
                 // Extract preview from blocks or legacy string
                 let previewText = '';
@@ -1578,7 +1594,12 @@
                     `<button class="btn" style="padding:1px 4px; font-size:9px; margin-left:4px; opacity:0.3;" onclick="event.stopPropagation(); togglePinItem('note', '${note.id}'); renderNotesList();">📌</button>`;
 
                 el.innerHTML = `
-                <div class="note-card-title">${note.isPinned ? '📌 ' : ''}${note.title || '(Untitled)'}${linkIndicator}</div>
+                <div class="note-card-title-row">
+                    <label class="ai-note-select" title="Include whole note in AI context">
+                        <input type="checkbox" ${wholeNoteSelected ? 'checked' : ''} onchange="event.stopPropagation(); toggleAINoteSelection('${note.id}', this.checked)">
+                    </label>
+                    <div class="note-card-title">${note.isPinned ? '📌 ' : ''}${note.title || '(Untitled)'}${linkIndicator}</div>
+                </div>
                 <div class="note-card-preview">${previewText}...</div>
                 <div style="margin-top:5px;">${tagsHtml}</div>
                 <div class="note-card-meta"><span>${new Date(note.timestamp || Date.now()).toLocaleDateString()}</span><span style="display:flex; align-items:center;">${reminderIcon}${pinIcon}</span></div>
@@ -1586,6 +1607,15 @@
                 el.onclick = () => openNoteEditor(note.id);
                 container.appendChild(el);
             });
+
+            updateAINoteSelectionSummary();
+        }
+
+        function updateAINoteSelectionSummary() {
+            const el = document.getElementById('ai-note-selection-summary');
+            if (!el || typeof getAINoteSelectionCounts !== 'function') return;
+            const counts = getAINoteSelectionCounts();
+            el.textContent = `AI context selection: ${counts.selectedWholeNotes} full note(s), ${counts.selectedBlocks} block(s)`;
         }
 
         function toggleCurrentNotePin() {
@@ -1768,6 +1798,8 @@
                 // Clear editor ID first to prevent saveCurrentNote from firing on ghost data
                 const deletedId = currentEditingNoteId;
                 currentEditingNoteId = null;
+
+                if (typeof toggleAINoteSelection === 'function') toggleAINoteSelection(deletedId, false);
 
                 closeNoteEditor();
                 saveToStorage();

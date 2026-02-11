@@ -1027,6 +1027,32 @@
             align-items: center;
         }
 
+        .note-card-title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-note-select input,
+        .ai-block-select input {
+            cursor: pointer;
+        }
+
+        .ai-selected-note {
+            border-color: var(--ai-accent);
+            box-shadow: 0 0 0 2px var(--ai-accent-light);
+        }
+
+        .ai-note-selection-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 6px;
+            gap: 8px;
+            font-size: 10px;
+            color: #a5b4fc;
+        }
+
         /* REPLACEMENT CSS FOR NOTE EDITOR (Modal Style) */
         #note-editor {
             position: fixed;
@@ -1193,6 +1219,10 @@
             border-color: var(--accent);
         }
 
+        .note-block.ai-selected-block {
+            box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.5), 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
         /* Add Above Trigger */
         .add-above-btn {
             position: absolute;
@@ -1254,6 +1284,15 @@
             display: flex;
             align-items: center;
             gap: 4px;
+        }
+
+        .ai-block-select {
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            color: #4c1d95;
         }
 
         .block-controls .note-toolbar-btn {

@@ -457,6 +457,127 @@ function toggleAIPresets() {
 
 // Track selected data types
 let selectedAIData = new Set(['tasks']); // Default to tasks
+let aiNoteSelection = {
+    notes: new Set(),
+    blocks: new Set()
+};
+
+function persistAINoteSelection() {
+    localStorage.setItem('ai_note_selection', JSON.stringify({
+        notes: Array.from(aiNoteSelection.notes),
+        blocks: Array.from(aiNoteSelection.blocks)
+    }));
+}
+
+function loadAINoteSelection() {
+    const raw = localStorage.getItem('ai_note_selection');
+    if (!raw) return;
+    try {
+        const parsed = JSON.parse(raw);
+        aiNoteSelection.notes = new Set(parsed.notes || []);
+        aiNoteSelection.blocks = new Set(parsed.blocks || []);
+    } catch (e) {
+        aiNoteSelection = { notes: new Set(), blocks: new Set() };
+    }
+}
+
+function makeBlockSelectionKey(noteId, blockId) {
+    return `${noteId}::${blockId}`;
+}
+
+function toggleAINoteSelection(noteId, checked) {
+    if (!noteId) return;
+    if (checked) aiNoteSelection.notes.add(noteId);
+    else aiNoteSelection.notes.delete(noteId);
+    persistAINoteSelection();
+    if (typeof renderNotesList === 'function') renderNotesList();
+    if (typeof updateAINoteSelectionSummary === 'function') updateAINoteSelectionSummary();
+}
+
+function toggleAIBlockSelection(noteId, blockId, checked) {
+    if (!noteId || typeof blockId === 'undefined' || blockId === null) return;
+    const key = makeBlockSelectionKey(noteId, blockId);
+    if (checked) aiNoteSelection.blocks.add(key);
+    else aiNoteSelection.blocks.delete(key);
+    persistAINoteSelection();
+    if (typeof renderNoteBlocks === 'function' && typeof currentEditingNoteId !== 'undefined' && currentEditingNoteId === noteId) {
+        renderNoteBlocks();
+    }
+    if (typeof renderNotesList === 'function') renderNotesList();
+    if (typeof updateAINoteSelectionSummary === 'function') updateAINoteSelectionSummary();
+}
+
+function clearAINoteSelection() {
+    aiNoteSelection.notes.clear();
+    aiNoteSelection.blocks.clear();
+    persistAINoteSelection();
+    if (typeof renderNotesList === 'function') renderNotesList();
+    if (typeof renderNoteBlocks === 'function') renderNoteBlocks();
+    if (typeof updateAINoteSelectionSummary === 'function') updateAINoteSelectionSummary();
+}
+
+function pruneAINoteSelection() {
+    const existingNoteIds = new Set((notes || []).map(n => n.id));
+    aiNoteSelection.notes = new Set(Array.from(aiNoteSelection.notes).filter(id => existingNoteIds.has(id)));
+
+    const existingBlockKeys = new Set();
+    (notes || []).forEach(note => {
+        const blocks = typeof parseNoteBody === 'function' ? parseNoteBody(note) : [];
+        blocks.forEach(block => {
+            if (block && typeof block.id !== 'undefined') {
+                existingBlockKeys.add(makeBlockSelectionKey(note.id, block.id));
+            }
+        });
+    });
+
+    aiNoteSelection.blocks = new Set(Array.from(aiNoteSelection.blocks).filter(k => existingBlockKeys.has(k)));
+    persistAINoteSelection();
+}
+
+function getAINoteSelectionCounts() {
+    let selectedBlocks = 0;
+    const selectedWholeNotes = aiNoteSelection.notes.size;
+    (notes || []).forEach(note => {
+        if (aiNoteSelection.notes.has(note.id)) return;
+        const blocks = typeof parseNoteBody === 'function' ? parseNoteBody(note) : [];
+        blocks.forEach(block => {
+            if (aiNoteSelection.blocks.has(makeBlockSelectionKey(note.id, block.id))) selectedBlocks += 1;
+        });
+    });
+    return { selectedWholeNotes, selectedBlocks };
+}
+
+function buildSelectedNotesContext() {
+    const selectedNotes = [];
+
+    (notes || []).forEach(note => {
+        const blocks = typeof parseNoteBody === 'function' ? parseNoteBody(note) : [];
+        const wholeNoteSelected = aiNoteSelection.notes.has(note.id);
+        const selectedBlocks = wholeNoteSelected
+            ? blocks
+            : blocks.filter(block => aiNoteSelection.blocks.has(makeBlockSelectionKey(note.id, block.id)));
+
+        if (!wholeNoteSelected && selectedBlocks.length === 0) return;
+
+        selectedNotes.push({
+            id: note.id,
+            title: note.title,
+            wholeNoteSelected,
+            linkedTaskCount: (note.taskIds || []).length,
+            blocks: selectedBlocks.map((block, index) => ({
+                id: block.id,
+                order: index + 1,
+                text: block.text || '',
+                category: (typeof noteSettings !== 'undefined' && noteSettings.categoryNames)
+                    ? (noteSettings.categoryNames[block.colorIndex] || `Category ${block.colorIndex}`)
+                    : `Category ${block.colorIndex}`,
+                bookmark: block.bookmarkName || ''
+            }))
+        });
+    });
+
+    return selectedNotes;
+}
 
 function toggleAIData(type) {
     const btn = document.querySelector(`.ai-data-toggle[data-type="${type}"]`);
@@ -710,13 +831,14 @@ function buildContextFromSelection(dataTypes) {
     }
 
     if (dataTypes.has('notes')) {
-        context.notes = notes.slice(0, 50).map(n => ({
-            id: n.id,
-            title: n.title,
-            preview: (n.body || '').substring(0, 300),
-            linkedTaskCount: (n.taskIds || []).length,
-            isPinned: n.isPinned
-        }));
+        const selectedNotes = buildSelectedNotesContext();
+        const selectionCounts = getAINoteSelectionCounts();
+        context.notesSelection = {
+            selectedWholeNotes: selectionCounts.selectedWholeNotes,
+            selectedBlocks: selectionCounts.selectedBlocks,
+            hasSelection: selectedNotes.length > 0
+        };
+        context.notes = selectedNotes;
     }
 
     if (dataTypes.has('archive')) {
@@ -785,10 +907,17 @@ async function askAI() {
     };
 
     const includedDataList = Array.from(selectedAIData).map(d => dataLabels[d]).join(', ');
+    const noteSelectionInfo = selectedAIData.has('notes')
+        ? getAINoteSelectionCounts()
+        : { selectedWholeNotes: 0, selectedBlocks: 0 };
 
     const systemPrompt = `You are an AI assistant for "Urgency Flow," a productivity app.
 
 DATA PROVIDED: ${includedDataList}
+
+${selectedAIData.has('notes')
+            ? `NOTES FILTER: Only use checked notes/blocks. Selected notes: ${noteSelectionInfo.selectedWholeNotes}, selected blocks: ${noteSelectionInfo.selectedBlocks}.`
+            : ''}
 
 CONTEXT: ${JSON.stringify(appState)}
 
