@@ -371,6 +371,23 @@
         <div style="padding: 10px; border-bottom: 1px solid #333;">
             <input type="text" id="note-search-input" placeholder="Search notes or tags..." oninput="renderNotesList()">
             <div id="note-tags-filter" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:5px;"></div>
+            <div class="ai-note-selection-row">
+                <div id="ai-note-selection-summary">AI context selection: 0 full note(s), 0 block(s)</div>
+                <div style="display:flex; gap:4px; align-items:center;">
+                    <button class="btn" style="padding:2px 8px; font-size:10px;" onclick="showAINoteSelectionHelp()">How</button>
+                    <button class="btn" style="padding:2px 8px; font-size:10px;" onclick="clearAINoteSelection()">Clear</button>
+                </div>
+            </div>
+            <div id="ai-note-selection-help" class="ai-note-help hidden">
+                <div><strong>How to send notes to AI:</strong></div>
+                <ol>
+                    <li>Enable <strong>Notes</strong> in the AI modal data toggles.</li>
+                    <li>In the notes list, check a note to include the whole note.</li>
+                    <li>Open a note and check <strong>AI</strong> on specific blocks to include only those blocks.</li>
+                    <li>Ask your question in AI chat. Only checked notes/blocks are shared.</li>
+                </ol>
+                <div style="font-size:10px; color:#94a3b8;">Tip: Whole-note selection overrides block-level checks for that note.</div>
+            </div>
         </div>
 
         <div class="panel-list" id="notes-list-container"></div>
