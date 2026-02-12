@@ -606,7 +606,7 @@ const aiPresets = {
         requiredData: ['inbox', 'goals']
     },
     'weekly-summary': {
-        prompt: 'Review my archived tasks, current progress, and habits. Write a brief executive summary of what I achieved this week and suggest my top 3 priorities for next week.',
+        prompt: 'Review my archived tasks and habit consistency this week. Write a brief executive summary of what I achieved and suggest my top 3 priorities for next week.',
         requiredData: ['tasks', 'archive', 'habits']
     },
     'schedule-optimization': {
@@ -618,7 +618,7 @@ const aiPresets = {
         requiredData: ['tasks']
     },
     'habit-insights': {
-        prompt: 'Analyze my habit streaks and completion rates. What patterns do you see? Which habits need attention and which are going strong?',
+        prompt: 'Analyze my current habit consistency and partial completion patterns. Which habits need attention and which are going strong?',
         requiredData: ['habits']
     },
     'next-action': {
@@ -809,13 +809,18 @@ function buildContextFromSelection(dataTypes) {
     }
 
     if (dataTypes.has('habits')) {
-        context.habits = habits.map(h => ({
-            title: h.title,
-            type: h.type,
-            frequency: h.frequency,
-            streak: calculateStreak(h),
-            target: h.target
-        }));
+        context.habits = habits.map(h => {
+            const metrics = typeof getHabitMetrics === 'function' ? getHabitMetrics(h) : null;
+            return {
+                title: h.title,
+                type: h.type,
+                frequency: h.frequency,
+                target: h.target,
+                current: metrics ? metrics.current : null,
+                ratio: metrics ? metrics.ratio : null,
+                status: metrics ? metrics.status : null
+            };
+        });
     }
 
     if (dataTypes.has('schedule')) {

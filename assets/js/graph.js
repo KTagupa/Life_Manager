@@ -765,8 +765,6 @@ function render() {
         else if (node._isBlocked) icon = '<span class="icon-lock">🔒</span>';
 
         const totalSubs = node.subtasks.length;
-        const doneSubs = node.subtasks.filter(s => s.done).length;
-        const progress = totalSubs === 0 ? 0 : (doneSubs / totalSubs) * 100;
 
         const timerBtnIcon = isActive ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M6 6h12v12H6z"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>';
         const timerBtnClass = isActive ? 'node-timer-control stop running' : 'node-timer-control play';
@@ -802,7 +800,6 @@ function render() {
                         </div>
                     </div>
                     ${!isUltraEcoMode ? `<div class="node-meta">${badgesHtml}</div>` : ''}
-                    ${!isUltraEcoMode && totalSubs > 0 ? `<div class="progress-container"><div class="progress-bar" style="width: ${progress}%"></div></div>` : ''}
                 `;
 
         el.onmousedown = (e) => startNodeDrag(e, node.id);
@@ -877,7 +874,6 @@ function setupInteractions() {
                 case 'KeyR': fitView(); break;
                 case 'KeyD': autoArrangeGraph(); break;
                 case 'KeyM': toggleHeatmap(); break;
-                case 'KeyC': toggleProgressDashboard(); break;
                 case 'KeyS': toggleSyncPanel(); break;
                 case 'KeyV': saveData(true); break;
                 case 'KeyL': document.getElementById('file-input').click(); break;
@@ -1134,7 +1130,6 @@ function toggleShortcutsHelp() {
                     <div><b>Alt+R</b> - Recenter/Focus</div>
                     <div><b>Alt+D</b> - Smart Declutter</div>
                     <div><b>Alt+M</b> - Heatmap</div>
-                    <div><b>Alt+C</b> - Progress Dashboard</div>
                     <div><b>Alt+O</b> - Node Groups</div>
                     <div><b>Alt+B</b> - Inbox</div>
                     <div><b>Alt+I</b> - AI Assistant</div>

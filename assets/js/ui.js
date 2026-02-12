@@ -1506,15 +1506,10 @@ function renderPinnedTask(container, taskId) {
         badgesHtml += `<span class="badge date-badge">📅 ${dateStr}</span>`;
     }
 
-    const totalSubs = node.subtasks.length;
-    const doneSubs = node.subtasks.filter(s => s.done).length;
-    const progress = totalSubs === 0 ? 0 : (doneSubs / totalSubs) * 100;
-
     el.innerHTML = `
                 <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('task', '${taskId}')">✕</button>
                 <div style="font-weight:600; font-size:12px; margin-bottom:4px; color:#eee;">${node.completed ? '✅' : ''} ${node.title}</div>
                 <div style="display:flex; gap:4px; flex-wrap:wrap; font-size:10px; margin-bottom:4px;">${badgesHtml}</div>
-                ${totalSubs > 0 ? `<div class="progress-container" style="height:3px;"><div class="progress-bar" style="width:${progress}%"></div></div>` : ''}
             `;
 
     el.onclick = () => {
@@ -1558,39 +1553,40 @@ function renderPinnedHabit(container, habitId) {
         return;
     }
 
-    const freq = h.frequency || 'daily';
-    const bounds = getPeriodBounds(freq);
-    const val = getSumInPeriod(h, bounds);
-    const target = h.target || 1;
-    const isDone = val >= target;
-    const percent = Math.min(100, (val / target) * 100);
-
-    if (!h.type) h.type = 'checkbox';
+    const metrics = getHabitMetrics(h);
+    const isDone = metrics.isDone;
+    const percent = metrics.percent;
+    const goalName = h.goalId ? getGoalTextById(h.goalId) : '';
 
     let controlsHtml = '';
     if (h.type === 'checkbox') {
         controlsHtml = `
-                    <div class="habit-checkbox ${isDone ? 'checked' : ''}" onclick="event.stopPropagation(); toggleHabitDay('${h.id}'); renderPinnedWindow();" style="flex-shrink:0;">
-                        ${isDone ? '✓' : ''}
-                    </div>`;
+            <button class="habit-btn-small" onclick="event.stopPropagation(); toggleHabitDay('${h.id}'); renderPinnedWindow();" style="${isDone ? 'border-color:var(--ready-color); color:var(--ready-color);' : ''}">
+                ${isDone ? '✓' : '○'}
+            </button>
+        `;
     } else if (h.type === 'counter') {
         controlsHtml = `
-                    <div style="display:flex; gap:3px; align-items:center; flex-shrink:0;">
-                        <button class="habit-btn-small" onclick="event.stopPropagation(); updateHabitCounter('${h.id}', -1); renderPinnedWindow();" style="width:20px; height:20px; font-size:10px;">-</button>
-                        <span style="font-family:monospace; font-size:10px; min-width:30px; text-align:center; color:${isDone ? 'var(--ready-color)' : '#aaa'};">${val}/${Math.floor(target)}</span>
-                        <button class="habit-btn-small" onclick="event.stopPropagation(); updateHabitCounter('${h.id}', 1); renderPinnedWindow();" style="width:20px; height:20px; font-size:10px;">+</button>
-                    </div>`;
+            <div style="display:flex; gap:3px; align-items:center; flex-shrink:0;">
+                <button class="habit-btn-small" onclick="event.stopPropagation(); updateHabitCounter('${h.id}', -1); renderPinnedWindow();" style="width:20px; height:20px; font-size:10px;">-</button>
+                <span style="font-family:monospace; font-size:10px; min-width:54px; text-align:center; color:${isDone ? 'var(--ready-color)' : '#aaa'};">${Math.floor(metrics.current)}/${Math.floor(metrics.target)}</span>
+                <button class="habit-btn-small" onclick="event.stopPropagation(); updateHabitCounter('${h.id}', 1); renderPinnedWindow();" style="width:20px; height:20px; font-size:10px;">+</button>
+            </div>
+        `;
     } else if (h.type === 'timer') {
         const isRunning = !!h.activeTimerStart;
-        const minsVal = Math.floor(val / 60000);
-        const minsTarget = Math.floor(target / 60000);
+        const minsVal = Math.floor(metrics.current / 60000);
+        const minsTarget = Math.floor(metrics.target / 60000);
         controlsHtml = `
-                    <div style="display:flex; gap:3px; align-items:center; flex-shrink:0;">
-                        <button class="habit-btn-small" onclick="event.stopPropagation(); toggleHabitTimer('${h.id}'); renderPinnedWindow();" style="width:20px; height:20px; font-size:10px; ${isRunning ? 'border-color:var(--ready-color); color:var(--ready-color);' : ''}">
-                            ${isRunning ? '⏸' : '▶'}
-                        </button>
-                        <span style="font-family:monospace; font-size:10px; color:${isDone ? 'var(--ready-color)' : '#aaa'};">${minsVal}m/${minsTarget}m</span>
-                    </div>`;
+            <div style="display:flex; gap:3px; align-items:center; flex-shrink:0;">
+                <button class="habit-btn-small" onclick="event.stopPropagation(); updateHabitMinutes('${h.id}', -5); renderPinnedWindow();" style="width:26px; height:20px; font-size:9px;">-5</button>
+                <button class="habit-btn-small" onclick="event.stopPropagation(); toggleHabitTimer('${h.id}'); renderPinnedWindow();" style="width:20px; height:20px; font-size:10px; ${isRunning ? 'border-color:var(--ready-color); color:var(--ready-color);' : ''}">
+                    ${isRunning ? '⏸' : '▶'}
+                </button>
+                <button class="habit-btn-small" onclick="event.stopPropagation(); updateHabitMinutes('${h.id}', 5); renderPinnedWindow();" style="width:26px; height:20px; font-size:9px;">+5</button>
+                <span style="font-family:monospace; font-size:10px; color:${isDone ? 'var(--ready-color)' : '#aaa'};">${minsVal}m/${minsTarget}m</span>
+            </div>
+        `;
     }
 
     const el = document.createElement('div');
@@ -1598,19 +1594,19 @@ function renderPinnedHabit(container, habitId) {
 
     el.innerHTML = `
                 <button class="pinned-unpin" onclick="event.stopPropagation(); togglePinItem('habit', '${habitId}')">✕</button>
-                ${h.type === 'checkbox' ? controlsHtml : ''}
                 <div style="flex-grow:1; min-width:0;">
                     <div style="font-weight:600; font-size:11px; color:#eee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                         ${h.title}
                         ${h.noteIds && h.noteIds.length > 0 ? `<span style="color:#3b82f6; font-size:9px; margin-left:4px; cursor:pointer;" onclick="event.stopPropagation(); showHabitNotes('${habitId}')" title="View linked notes">📝${h.noteIds.length}</span>` : ''}
                     </div>
-                    ${h.type !== 'checkbox' ? `
-                        <div style="height:3px; background:#333; border-radius:2px; margin-top:3px; overflow:hidden;">
-                            <div style="height:100%; background:${isDone ? 'var(--ready-color)' : 'var(--accent)'}; width:${percent}%; transition:width 0.3s;"></div>
-                        </div>
-                    ` : ''}
+                    <div style="font-size:9px; color:#889; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${goalName ? '🎯 ' + goalName : 'No linked goal'} • ${percent}%
+                    </div>
+                    <div style="height:3px; background:#333; border-radius:2px; margin-top:3px; overflow:hidden;">
+                        <div style="height:100%; background:${isDone ? 'var(--ready-color)' : 'var(--accent)'}; width:${percent}%; transition:width 0.3s;"></div>
+                    </div>
                 </div>
-                ${h.type !== 'checkbox' ? controlsHtml : ''}
+                ${controlsHtml}
             `;
 
     container.appendChild(el);

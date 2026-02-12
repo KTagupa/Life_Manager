@@ -443,11 +443,42 @@
             // --- PRESERVE HABITS CLEANUP ---
             if (!Array.isArray(habits)) habits = [];
             habits.forEach(h => {
-                if (!h.history) h.history = {};
-                if (h.activeTimerStart === undefined) h.activeTimerStart = null;
-                if (h.activeTimerStart !== null) h.activeTimerStart = Number(h.activeTimerStart);
-                if (!h.type) h.type = 'checkbox';
-                if (!h.noteIds) h.noteIds = [];
+                if (!h.history || typeof h.history !== 'object') h.history = {};
+                if (h.activeTimerStart === undefined || h.activeTimerStart === null) h.activeTimerStart = null;
+                if (h.activeTimerStart !== null) {
+                    const timerStart = Number(h.activeTimerStart);
+                    h.activeTimerStart = Number.isFinite(timerStart) ? timerStart : null;
+                }
+                if (!Array.isArray(h.noteIds)) h.noteIds = [];
+
+                h.type = ['checkbox', 'counter', 'timer'].includes(h.type) ? h.type : 'checkbox';
+                h.frequency = ['daily', 'weekly', 'monthly'].includes(h.frequency) ? h.frequency : 'daily';
+
+                const normalizedHistory = {};
+                Object.entries(h.history).forEach(([dateKey, rawVal]) => {
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
+                    if (h.type === 'checkbox') {
+                        normalizedHistory[dateKey] = rawVal === true || Number(rawVal) > 0 ? 1 : 0;
+                        return;
+                    }
+                    if (rawVal === true) normalizedHistory[dateKey] = 1;
+                    else if (rawVal === false) normalizedHistory[dateKey] = 0;
+                    else normalizedHistory[dateKey] = Math.max(0, Number(rawVal) || 0);
+                });
+                h.history = normalizedHistory;
+
+                if (h.type === 'timer') {
+                    let timerTarget = Number(h.target);
+                    if (!Number.isFinite(timerTarget) || timerTarget <= 0) timerTarget = 30 * 60 * 1000;
+                    if (timerTarget > 0 && timerTarget < 1000) timerTarget = timerTarget * 60 * 1000;
+                    h.target = Math.round(timerTarget);
+                } else if (h.type === 'counter') {
+                    let countTarget = Number(h.target);
+                    if (!Number.isFinite(countTarget) || countTarget <= 0) countTarget = 1;
+                    h.target = Math.max(1, Math.round(countTarget));
+                } else {
+                    h.target = 1;
+                }
             });
             // --- REMINDERS CLEANUP ---
             if (!Array.isArray(reminders)) reminders = [];

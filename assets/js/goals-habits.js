@@ -102,41 +102,68 @@
 
 
         // --- HABIT TRACKER LOGIC ---
+        let currentHabitFilter = 'all';
 
         function toggleHabits() {
             const panel = document.getElementById('habits-panel');
             const goalsPanel = document.getElementById('goals-panel');
 
-            // Toggle visibility
             if (panel.classList.contains('hidden')) {
                 panel.classList.remove('hidden');
-                goalsPanel.classList.add('hidden'); // Close goals to avoid clutter
+                goalsPanel.classList.add('hidden');
                 document.getElementById('archive-panel').classList.add('hidden');
                 document.getElementById('notes-panel').classList.add('hidden');
-                renderHabits();
                 updateHabitGoalSelect();
+                toggleHabitInputs();
+                renderHabits();
             } else {
                 panel.classList.add('hidden');
             }
         }
 
-        function updateHabitGoalSelect() {
-            const select = document.getElementById('habit-goal-select');
-            select.innerHTML = '<option value="">(Optional) Link to a Life Goal...</option>';
+        function setHabitFilter(filter) {
+            currentHabitFilter = filter || 'all';
+            document.querySelectorAll('.habit-filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === currentHabitFilter);
+            });
+            renderHabits();
+        }
 
-            // Flatten goals for the dropdown
-            if (lifeGoals[currentGoalYear]) {
+        function getAllGoalsFlat() {
+            const all = [];
+            const years = Object.keys(lifeGoals || {}).sort((a, b) => Number(a) - Number(b));
+            years.forEach(year => {
                 const flatten = (list, depth = 0) => {
-                    list.forEach(g => {
-                        const opt = document.createElement('option');
-                        opt.value = g.id;
-                        opt.text = "- ".repeat(depth) + g.text;
-                        select.appendChild(opt);
-                        if (g.children) flatten(g.children, depth + 1);
+                    list.forEach(goal => {
+                        all.push({ year: year, goal: goal, depth: depth });
+                        if (goal.children && goal.children.length > 0) flatten(goal.children, depth + 1);
                     });
                 };
-                flatten(lifeGoals[currentGoalYear]);
-            }
+                flatten(lifeGoals[year] || []);
+            });
+            return all;
+        }
+
+        function getGoalTextById(goalId) {
+            if (!goalId) return '';
+            const allGoals = getAllGoalsFlat();
+            const found = allGoals.find(item => item.goal.id === goalId);
+            return found ? found.goal.text : '';
+        }
+
+        function updateHabitGoalSelect() {
+            const select = document.getElementById('habit-goal-select');
+            if (!select) return;
+            select.innerHTML = '<option value="">(Optional) Link to a Life Goal...</option>';
+
+            const allGoals = getAllGoalsFlat();
+            allGoals.forEach(item => {
+                const opt = document.createElement('option');
+                const indent = item.depth > 0 ? ('- '.repeat(item.depth)) : '';
+                opt.value = item.goal.id;
+                opt.text = `${item.year} • ${indent}${item.goal.text}`;
+                select.appendChild(opt);
+            });
         }
 
         function toggleHabitInputs() {
@@ -144,21 +171,27 @@
             const targetInput = document.getElementById('habit-target-input');
             const unitLabel = document.getElementById('habit-unit-label');
 
+            targetInput.style.display = 'block';
+            unitLabel.style.display = 'inline';
+
             if (type === 'checkbox') {
                 targetInput.style.display = 'none';
                 unitLabel.style.display = 'none';
             } else if (type === 'counter') {
-                targetInput.style.display = 'block';
-                targetInput.placeholder = "Target (e.g. 5)";
-                unitLabel.style.display = 'none';
+                targetInput.placeholder = "Target count (e.g. 10)";
+                unitLabel.innerText = 'counts';
             } else if (type === 'timer') {
-                targetInput.style.display = 'block';
-                targetInput.placeholder = "Mins (e.g. 30)";
-                unitLabel.style.display = 'block';
+                targetInput.placeholder = "Target minutes (e.g. 40)";
+                unitLabel.innerText = 'mins';
             }
         }
 
-        // Helper to get today's key YYYY-MM-DD
+        function parseHabitDateKey(dateKey) {
+            const parts = (dateKey || '').split('-').map(Number);
+            if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+            return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0, 0);
+        }
+
         function getHabitDateKey(offsetDays = 0) {
             const d = new Date();
             d.setDate(d.getDate() - offsetDays);
@@ -170,7 +203,7 @@
             const end = new Date(date);
             if (frequency === 'weekly') {
                 const day = start.getDay();
-                start.setDate(start.getDate() - day); // Start of week (Sunday)
+                start.setDate(start.getDate() - day);
                 start.setHours(0, 0, 0, 0);
                 end.setDate(start.getDate() + 6);
                 end.setHours(23, 59, 59, 999);
@@ -179,45 +212,101 @@
                 start.setHours(0, 0, 0, 0);
                 end.setMonth(start.getMonth() + 1, 0);
                 end.setHours(23, 59, 59, 999);
-            } else { // Daily
+            } else {
                 start.setHours(0, 0, 0, 0);
                 end.setHours(23, 59, 59, 999);
             }
             return { start, end };
         }
 
+        function normalizeHabitForRuntime(habit) {
+            if (!habit.history || typeof habit.history !== 'object') habit.history = {};
+            if (!habit.type) habit.type = 'checkbox';
+            if (!habit.frequency) habit.frequency = 'daily';
+            if (habit.activeTimerStart === undefined || habit.activeTimerStart === null) habit.activeTimerStart = null;
+            if (habit.activeTimerStart !== null) habit.activeTimerStart = Number(habit.activeTimerStart);
+            if (!Array.isArray(habit.noteIds)) habit.noteIds = [];
+
+            if (habit.type === 'timer') {
+                const targetMs = Number(habit.target);
+                habit.target = Number.isFinite(targetMs) && targetMs > 0 ? targetMs : (30 * 60000);
+            } else if (habit.type === 'counter') {
+                const targetCount = Number(habit.target);
+                habit.target = Number.isFinite(targetCount) && targetCount > 0 ? Math.round(targetCount) : 1;
+            } else {
+                habit.target = 1;
+            }
+        }
+
+        function getHabitTarget(habit) {
+            if (habit.type === 'timer') return Math.max(1, Number(habit.target) || 0);
+            if (habit.type === 'counter') return Math.max(1, Math.round(Number(habit.target) || 0));
+            return 1;
+        }
+
         function getSumInPeriod(habit, bounds) {
             let sum = 0;
-            // Iterate through history and sum values within the date range
-            for (const [dateKey, value] of Object.entries(habit.history)) {
-                const d = new Date(dateKey);
-                if (d >= bounds.start && d <= bounds.end) {
-                    sum += (typeof value === 'boolean') ? (value ? 1 : 0) : value;
+            const history = habit.history || {};
+
+            for (const [dateKey, rawValue] of Object.entries(history)) {
+                const entryDate = parseHabitDateKey(dateKey);
+                if (!entryDate) continue;
+                if (entryDate < bounds.start || entryDate > bounds.end) continue;
+
+                if (typeof rawValue === 'boolean') {
+                    sum += rawValue ? 1 : 0;
+                } else {
+                    const val = Number(rawValue) || 0;
+                    sum += val;
                 }
             }
-            // Add current running timer if it's within this period
+
             if (habit.activeTimerStart && habit.type === 'timer') {
                 const now = Date.now();
                 if (now >= bounds.start.getTime() && now <= bounds.end.getTime()) {
                     sum += (now - habit.activeTimerStart);
                 }
             }
-            return sum;
+
+            return Math.max(0, sum);
         }
 
-        function getHabitValue(habit, dateKey) {
-            let val = habit.history[dateKey];
-            // If undefined, return 0
-            if (val === undefined) return 0;
-            // If it's a boolean (legacy data), return 1 if true
-            if (val === true) return 1;
-            if (val === false) return 0;
+        function getHabitMetrics(habit) {
+            normalizeHabitForRuntime(habit);
+            const freq = habit.frequency || 'daily';
+            const bounds = getPeriodBounds(freq);
+            const current = getSumInPeriod(habit, bounds);
+            const target = getHabitTarget(habit);
+            const ratio = target > 0 ? (current / target) : 0;
+            const isDone = ratio >= 1;
+            const clampedPercent = Math.min(100, Math.round(ratio * 100));
+            return {
+                current: current,
+                target: target,
+                ratio: ratio,
+                isDone: isDone,
+                percent: clampedPercent,
+                status: isDone ? 'completed' : (current > 0 ? 'in-progress' : 'needs-action')
+            };
+        }
 
-            // If it's a timer and we are checking TODAY, add the active running time
-            if (habit.type === 'timer' && dateKey === getHabitDateKey(0) && habit.activeTimerStart) {
-                val += (Date.now() - habit.activeTimerStart);
+        function getFrequencyLabel(freq) {
+            if (freq === 'weekly') return 'Weekly';
+            if (freq === 'monthly') return 'Monthly';
+            return 'Daily';
+        }
+
+        function getHabitProgressLabel(habit, metrics) {
+            const freqLabel = getFrequencyLabel(habit.frequency || 'daily');
+            if (habit.type === 'timer') {
+                const currentMins = Math.floor(metrics.current / 60000);
+                const targetMins = Math.floor(metrics.target / 60000);
+                return `${currentMins}m / ${targetMins}m · ${freqLabel}`;
             }
-            return val;
+            if (habit.type === 'counter') {
+                return `${Math.floor(metrics.current)} / ${Math.floor(metrics.target)} · ${freqLabel}`;
+            }
+            return `${metrics.current >= 1 ? 'Done' : 'Not done'} · ${freqLabel}`;
         }
 
         function addHabit() {
@@ -228,37 +317,45 @@
 
             const title = input.value.trim();
             const type = typeSelect.value;
-            let target = parseFloat(targetInput.value);
+            const frequency = document.getElementById('habit-frequency-select').value;
 
-            // Validate target
-            if (type !== 'checkbox' && (!target || target <= 0)) {
-                alert("Please enter a valid target number.");
-                return;
+            if (!title) return;
+
+            let target = 1;
+            if (type === 'counter') {
+                const parsed = Math.round(Number(targetInput.value));
+                if (!Number.isFinite(parsed) || parsed <= 0) {
+                    alert("Enter a valid target count.");
+                    return;
+                }
+                target = parsed;
+            } else if (type === 'timer') {
+                const parsedMinutes = Number(targetInput.value);
+                if (!Number.isFinite(parsedMinutes) || parsedMinutes <= 0) {
+                    alert("Enter a valid target in minutes.");
+                    return;
+                }
+                target = Math.round(parsedMinutes * 60000);
             }
 
-            // For timers, convert minutes to milliseconds for storage
-            if (type === 'timer') target = target * 60 * 1000;
+            habits.push({
+                id: 'habit_' + Date.now(),
+                title: title,
+                type: type,
+                frequency: frequency || 'daily',
+                target: target,
+                goalId: goalSelect.value || null,
+                history: {},
+                activeTimerStart: null,
+                created: Date.now(),
+                noteIds: []
+            });
 
-            if (title) {
-                habits.push({
-                    id: 'habit_' + Date.now(),
-                    title: title,
-                    type: type, // 'checkbox', 'counter', 'timer'
-                    frequency: document.getElementById('habit-frequency-select').value,
-                    target: target || 1, // Default 1 for checkbox
-                    goalId: goalSelect.value || null,
-                    history: {},
-                    activeTimerStart: null,
-                    created: Date.now(),
-                    noteIds: []
-                });
-
-                // Reset UI
-                input.value = '';
-                toggleHabitInputs(); // Reset visibility
-                renderHabits();
-                saveToStorage();
-            }
+            input.value = '';
+            if (type !== 'checkbox') targetInput.value = '';
+            toggleHabitInputs();
+            renderHabits();
+            saveToStorage();
         }
 
         function deleteHabit(id) {
@@ -273,203 +370,194 @@
         function toggleHabitDay(id) {
             const habit = habits.find(h => h.id === id);
             if (!habit) return;
+            normalizeHabitForRuntime(habit);
 
             const key = getHabitDateKey(0);
-
-            // Simple toggle logic for checkboxes
-            if (habit.history[key]) {
-                delete habit.history[key];
-            } else {
-                habit.history[key] = 1; // 1 means done for checkbox
-            }
+            const current = Number(habit.history[key]) || 0;
+            if (current >= 1) delete habit.history[key];
+            else habit.history[key] = 1;
 
             renderHabits();
             saveToStorage();
         }
 
-        // FOR COUNTERS
         function updateHabitCounter(id, change) {
             const habit = habits.find(h => h.id === id);
             if (!habit) return;
+            normalizeHabitForRuntime(habit);
 
             const key = getHabitDateKey(0);
-            let current = habit.history[key] || 0;
+            const base = Number(habit.history[key]) || 0;
+            const next = Math.max(0, Math.round(base + change));
+            habit.history[key] = next;
 
-            // Handle legacy boolean if switching types
-            if (current === true) current = 1;
-            if (current === false) current = 0;
-
-            let newVal = current + change;
-            if (newVal < 0) newVal = 0;
-
-            habit.history[key] = newVal;
             renderHabits();
             saveToStorage();
         }
 
-        // FOR TIMERS
+        function updateHabitMinutes(id, deltaMinutes) {
+            const habit = habits.find(h => h.id === id);
+            if (!habit || habit.type !== 'timer') return;
+            normalizeHabitForRuntime(habit);
+
+            const key = getHabitDateKey(0);
+            const base = Number(habit.history[key]) || 0;
+            const next = Math.max(0, base + (deltaMinutes * 60000));
+            habit.history[key] = next;
+
+            renderHabits();
+            saveToStorage();
+        }
+
         function toggleHabitTimer(id) {
             const habit = habits.find(h => h.id === id);
             if (!habit) return;
+            normalizeHabitForRuntime(habit);
+
             const key = getHabitDateKey(0);
             if (habit.activeTimerStart) {
                 const now = Date.now();
-                const duration = now - habit.activeTimerStart;
-                habit.history[key] = (habit.history[key] || 0) + duration;
+                const duration = Math.max(0, now - habit.activeTimerStart);
+                habit.history[key] = Math.max(0, (Number(habit.history[key]) || 0) + duration);
 
-                // Track granular logs for accurate timeline rendering
-                if (!habit.timeLogs) habit.timeLogs = [];
+                if (!Array.isArray(habit.timeLogs)) habit.timeLogs = [];
                 habit.timeLogs.push({ start: habit.activeTimerStart, end: now, duration: duration });
 
                 habit.activeTimerStart = null;
-                playAudioFeedback('timer-stop'); // <--- SOUND
+                playAudioFeedback('timer-stop');
             } else {
                 habit.activeTimerStart = Date.now();
-                playAudioFeedback('timer-start'); // <--- SOUND
+                playAudioFeedback('timer-start');
             }
+
             renderHabits();
             saveToStorage();
         }
 
-        function calculateStreak(habit) {
-            let streak = 0;
-            const freq = habit.frequency || 'daily';
-            let checkDate = new Date();
+        function renderHabitSummary(items) {
+            const completedEl = document.getElementById('habit-summary-completed');
+            const pendingEl = document.getElementById('habit-summary-pending');
+            const fillEl = document.getElementById('habit-summary-progress-fill');
+            const textEl = document.getElementById('habit-summary-progress-text');
+            const periodEl = document.getElementById('habit-summary-period');
+            if (!completedEl || !pendingEl || !fillEl || !textEl || !periodEl) return;
 
-            for (let i = 0; i < 52; i++) { // Check up to 52 periods back
-                const bounds = getPeriodBounds(freq, checkDate);
-                const sum = getSumInPeriod(habit, bounds);
-                const isMet = sum >= (habit.target || 1);
-
-                if (isMet) {
-                    streak++;
-                } else {
-                    // If checking the current period, it's okay if not finished yet
-                    const now = new Date();
-                    if (now >= bounds.start && now <= bounds.end) {
-                        // Don't break yet, just check previous
-                    } else {
-                        break;
-                    }
-                }
-
-                // Move checkDate to previous period
-                if (freq === 'daily') checkDate.setDate(checkDate.getDate() - 1);
-                else if (freq === 'weekly') checkDate.setDate(checkDate.getDate() - 7);
-                else if (freq === 'monthly') checkDate.setMonth(checkDate.getMonth() - 1);
+            if (items.length === 0) {
+                completedEl.innerText = '0';
+                pendingEl.innerText = '0';
+                fillEl.style.width = '0%';
+                textEl.innerText = '0% complete';
+                periodEl.innerText = 'No habits yet';
+                return;
             }
-            return streak;
+
+            const completedCount = items.filter(item => item.metrics.isDone).length;
+            const pendingCount = items.length - completedCount;
+            const averagePercent = Math.round(items.reduce((sum, item) => sum + item.metrics.percent, 0) / items.length);
+
+            completedEl.innerText = String(completedCount);
+            pendingEl.innerText = String(pendingCount);
+            fillEl.style.width = `${Math.min(100, averagePercent)}%`;
+            textEl.innerText = `${averagePercent}% complete`;
+            periodEl.innerText = 'Live period snapshot';
+        }
+
+        function getHabitCardControls(habit, metrics) {
+            if (habit.type === 'checkbox') {
+                return `
+                    <button class="habit-main-toggle ${metrics.isDone ? 'done' : ''}" onclick="toggleHabitDay('${habit.id}')">
+                        ${metrics.isDone ? 'Done' : 'Mark Done'}
+                    </button>
+                `;
+            }
+
+            if (habit.type === 'counter') {
+                return `
+                    <div class="habit-controls">
+                        <button class="habit-btn-small" onclick="updateHabitCounter('${habit.id}', -1)">-</button>
+                        <div class="habit-val-display">${Math.floor(metrics.current)} / ${Math.floor(metrics.target)}</div>
+                        <button class="habit-btn-small" onclick="updateHabitCounter('${habit.id}', 1)">+</button>
+                    </div>
+                `;
+            }
+
+            const isRunning = !!habit.activeTimerStart;
+            const currentMins = Math.floor(metrics.current / 60000);
+            const targetMins = Math.floor(metrics.target / 60000);
+            return `
+                <div class="habit-controls">
+                    <button class="habit-btn-small" onclick="updateHabitMinutes('${habit.id}', -5)">-5m</button>
+                    <button class="habit-btn-small" onclick="toggleHabitTimer('${habit.id}')" style="${isRunning ? 'border-color:var(--ready-color); color:var(--ready-color);' : ''}">${isRunning ? '⏸' : '▶'}</button>
+                    <button class="habit-btn-small" onclick="updateHabitMinutes('${habit.id}', 5)">+5m</button>
+                    <div class="habit-val-display">${currentMins}m / ${targetMins}m</div>
+                </div>
+            `;
         }
 
         function renderHabits() {
             const container = document.getElementById('habits-list-container');
+            if (!container) return;
             container.innerHTML = '';
 
-            if (habits.length === 0) {
+            const prepared = habits.map(habit => {
+                normalizeHabitForRuntime(habit);
+                return { habit: habit, metrics: getHabitMetrics(habit) };
+            });
+
+            renderHabitSummary(prepared);
+
+            const filtered = prepared.filter(item => {
+                if (currentHabitFilter === 'completed') return item.metrics.isDone;
+                if (currentHabitFilter === 'needs-action') return !item.metrics.isDone;
+                return true;
+            });
+
+            if (prepared.length === 0) {
                 container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No habits tracked yet.</div>';
                 return;
             }
 
-            habits.forEach(h => {
-                // --- 1. PERIOD CALCULATIONS (New Logic) ---
-                const freq = h.frequency || 'daily';
-                const bounds = getPeriodBounds(freq);
-                const val = getSumInPeriod(h, bounds);
-                const target = h.target || 1;
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No habits in this filter.</div>';
+                return;
+            }
 
-                // Ensure type exists for old habits
-                if (!h.type) h.type = 'checkbox';
+            filtered.forEach(item => {
+                const h = item.habit;
+                const metrics = item.metrics;
+                const goalName = h.goalId ? getGoalTextById(h.goalId) : '';
+                const progressLabel = getHabitProgressLabel(h, metrics);
+                const controlsHtml = getHabitCardControls(h, metrics);
 
-                const isDone = val >= target;
-                const streak = calculateStreak(h);
-                const percent = Math.min(100, (val / target) * 100);
-
-                // --- 2. GENERATE DISPLAY LABELS ---
-                let freqLabel = freq.charAt(0).toUpperCase() + freq.slice(1);
-                let displayVal = "";
-
-                if (h.type === 'timer') {
-                    const minsVal = Math.floor(val / 60000);
-                    const minsTarget = Math.floor(target / 60000);
-                    displayVal = `${minsVal}m / ${minsTarget}m (${freqLabel})`;
-                } else if (h.type === 'counter') {
-                    displayVal = `${val} / ${target} (${freqLabel})`;
-                } else {
-                    // Checkboxes show purely status in the label area
-                    displayVal = freqLabel;
-                }
-
-                // --- 3. GENERATE CONTROLS BASED ON TYPE ---
-                let controlsHtml = '';
-                if (h.type === 'checkbox') {
-                    controlsHtml = `
-                        <div class="habit-checkbox ${isDone ? 'checked' : ''}" onclick="toggleHabitDay('${h.id}')">
-                            ${isDone ? '✓' : ''}
-                        </div>`;
-                }
-                else if (h.type === 'counter') {
-                    controlsHtml = `
-                        <div class="habit-controls">
-                            <button class="habit-btn-small" onclick="updateHabitCounter('${h.id}', -1)">-</button>
-                            <div class="habit-val-display" style="${isDone ? 'color:var(--ready-color); font-weight:bold;' : ''}">${displayVal}</div>
-                            <button class="habit-btn-small" onclick="updateHabitCounter('${h.id}', 1)">+</button>
-                        </div>`;
-                }
-                else if (h.type === 'timer') {
-                    const isRunning = !!h.activeTimerStart;
-                    controlsHtml = `
-                        <div class="habit-controls">
-                            <button class="habit-btn-small" style="${isRunning ? 'border-color:var(--ready-color); color:var(--ready-color);' : ''}" onclick="toggleHabitTimer('${h.id}')">
-                                ${isRunning ? '⏸' : '▶'}
-                            </button>
-                            <div class="habit-val-display" style="${isDone ? 'color:var(--ready-color); font-weight:bold;' : ''}">${displayVal}</div>
-                        </div>`;
-                }
-
-                // --- 4. RESOLVE GOAL NAME ---
-                let goalName = '';
-                if (h.goalId && lifeGoals[currentGoalYear]) {
-                    const findGoal = (list) => {
-                        for (let g of list) {
-                            if (g.id === h.goalId) return g.text;
-                            if (g.children) {
-                                const f = findGoal(g.children);
-                                if (f) return f;
-                            }
-                        }
-                        return null;
-                    };
-                    const name = findGoal(lifeGoals[currentGoalYear]);
-                    if (name) goalName = '🎯 ' + name;
-                }
-
-                // --- 5. RENDER THE HTML ELEMENT ---
                 const el = document.createElement('div');
-                el.className = `habit-item ${isDone ? 'done-today' : ''}`;
+                el.className = `habit-item ${metrics.isDone ? 'done-today' : ''}`;
                 el.innerHTML = `
-                    ${h.type === 'checkbox' ? controlsHtml : ''}
-                    <div class="habit-details">
-                        <div style="display:flex; justify-content:space-between; align-items:center">
+                    <div class="habit-card-top">
+                        <div class="habit-title-wrap">
                             <div class="habit-title">${h.title}</div>
-                            ${h.type !== 'checkbox' ? controlsHtml : ''}
+                            <div class="habit-progress-label">${progressLabel}</div>
                         </div>
-                        
-                        ${h.type !== 'checkbox' ? `
-                            <div class="habit-progress-bar-bg">
-                                <div class="habit-progress-fill ${isDone ? 'done' : ''}" style="width: ${percent}%"></div>
-                            </div>
-                        ` : ''}
-        
+                        <div class="habit-ratio-pill ${metrics.isDone ? 'done' : ''}">${metrics.percent}%</div>
+                    </div>
+
+                    <div class="habit-progress-track">
+                        <div class="habit-progress-fill ${metrics.isDone ? 'done' : ''}" style="width:${metrics.percent}%"></div>
+                    </div>
+
+                    <div class="habit-card-bottom">
                         <div class="habit-meta">
-                            <span class="habit-streak">🔥 ${streak}</span>
-                            <span class="habit-goal-link">${goalName}</span>
+                            ${goalName ? `<span class="habit-goal-link" title="${goalName}">🎯 ${goalName}</span>` : '<span class="habit-goal-link muted">No linked goal</span>'}
                             ${h.noteIds && h.noteIds.length > 0 ? `<span style="color:#3b82f6; font-size:10px; cursor:pointer;" onclick="event.stopPropagation(); showHabitNotes('${h.id}')" title="View linked notes">📝 ${h.noteIds.length}</span>` : ''}
                         </div>
+                        <div class="habit-actions">
+                            <button class="btn" style="padding:2px 6px; font-size:10px; ${hasReminderForItem('habit', h.id) ? 'border-color:var(--critical-path); color:var(--critical-path);' : ''}" onclick="openRemindersModal('habit', '${h.id}')">⏰</button>
+                            <button class="btn" style="padding:2px 6px; font-size:10px; ${isPinned('habit', h.id) ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="togglePinItem('habit', '${h.id}'); renderHabits();">📌</button>
+                            <button class="btn btn-danger" style="padding:2px 6px; font-size:10px;" onclick="deleteHabit('${h.id}')">✕</button>
+                        </div>
                     </div>
-                    <div class="habit-actions">
-                        <button class="btn ${hasReminderForItem('habit', h.id) ? '' : ''}" style="padding: 2px 6px; font-size:10px; ${hasReminderForItem('habit', h.id) ? 'border-color:var(--critical-path); color:var(--critical-path);' : ''}" onclick="openRemindersModal('habit', '${h.id}')">⏰</button>
-                        <button class="btn" style="padding: 2px 6px; font-size:10px; ${isPinned('habit', h.id) ? 'border-color:var(--accent); color:var(--accent);' : ''}" onclick="togglePinItem('habit', '${h.id}'); renderHabits();">📌</button>
-                        <button class="btn btn-danger" style="padding: 2px 6px; font-size:10px;" onclick="deleteHabit('${h.id}')">✕</button>
+
+                    <div class="habit-controls-row">
+                        ${controlsHtml}
                     </div>
                 `;
                 container.appendChild(el);

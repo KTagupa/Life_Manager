@@ -1186,7 +1186,8 @@
                 item.className = 'note-search-result-item';
                 const freq = h.frequency || 'daily';
                 const type = h.type || 'checkbox';
-                item.innerHTML = `<strong>✅ ${h.title || "Untitled Habit"}</strong><small>${freq} • ${type}</small>`;
+                const typeLabel = type === 'timer' ? 'minutes' : (type === 'counter' ? 'count' : 'checkbox');
+                item.innerHTML = `<strong>✅ ${h.title || "Untitled Habit"}</strong><small>${freq} • ${typeLabel}</small>`;
                 item.onclick = () => {
                     linkNoteToHabit(currentEditingNoteId, h.id);
                     toggleNoteHabitSearch();

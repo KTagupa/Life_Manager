@@ -100,7 +100,6 @@
             <button class="btn" onclick="fitView()">Recenter / Urgent (Optn+R)</button>
             <button class="btn" onclick="autoArrangeGraph()">🪄 Declutter (Optn+D)</button>
             <button class="btn" onclick="toggleHeatmap()">📅 Heatmap (Optn+M)</button>
-            <button class="btn" onclick="toggleProgressDashboard()">🏆 Progress (Optn+C)</button>
             <button class="btn" style="border-color: var(--accent); color: var(--accent);"
                 onclick="toggleSyncPanel()">☁️ Sync (Optn+S)</button>
             <button class="btn" onclick="toggleRemindersModal()">🔔 All Reminders</button>
@@ -280,7 +279,7 @@
                 onclick="quickPrompt('Identify the Critical Path tasks that are currently blocked. What is the single most important thing I must finish today to prevent a cascade of delays?')">⚠️
                 Risk Check</button>
             <button class="btn" style="font-size: 10px; padding: 4px 8px;"
-                onclick="quickPrompt('Look at my archived and completed tasks and current progress. Write a brief executive summary of what I achieved this week and what my top 3 priorities should be for next week.')">📝
+                onclick="quickPrompt('Look at my archived and completed tasks plus habit consistency. Write a brief executive summary of what I achieved this week and what my top 3 priorities should be for next week.')">📝
                 Weekly Recap</button>
         </div>
 
@@ -316,42 +315,61 @@
 
     <div id="habits-panel" class="hidden">
         <div class="panel-header-row">
-            <span>✅ Daily Habits</span>
+            <span>✅ Habits</span>
             <button class="btn" onclick="toggleHabits()">✕</button>
         </div>
 
-        <div style="padding: 15px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2);">
-            <div style="display:flex; gap: 5px; margin-bottom: 8px;">
-                <input type="text" id="new-habit-input" placeholder="Habit title..." style="flex-grow:1;">
+        <div class="habit-composer">
+            <div class="habit-composer-row">
+                <input type="text" id="new-habit-input" placeholder="New habit..." style="flex-grow:1;"
+                    onkeypress="if(event.key==='Enter') addHabit()">
                 <button class="btn btn-primary" onclick="addHabit()">Add</button>
             </div>
 
             <div class="habit-type-row">
-                <select id="habit-frequency-select"
-                    style="flex:1; font-size: 11px; padding: 4px; color:#ccc; border-color:#333; background:#1a1a1a;">
+                <select id="habit-frequency-select">
                     <option value="daily">📅 Daily</option>
                     <option value="weekly">🗓️ Weekly</option>
                     <option value="monthly">🌕 Monthly</option>
                 </select>
 
-                <select id="habit-type-select"
-                    style="flex:1; font-size: 11px; padding: 4px; color:#ccc; border-color:#333; background:#1a1a1a;"
-                    onchange="toggleHabitInputs()">
+                <select id="habit-type-select" onchange="toggleHabitInputs()">
                     <option value="checkbox">☑ Checkbox</option>
-                    <option value="counter">🔢 Counter</option>
-                    <option value="timer">⏱ Timer</option>
+                    <option value="counter">🔢 Count</option>
+                    <option value="timer">⏱ Minutes</option>
                 </select>
             </div>
+
             <div class="habit-type-row">
-                <input type="number" id="habit-target-input" placeholder="Target..." style="flex: 1; font-size: 11px;">
-                <span id="habit-unit-label"
-                    style="font-size:11px; color:#888; align-self:center; display:none; margin-left: 5px;">mins</span>
+                <input type="number" id="habit-target-input" placeholder="Target..." min="1">
+                <span id="habit-unit-label">mins</span>
             </div>
 
-            <select id="habit-goal-select"
-                style="width:100%; font-size: 11px; padding: 4px; color:#aaa; border-color:#333; background:#1a1a1a;">
+            <select id="habit-goal-select">
                 <option value="">(Optional) Link to a Life Goal...</option>
             </select>
+        </div>
+
+        <div class="habit-summary-strip">
+            <div class="habit-summary-top">
+                <span id="habit-summary-period">Today</span>
+                <span id="habit-summary-progress-text">0% complete</span>
+            </div>
+            <div class="habit-summary-bar">
+                <div id="habit-summary-progress-fill"></div>
+            </div>
+            <div class="habit-summary-stats">
+                <div><span id="habit-summary-completed">0</span> completed</div>
+                <div><span id="habit-summary-pending">0</span> needs action</div>
+            </div>
+        </div>
+
+        <div id="habits-filter-row" class="habit-filter-row">
+            <button class="habit-filter-btn active" data-filter="all" onclick="setHabitFilter('all')">All</button>
+            <button class="habit-filter-btn" data-filter="needs-action" onclick="setHabitFilter('needs-action')">Needs
+                Action</button>
+            <button class="habit-filter-btn" data-filter="completed"
+                onclick="setHabitFilter('completed')">Completed</button>
         </div>
 
         <div class="panel-list" id="habits-list-container">
@@ -755,30 +773,6 @@
             <button class="btn" onclick="toggleHeatmap()">Close</button>
         </div>
         <div id="heatmap-container" class="heatmap-grid" style="display: block;">
-        </div>
-    </div>
-
-    <!-- Progress Dashboard -->
-    <div id="progress-dashboard" class="hidden">
-        <div class="progress-header">
-            <div class="progress-title">
-                <span>🏆</span>
-                <span id="progress-title-text">Weekly Progress</span>
-            </div>
-            <div style="display: flex; gap: 12px; align-items: center;">
-                <div class="progress-view-switch">
-                    <button class="view-btn active" onclick="setProgressView('day')">Day</button>
-                    <button class="view-btn" onclick="setProgressView('week')">Week</button>
-                    <button class="view-btn" onclick="setProgressView('month')">Month</button>
-                </div>
-                <button class="btn" onclick="changeProgressDate(-1)">←</button>
-                <button class="btn" onclick="changeProgressDate(1)">→</button>
-                <button class="btn" onclick="toggleProgressDashboard()">Close</button>
-            </div>
-        </div>
-
-        <div class="progress-content" id="progress-content">
-            <!-- Content renders here via JS -->
         </div>
     </div>
 
