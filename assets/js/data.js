@@ -671,10 +671,18 @@
                 agenda = [];
                 quickLinks = [];
                 reminders = [];
+                pinnedItems = [];
+                hiddenNodeGroups = new Set();
+                lastKnownAgendaTaskId = null;
+                selectedNodeId = null;
+                selectedIds = new Set();
+                currentEditingNoteId = null;
                 noteSettings = {
                     categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`)
                 };
                 localStorage.removeItem('urgencyFlowData');
+                localStorage.removeItem('urgencyFlowData_backup');
+                saveToStorage();
                 render();
                 renderInbox();
                 renderGoals();
