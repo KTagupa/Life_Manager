@@ -44,6 +44,9 @@
             renderQuickLinks();
             if (typeof updateAINoteSelectionSummary === 'function') updateAINoteSelectionSummary();
             if (typeof renderReminderStrip === 'function') renderReminderStrip();
+            if (typeof shouldOpenDashboardOnStartup === 'function' && shouldOpenDashboardOnStartup()) {
+                openInsightsDashboard();
+            }
 
             // Setup modal dragging
             setupModalDragging();

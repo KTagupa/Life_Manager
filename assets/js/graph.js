@@ -835,6 +835,12 @@ function setupInteractions() {
                 picker.classList.add('hidden');
                 return;
             }
+
+            const insightsOverlay = document.getElementById('insights-dashboard-overlay');
+            if (insightsOverlay && !insightsOverlay.classList.contains('hidden')) {
+                closeInsightsDashboard();
+                return;
+            }
         }
 
         if (isTyping) return; // If typing, don't run any of the shortcuts below
@@ -881,6 +887,7 @@ function setupInteractions() {
                 case 'KeyE': cycleEcoMode(); break;
                 case 'KeyP': togglePinnedWindow(); break; // I added this own my own
                 case 'KeyF': toggleTaskListWindow(); break;
+                case 'KeyU': toggleInsightsDashboard(); break;
                 case 'KeyW':
                     const noteEditor = document.getElementById('note-editor');
                     if (noteEditor && !noteEditor.classList.contains('hidden')) {

@@ -82,6 +82,8 @@
                 onclick="toggleTaskListWindow()">📋</button>
             <button id="btn-pinned" class="toolbar-icon-btn" title="Pinned Window"
                 onclick="togglePinnedWindow()">📌</button>
+            <button id="btn-dashboard" class="toolbar-icon-btn" title="Dashboard (Opt+U)"
+                onclick="toggleInsightsDashboard()">🌿</button>
             <div id="quick-links-container" class="quick-links"></div>
             <div id="reminder-alert-strip" class="reminder-strip"></div>
             <button id="btn-add-quick-link" class="toolbar-icon-btn" title="Add Link"
@@ -794,6 +796,101 @@
         </div>
     </div>
 
+    <div id="insights-dashboard-overlay" class="hidden" onclick="if (event.target === this) closeInsightsDashboard();">
+        <div class="insights-dashboard-shell" role="dialog" aria-modal="true" aria-labelledby="insights-dashboard-title">
+            <header class="insights-header">
+                <div class="insights-title-wrap">
+                    <h1 id="insights-dashboard-title">The Canopy</h1>
+                    <p id="insights-dashboard-date">Seasonal Growth</p>
+                </div>
+                <div class="insights-header-actions">
+                    <div class="insights-completion-chip">
+                        <span id="insights-completion-rate">0%</span> Completion
+                    </div>
+                    <label class="insights-startup-toggle" for="insights-dashboard-startup-toggle">
+                        <input id="insights-dashboard-startup-toggle" type="checkbox"
+                            onchange="setDashboardStartupPreference(this.checked)">
+                        <span>Show on app launch</span>
+                    </label>
+                    <button class="insights-close-btn" onclick="closeInsightsDashboard()"
+                        title="Close dashboard">Close</button>
+                </div>
+            </header>
+
+            <main class="insights-grid">
+                <section class="insights-main-col">
+                    <section class="insights-card insights-stats">
+                        <div class="insights-stat critical">
+                            <span class="insights-stat-label">Critical</span>
+                            <span class="insights-stat-value" id="insights-stat-critical">0</span>
+                        </div>
+                        <div class="insights-stat urgent">
+                            <span class="insights-stat-label">Urgent</span>
+                            <span class="insights-stat-value" id="insights-stat-urgent">0</span>
+                        </div>
+                        <div class="insights-stat blocked">
+                            <span class="insights-stat-label">Blocked</span>
+                            <span class="insights-stat-value" id="insights-stat-blocked">0</span>
+                        </div>
+                        <div class="insights-stat ready">
+                            <span class="insights-stat-label">Ready</span>
+                            <span class="insights-stat-value" id="insights-stat-ready">0</span>
+                        </div>
+                    </section>
+
+                    <section class="insights-card">
+                        <div class="insights-card-head">
+                            <h2>Immediate Focus Path</h2>
+                        </div>
+                        <div id="insights-priority-list" class="insights-list"></div>
+                    </section>
+
+                    <section class="insights-card insights-habits-card">
+                        <div class="insights-habits-head">
+                            <div class="insights-habits-head-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" role="presentation">
+                                    <path d="M4 18H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M7 18V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M12 18V5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M17 18V12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h2>Growth Accumulation</h2>
+                                <p>Tracing the volume of effort over time.</p>
+                            </div>
+                        </div>
+                        <div id="insights-habits-list" class="insights-habits-list"></div>
+                    </section>
+                </section>
+
+                <aside class="insights-side-col">
+                    <section class="insights-card insights-health-card">
+                        <div class="insights-health-ring">
+                            <span id="insights-health-score">0%</span>
+                        </div>
+                        <h3>Canopy Health</h3>
+                        <p id="insights-health-text">Waiting for data.</p>
+                    </section>
+
+                    <section class="insights-card insights-links-card">
+                        <div class="insights-card-head">
+                            <h2>Outer Branches</h2>
+                        </div>
+                        <div id="insights-quick-links" class="insights-links-list"></div>
+                    </section>
+
+                    <section id="insights-blockers-card" class="insights-card insights-blockers-card hidden">
+                        <div class="insights-card-head">
+                            <h2>Root Blockers</h2>
+                        </div>
+                        <div id="insights-blockers-list" class="insights-blockers-list"></div>
+                    </section>
+                </aside>
+            </main>
+        </div>
+    </div>
+
     <div id="health-dashboard">
         <div class="health-row" title="Active vs Archived Nodes">
             <span class="health-label">Task Load</span>
@@ -913,6 +1010,7 @@
     <script defer src="assets/js/graph.js"></script>
     <script defer src="assets/js/tasks.js"></script>
     <script defer src="assets/js/schedule.js"></script>
+    <script defer src="assets/js/dashboard.js"></script>
     <script defer src="assets/js/init.js"></script>
 </body>
 

@@ -753,7 +753,8 @@
                 'nodeGroupsModalPosition',
                 'ai_selected_data',
                 'ai_note_selection',
-                'lastAutoBackupDate'
+                'lastAutoBackupDate',
+                'urgencyFlow_dashboard_open_on_startup'
             ].forEach(key => localStorage.removeItem(key));
 
             await wipeIndexedDB();
