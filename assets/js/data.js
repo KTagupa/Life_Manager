@@ -660,38 +660,63 @@
             input.value = '';
             reader.readAsText(file);
         }
-        function clearData() {
-            if (confirm("Are you sure you want to clear all tasks?")) {
-                nodes = [];
-                archivedNodes = [];
-                inbox = [];
-                lifeGoals = {};
-                notes = [];
-                habits = [];
-                agenda = [];
-                quickLinks = [];
-                reminders = [];
-                pinnedItems = [];
-                hiddenNodeGroups = new Set();
-                lastKnownAgendaTaskId = null;
-                selectedNodeId = null;
-                selectedIds = new Set();
-                currentEditingNoteId = null;
-                noteSettings = {
-                    categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`)
-                };
-                localStorage.removeItem('urgencyFlowData');
-                localStorage.removeItem('urgencyFlowData_backup');
-                saveToStorage();
-                render();
-                renderInbox();
-                renderGoals();
-                renderAgenda();
-                renderQuickLinks();
-                if (typeof renderReminderStrip === 'function') renderReminderStrip();
-                if (typeof renderRemindersModal === 'function') renderRemindersModal();
-                deselectNode();
-            }
+        async function clearData() {
+            if (!confirm("Reset app to a brand-new state? This clears all saved data and settings.")) return;
+
+            nodes = [];
+            archivedNodes = [];
+            inbox = [];
+            lifeGoals = {};
+            notes = [];
+            habits = [];
+            agenda = [];
+            quickLinks = [];
+            reminders = [];
+            pinnedItems = [];
+            hiddenNodeGroups = new Set();
+            lastKnownAgendaTaskId = null;
+            selectedNodeId = null;
+            selectedIds = new Set();
+            currentEditingNoteId = null;
+            historyStack = [];
+            historyIndex = -1;
+            lastHistoryState = null;
+            githubToken = '';
+            gistId = '';
+            geminiApiKey = '';
+            selectedAIData = new Set(['tasks']);
+            noteSettings = {
+                categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`)
+            };
+            aiModalPosition = { x: null, y: null, width: 450, height: 600 };
+            inboxModalPosition = { x: null, y: null, width: 380, height: 500 };
+            remindersModalPosition = { x: null, y: null, width: 560, height: 620 };
+            healthDashboardPosition = { x: null, y: null };
+            nodeGroupsModalPosition = { x: null, y: null, width: 420, height: 600 };
+
+            [
+                'urgencyFlowData',
+                'urgencyFlowData_backup',
+                'urgencyFlow_lastSave',
+                'urgency_flow_gemini_key',
+                'aiModalPosition',
+                'inboxModalPosition',
+                'remindersModalPosition',
+                'healthDashboardPosition',
+                'nodeGroupsModalPosition',
+                'ai_selected_data',
+                'ai_note_selection',
+                'lastAutoBackupDate'
+            ].forEach(key => localStorage.removeItem(key));
+
+            await new Promise(resolve => {
+                const deleteReq = indexedDB.deleteDatabase('urgencyFlowDB');
+                deleteReq.onsuccess = () => resolve();
+                deleteReq.onerror = () => resolve();
+                deleteReq.onblocked = () => resolve();
+            });
+
+            window.location.reload();
         }
 
 
