@@ -205,21 +205,66 @@
                     activeTimerStart: null, timeLogs: []
                 }
             ];
-            inbox = [{ id: 'inbox_1', title: 'Check Emails' }];
-            lifeGoals[currentGoalYear] = [
-                {
-                    id: 'g1', text: 'Health & Fitness', collapsed: false, children: [
-                        { id: 'g2', text: 'Run a Marathon', collapsed: false, children: [] }
-                    ]
-                }
-            ];
-            habits = [
-                { id: 'h1', title: 'Drink Water', goalId: '', history: {}, created: Date.now() }
-            ];
-            notes = [
-                createNoteObject("Project Ideas", "# My Project\n\n- [ ] Better colors\n- [ ] Mobile support\n\nSee [[Define Goal]] for more context.", null)
-            ];
+            archivedNodes = [];
+            inbox = [];
+            lifeGoals = {};
+            habits = [];
+            notes = [];
+            agenda = [];
+            quickLinks = [];
+            reminders = [];
+            pinnedItems = [];
+            hiddenNodeGroups = new Set();
             saveToStorage();
+        }
+
+        async function wipeIndexedDB() {
+            await new Promise(resolve => {
+                let done = false;
+                const finish = () => {
+                    if (done) return;
+                    done = true;
+                    resolve();
+                };
+
+                const deleteDb = () => {
+                    const deleteReq = indexedDB.deleteDatabase('urgencyFlowDB');
+                    deleteReq.onsuccess = finish;
+                    deleteReq.onerror = finish;
+                    deleteReq.onblocked = finish;
+                };
+
+                const openReq = indexedDB.open('urgencyFlowDB', 1);
+
+                openReq.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('appState')) {
+                        db.createObjectStore('appState', { keyPath: 'id' });
+                    }
+                };
+
+                openReq.onsuccess = (event) => {
+                    const db = event.target.result;
+                    const closeThenDelete = () => {
+                        try { db.close(); } catch (e) { }
+                        deleteDb();
+                    };
+
+                    try {
+                        const tx = db.transaction(['appState'], 'readwrite');
+                        tx.objectStore('appState').clear();
+                        tx.oncomplete = closeThenDelete;
+                        tx.onerror = closeThenDelete;
+                        tx.onabort = closeThenDelete;
+                    } catch (e) {
+                        closeThenDelete();
+                    }
+                };
+
+                openReq.onerror = () => {
+                    deleteDb();
+                };
+            });
         }
 
 
@@ -661,7 +706,7 @@
             reader.readAsText(file);
         }
         async function clearData() {
-            if (!confirm("Reset app to a brand-new state? This clears all saved data and settings.")) return;
+            if (!confirm("Reset app to a brand-new state? This clears all saved data/tokens and restores the starter task 'Define Goal'.")) return;
 
             nodes = [];
             archivedNodes = [];
@@ -699,6 +744,8 @@
                 'urgencyFlowData_backup',
                 'urgencyFlow_lastSave',
                 'urgency_flow_gemini_key',
+                'openai_api_key',
+                'finance_flow_encrypted_v1',
                 'aiModalPosition',
                 'inboxModalPosition',
                 'remindersModalPosition',
@@ -709,12 +756,7 @@
                 'lastAutoBackupDate'
             ].forEach(key => localStorage.removeItem(key));
 
-            await new Promise(resolve => {
-                const deleteReq = indexedDB.deleteDatabase('urgencyFlowDB');
-                deleteReq.onsuccess = () => resolve();
-                deleteReq.onerror = () => resolve();
-                deleteReq.onblocked = () => resolve();
-            });
+            await wipeIndexedDB();
 
             window.location.reload();
         }
