@@ -248,6 +248,24 @@
             return txs.filter(x => x).sort((a, b) => new Date(b.date) - new Date(a.date));
         }
 
+        function calculateWeightedHoldingDays(lots) {
+            const now = Date.now();
+            let weightedDays = 0;
+            let totalAmount = 0;
+
+            (lots || []).forEach(lot => {
+                if (!lot || lot.amount <= 0.000001) return;
+                const lotTime = new Date(lot.date).getTime();
+                if (!Number.isFinite(lotTime)) return;
+
+                const ageDays = Math.max(0, (now - lotTime) / (1000 * 60 * 60 * 24));
+                weightedDays += lot.amount * ageDays;
+                totalAmount += lot.amount;
+            });
+
+            return totalAmount > 0 ? (weightedDays / totalAmount) : 0;
+        }
+
         async function calculateHoldings(method = 'fifo') {
             const txs = await getDecryptedCrypto();
             const holdings = {};
@@ -287,10 +305,29 @@
                     let soldAmount = 0;
 
                     if (method === 'avg') {
-                        const avgPrice = h.amount > 0 ? (h.totalCost / h.amount) : 0;
-                        costOfSold = avgPrice * tx.amount;
+                        const totalAmountBeforeSell = h.amount;
+                        soldAmount = Math.min(tx.amount, totalAmountBeforeSell);
+                        const avgPrice = totalAmountBeforeSell > 0 ? (h.totalCost / totalAmountBeforeSell) : 0;
+                        costOfSold = avgPrice * soldAmount;
                         h.totalCost -= costOfSold;
-                        soldAmount = tx.amount;
+
+                        // Keep lot ages meaningful for holding-time metrics by reducing each lot proportionally.
+                        if (totalAmountBeforeSell > 0 && h.lots.length > 0) {
+                            const remainingRatio = Math.max((totalAmountBeforeSell - soldAmount) / totalAmountBeforeSell, 0);
+                            h.lots = h.lots
+                                .map(lot => {
+                                    const newAmount = lot.amount * remainingRatio;
+                                    return {
+                                        ...lot,
+                                        amount: newAmount,
+                                        total: newAmount * lot.price
+                                    };
+                                })
+                                .filter(lot => lot.amount > 0.000001);
+                        }
+
+                        // Recalculate from remaining lots to minimize floating-point drift.
+                        h.totalCost = h.lots.reduce((sum, l) => sum + (l.amount * l.price), 0);
                     } else {
                         // FIFO/LIFO
                         while (remainingToSell > 0.000001 && h.lots.length > 0) {
@@ -447,6 +484,7 @@
                 const avgPrice = h.amount > 0 ? h.totalCost / h.amount : 0;
                 const unrealized = currentPrice > 0 ? (value - h.totalCost) : 0;
                 const pnlPct = h.totalCost > 0 ? (unrealized / h.totalCost) * 100 : 0;
+                const weightedHoldingDays = calculateWeightedHoldingDays(h.lots);
 
                 if (h.amount > 0.000001) {
                     totalVal += value;
@@ -469,6 +507,7 @@
                                 <span class="text-[10px] bg-slate-700 text-slate-400 px-1.5 rounded">${id}</span>
                             </div>
                             <p class="text-xs text-slate-400 mt-1">${h.amount.toFixed(4)} tokens @ ${fmt(avgPrice)} avg</p>
+                            <p class="text-[10px] text-slate-500 mt-0.5">Invested: ${fmt(h.totalCost)} • Avg hold: ${weightedHoldingDays.toFixed(1)} days</p>
                             <p class="text-[10px] text-slate-500 mt-0.5">${taxMethod.toUpperCase()} Basis</p>
                         </div>
                         <div class="text-right">
