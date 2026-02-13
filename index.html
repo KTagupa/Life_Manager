@@ -806,6 +806,7 @@
                 <div class="insights-header-actions">
                     <div class="insights-completion-chip">
                         <span id="insights-completion-rate">0%</span> Completion
+                        <span id="insights-completion-delta" class="insights-completion-delta">No baseline</span>
                     </div>
                     <label class="insights-startup-toggle" for="insights-dashboard-startup-toggle">
                         <input id="insights-dashboard-startup-toggle" type="checkbox"
@@ -823,18 +824,22 @@
                         <div class="insights-stat critical">
                             <span class="insights-stat-label">Critical</span>
                             <span class="insights-stat-value" id="insights-stat-critical">0</span>
+                            <span class="insights-stat-delta" id="insights-stat-critical-delta">No baseline</span>
                         </div>
                         <div class="insights-stat urgent">
                             <span class="insights-stat-label">Urgent</span>
                             <span class="insights-stat-value" id="insights-stat-urgent">0</span>
+                            <span class="insights-stat-delta" id="insights-stat-urgent-delta">No baseline</span>
                         </div>
                         <div class="insights-stat blocked">
                             <span class="insights-stat-label">Blocked</span>
                             <span class="insights-stat-value" id="insights-stat-blocked">0</span>
+                            <span class="insights-stat-delta" id="insights-stat-blocked-delta">No baseline</span>
                         </div>
                         <div class="insights-stat ready">
                             <span class="insights-stat-label">Ready</span>
                             <span class="insights-stat-value" id="insights-stat-ready">0</span>
+                            <span class="insights-stat-delta" id="insights-stat-ready-delta">No baseline</span>
                         </div>
                     </section>
 
@@ -842,7 +847,16 @@
                         <div class="insights-card-head">
                             <h2>Immediate Focus Path</h2>
                         </div>
-                        <div id="insights-priority-list" class="insights-list"></div>
+                        <div class="insights-focus-split">
+                            <div class="insights-focus-col">
+                                <h3 class="insights-focus-subtitle">Do Now</h3>
+                                <div id="insights-do-now-list" class="insights-list"></div>
+                            </div>
+                            <div class="insights-focus-col">
+                                <h3 class="insights-focus-subtitle">Unblock Now</h3>
+                                <div id="insights-unblock-list" class="insights-list"></div>
+                            </div>
+                        </div>
                     </section>
 
                     <section class="insights-card insights-habits-card">
@@ -882,7 +896,7 @@
 
                     <section id="insights-blockers-card" class="insights-card insights-blockers-card hidden">
                         <div class="insights-card-head">
-                            <h2>Root Blockers</h2>
+                            <h2>Root Blocker Causes</h2>
                         </div>
                         <div id="insights-blockers-list" class="insights-blockers-list"></div>
                     </section>

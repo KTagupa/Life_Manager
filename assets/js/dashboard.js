@@ -1,6 +1,9 @@
 (function () {
     const DASHBOARD_PREF_KEY = 'urgencyFlow_dashboard_open_on_startup';
+    const TREND_SNAPSHOT_KEY = 'urgencyFlow_canopy_daily_trends_v1';
+    const TREND_RETENTION_DAYS = 45;
     const PRIORITY_LIMIT = 5;
+    const UNBLOCK_LIMIT = 5;
     const BLOCKER_LIMIT = 6;
     const OUTER_BRANCH_LIMIT = 12;
     const DAY_MS = 24 * 60 * 60 * 1000;
@@ -61,6 +64,98 @@
         const mm = Number(m[2]) - 1;
         const d = Number(m[3]);
         return new Date(y, mm, d, 12, 0, 0, 0);
+    }
+
+    function getLocalDayKey(date = new Date()) {
+        const y = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        return `${y}-${mm}-${dd}`;
+    }
+
+    function formatDayKey(dayKey) {
+        const parsed = parseDateKey(dayKey);
+        if (!parsed) return 'previous day';
+        return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
+    function readTrendSnapshots() {
+        try {
+            const raw = localStorage.getItem(TREND_SNAPSHOT_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+
+            const cleaned = parsed
+                .map(entry => {
+                    if (!entry || typeof entry !== 'object') return null;
+                    const dayKey = typeof entry.dayKey === 'string' ? entry.dayKey : '';
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return null;
+                    return {
+                        dayKey: dayKey,
+                        critical: Number(entry.critical) || 0,
+                        urgent: Number(entry.urgent) || 0,
+                        blocked: Number(entry.blocked) || 0,
+                        ready: Number(entry.ready) || 0,
+                        completionRate: Number(entry.completionRate) || 0
+                    };
+                })
+                .filter(Boolean)
+                .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+
+            return cleaned.slice(-TREND_RETENTION_DAYS);
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function writeTrendSnapshots(list) {
+        try {
+            localStorage.setItem(TREND_SNAPSHOT_KEY, JSON.stringify(safeArray(list).slice(-TREND_RETENTION_DAYS)));
+        } catch (error) { }
+    }
+
+    function buildTrendDeltas(currentSnapshot) {
+        const todayKey = getLocalDayKey();
+        const baseline = {
+            dayKey: todayKey,
+            critical: Number(currentSnapshot.critical) || 0,
+            urgent: Number(currentSnapshot.urgent) || 0,
+            blocked: Number(currentSnapshot.blocked) || 0,
+            ready: Number(currentSnapshot.ready) || 0,
+            completionRate: Number(currentSnapshot.completionRate) || 0
+        };
+
+        const snapshots = readTrendSnapshots().filter(item => item.dayKey !== todayKey);
+        snapshots.push(baseline);
+        snapshots.sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+        const trimmed = snapshots.slice(-TREND_RETENTION_DAYS);
+        writeTrendSnapshots(trimmed);
+
+        const previous = trimmed
+            .slice()
+            .reverse()
+            .find(item => item.dayKey < todayKey);
+
+        if (!previous) {
+            return {
+                label: 'No baseline',
+                criticalDelta: null,
+                urgentDelta: null,
+                blockedDelta: null,
+                readyDelta: null,
+                completionRateDelta: null
+            };
+        }
+
+        return {
+            label: `vs ${formatDayKey(previous.dayKey)}`,
+            criticalDelta: baseline.critical - previous.critical,
+            urgentDelta: baseline.urgent - previous.urgent,
+            blockedDelta: baseline.blocked - previous.blocked,
+            readyDelta: baseline.ready - previous.ready,
+            completionRateDelta: baseline.completionRate - previous.completionRate
+        };
     }
 
     function toHabitNumericValue(rawValue, type) {
@@ -159,11 +254,18 @@
     function deriveTaskDecision(task, taskLookup, nowTs) {
         const hardDeps = getHardDependencies(task);
         let unresolvedHardDeps = 0;
+        const blockingParents = [];
 
         hardDeps.forEach(dep => {
             const parent = taskLookup.get(dep.id);
             if (!parent) return;
-            if (!parent.completed) unresolvedHardDeps += 1;
+            if (!parent.completed) {
+                unresolvedHardDeps += 1;
+                blockingParents.push({
+                    id: parent.id,
+                    title: parent.title || 'Untitled Task'
+                });
+            }
         });
 
         const isBlocked = unresolvedHardDeps > 0;
@@ -195,7 +297,8 @@
             isUrgent: isUrgent,
             isCritical: isCritical,
             dueDayDelta: dueDayDelta,
-            downstreamWeight: Math.max(0, Number(task._downstreamWeight) || 0)
+            downstreamWeight: Math.max(0, Number(task._downstreamWeight) || 0),
+            blockingParents: blockingParents
         };
     }
 
@@ -257,7 +360,9 @@
             _isReady: item.state.isReady,
             _isUrgent: item.state.isUrgent,
             _isCritical: item.state.isCritical,
-            _focusScore: item.focusScore
+            _focusScore: item.focusScore,
+            _dueDayDelta: item.state.dueDayDelta,
+            _blockingParents: safeArray(item.state.blockingParents)
         });
     }
 
@@ -445,6 +550,61 @@
         return { score: rounded, text: text };
     }
 
+    function formatRelativeDueLabel(dueDayDelta) {
+        if (!Number.isFinite(dueDayDelta)) return 'No due date';
+        if (dueDayDelta < 0) return `${Math.abs(dueDayDelta)}d overdue`;
+        if (dueDayDelta === 0) return 'Due today';
+        if (dueDayDelta === 1) return 'Due tomorrow';
+        return `Due in ${dueDayDelta}d`;
+    }
+
+    function buildBlockerCauses(analyzedTasks, taskLookup, nowTs) {
+        const causesByTask = new Map();
+
+        analyzedTasks.forEach(item => {
+            if (!item.state.isBlocked) return;
+            const blockedTaskTitle = item.task.title || 'Untitled Task';
+            safeArray(item.state.blockingParents).forEach(parentRef => {
+                const parentTask = taskLookup.get(parentRef.id);
+                if (!parentTask || parentTask.completed) return;
+
+                let existing = causesByTask.get(parentTask.id);
+                if (!existing) {
+                    const parentState = deriveTaskDecision(parentTask, taskLookup, nowTs);
+                    existing = {
+                        id: parentTask.id,
+                        title: parentTask.title || 'Untitled Task',
+                        blockedCount: 0,
+                        blockedTaskTitles: [],
+                        downstreamWeight: Math.max(0, Number(parentTask._downstreamWeight) || 0),
+                        isUrgent: parentState.isUrgent,
+                        isCritical: parentState.isCritical,
+                        dueDayDelta: parentState.dueDayDelta,
+                        dueDate: parentTask.dueDate || ''
+                    };
+                    causesByTask.set(parentTask.id, existing);
+                }
+
+                existing.blockedCount += 1;
+                if (existing.blockedTaskTitles.length < 3) {
+                    existing.blockedTaskTitles.push(blockedTaskTitle);
+                }
+            });
+        });
+
+        return Array.from(causesByTask.values())
+            .sort((a, b) => {
+                if (b.blockedCount !== a.blockedCount) return b.blockedCount - a.blockedCount;
+                const urgencyDiff = (b.isUrgent ? 1 : 0) - (a.isUrgent ? 1 : 0);
+                if (urgencyDiff !== 0) return urgencyDiff;
+                if (b.downstreamWeight !== a.downstreamWeight) return b.downstreamWeight - a.downstreamWeight;
+                const dueDiff = getDueTime(a.dueDate) - getDueTime(b.dueDate);
+                if (dueDiff !== 0) return dueDiff;
+                return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
+            })
+            .slice(0, BLOCKER_LIMIT);
+    }
+
     function buildDashboardModel() {
         const allNodes = getNodesStore();
         ensureTaskSignals(allNodes);
@@ -474,15 +634,24 @@
         const completionRate = Math.round((completionNumerator / completionDenominator) * 100);
 
         const rankedByFocus = analyzedTasks.slice().sort(sortFocusCandidates);
-        const priorityTasks = rankedByFocus
+        const doNowTasks = rankedByFocus
+            .filter(item => item.state.isReady)
             .slice(0, PRIORITY_LIMIT)
             .map(toDashboardTask);
 
-        const blockedTasks = analyzedTasks
+        const unblockTasks = rankedByFocus
             .filter(item => item.state.isBlocked)
-            .sort(sortFocusCandidates)
-            .slice(0, BLOCKER_LIMIT)
+            .slice(0, UNBLOCK_LIMIT)
             .map(toDashboardTask);
+
+        const blockerCauses = buildBlockerCauses(analyzedTasks, taskLookup, nowTs);
+        const trends = buildTrendDeltas({
+            critical: critical,
+            urgent: urgent,
+            blocked: blocked,
+            ready: ready,
+            completionRate: completionRate
+        });
 
         const habits = buildHabitSummary();
         const health = calculateCanopyHealth({
@@ -502,23 +671,49 @@
             blocked: blocked,
             ready: ready,
             completionRate: clamp(completionRate, 0, 100),
+            trends: trends,
             healthScore: health.score,
             healthText: health.text,
-            priorityTasks: priorityTasks,
-            blockedTasks: blockedTasks,
+            doNowTasks: doNowTasks,
+            unblockTasks: unblockTasks,
+            blockerCauses: blockerCauses,
             habits: habits,
             outerBranches: buildOuterBranches(allNodes, archived),
             startupEnabled: shouldOpenDashboardOnStartup()
         };
     }
 
-    function renderPriorityTasks(tasks) {
-        const list = document.getElementById('insights-priority-list');
+    function summarizeBlockingParents(blockingParents) {
+        const list = safeArray(blockingParents);
+        if (list.length === 0) return 'Blocked by unresolved dependencies';
+        const names = list.slice(0, 2).map(parent => parent.title || 'Untitled Task');
+        const moreCount = Math.max(0, list.length - names.length);
+        if (moreCount > 0) return `Blocked by ${names.join(', ')} +${moreCount} more`;
+        return `Blocked by ${names.join(', ')}`;
+    }
+
+    function buildTaskReason(task, showBlockingContext) {
+        const parts = [];
+        if (showBlockingContext && task._isBlocked) {
+            parts.push(summarizeBlockingParents(task._blockingParents));
+        }
+        if (Number.isFinite(task._dueDayDelta)) {
+            parts.push(formatRelativeDueLabel(task._dueDayDelta));
+        }
+        const downstreamWeight = Math.max(0, Number(task._downstreamWeight) || 0);
+        if (downstreamWeight > 0) {
+            parts.push(`${downstreamWeight} downstream`);
+        }
+        return parts.join(' • ');
+    }
+
+    function renderTaskFocusList(listId, tasks, emptyMessage, showBlockingContext = false) {
+        const list = document.getElementById(listId);
         if (!list) return;
         list.innerHTML = '';
 
-        if (tasks.length === 0) {
-            list.innerHTML = '<div class="insights-empty">No active tasks right now.</div>';
+        if (!tasks.length) {
+            list.innerHTML = `<div class="insights-empty">${escapeHtml(emptyMessage)}</div>`;
             return;
         }
 
@@ -526,18 +721,24 @@
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'insights-priority-item';
+
             const tags = [];
             if (task._isBlocked) tags.push('<span class="insights-tag blocked">Blocked</span>');
             if (task._isCritical) tags.push('<span class="insights-tag critical">Critical</span>');
             if (task._isUrgent) tags.push('<span class="insights-tag urgent">Urgent</span>');
             if (task._isReady && !task._isBlocked) tags.push('<span class="insights-tag ready">Ready</span>');
+
+            const reason = buildTaskReason(task, showBlockingContext);
+            const reasonHtml = reason ? `<div class="insights-priority-meta">${escapeHtml(reason)}</div>` : '';
             btn.innerHTML = `
                 <div class="insights-priority-top">
                     <h3 class="insights-priority-title">${escapeHtml(task.title || 'Untitled Task')}</h3>
                     <span class="insights-priority-due">${escapeHtml(formatDueDate(task.dueDate))}</span>
                 </div>
+                ${reasonHtml}
                 <div class="insights-priority-tags">${tags.join('')}</div>
             `;
+
             btn.addEventListener('click', () => {
                 if (typeof window.jumpToTask === 'function') {
                     window.jumpToTask(task.id);
@@ -546,6 +747,11 @@
             });
             list.appendChild(btn);
         });
+    }
+
+    function renderFocusSplit(model) {
+        renderTaskFocusList('insights-do-now-list', model.doNowTasks, 'No ready tasks. Clear blockers first.');
+        renderTaskFocusList('insights-unblock-list', model.unblockTasks, 'No blocked tasks. Momentum is clear.', true);
     }
 
     function renderHabitSummary(habits) {
@@ -617,12 +823,12 @@
         });
     }
 
-    function renderBlockers(blockedTasks) {
+    function renderBlockers(blockerCauses) {
         const card = document.getElementById('insights-blockers-card');
         const list = document.getElementById('insights-blockers-list');
         if (!card || !list) return;
 
-        if (!blockedTasks.length) {
+        if (!Array.isArray(blockerCauses) || blockerCauses.length === 0) {
             card.classList.add('hidden');
             list.innerHTML = '';
             return;
@@ -630,17 +836,72 @@
 
         card.classList.remove('hidden');
         list.innerHTML = '';
-        blockedTasks.forEach(task => {
-            const item = document.createElement('div');
-            item.className = 'insights-blocker-item';
-            item.textContent = task.title || 'Untitled Task';
-            list.appendChild(item);
+
+        blockerCauses.forEach(cause => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'insights-blocker-item';
+
+            const preview = safeArray(cause.blockedTaskTitles);
+            const previewText = preview.join(', ');
+            const extraCount = Math.max(0, cause.blockedCount - preview.length);
+            const heldUpText = extraCount > 0 ? `${previewText} +${extraCount} more` : previewText;
+
+            const tags = [];
+            if (cause.isUrgent) tags.push('<span class="insights-tag urgent">Urgent</span>');
+            else if (cause.isCritical) tags.push('<span class="insights-tag critical">Critical</span>');
+            if (cause.downstreamWeight > 0) tags.push(`<span class="insights-tag blocked">${escapeHtml(`${cause.downstreamWeight} downstream`)}</span>`);
+
+            const dueLabel = formatRelativeDueLabel(cause.dueDayDelta);
+            btn.innerHTML = `
+                <div class="insights-blocker-top">
+                    <h3 class="insights-blocker-title">${escapeHtml(cause.title || 'Untitled Task')}</h3>
+                    <span class="insights-blocker-count">${escapeHtml(`${cause.blockedCount} blocked`)}</span>
+                </div>
+                <div class="insights-priority-tags">${tags.join('')}</div>
+                <div class="insights-blocker-meta">${escapeHtml(`Why now: ${dueLabel}`)}</div>
+                <div class="insights-blocker-meta">${escapeHtml(`Holding: ${heldUpText || 'Dependency chain'}`)}</div>
+            `;
+
+            btn.addEventListener('click', () => {
+                if (typeof window.jumpToTask === 'function') {
+                    window.jumpToTask(cause.id);
+                }
+                closeInsightsDashboard();
+            });
+
+            list.appendChild(btn);
         });
+    }
+
+    function renderDeltaValue(el, delta, label, positiveIsGood, isPercent = false) {
+        if (!el) return;
+        el.classList.remove('is-good', 'is-bad', 'is-neutral');
+
+        if (!Number.isFinite(delta)) {
+            el.textContent = 'No baseline';
+            el.classList.add('is-neutral');
+            return;
+        }
+
+        if (delta === 0) {
+            el.textContent = `No change ${label}`;
+            el.classList.add('is-neutral');
+            return;
+        }
+
+        const magnitude = Math.abs(delta);
+        const amount = isPercent ? `${magnitude}pt` : String(magnitude);
+        const direction = delta > 0 ? '↑' : '↓';
+        const positiveDirectionIsGood = delta > 0 ? positiveIsGood : !positiveIsGood;
+        el.classList.add(positiveDirectionIsGood ? 'is-good' : 'is-bad');
+        el.textContent = `${direction}${amount} ${label}`;
     }
 
     function renderHeader(model) {
         const dateEl = document.getElementById('insights-dashboard-date');
         const completionEl = document.getElementById('insights-completion-rate');
+        const completionDeltaEl = document.getElementById('insights-completion-delta');
         const scoreEl = document.getElementById('insights-health-score');
         const healthTextEl = document.getElementById('insights-health-text');
         const startupToggle = document.getElementById('insights-dashboard-startup-toggle');
@@ -649,6 +910,10 @@
         const urgentEl = document.getElementById('insights-stat-urgent');
         const blockedEl = document.getElementById('insights-stat-blocked');
         const readyEl = document.getElementById('insights-stat-ready');
+        const criticalDeltaEl = document.getElementById('insights-stat-critical-delta');
+        const urgentDeltaEl = document.getElementById('insights-stat-urgent-delta');
+        const blockedDeltaEl = document.getElementById('insights-stat-blocked-delta');
+        const readyDeltaEl = document.getElementById('insights-stat-ready-delta');
         const ringEl = document.querySelector('.insights-health-ring');
 
         if (dateEl) dateEl.textContent = model.dateText;
@@ -663,6 +928,14 @@
 
         if (ringEl) ringEl.style.setProperty('--progress', `${model.healthScore}%`);
         if (healthTextEl) healthTextEl.textContent = model.healthText;
+
+        const trend = model.trends || {};
+        const trendLabel = trend.label || 'No baseline';
+        renderDeltaValue(criticalDeltaEl, trend.criticalDelta, trendLabel, false);
+        renderDeltaValue(urgentDeltaEl, trend.urgentDelta, trendLabel, false);
+        renderDeltaValue(blockedDeltaEl, trend.blockedDelta, trendLabel, false);
+        renderDeltaValue(readyDeltaEl, trend.readyDelta, trendLabel, true);
+        renderDeltaValue(completionDeltaEl, trend.completionRateDelta, trendLabel, true, true);
     }
 
     function isInsightsDashboardOpen() {
@@ -681,10 +954,10 @@
     function renderInsightsDashboard() {
         const model = buildDashboardModel();
         renderHeader(model);
-        renderPriorityTasks(model.priorityTasks);
+        renderFocusSplit(model);
         renderHabitSummary(model.habits);
         renderQuickLinks(model.outerBranches);
-        renderBlockers(model.blockedTasks);
+        renderBlockers(model.blockerCauses);
     }
 
     function openInsightsDashboard() {
