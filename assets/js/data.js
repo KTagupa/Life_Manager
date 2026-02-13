@@ -246,7 +246,9 @@
                 openReq.onsuccess = (event) => {
                     const db = event.target.result;
                     const closeThenDelete = () => {
-                        try { db.close(); } catch (e) { }
+                        try { db.close(); } catch (error) {
+                            console.warn('[storage] Failed to close IndexedDB before delete:', error);
+                        }
                         deleteDb();
                     };
 
@@ -330,8 +332,51 @@
         }
 
         function loadFromStorage() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open('urgencyFlowDB', 1);
+            return new Promise((resolve) => {
+                let settled = false;
+                const finish = (result) => {
+                    if (settled) return;
+                    settled = true;
+                    resolve({
+                        success: false,
+                        restored: false,
+                        empty: false,
+                        source: 'none',
+                        error: null,
+                        ...result
+                    });
+                };
+
+                const restoreFromLegacy = (keys) => {
+                    let sawLegacyData = false;
+                    for (const key of keys) {
+                        const raw = localStorage.getItem(key);
+                        if (!raw) continue;
+                        sawLegacyData = true;
+                        try {
+                            restoreStateData(JSON.parse(raw));
+                            return { restored: true, key, sawLegacyData: true };
+                        } catch (error) {
+                            console.error(`[storage] localStorage parse error (${key}):`, error);
+                        }
+                    }
+                    return { restored: false, key: null, sawLegacyData };
+                };
+
+                let request;
+                try {
+                    request = indexedDB.open('urgencyFlowDB', 1);
+                } catch (error) {
+                    console.error('[storage] IndexedDB open threw synchronously:', error);
+                    const legacy = restoreFromLegacy(['urgencyFlowData', 'urgencyFlowData_backup']);
+                    finish({
+                        success: legacy.restored,
+                        restored: legacy.restored,
+                        source: legacy.restored ? 'localStorage' : 'none',
+                        error: 'indexeddb-open-throw'
+                    });
+                    return;
+                }
 
                 request.onupgradeneeded = (event) => {
                     const db = event.target.result;
@@ -342,46 +387,93 @@
 
                 request.onsuccess = (event) => {
                     const db = event.target.result;
-                    const tx = db.transaction(['appState'], 'readonly');
+                    const closeDb = () => {
+                        try {
+                            db.close();
+                        } catch (closeError) {
+                            console.warn('[storage] Failed to close IndexedDB handle cleanly:', closeError);
+                        }
+                    };
+
+                    let tx;
+                    try {
+                        tx = db.transaction(['appState'], 'readonly');
+                    } catch (error) {
+                        console.error('[storage] Failed to open IndexedDB transaction:', error);
+                        const legacy = restoreFromLegacy(['urgencyFlowData', 'urgencyFlowData_backup']);
+                        closeDb();
+                        finish({
+                            success: legacy.restored,
+                            restored: legacy.restored,
+                            source: legacy.restored ? 'localStorage' : 'none',
+                            error: 'indexeddb-transaction-error'
+                        });
+                        return;
+                    }
+
                     const store = tx.objectStore('appState');
                     const getReq = store.get('main');
 
                     getReq.onsuccess = () => {
-                        if (getReq.result && getReq.result.data) {
-                            restoreStateData(getReq.result.data);
-                            resolve(); // Signal completion
-                        } else {
-                            // Try localStorage fallback
-                            const legacy = localStorage.getItem('urgencyFlowData') || localStorage.getItem('urgencyFlowData_backup');
-                            if (legacy) {
-                                try {
-                                    restoreStateData(JSON.parse(legacy));
-                                } catch (e) {
-                                    console.error('localStorage parse error:', e);
-                                }
+                        const hasIndexedDbPayload = !!(getReq.result && getReq.result.data);
+                        if (hasIndexedDbPayload) {
+                            try {
+                                restoreStateData(getReq.result.data);
+                                closeDb();
+                                finish({
+                                    success: true,
+                                    restored: true,
+                                    source: 'indexeddb'
+                                });
+                                return;
+                            } catch (error) {
+                                console.error('[storage] Failed to restore IndexedDB payload:', error);
                             }
-                            resolve(); // Still resolve even if no data
                         }
+
+                        const legacy = restoreFromLegacy(['urgencyFlowData', 'urgencyFlowData_backup']);
+                        closeDb();
+
+                        if (legacy.restored) {
+                            finish({
+                                success: true,
+                                restored: true,
+                                source: 'localStorage'
+                            });
+                            return;
+                        }
+
+                        finish({
+                            success: !hasIndexedDbPayload,
+                            restored: false,
+                            empty: !hasIndexedDbPayload && !legacy.sawLegacyData,
+                            source: 'none',
+                            error: hasIndexedDbPayload ? 'indexeddb-restore-error' : (legacy.sawLegacyData ? 'legacy-parse-error' : null)
+                        });
                     };
 
                     getReq.onerror = () => {
-                        console.error('IndexedDB read error');
-                        resolve(); // Don't block app initialization
+                        console.error('[storage] IndexedDB read error');
+                        const legacy = restoreFromLegacy(['urgencyFlowData', 'urgencyFlowData_backup']);
+                        closeDb();
+                        finish({
+                            success: legacy.restored,
+                            restored: legacy.restored,
+                            source: legacy.restored ? 'localStorage' : 'none',
+                            error: 'indexeddb-read-error'
+                        });
                     };
                 };
 
                 request.onerror = (event) => {
-                    console.error('IndexedDB open error:', event);
-                    // Fallback to legacy localStorage only
-                    const data = localStorage.getItem('urgencyFlowData');
-                    if (data) {
-                        try {
-                            restoreStateData(JSON.parse(data));
-                        } catch (e) {
-                            console.error(e);
-                        }
-                    }
-                    resolve(); // Don't block app initialization
+                    console.error('[storage] IndexedDB open error:', event);
+                    const legacy = restoreFromLegacy(['urgencyFlowData', 'urgencyFlowData_backup']);
+                    finish({
+                        success: legacy.restored,
+                        restored: legacy.restored,
+                        source: legacy.restored ? 'localStorage' : 'none',
+                        error: 'indexeddb-open-error'
+                    });
                 };
             });
         }
@@ -599,7 +691,11 @@
         function updateDataMetrics() {
             const financeLocal = localStorage.getItem('finance_flow_encrypted_v1');
             let financeData = null;
-            try { financeData = financeLocal ? JSON.parse(financeLocal) : null; } catch (e) { }
+            try {
+                financeData = financeLocal ? JSON.parse(financeLocal) : null;
+            } catch (error) {
+                console.warn('[metrics] Failed to parse finance_flow_encrypted_v1:', error);
+            }
 
             const collections = {
                 'Notes': notes,
