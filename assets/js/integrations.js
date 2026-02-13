@@ -1,10 +1,40 @@
 let geminiApiKey = localStorage.getItem('urgency_flow_gemini_key') || "";
 
+function updateSettingsHubUI() {
+    const settingsGeminiInput = document.getElementById('settings-gemini-key-input');
+    if (settingsGeminiInput) settingsGeminiInput.value = geminiApiKey || '';
+
+    const aiGeminiInput = document.getElementById('gemini-api-key-input');
+    if (aiGeminiInput && geminiApiKey) aiGeminiInput.value = geminiApiKey;
+
+    const ecoStatus = document.getElementById('eco-status');
+    const settingsEcoStatus = document.getElementById('settings-eco-status');
+    if (ecoStatus && settingsEcoStatus) settingsEcoStatus.innerText = ecoStatus.innerText;
+
+    if (typeof updateBackupStatusUI === 'function') updateBackupStatusUI();
+    if (typeof updateDataMetrics === 'function') updateDataMetrics();
+}
+
 // --- GITHUB SYNC LOGIC ---
-function toggleSyncPanel() {
+function toggleSyncPanel(forceOpen = null) {
     const panel = document.getElementById('sync-panel');
-    if (panel.classList.contains('hidden')) panel.classList.remove('hidden');
-    else panel.classList.add('hidden');
+    const shouldOpen = forceOpen === true || (forceOpen === null && panel.classList.contains('hidden'));
+    if (shouldOpen) {
+        if (typeof closeInsightsDashboard === 'function') closeInsightsDashboard();
+        if (typeof openRightDockPanel === 'function') {
+            openRightDockPanel('sync-panel', () => {
+                updateSettingsHubUI();
+                updateConnectionStatus();
+            });
+        } else {
+            panel.classList.remove('hidden');
+            updateSettingsHubUI();
+            updateConnectionStatus();
+        }
+    } else {
+        if (typeof closeRightDockPanel === 'function') closeRightDockPanel('sync-panel');
+        else panel.classList.add('hidden');
+    }
 }
 
 // --- CONNECTION MONITORING ---
@@ -62,6 +92,18 @@ function setSyncStatus(msg, isError = false) {
         el.innerText = msg;
     } else {
         console.warn("Sync status element missing:", msg);
+    }
+
+    const hdSync = document.getElementById('hd-sync');
+    if (hdSync) {
+        hdSync.innerText = msg;
+        hdSync.style.color = isError ? '#ef4444' : 'var(--ready-color)';
+    }
+
+    const reviewSync = document.getElementById('review-health-sync');
+    if (reviewSync) {
+        reviewSync.innerText = msg;
+        reviewSync.style.color = isError ? '#ef4444' : '#e2e8f0';
     }
 }
 
@@ -665,6 +707,10 @@ function selectAIPreset(presetKey) {
 function saveGeminiKey(val) {
     geminiApiKey = val.trim();
     localStorage.setItem('urgency_flow_gemini_key', geminiApiKey);
+    const aiInput = document.getElementById('gemini-api-key-input');
+    if (aiInput && aiInput.value !== geminiApiKey) aiInput.value = geminiApiKey;
+    const settingsInput = document.getElementById('settings-gemini-key-input');
+    if (settingsInput && settingsInput.value !== geminiApiKey) settingsInput.value = geminiApiKey;
     showNotification("API Key Saved");
 }
 
@@ -1127,83 +1173,5 @@ async function applyAI(mode) {
     } finally {
         if (aiToolbar) aiToolbar.classList.remove('visible');
         if (btn && originalBtnText) btn.innerHTML = originalBtnText;
-    }
-}
-
-async function applyAI_OLD_UNUSED(mode) {
-    const start = noteInput.selectionStart;
-    const end = noteInput.selectionEnd;
-    const selectedText = noteInput.value.substring(start, end);
-
-    if (!selectedText) return;
-
-    // 1. Check for Gemini Key
-    if (!geminiApiKey) {
-        geminiApiKey = localStorage.getItem('urgency_flow_gemini_key');
-    }
-
-    if (!geminiApiKey) {
-        alert("⚠️ Please set your Gemini API Key in the settings (⚙️ icon top-left) to use AI features.");
-        return;
-    }
-
-    // Show loading state
-    const originalBtnText = event.currentTarget.innerHTML;
-    event.currentTarget.innerHTML = '<span>⏳</span> Processing...';
-    event.currentTarget.style.cursor = 'wait';
-
-    const systemPrompt = mode === 'grammar'
-        ? "Fix grammar and spelling in the following text. Return ONLY the corrected text. Preserve formatting."
-        : "Rewrite the following text to include improve clarity and flow. Return ONLY the rewritten text. Preserve formatting.";
-
-    try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: "gpt-3.5-turbo",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: selectedText }
-                ],
-                temperature: 0.3
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.error) {
-            throw new Error(data.error.message);
-        }
-
-        const result = data.choices[0].message.content;
-
-        // Replace text
-        const before = noteInput.value.substring(0, start);
-        const after = noteInput.value.substring(end);
-
-        noteInput.value = before + result + after;
-
-        // Save
-        saveCurrentNote(); // Ensure function exists
-
-        // Update selection to new text length
-        // noteInput.setSelectionRange(start, start + result.length); // Optional: keep selection
-
-    } catch (err) {
-        alert("AI Error: " + err.message);
-        // If auth error, maybe clear key
-        if (err.message.includes('401') || err.message.includes('key')) {
-            localStorage.removeItem('openai_api_key');
-        }
-    } finally {
-        // Reset button
-        // Need to re-query button or use closures, but simplest is just hiding toolbar
-        aiToolbar.classList.remove('visible');
-        // Could reset button text if we kept the toolbar open
-        // event.target.innerHTML = originalBtnText; // naive
     }
 }

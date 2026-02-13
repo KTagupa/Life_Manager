@@ -280,6 +280,9 @@ function applyEcoMode() {
         showNotification("⚡ Ultra Eco Mode - View Only");
     }
 
+    const settingsEcoStatus = document.getElementById('settings-eco-status');
+    if (settingsEcoStatus && statusEl) settingsEcoStatus.innerText = statusEl.innerText;
+
     render();
 }
 
@@ -836,6 +839,12 @@ function setupInteractions() {
                 return;
             }
 
+            const shortcutsModal = document.getElementById('shortcuts-modal');
+            if (shortcutsModal) {
+                shortcutsModal.remove();
+                return;
+            }
+
             const insightsOverlay = document.getElementById('insights-dashboard-overlay');
             if (insightsOverlay && !insightsOverlay.classList.contains('hidden')) {
                 closeInsightsDashboard();
@@ -873,7 +882,7 @@ function setupInteractions() {
                 case 'KeyH': toggleHabits(); break;
                 case 'KeyA':
                     toggleAgenda();
-                    showNotification(document.getElementById('agenda-panel').classList.contains('hidden') ? "Agenda Closed" : "Agenda Opened");
+                    showNotification(document.getElementById('agenda-panel').classList.contains('hidden') ? "Planner Closed" : "Planner Opened");
                     break;
                 case 'KeyN': toggleNotesPanel(); break;
                 case 'KeyX': toggleArchivePanel(); break;
@@ -885,7 +894,7 @@ function setupInteractions() {
                 case 'KeyL': document.getElementById('file-input').click(); break;
                 case 'KeyK': clearData(); break;
                 case 'KeyE': cycleEcoMode(); break;
-                case 'KeyP': togglePinnedWindow(); break; // I added this own my own
+                case 'KeyP': togglePinnedWindow(); break;
                 case 'KeyF': toggleTaskListWindow(); break;
                 case 'KeyU': toggleInsightsDashboard(); break;
                 case 'KeyW':
@@ -922,8 +931,6 @@ function setupInteractions() {
             closeAIModal();
             return;
         }
-        const panel = document.getElementById('inbox-panel'); const fab = document.getElementById('fab-inbox');
-        if (!panel.classList.contains('hidden')) { if (!panel.contains(e.target) && !fab.contains(e.target)) toggleInboxModal(); }
 
         // Close subtask expansion boxes when clicking outside
         const clickedBox = e.target.closest('.subtasks-expanded-box');
@@ -936,18 +943,21 @@ function setupInteractions() {
 
         // (Cleaned up ai-panel references)
 
-        const taskListWindow = document.getElementById('task-list-window');
-        const taskListBtn = document.getElementById('btn-task-list');
-        if (!taskListWindow.classList.contains('hidden')) {
-            if (!taskListWindow.contains(e.target) && !taskListBtn.contains(e.target)) {
-                toggleTaskListWindow();
+        const navigatorPanel = document.getElementById('navigator-panel');
+        const navButtonClicked = e.target.closest('#btn-navigator');
+        const rightRailClicked = e.target.closest('#right-rail-tabs');
+        if (navigatorPanel && !navigatorPanel.classList.contains('hidden')) {
+            if (!navigatorPanel.contains(e.target) && !navButtonClicked && !rightRailClicked) {
+                if (typeof closeRightDockPanel === 'function') closeRightDockPanel('navigator-panel');
+                else navigatorPanel.classList.add('hidden');
             }
         }
 
         const sync = document.getElementById('sync-panel');
-        const syncBtn = document.querySelector('button[onclick="toggleSyncPanel()"]');
-        if (!sync.classList.contains('hidden') && !sync.contains(e.target) && e.target !== syncBtn) {
-            sync.classList.add('hidden');
+        const syncToggleClicked = !!e.target.closest('button[onclick="toggleSyncPanel()"]');
+        if (sync && !sync.classList.contains('hidden') && !sync.contains(e.target) && !syncToggleClicked && !rightRailClicked) {
+            if (typeof closeRightDockPanel === 'function') closeRightDockPanel('sync-panel');
+            else sync.classList.add('hidden');
         }
 
         // Hide selection menu on outside click
@@ -1104,68 +1114,99 @@ function setupInteractions() {
 }
 
 function toggleShortcutsHelp() {
-    let modal = document.getElementById('shortcuts-modal');
-    if (modal) {
-        modal.remove();
+    const existing = document.getElementById('shortcuts-modal');
+    if (existing) {
+        existing.remove();
         return;
     }
 
-    modal = document.createElement('div');
-    modal.id = 'shortcuts-modal';
-    modal.style.cssText = `
-                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                background: var(--panel-bg-elevated); border: 1px solid var(--border);
-                border-radius: 12px; padding: 24px; z-index: 3000; max-width: 600px;
-                max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow-xl);
-            `;
+    const overlay = document.createElement('div');
+    overlay.id = 'shortcuts-modal';
+    overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.7);
+        backdrop-filter: blur(4px);
+        z-index: 3000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+    `;
 
-    modal.innerHTML = `
-                <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-                    <h2 style="margin:0; font-size:18px; color:var(--text-main)">⌨️ Keyboard Shortcuts</h2>
-                    <button onclick="toggleShortcutsHelp()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:20px;">✕</button>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; font-size:13px;">
-                    <div><b>?</b> - Show this help</div>
-                    <div><b>Ctrl+S</b> - Sync to GitHub</div>
-                    <div><b>Ctrl+Z</b> - Undo</div>
-                    <div><b>Ctrl+Shift+Z</b> - Redo</div>
-                    <div><b>Alt+T</b> - New Task</div>
-                    <div><b>Alt+N</b> - Notes Panel</div>
-                    <div><b>Alt+G</b> - Goals Panel</div>
-                    <div><b>Alt+H</b> - Habits Panel</div>
-                    <div><b>Alt+A</b> - Agenda</div>
-                    <div><b>Alt+R</b> - Recenter/Focus</div>
-                    <div><b>Alt+D</b> - Smart Declutter</div>
-                    <div><b>Alt+M</b> - Heatmap</div>
-                    <div><b>Alt+O</b> - Node Groups</div>
-                    <div><b>Alt+B</b> - Inbox</div>
-                    <div><b>Alt+I</b> - AI Assistant</div>
-                    <div><b>Alt+E</b> - Cycle Eco Mode</div>
-                    <div><b>Esc</b> - Close panels</div>
-                </div>
-                <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border); font-size:11px; color:var(--text-muted);">
-                    Tip: Press ? anytime to see this menu. Use Ctrl+Z to undo accidental task deletions.
-                </div>
-            `;
+    overlay.innerHTML = `
+        <div style="
+            width: min(720px, 100%);
+            max-height: 85vh;
+            overflow-y: auto;
+            background: var(--panel-bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: var(--shadow-xl);
+            padding: 22px;
+        ">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+                <h2 style="margin:0; font-size:18px; color:var(--text-main)">Keyboard Shortcuts</h2>
+                <button onclick="toggleShortcutsHelp()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:20px;">✕</button>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px; font-size:13px;">
+                <div><b>?</b> - Show this help</div>
+                <div><b>Esc</b> - Close modal/panel</div>
+                <div><b>Ctrl+S</b> - Push sync snapshot</div>
+                <div><b>Ctrl+Z</b> - Undo</div>
+                <div><b>Ctrl+Shift+Z</b> - Redo</div>
+                <div><b>Alt+T</b> - New task</div>
+                <div><b>Alt+B</b> - Inbox</div>
+                <div><b>Alt+N</b> - Notes</div>
+                <div><b>Alt+G</b> - Goals</div>
+                <div><b>Alt+H</b> - Habits</div>
+                <div><b>Alt+A</b> - Planner</div>
+                <div><b>Alt+M</b> - Planner heatmap tab</div>
+                <div><b>Alt+F</b> - Navigator (Tasks)</div>
+                <div><b>Alt+P</b> - Navigator (Pinned)</div>
+                <div><b>Alt+O</b> - Navigator (Groups)</div>
+                <div><b>Alt+S</b> - Settings hub</div>
+                <div><b>Alt+U</b> - Canopy dashboard</div>
+                <div><b>Alt+I</b> - AI assistant</div>
+                <div><b>Alt+R</b> - Recenter</div>
+                <div><b>Alt+D</b> - Declutter</div>
+                <div><b>Alt+E</b> - Cycle engine mode</div>
+                <div><b>Alt+Space</b> - Global search</div>
+            </div>
+            <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border); font-size:11px; color:var(--text-muted);">
+                Tip: Press <b>?</b> any time to reopen this guide.
+            </div>
+        </div>
+    `;
 
-    // Close on backdrop click
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) toggleShortcutsHelp();
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            toggleShortcutsHelp();
+        }
     });
 
-    document.body.appendChild(modal);
+    document.body.appendChild(overlay);
 }
 
 function closeAllSidePanels() {
     const tb = document.getElementById('toolbar');
     if (!tb.classList.contains('collapsed')) toggleMenu();
     const notePanel = document.getElementById('notes-panel');
-    if (!notePanel.classList.contains('pinned')) {
+    if (notePanel && !notePanel.classList.contains('pinned')) {
         notePanel.classList.add('hidden');
     }
-    document.getElementById('goals-panel').classList.add('hidden');
-    document.getElementById('archive-panel').classList.add('hidden');
+    const goalsPanel = document.getElementById('goals-panel');
+    if (goalsPanel) goalsPanel.classList.add('hidden');
+    const habitsPanel = document.getElementById('habits-panel');
+    if (habitsPanel) habitsPanel.classList.add('hidden');
+    const archivePanel = document.getElementById('archive-panel');
+    if (archivePanel) archivePanel.classList.add('hidden');
+    const plannerPanel = document.getElementById('agenda-panel');
+    if (plannerPanel) plannerPanel.classList.add('hidden');
+    const navPanel = document.getElementById('navigator-panel');
+    if (navPanel) navPanel.classList.add('hidden');
     // (Cleaned up ai-panel reference)
+    if (typeof syncRightRailTabs === 'function') syncRightRailTabs();
     deselectNode();
 }
 
@@ -1472,7 +1513,11 @@ function updateHealthMonitor() {
 
     const activeCount = nodes.length;
     const archCount = archivedNodes.length;
-    document.getElementById('hd-load').innerText = `${activeCount} Act / ${archCount} Arch`;
+    const loadText = `${activeCount} Act / ${archCount} Arch`;
+    const loadEl = document.getElementById('hd-load');
+    if (loadEl) loadEl.innerText = loadText;
+    const reviewLoadEl = document.getElementById('review-health-load');
+    if (reviewLoadEl) reviewLoadEl.innerText = loadText;
 
     const fpsText = document.getElementById('hd-fps');
     const fpsDot = document.getElementById('hd-fps-dot');
@@ -1512,6 +1557,9 @@ function updateHealthMonitor() {
                 }
             }
         }
+
+        const reviewRenderEl = document.getElementById('review-health-render');
+        if (reviewRenderEl) reviewRenderEl.innerText = fpsText.innerText;
     }
 
     // Update Storage Metrics (Approximate IndexedDB Size)
@@ -1542,6 +1590,8 @@ function updateHealthMonitor() {
         if (storageText) {
             storageText.innerText = sizeStr;
         }
+        const reviewStorageEl = document.getElementById('review-health-storage');
+        if (reviewStorageEl) reviewStorageEl.innerText = sizeStr;
         if (storageBar) {
             storageBar.style.width = Math.min(100, Math.max(1, storagePct)) + '%';
             // Colorize based on usage
@@ -1559,4 +1609,6 @@ function updateHealthMonitor() {
         virtualEl.innerText = "Off";
         virtualEl.style.color = "#888";
     }
+    const reviewVirtEl = document.getElementById('review-health-virt');
+    if (reviewVirtEl) reviewVirtEl.innerText = "Off";
 }

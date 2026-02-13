@@ -1,20 +1,24 @@
         // --- LIFE GOALS LOGIC ---
-        function toggleGoals() {
+        function toggleGoals(forceOpen = null) {
             const panel = document.getElementById('goals-panel');
-            const archivePanel = document.getElementById('archive-panel');
-            const notesPanel = document.getElementById('notes-panel');
             const aiModal = document.getElementById('ai-modal'); // Use aiModal for consistency
 
-            if (panel.classList.contains('hidden')) {
-                panel.classList.remove('hidden');
-                archivePanel.classList.add('hidden');
-                notesPanel.classList.add('hidden');
+            const shouldOpen = forceOpen === true || (forceOpen === null && panel.classList.contains('hidden'));
+            if (shouldOpen) {
+                if (typeof openRightDockPanel === 'function') {
+                    openRightDockPanel('goals-panel', () => {
+                        renderGoals();
+                    });
+                } else {
+                    panel.classList.remove('hidden');
+                    renderGoals();
+                }
                 if (aiModal.classList.contains('visible')) { // Check if AI modal is open
                     closeAIModal(); // Close AI modal if open
                 }
-                renderGoals();
             } else {
-                panel.classList.add('hidden');
+                if (typeof closeRightDockPanel === 'function') closeRightDockPanel('goals-panel');
+                else panel.classList.add('hidden');
             }
         }
         function changeGoalYear(delta) { currentGoalYear += delta; renderGoals(); }
@@ -104,20 +108,26 @@
         // --- HABIT TRACKER LOGIC ---
         let currentHabitFilter = 'all';
 
-        function toggleHabits() {
+        function toggleHabits(forceOpen = null) {
             const panel = document.getElementById('habits-panel');
-            const goalsPanel = document.getElementById('goals-panel');
 
-            if (panel.classList.contains('hidden')) {
-                panel.classList.remove('hidden');
-                goalsPanel.classList.add('hidden');
-                document.getElementById('archive-panel').classList.add('hidden');
-                document.getElementById('notes-panel').classList.add('hidden');
-                updateHabitGoalSelect();
-                toggleHabitInputs();
-                renderHabits();
+            const shouldOpen = forceOpen === true || (forceOpen === null && panel.classList.contains('hidden'));
+            if (shouldOpen) {
+                if (typeof openRightDockPanel === 'function') {
+                    openRightDockPanel('habits-panel', () => {
+                        updateHabitGoalSelect();
+                        toggleHabitInputs();
+                        renderHabits();
+                    });
+                } else {
+                    panel.classList.remove('hidden');
+                    updateHabitGoalSelect();
+                    toggleHabitInputs();
+                    renderHabits();
+                }
             } else {
-                panel.classList.add('hidden');
+                if (typeof closeRightDockPanel === 'function') closeRightDockPanel('habits-panel');
+                else panel.classList.add('hidden');
             }
         }
 

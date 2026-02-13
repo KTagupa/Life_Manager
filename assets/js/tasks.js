@@ -82,23 +82,26 @@
             }
         }
 
-        function toggleArchivePanel() {
+        function toggleArchivePanel(forceOpen = null) {
             const archivePanel = document.getElementById('archive-panel');
-            const notesPanel = document.getElementById('notes-panel');
-            const goalsPanel = document.getElementById('goals-panel');
             const aiModal = document.getElementById('ai-modal'); // Use aiModal for consistency
 
-            if (archivePanel.classList.contains('hidden')) {
-                // Opening Archive: Hide everything else
-                archivePanel.classList.remove('hidden');
-                notesPanel.classList.add('hidden');
-                goalsPanel.classList.add('hidden');
+            const shouldOpen = forceOpen === true || (forceOpen === null && archivePanel.classList.contains('hidden'));
+            if (shouldOpen) {
+                if (typeof openRightDockPanel === 'function') {
+                    openRightDockPanel('archive-panel', () => {
+                        renderArchiveList();
+                    });
+                } else {
+                    archivePanel.classList.remove('hidden');
+                    renderArchiveList();
+                }
                 if (aiModal.classList.contains('visible')) { // Check if AI modal is open
                     closeAIModal(); // Close AI modal if open
                 }
-                renderArchiveList();
             } else {
-                archivePanel.classList.add('hidden');
+                if (typeof closeRightDockPanel === 'function') closeRightDockPanel('archive-panel');
+                else archivePanel.classList.add('hidden');
             }
         }
 

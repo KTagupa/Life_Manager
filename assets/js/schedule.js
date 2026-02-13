@@ -194,7 +194,91 @@ async function playAudioFeedback(type) {
     }
 }
 
-function toggleHeatmap() { const overlay = document.getElementById('heatmap-overlay'); const isHidden = overlay.classList.contains('hidden'); if (isHidden) { overlay.classList.remove('hidden'); renderHeatmap(); } else { overlay.classList.add('hidden'); } }
+const PLANNER_TAB_STORAGE_KEY = 'urgencyFlow_planner_tab';
+
+function normalizePlannerTab(tab) {
+    const valid = ['agenda', 'calendar', 'heatmap'];
+    return valid.includes(tab) ? tab : 'agenda';
+}
+
+function getSavedPlannerTab() {
+    try {
+        return normalizePlannerTab(localStorage.getItem(PLANNER_TAB_STORAGE_KEY) || 'agenda');
+    } catch (error) {
+        return 'agenda';
+    }
+}
+
+let currentPlannerTab = getSavedPlannerTab();
+
+function setPlannerTab(tab = 'agenda') {
+    tab = normalizePlannerTab(tab);
+    const panel = document.getElementById('agenda-panel');
+    if (!panel) return;
+
+    currentPlannerTab = tab;
+    try {
+        localStorage.setItem(PLANNER_TAB_STORAGE_KEY, tab);
+    } catch (error) {
+        console.warn('[schedule] Failed to persist planner tab:', error);
+    }
+
+    panel.querySelectorAll('.planner-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.plannerTab === tab);
+    });
+
+    const sections = {
+        agenda: document.getElementById('planner-tab-agenda'),
+        calendar: document.getElementById('calendar-panel'),
+        heatmap: document.getElementById('heatmap-overlay')
+    };
+
+    Object.entries(sections).forEach(([key, el]) => {
+        if (!el) return;
+        el.classList.toggle('hidden', key !== tab);
+    });
+
+    if (tab === 'agenda') {
+        renderAgenda();
+        if (typeof renderAgendaPanelUI === 'function') renderAgendaPanelUI();
+    } else if (tab === 'calendar') {
+        renderCalendar();
+    } else if (tab === 'heatmap') {
+        renderHeatmap();
+    }
+}
+
+function openPlannerTab(tab = 'agenda') {
+    const panel = document.getElementById('agenda-panel');
+    if (!panel) return;
+
+    if (typeof closeInsightsDashboard === 'function') closeInsightsDashboard();
+
+    if (typeof openRightDockPanel === 'function') {
+        openRightDockPanel('agenda-panel', () => {
+            setPlannerTab(tab);
+        });
+    } else {
+        panel.classList.remove('hidden');
+        setPlannerTab(tab);
+    }
+}
+
+function toggleHeatmap() {
+    const panel = document.getElementById('agenda-panel');
+    if (!panel) return;
+    if (panel.classList.contains('hidden')) {
+        openPlannerTab('heatmap');
+        return;
+    }
+    if (currentPlannerTab === 'heatmap') {
+        if (typeof closeRightDockPanel === 'function') closeRightDockPanel('agenda-panel');
+        else panel.classList.add('hidden');
+    } else {
+        setPlannerTab('heatmap');
+    }
+}
+
 function changeHeatmapYear(delta) { currentHeatmapYear += delta; renderHeatmap(); }
 function renderHeatmap() {
     const container = document.getElementById('heatmap-container'); document.getElementById('heatmap-title').textContent = `${currentHeatmapYear} Heatmap`; container.innerHTML = '';
@@ -266,12 +350,17 @@ let calendarView = 'day'; // day, week, month
 let calendarDate = new Date();
 
 function toggleCalendar() {
-    const panel = document.getElementById('calendar-panel');
-    if (panel.classList.contains('hidden')) {
-        panel.classList.remove('hidden');
-        renderCalendar();
+    const plannerPanel = document.getElementById('agenda-panel');
+    if (!plannerPanel) return;
+    if (plannerPanel.classList.contains('hidden')) {
+        openPlannerTab('calendar');
+        return;
+    }
+    if (currentPlannerTab === 'calendar') {
+        if (typeof closeRightDockPanel === 'function') closeRightDockPanel('agenda-panel');
+        else plannerPanel.classList.add('hidden');
     } else {
-        panel.classList.add('hidden');
+        setPlannerTab('calendar');
     }
 }
 
@@ -480,9 +569,13 @@ function tickTimers() {
     if (hasRunningHabit && !document.getElementById('habits-panel').classList.contains('hidden')) {
         renderHabits();
 
-        // Update pinned window if it has running timers
-        const pinnedWindow = document.getElementById('pinned-window');
-        if (pinnedWindow && !pinnedWindow.classList.contains('hidden')) {
+        // Update navigator pinned tab if it has running timers
+        const navigatorPanel = document.getElementById('navigator-panel');
+        const pinnedTabOpen = navigatorPanel &&
+            !navigatorPanel.classList.contains('hidden') &&
+            typeof currentNavigatorTab !== 'undefined' &&
+            currentNavigatorTab === 'pinned';
+        if (pinnedTabOpen) {
             const hasRunningInPinned = pinnedItems.some(p => {
                 if (p.type === 'habit') {
                     const h = habits.find(habit => habit.id === p.id);
@@ -648,16 +741,16 @@ function focusHUDTask(type) {
 // --- AGENDA PANEL FUNCTIONS ---
 function toggleAgenda() {
     const panel = document.getElementById('agenda-panel');
-    const others = ['notes-panel', 'archive-panel', 'goals-panel', 'habits-panel'];
+    if (!panel) return;
     if (panel.classList.contains('hidden')) {
-        others.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.classList.add('hidden');
-        });
-        panel.classList.remove('hidden');
-        renderAgenda();
+        openPlannerTab('agenda');
     } else {
-        panel.classList.add('hidden');
+        if (currentPlannerTab === 'agenda') {
+            if (typeof closeRightDockPanel === 'function') closeRightDockPanel('agenda-panel');
+            else panel.classList.add('hidden');
+        } else {
+            setPlannerTab('agenda');
+        }
     }
 }
 

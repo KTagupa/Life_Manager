@@ -78,10 +78,8 @@
     <div id="toolbar" class="collapsed">
         <div class="toolbar-actions">
             <button id="menu-btn" onclick="toggleMenu()">☰</button>
-            <button id="btn-task-list" class="toolbar-icon-btn" title="Task List (Opt+F)"
-                onclick="toggleTaskListWindow()">📋</button>
-            <button id="btn-pinned" class="toolbar-icon-btn" title="Pinned Window"
-                onclick="togglePinnedWindow()">📌</button>
+            <button id="btn-navigator" class="toolbar-icon-btn" title="Navigator (Opt+F)"
+                onclick="toggleNavigatorPanel(null, 'tasks')">🧭</button>
             <button id="btn-dashboard" class="toolbar-icon-btn" title="Dashboard (Opt+U)"
                 onclick="toggleInsightsDashboard()">🌿</button>
             <div id="quick-links-container" class="quick-links"></div>
@@ -90,20 +88,29 @@
                 onclick="openQuickLinkModal()">+</button>
             <button id="btn-reminders-modal" class="toolbar-icon-btn" title="All Reminders"
                 onclick="toggleRemindersModal()">🔔</button>
+            <button id="btn-shortcuts" class="toolbar-icon-btn" title="Keyboard Shortcuts (?)"
+                onclick="toggleShortcutsHelp()">⌨️</button>
         </div>
         <div id="toolbar-content">
+            <div id="workspace-nav" class="workspace-nav">
+                <button class="workspace-tab active" data-section="today" onclick="setWorkspaceSection('today')">Today</button>
+                <button class="workspace-tab" data-section="capture" onclick="setWorkspaceSection('capture')">Capture</button>
+                <button class="workspace-tab" data-section="knowledge" onclick="setWorkspaceSection('knowledge')">Knowledge</button>
+                <button class="workspace-tab" data-section="review" onclick="setWorkspaceSection('review')">Review</button>
+                <button class="workspace-tab" data-section="settings" onclick="setWorkspaceSection('settings')">Settings</button>
+            </div>
             <button class="btn btn-primary" onclick="addNode()">+ New Task (Optn+T)</button>
+            <button class="btn" onclick="toggleInboxModal()">📥 Inbox (Optn+B)</button>
             <button class="btn" onclick="toggleGoals()">🎯 Life Goals (Optn+G)</button>
             <button class="btn" onclick="toggleHabits()">✅ Habits (Optn+H)</button>
-            <button class="btn" onclick="toggleAgenda()">📅 Agenda (Optn+A)</button>
+            <button class="btn" onclick="toggleAgenda()">📅 Planner (Optn+A)</button>
             <button class="btn" onclick="toggleNotesPanel()">📝 Knowledge Base (Optn+N)</button>
             <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive (Optn+X)</button>
-            <button class="btn" onclick="toggleNodeGroupsModal()">🗂️ Node Groups (Optn+O)</button>
+            <button class="btn" onclick="toggleNavigatorPanel(null, 'tasks')">🧭 Navigator (Optn+F)</button>
             <button class="btn" onclick="fitView()">Recenter / Urgent (Optn+R)</button>
             <button class="btn" onclick="autoArrangeGraph()">🪄 Declutter (Optn+D)</button>
-            <button class="btn" onclick="toggleHeatmap()">📅 Heatmap (Optn+M)</button>
             <button class="btn" style="border-color: var(--accent); color: var(--accent);"
-                onclick="toggleSyncPanel()">☁️ Sync (Optn+S)</button>
+                onclick="toggleSyncPanel()">⚙️ Settings (Optn+S)</button>
             <button class="btn" onclick="toggleRemindersModal()">🔔 All Reminders</button>
             <button class="btn" onclick="toggleGlobalSearch()">🔍 Search (Optn+Space)</button>
             <button class="btn" onclick="saveData(true)">Save (Optn+V)</button>
@@ -113,6 +120,16 @@
             <button class="btn" id="eco-toggle-btn" onclick="cycleEcoMode()">🚀 Mode: <span id="eco-status">Turbo</span>
                 (Optn+E)</button>
         </div>
+    </div>
+
+    <div id="right-rail-tabs" class="right-rail-tabs" aria-label="Right Rail Tabs">
+        <button class="right-rail-tab" data-panel-id="notes-panel" onclick="openRightRailTab('notes')">Notes</button>
+        <button class="right-rail-tab" data-panel-id="goals-panel" onclick="openRightRailTab('goals')">Goals</button>
+        <button class="right-rail-tab" data-panel-id="habits-panel" onclick="openRightRailTab('habits')">Habits</button>
+        <button class="right-rail-tab" data-panel-id="agenda-panel" onclick="openRightRailTab('planner')">Planner</button>
+        <button class="right-rail-tab" data-panel-id="archive-panel" onclick="openRightRailTab('archive')">Archive</button>
+        <button class="right-rail-tab" data-panel-id="navigator-panel" onclick="openRightRailTab('navigator')">Navigator</button>
+        <button class="right-rail-tab" data-panel-id="sync-panel" onclick="openRightRailTab('settings')">Settings</button>
     </div>
 
     <input type="file" id="file-input" style="display:none" onchange="loadFile(this)">
@@ -134,46 +151,79 @@
 
     <div id="sync-panel" class="hidden">
         <div class="sync-header">
-            <span>☁️ GitHub Gist Sync</span>
+            <span>⚙️ Settings Hub</span>
             <div style="display: flex; align-items: center; gap: 10px;">
                 <span id="connection-status"
                     style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #333;">Checking...</span>
                 <span style="cursor:pointer" onclick="toggleSyncPanel()">✕</span>
             </div>
         </div>
-        <div class="sync-info">
-            Enter your GitHub Personal Access Token to sync data across devices via a private Gist.
-        </div>
 
-        <div class="form-group">
-            <label>GitHub Token (Repo/Gist Scope)</label>
-            <div style="display:flex; gap:5px;">
-                <input type="password" id="github-token" placeholder="ghp_xxxxxxxxxxxx"
-                    onchange="saveGithubToken(this.value)" style="flex-grow:1;">
-                <button class="btn" onclick="testGithubConnection()" title="Test Token" style="white-space:nowrap;">🧪
-                    Test</button>
+        <div class="panel-list" style="padding: 12px;">
+            <div class="sync-info" style="margin-bottom: 12px;">
+                Centralized controls for sync, AI, backups, and performance.
             </div>
-        </div>
 
-        <div class="form-group">
-            <label>Gist ID (Auto-filled on Push)</label>
-            <input type="text" id="gist-id" placeholder="Autogenerated..." readonly>
-        </div>
-        <div style="display:flex; gap:10px;">
-            <button class="btn" style="flex:1" onclick="pullFromGist()">⬇ Pull</button>
-            <button class="btn btn-primary" style="flex:1" onclick="pushToGist()">⬆ Push</button>
-        </div>
-        <div id="data-health-panel" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #333;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <span style="font-size:11px; font-weight:bold; color:#eee;">📊 Data Health & Metrics</span>
-                <span id="total-gist-size" style="font-size:10px; color:var(--ready-color); font-family:monospace;">0.0
-                    KB</span>
+            <div class="form-group">
+                <label>☁️ GitHub Gist Sync</label>
+                <div style="display:flex; gap:5px; margin-top:6px;">
+                    <input type="password" id="github-token" placeholder="ghp_xxxxxxxxxxxx"
+                        onchange="saveGithubToken(this.value)" style="flex-grow:1;">
+                    <button class="btn" onclick="testGithubConnection()" title="Test Token"
+                        style="white-space:nowrap;">🧪 Test</button>
+                </div>
             </div>
-            <div id="metrics-breakdown" class="metrics-breakdown">
-                <!-- Filled via JS -->
+
+            <div class="form-group">
+                <label>Gist ID (Auto-filled on Push)</label>
+                <input type="text" id="gist-id" placeholder="Autogenerated..." readonly>
             </div>
+
+            <div style="display:flex; gap:10px; margin-bottom: 14px;">
+                <button class="btn" style="flex:1" onclick="pullFromGist()">⬇ Pull</button>
+                <button class="btn btn-primary" style="flex:1" onclick="pushToGist()">⬆ Push</button>
+            </div>
+
+            <div class="form-group" style="border-top: 1px solid #333; padding-top: 12px;">
+                <label>✨ Gemini API Key</label>
+                <input type="password" id="settings-gemini-key-input" placeholder="Paste API key..."
+                    onchange="saveGeminiKey(this.value)" style="margin-top:6px;">
+                <div style="display:flex; gap:10px; margin-top:8px;">
+                    <button class="btn" style="flex:1" onclick="toggleAIModal()">Open AI Workspace</button>
+                    <button class="btn" style="flex:1" onclick="toggleAIPresets()">Quick Presets</button>
+                </div>
+            </div>
+
+            <div class="form-group" style="border-top: 1px solid #333; padding-top: 12px;">
+                <label>🧰 System Controls</label>
+                <div style="display:flex; gap:10px; margin-top:8px;">
+                    <button class="btn" style="flex:1" onclick="cycleEcoMode()">Mode: <span
+                            id="settings-eco-status">Turbo</span></button>
+                    <button class="btn" style="flex:1" onclick="cleanAppMemory()">🧹 Clean Memory</button>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:8px;">
+                    <button class="btn" style="flex:1" onclick="saveData(true)">⬇ Backup Now</button>
+                    <button class="btn" style="flex:1" onclick="updateDataMetrics()">↻ Refresh Metrics</button>
+                </div>
+                <div style="margin-top:8px; font-size:10px; color:var(--text-muted);">
+                    Last auto backup: <span id="backup-timestamp-settings">None</span>
+                </div>
+            </div>
+
+            <div id="data-health-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #333;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <span style="font-size:11px; font-weight:bold; color:#eee;">📊 Data Health & Metrics</span>
+                    <span id="total-gist-size"
+                        style="font-size:10px; color:var(--ready-color); font-family:monospace;">0.0
+                        KB</span>
+                </div>
+                <div id="metrics-breakdown" class="metrics-breakdown">
+                    <!-- Filled via JS -->
+                </div>
+            </div>
+
+            <div id="sync-status" class="sync-status"></div>
         </div>
-        <div id="sync-status" class="sync-status"></div>
     </div>
 
     <!-- AI Assistant Modal -->
@@ -404,57 +454,93 @@
         </div>
     </div>
 
-    <div id="agenda-panel" class="hidden side-panel">
+    <div id="agenda-panel" class="hidden side-panel planner-panel">
         <div class="panel-header-row">
-            <span>📅 Daily Agenda</span>
+            <span>🗓️ Planner</span>
             <button class="btn" onclick="toggleAgenda()">✕</button>
         </div>
-        <div style="padding: 15px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border);">
-            <div
-                style="font-size: 11px; color: #888; margin-bottom: 10px; display: flex; justify-content: space-between;">
-                <span>Plan for: <span id="agenda-date-display"></span></span>
-                <button class="btn" onclick="clearCompletedAgendaSlots()"
-                    style="background:none; border:none; padding:0; color:var(--accent); font-size:10px;">Clear
-                    Done</button>
-            </div>
+        <div class="planner-tabs">
+            <button class="planner-tab active" data-planner-tab="agenda" onclick="setPlannerTab('agenda')">Agenda</button>
+            <button class="planner-tab" data-planner-tab="calendar" onclick="setPlannerTab('calendar')">Calendar</button>
+            <button class="planner-tab" data-planner-tab="heatmap" onclick="setPlannerTab('heatmap')">Heatmap</button>
+        </div>
 
-            <!-- Selection Info -->
-            <div id="agenda-selection-info"
-                style="margin-bottom: 12px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px; font-size: 12px; color: #cbd5e1; border-left: 3px solid transparent;">
-                <div style="font-weight: 700; margin-bottom: 4px; color: #94a3b8;">SELECTED TASK</div>
-                <div id="agenda-selected-task-title"
-                    style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-style: italic;">(Select
-                    a task on the graph)</div>
-            </div>
-
-            <!-- Time Inputs -->
-            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                <div style="flex: 1;">
-                    <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 4px;">START</label>
-                    <input type="time" id="agenda-start-time"
-                        style="width: 100%; background: #0f172a; border: 1px solid #334155; color: white; padding: 6px; border-radius: 4px; font-size: 12px;">
+        <div id="planner-tab-agenda" class="planner-tab-content">
+            <div style="padding: 15px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border);">
+                <div
+                    style="font-size: 11px; color: #888; margin-bottom: 10px; display: flex; justify-content: space-between;">
+                    <span>Plan for: <span id="agenda-date-display"></span></span>
+                    <button class="btn" onclick="clearCompletedAgendaSlots()"
+                        style="background:none; border:none; padding:0; color:var(--accent); font-size:10px;">Clear
+                        Done</button>
                 </div>
-                <div style="flex: 1;">
-                    <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 4px;">END</label>
-                    <input type="time" id="agenda-end-time"
-                        style="width: 100%; background: #0f172a; border: 1px solid #334155; color: white; padding: 6px; border-radius: 4px; font-size: 12px;">
+
+                <div id="agenda-selection-info"
+                    style="margin-bottom: 12px; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 6px; font-size: 12px; color: #cbd5e1; border-left: 3px solid transparent;">
+                    <div style="font-weight: 700; margin-bottom: 4px; color: #94a3b8;">SELECTED TASK</div>
+                    <div id="agenda-selected-task-title"
+                        style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-style: italic;">(Select
+                        a task on the graph)</div>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 4px;">START</label>
+                        <input type="time" id="agenda-start-time"
+                            style="width: 100%; background: #0f172a; border: 1px solid #334155; color: white; padding: 6px; border-radius: 4px; font-size: 12px;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 4px;">END</label>
+                        <input type="time" id="agenda-end-time"
+                            style="width: 100%; background: #0f172a; border: 1px solid #334155; color: white; padding: 6px; border-radius: 4px; font-size: 12px;">
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" style="width: 100%; margin-bottom: 15px;" onclick="addToAgenda()">+ Add
+                    Selected Task</button>
+
+                <div style="border-top: 1px solid var(--border); padding-top: 12px;">
+                    <div style="font-size: 10px; color: #94a3b8; margin-bottom: 8px; font-weight: 700;">ADD BREAK</div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn" style="flex: 1; font-size: 11px;" onclick="addBreak(15)">☕ 15m</button>
+                        <button class="btn" style="flex: 1; font-size: 11px;" onclick="addBreak(30)">☕ 30m</button>
+                        <button class="btn" style="flex: 1; font-size: 11px;" onclick="addBreak(60)">🍽️ 1h</button>
+                    </div>
                 </div>
             </div>
-
-            <button class="btn btn-primary" style="width: 100%; margin-bottom: 15px;" onclick="addToAgenda()">+ Add
-                Selected Task</button>
-
-            <!-- Breaks -->
-            <div style="border-top: 1px solid var(--border); padding-top: 12px;">
-                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 8px; font-weight: 700;">ADD BREAK</div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn" style="flex: 1; font-size: 11px;" onclick="addBreak(15)">☕ 15m</button>
-                    <button class="btn" style="flex: 1; font-size: 11px;" onclick="addBreak(30)">☕ 30m</button>
-                    <button class="btn" style="flex: 1; font-size: 11px;" onclick="addBreak(60)">🍽️ 1h</button>
-                </div>
+            <div class="panel-list" id="agenda-list-container">
             </div>
         </div>
-        <div class="panel-list" id="agenda-list-container">
+
+        <div id="calendar-panel" class="planner-tab-content hidden">
+            <div class="cal-header">
+                <div class="cal-controls">
+                    <button class="btn" onclick="changeCalDate(-1)">&lt;</button>
+                    <button class="btn" onclick="setCalView('day')">Day</button>
+                    <button class="btn" onclick="setCalView('week')">Week</button>
+                    <button class="btn" onclick="setCalView('month')">Month</button>
+                    <button class="btn" onclick="changeCalDate(1)">&gt;</button>
+                </div>
+                <div id="cal-title" class="cal-title">January 2026</div>
+                <div class="cal-controls">
+                    <button class="btn" onclick="setPlannerTab('agenda')">Back</button>
+                </div>
+            </div>
+            <div id="cal-container" class="cal-view-container">
+            </div>
+        </div>
+
+        <div id="heatmap-overlay" class="planner-tab-content hidden">
+            <div class="heatmap-header">
+                <div class="heatmap-controls">
+                    <button class="btn" onclick="changeHeatmapYear(-1)">&lt; Prev Year</button>
+                    <h2 id="heatmap-title" style="margin: 0;">2024 Heatmap</h2>
+                    <button class="btn" onclick="changeHeatmapYear(1)">Next Year &gt;</button>
+                </div>
+                <button class="btn" onclick="setPlannerTab('agenda')">Back</button>
+            </div>
+            <div id="heatmap-container" class="heatmap-grid" style="display: block;">
+            </div>
         </div>
     </div>
 
@@ -657,20 +743,6 @@
         </div>
     </div>
 
-    <div id="inbox-panel" class="hidden">
-        <div class="inbox-header">
-            <span>Inbox (Ideas)</span>
-            <span style="cursor:pointer; font-size:18px" onclick="toggleInboxModal()">×</span>
-        </div>
-        <div class="inbox-list" id="inbox-list">
-        </div>
-        <div class="inbox-footer">
-            <input type="text" id="inbox-input" placeholder="Quick task..."
-                onkeypress="if(event.key==='Enter') addToInbox()">
-            <button class="btn btn-primary" onclick="addToInbox()">Add</button>
-        </div>
-    </div>
-
     <!-- Inbox Modal -->
     <div id="inbox-modal">
         <div class="modal-header-enhanced" id="inbox-modal-header">
@@ -712,87 +784,50 @@
         </div>
     </div>
 
-    <div id="pinned-window" class="hidden">
-        <div class="pinned-header">
-            <span>📌 Pinned</span>
-            <button class="btn" onclick="togglePinnedWindow()" style="padding: 2px 6px; font-size: 10px;">✕</button>
+    <div id="navigator-panel" class="hidden side-panel">
+        <div class="panel-header-row">
+            <span>🧭 Navigator</span>
+            <button class="btn" onclick="toggleNavigatorPanel()">✕</button>
         </div>
-        <div class="pinned-content" id="pinned-content">
-            <!-- Pinned items render here -->
+        <div class="navigator-tabs">
+            <button class="navigator-tab active" data-nav-tab="pinned" onclick="setNavigatorTab('pinned')">Pinned</button>
+            <button class="navigator-tab" data-nav-tab="tasks" onclick="setNavigatorTab('tasks')">Tasks</button>
+            <button class="navigator-tab" data-nav-tab="groups" onclick="setNavigatorTab('groups')">Groups</button>
         </div>
-    </div>
 
-    <div id="task-list-window" class="hidden">
-        <div class="task-list-header">
-            <span>📋 All Tasks</span>
-            <button class="btn" onclick="toggleTaskListWindow()" style="padding: 2px 6px; font-size: 10px;">✕</button>
-        </div>
-        <div class="task-list-filters">
-            <button class="filter-btn active" data-filter="all" onclick="setTaskFilter('all')">All</button>
-            <button class="filter-btn" data-filter="urgent" onclick="setTaskFilter('urgent')">Urgent</button>
-            <button class="filter-btn" data-filter="critical" onclick="setTaskFilter('critical')">Critical</button>
-            <button class="filter-btn" data-filter="ready" onclick="setTaskFilter('ready')">Ready</button>
-            <button class="filter-btn" data-filter="blocked" onclick="setTaskFilter('blocked')">Blocked</button>
-            <button class="filter-btn" data-filter="completed" onclick="setTaskFilter('completed')">Completed</button>
-        </div>
-        <div class="task-list-content" id="task-list-content">
-            <!-- Tasks render here -->
-        </div>
-    </div>
-
-    <!-- Node Groups Modal -->
-    <div id="node-groups-modal">
-        <div class="modal-header-enhanced" id="node-groups-header">
-            <div class="modal-title-enhanced">
-                <span style="font-size: 24px;">🗂️</span>
-                <span>Connected Node Groups</span>
+        <div id="navigator-tab-pinned" class="navigator-tab-content">
+            <div class="pinned-content" id="pinned-content">
+                <!-- Pinned items render here -->
             </div>
-            <button class="modal-close-btn" onclick="closeNodeGroupsModal()">✕</button>
         </div>
 
-        <div
-            style="padding: 12px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); font-size: 11px; color: var(--text-muted);">
-            Groups are automatically detected based on dependencies. Toggle visibility to declutter your workspace.
+        <div id="navigator-tab-tasks" class="navigator-tab-content hidden">
+            <div class="task-list-filters">
+                <button class="filter-btn active" data-filter="all" onclick="setTaskFilter('all')">All</button>
+                <button class="filter-btn" data-filter="urgent" onclick="setTaskFilter('urgent')">Urgent</button>
+                <button class="filter-btn" data-filter="critical" onclick="setTaskFilter('critical')">Critical</button>
+                <button class="filter-btn" data-filter="ready" onclick="setTaskFilter('ready')">Ready</button>
+                <button class="filter-btn" data-filter="blocked" onclick="setTaskFilter('blocked')">Blocked</button>
+                <button class="filter-btn" data-filter="completed" onclick="setTaskFilter('completed')">Completed</button>
+            </div>
+            <div class="task-list-content" id="task-list-content">
+                <!-- Tasks render here -->
+            </div>
         </div>
 
-        <div class="panel-list" id="node-groups-list" style="flex-grow: 1; overflow-y: auto; padding: 10px;">
-            <!-- Groups render here -->
+        <div id="navigator-tab-groups" class="navigator-tab-content hidden">
+            <div
+                style="padding: 12px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); font-size: 11px; color: var(--text-muted);">
+                Groups are automatically detected based on dependencies. Toggle visibility to declutter your workspace.
+            </div>
+            <div class="panel-list" id="node-groups-list" style="flex-grow: 1; overflow-y: auto; padding: 10px;">
+                <!-- Groups render here -->
+            </div>
         </div>
     </div>
 
     <div id="inspector" class="hidden">
         <div id="insp-content" style="display:flex; flex-direction:column; height:100%;">
-        </div>
-    </div>
-
-    <div id="heatmap-overlay" class="hidden">
-        <div class="heatmap-header">
-            <div class="heatmap-controls">
-                <button class="btn" onclick="changeHeatmapYear(-1)">&lt; Prev Year</button>
-                <h2 id="heatmap-title" style="margin: 0;">2024 Heatmap</h2>
-                <button class="btn" onclick="changeHeatmapYear(1)">Next Year &gt;</button>
-            </div>
-            <button class="btn" onclick="toggleHeatmap()">Close</button>
-        </div>
-        <div id="heatmap-container" class="heatmap-grid" style="display: block;">
-        </div>
-    </div>
-
-    <div id="calendar-panel" class="hidden">
-        <div class="cal-header">
-            <div class="cal-controls">
-                <button class="btn" onclick="changeCalDate(-1)">&lt;</button>
-                <button class="btn" onclick="setCalView('day')">Day</button>
-                <button class="btn" onclick="setCalView('week')">Week</button>
-                <button class="btn" onclick="setCalView('month')">Month</button>
-                <button class="btn" onclick="changeCalDate(1)">&gt;</button>
-            </div>
-            <div id="cal-title" class="cal-title">January 2026</div>
-            <div class="cal-controls">
-                <button class="btn" onclick="toggleCalendar()">Close</button>
-            </div>
-        </div>
-        <div id="cal-container" class="cal-view-container">
         </div>
     </div>
 
@@ -885,6 +920,61 @@
                         </div>
                         <h3>Canopy Health</h3>
                         <p id="insights-health-text">Waiting for data.</p>
+                    </section>
+
+                    <section class="insights-card">
+                        <div class="insights-card-head">
+                            <h2>Operational Health</h2>
+                        </div>
+                        <div class="metrics-breakdown">
+                            <div class="metric-item">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                    <span class="metric-label">Task Load</span>
+                                    <span class="metric-value" id="review-health-load">0 Act / 0 Arch</span>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                    <span class="metric-label">Storage</span>
+                                    <span class="metric-value" id="review-health-storage">0 KB</span>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                    <span class="metric-label">Render</span>
+                                    <span class="metric-value" id="review-health-render">0ms</span>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                    <span class="metric-label">Sync</span>
+                                    <span class="metric-value" id="review-health-sync">Ready</span>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                    <span class="metric-label">Virtualization</span>
+                                    <span class="metric-value" id="review-health-virt">Off</span>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                    <span class="metric-label">Backup</span>
+                                    <span class="metric-value" id="review-health-backup">None</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="insights-card">
+                        <div class="insights-card-head">
+                            <h2>Data Footprint</h2>
+                            <span id="total-gist-size-review"
+                                style="font-size:10px; color:var(--ready-color); font-family:monospace;">0.0 KB</span>
+                        </div>
+                        <div id="metrics-breakdown-review" class="metrics-breakdown">
+                            <!-- Filled via JS -->
+                        </div>
                     </section>
 
                     <section class="insights-card insights-links-card">

@@ -706,12 +706,23 @@
                 'Goals': lifeGoals
             };
 
-            const breakdown = document.getElementById('metrics-breakdown');
-            const totalEl = document.getElementById('total-gist-size');
-            if (!breakdown || !totalEl) return;
+            const targets = [
+                {
+                    breakdown: document.getElementById('metrics-breakdown'),
+                    total: document.getElementById('total-gist-size')
+                },
+                {
+                    breakdown: document.getElementById('metrics-breakdown-review'),
+                    total: document.getElementById('total-gist-size-review')
+                }
+            ].filter(t => t.breakdown && t.total);
+            if (targets.length === 0) return;
 
-            breakdown.innerHTML = '';
+            targets.forEach(t => {
+                t.breakdown.innerHTML = '';
+            });
             let totalBytes = 0;
+            const rows = [];
 
             for (const [name, data] of Object.entries(collections)) {
                 if (!data) continue;
@@ -734,10 +745,14 @@
                         <div style="height:100%; width:${visualPct}%; background:${visualPct > 80 ? 'var(--blocked-color)' : 'var(--accent)'};"></div>
                     </div>
                 `;
-                breakdown.appendChild(item);
+                rows.push(item.outerHTML);
             }
 
-            totalEl.innerText = (totalBytes / 1024).toFixed(1) + ' KB';
+            const totalText = (totalBytes / 1024).toFixed(1) + ' KB';
+            targets.forEach(t => {
+                t.breakdown.innerHTML = rows.join('');
+                t.total.innerText = totalText;
+            });
         }
 
 
@@ -840,7 +855,6 @@
                 'urgencyFlowData_backup',
                 'urgencyFlow_lastSave',
                 'urgency_flow_gemini_key',
-                'openai_api_key',
                 'finance_flow_encrypted_v1',
                 'aiModalPosition',
                 'inboxModalPosition',
@@ -850,7 +864,10 @@
                 'ai_selected_data',
                 'ai_note_selection',
                 'lastAutoBackupDate',
-                'urgencyFlow_dashboard_open_on_startup'
+                'urgencyFlow_dashboard_open_on_startup',
+                'urgencyFlow_workspace_section',
+                'urgencyFlow_navigator_tab',
+                'urgencyFlow_planner_tab'
             ].forEach(key => localStorage.removeItem(key));
 
             await wipeIndexedDB();
@@ -862,9 +879,12 @@
         function updateBackupStatusUI() {
             const lastDate = localStorage.getItem('lastAutoBackupDate');
             const displayElement = document.getElementById('backup-timestamp');
-            if (displayElement) {
-                displayElement.innerText = lastDate || "No backup recorded yet";
-            }
+            const settingsDisplay = document.getElementById('backup-timestamp-settings');
+            const reviewDisplay = document.getElementById('review-health-backup');
+            const text = lastDate || "No backup recorded yet";
+            if (displayElement) displayElement.innerText = text;
+            if (settingsDisplay) settingsDisplay.innerText = text;
+            if (reviewDisplay) reviewDisplay.innerText = text;
         }
 
         function checkAutomatedBackup() {

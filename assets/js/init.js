@@ -48,6 +48,8 @@
             // Load API Key into input if exists
             const geminiKeyInput = document.getElementById('gemini-api-key-input');
             if (geminiKeyInput && geminiApiKey) geminiKeyInput.value = geminiApiKey;
+            const settingsGeminiKeyInput = document.getElementById('settings-gemini-key-input');
+            if (settingsGeminiKeyInput && geminiApiKey) settingsGeminiKeyInput.value = geminiApiKey;
 
             // Load saved AI data preferences
             const savedAIData = localStorage.getItem('ai_selected_data');
@@ -88,6 +90,16 @@
             setupContextualMenu();
             renderPinnedWindow();
             renderQuickLinks();
+            if (typeof setNavigatorTab === 'function' && typeof getSavedNavigatorTab === 'function') {
+                setNavigatorTab(getSavedNavigatorTab());
+            }
+            if (typeof setPlannerTab === 'function' && typeof getSavedPlannerTab === 'function') {
+                setPlannerTab(getSavedPlannerTab());
+            }
+            const initialSection = (typeof getSavedWorkspaceSection === 'function')
+                ? getSavedWorkspaceSection()
+                : 'today';
+            if (typeof setWorkspaceSection === 'function') setWorkspaceSection(initialSection);
             if (typeof updateAINoteSelectionSummary === 'function') updateAINoteSelectionSummary();
             if (typeof renderReminderStrip === 'function') renderReminderStrip();
             if (typeof shouldOpenDashboardOnStartup === 'function' && shouldOpenDashboardOnStartup()) {

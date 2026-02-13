@@ -963,6 +963,12 @@
     function openInsightsDashboard() {
         const overlay = document.getElementById('insights-dashboard-overlay');
         if (!overlay) return;
+        if (typeof updateDataMetrics === 'function') updateDataMetrics();
+        if (typeof updateBackupStatusUI === 'function') updateBackupStatusUI();
+        if (typeof updateHealthMonitor === 'function') updateHealthMonitor();
+        const hdSync = document.getElementById('hd-sync');
+        const reviewSync = document.getElementById('review-health-sync');
+        if (hdSync && reviewSync) reviewSync.textContent = hdSync.textContent;
         renderInsightsDashboard();
         overlay.classList.remove('hidden');
         syncDashboardButtonState();

@@ -33,6 +33,216 @@ function toggleMenu() {
     }
 }
 
+const WORKSPACE_SECTION_STORAGE_KEY = 'urgencyFlow_workspace_section';
+const NAVIGATOR_TAB_STORAGE_KEY = 'urgencyFlow_navigator_tab';
+
+function normalizeWorkspaceSection(section) {
+    const valid = ['today', 'capture', 'knowledge', 'review', 'settings'];
+    return valid.includes(section) ? section : 'today';
+}
+
+function getSavedWorkspaceSection() {
+    try {
+        return normalizeWorkspaceSection(localStorage.getItem(WORKSPACE_SECTION_STORAGE_KEY) || 'today');
+    } catch (error) {
+        return 'today';
+    }
+}
+
+function normalizeNavigatorTab(tab) {
+    const valid = ['pinned', 'tasks', 'groups'];
+    return valid.includes(tab) ? tab : 'pinned';
+}
+
+function getSavedNavigatorTab() {
+    try {
+        return normalizeNavigatorTab(localStorage.getItem(NAVIGATOR_TAB_STORAGE_KEY) || 'pinned');
+    } catch (error) {
+        return 'pinned';
+    }
+}
+
+let currentWorkspaceSection = getSavedWorkspaceSection();
+
+const RIGHT_DOCK_PANEL_IDS = [
+    'notes-panel',
+    'archive-panel',
+    'agenda-panel',
+    'navigator-panel',
+    'sync-panel',
+    'goals-panel',
+    'habits-panel'
+];
+
+function closeRightDockPanels(exceptId = null) {
+    RIGHT_DOCK_PANEL_IDS.forEach(id => {
+        if (id === exceptId) return;
+        const panel = document.getElementById(id);
+        if (!panel) return;
+        // Floating notes are detached from the right rail and should not be force-closed.
+        if (id === 'notes-panel' && panel.classList.contains('floating')) return;
+        panel.classList.add('hidden');
+    });
+}
+
+function getVisibleRightDockPanelId() {
+    for (const id of RIGHT_DOCK_PANEL_IDS) {
+        const panel = document.getElementById(id);
+        if (!panel) continue;
+        if (!panel.classList.contains('hidden')) return id;
+    }
+    return null;
+}
+
+function syncRightRailTabs() {
+    const activePanelId = getVisibleRightDockPanelId();
+    document.querySelectorAll('#right-rail-tabs .right-rail-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.panelId === activePanelId);
+    });
+    document.body.classList.toggle('right-rail-open', !!activePanelId);
+}
+
+function openRightDockPanel(panelId, onOpen = null) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return false;
+    closeRightDockPanels(panelId);
+    panel.classList.remove('hidden');
+    if (typeof onOpen === 'function') onOpen();
+    syncRightRailTabs();
+    return true;
+}
+
+function closeRightDockPanel(panelId) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    panel.classList.add('hidden');
+    syncRightRailTabs();
+}
+
+function openRightRailTab(tabId) {
+    switch (tabId) {
+        case 'notes':
+            if (typeof toggleNotesPanel === 'function') toggleNotesPanel(true);
+            break;
+        case 'goals':
+            if (typeof toggleGoals === 'function') toggleGoals(true);
+            break;
+        case 'habits':
+            if (typeof toggleHabits === 'function') toggleHabits(true);
+            break;
+        case 'planner':
+            if (typeof openPlannerTab === 'function') {
+                const desired = (typeof currentPlannerTab === 'string' && currentPlannerTab) ? currentPlannerTab : 'agenda';
+                openPlannerTab(desired);
+            }
+            break;
+        case 'archive':
+            if (typeof toggleArchivePanel === 'function') toggleArchivePanel(true);
+            break;
+        case 'navigator':
+            if (typeof toggleNavigatorPanel === 'function') {
+                const desired = (typeof currentNavigatorTab === 'string' && currentNavigatorTab) ? currentNavigatorTab : 'tasks';
+                toggleNavigatorPanel(true, desired);
+            }
+            break;
+        case 'settings':
+            if (typeof toggleSyncPanel === 'function') toggleSyncPanel(true);
+            break;
+    }
+}
+
+function closeWorkspaceSurfaces() {
+    const sidePanels = ['goals-panel', 'habits-panel', 'notes-panel', 'agenda-panel', 'archive-panel', 'calendar-panel'];
+    sidePanels.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+
+    const heatmap = document.getElementById('heatmap-overlay');
+    if (heatmap) heatmap.classList.add('hidden');
+
+    const syncPanel = document.getElementById('sync-panel');
+    if (syncPanel) syncPanel.classList.add('hidden');
+
+    const navigatorPanel = document.getElementById('navigator-panel');
+    if (navigatorPanel) navigatorPanel.classList.add('hidden');
+
+    const inboxModal = document.getElementById('inbox-modal');
+    if (inboxModal && inboxModal.classList.contains('visible') && typeof closeInboxModal === 'function') {
+        closeInboxModal();
+    }
+
+    const remindersModal = document.getElementById('reminders-modal');
+    if (remindersModal && remindersModal.classList.contains('visible') && typeof closeRemindersModal === 'function') {
+        closeRemindersModal();
+    }
+
+    const aiModal = document.getElementById('ai-modal');
+    if (aiModal && aiModal.classList.contains('visible') && typeof closeAIModal === 'function') {
+        closeAIModal();
+    }
+
+    if (typeof closeInsightsDashboard === 'function') {
+        closeInsightsDashboard();
+    }
+
+    syncRightRailTabs();
+}
+
+function setWorkspaceSection(section = 'today') {
+    section = normalizeWorkspaceSection(section);
+    currentWorkspaceSection = section;
+    try {
+        localStorage.setItem(WORKSPACE_SECTION_STORAGE_KEY, section);
+    } catch (error) {
+        console.warn('[ui] Failed to persist workspace section:', error);
+    }
+
+    document.querySelectorAll('#workspace-nav .workspace-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.section === section);
+    });
+
+    closeWorkspaceSurfaces();
+
+    if (section === 'capture') {
+        if (typeof toggleInboxModal === 'function') toggleInboxModal();
+        return;
+    }
+
+    if (section === 'knowledge') {
+        if (typeof openRightDockPanel === 'function') {
+            openRightDockPanel('notes-panel', () => {
+                if (typeof renderNotesList === 'function') renderNotesList();
+            });
+        } else {
+            const notesPanel = document.getElementById('notes-panel');
+            if (notesPanel) notesPanel.classList.remove('hidden');
+            if (typeof renderNotesList === 'function') renderNotesList();
+        }
+        return;
+    }
+
+    if (section === 'review') {
+        if (typeof openInsightsDashboard === 'function') openInsightsDashboard();
+        return;
+    }
+
+    if (section === 'settings') {
+        if (typeof openRightDockPanel === 'function') {
+            openRightDockPanel('sync-panel', () => {
+                if (typeof updateSettingsHubUI === 'function') updateSettingsHubUI();
+                if (typeof updateConnectionStatus === 'function') updateConnectionStatus();
+            });
+        } else {
+            const syncPanel = document.getElementById('sync-panel');
+            if (syncPanel) syncPanel.classList.remove('hidden');
+            if (typeof updateSettingsHubUI === 'function') updateSettingsHubUI();
+            if (typeof updateConnectionStatus === 'function') updateConnectionStatus();
+        }
+        return;
+    }
+}
+
 // --- QUICK LINKS ---
 const MAX_QUICK_LINKS = 5;
 
@@ -953,7 +1163,8 @@ function openSearchResult(type, id) {
         const modal = document.getElementById('inbox-modal');
         if (modal && !modal.classList.contains('visible')) toggleInboxModal();
     } else if (type === 'goal') {
-        if (!isGoalsOpen) toggleGoals();
+        const goalsPanel = document.getElementById('goals-panel');
+        if (goalsPanel && goalsPanel.classList.contains('hidden')) toggleGoals();
         // Flash the goal in the list (you'd need to add IDs to goal elements)
         setTimeout(() => {
             const goalEl = document.querySelector(`[data-goal-id=\"${id}\"]`);
@@ -1008,41 +1219,16 @@ function closeInboxModal() {
 
 // --- NODE GROUPS LOGIC ---
 function toggleNodeGroupsModal() {
-    const modal = document.getElementById('node-groups-modal');
-
-    if (modal.classList.contains('visible')) {
-        closeNodeGroupsModal();
-    } else {
-        // Restore saved position
-        if (nodeGroupsModalPosition.x !== null && nodeGroupsModalPosition.y !== null) {
-            modal.style.left = nodeGroupsModalPosition.x + 'px';
-            modal.style.top = nodeGroupsModalPosition.y + 'px';
-            modal.style.transform = 'none';
-        }
-        if (nodeGroupsModalPosition.width && nodeGroupsModalPosition.height) {
-            modal.style.width = nodeGroupsModalPosition.width + 'px';
-            modal.style.height = nodeGroupsModalPosition.height + 'px';
-        }
-
-        modal.classList.add('visible');
-        detectAndRenderNodeGroups();
+    const panel = document.getElementById('navigator-panel');
+    if (panel && !panel.classList.contains('hidden') && currentNavigatorTab === 'groups') {
+        closeRightDockPanel('navigator-panel');
+        return;
     }
+    toggleNavigatorPanel(true, 'groups');
 }
 
 function closeNodeGroupsModal() {
-    const modal = document.getElementById('node-groups-modal');
-
-    // Save position before closing
-    const rect = modal.getBoundingClientRect();
-    nodeGroupsModalPosition = {
-        x: rect.left,
-        y: rect.top,
-        width: rect.width,
-        height: rect.height
-    };
-    localStorage.setItem('nodeGroupsModalPosition', JSON.stringify(nodeGroupsModalPosition));
-
-    modal.classList.remove('visible');
+    closeRightDockPanel('navigator-panel');
 }
 
 function detectAndRenderNodeGroups() {
@@ -1163,6 +1349,7 @@ function toggleNodeGroupVisibility(groupId, groupIndex) {
 
 function renderInboxModal() {
     const list = document.getElementById('inbox-modal-list');
+    if (!list) return;
     list.innerHTML = '';
 
     if (inbox.length === 0) {
@@ -1181,6 +1368,7 @@ function renderInboxModal() {
 
 function addToInboxModal() {
     const input = document.getElementById('inbox-modal-input');
+    if (!input) return;
     const val = input.value.trim();
     if (val) {
         inbox.push({ id: 'inbox_' + Date.now(), title: val });
@@ -1189,17 +1377,15 @@ function addToInboxModal() {
         saveToStorage();
     }
 }
+
 function renderInbox() {
-    const list = document.getElementById('inbox-list'); list.innerHTML = '';
-    if (inbox.length === 0) { list.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:20px;">No pending tasks</div>'; return; }
-    inbox.forEach((item, index) => {
-        const hasReminder = hasReminderForItem('inbox', item.id);
-        const el = document.createElement('div'); el.className = 'inbox-item';
-        el.innerHTML = `<span>${linkify(item.title)}</span><div class="inbox-actions"><span class="inbox-btn promote-btn" onclick="promoteInboxTask(${index})" title="Move to Board">⬆</span><span class="inbox-btn promote-goal-btn" onclick="promoteInboxToGoal(${index})" title="Move to Goals">🎯</span><span class="inbox-btn reminder-btn ${hasReminder ? 'active' : ''}" onclick="openRemindersModal('inbox', '${item.id}')" title="Set Reminder">⏰</span><span class="inbox-btn" style="color: var(--accent);" onclick="scheduleInboxItem(${index})" title="Add to Agenda">📅</span><span class="inbox-btn delete-btn" onclick="deleteInboxTask(${index})" title="Delete">✕</span></div>`;
-        list.appendChild(el);
-    });
+    renderInboxModal();
 }
-function addToInbox() { const input = document.getElementById('inbox-input'); const val = input.value.trim(); if (val) { inbox.push({ id: 'inbox_' + Date.now(), title: val }); input.value = ''; renderInbox(); saveToStorage(); } }
+
+function addToInbox() {
+    addToInboxModal();
+}
+
 function deleteInboxTask(index) {
     const item = inbox[index];
     if (!item) return;
@@ -1223,10 +1409,19 @@ function promoteInboxTask(index) {
     inbox.splice(index, 1); nodes.push(newNode);
     transferReminderAssignment('inbox', item.id, 'task', newNode.id, newNode.title);
     renderInbox(); updateCalculations(); render(); selectNode(newNode.id); saveToStorage();
-    const inboxPanel = document.getElementById('inbox-panel');
-    if (!inboxPanel.classList.contains('hidden')) inboxPanel.classList.add('hidden');
 }
-function promoteInboxToGoal(index) { const item = inbox[index]; if (!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = []; lifeGoals[currentGoalYear].push(createGoal(item.title)); discardReminderByItem('inbox', item.id); inbox.splice(index, 1); renderInbox(); renderGoals(); const panel = document.getElementById('goals-panel'); if (panel.classList.contains('hidden')) panel.classList.remove('hidden'); saveToStorage(); }
+function promoteInboxToGoal(index) {
+    const item = inbox[index];
+    if (!item) return;
+    if (!lifeGoals[currentGoalYear]) lifeGoals[currentGoalYear] = [];
+    lifeGoals[currentGoalYear].push(createGoal(item.title));
+    discardReminderByItem('inbox', item.id);
+    inbox.splice(index, 1);
+    renderInbox();
+    renderGoals();
+    if (typeof toggleGoals === 'function') toggleGoals(true);
+    saveToStorage();
+}
 function scheduleInboxItem(index) {
     const item = inbox[index];
     if (!item) return;
@@ -1263,14 +1458,37 @@ function scheduleInboxItem(index) {
     // Open agenda panel to show the new item
     const agendaPanel = document.getElementById('agenda-panel');
     if (agendaPanel.classList.contains('hidden')) {
-        toggleAgenda();
+        if (typeof openPlannerTab === 'function') openPlannerTab('agenda');
+        else toggleAgenda();
     } else {
         renderAgenda();
     }
 
     showNotification(`"${item.title}" scheduled for ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
 }
-function demoteToInbox() { if (!selectedNodeId) return; const node = nodes.find(n => n.id === selectedNodeId); if (!node) return; const newInboxId = 'inbox_' + Date.now(); inbox.push({ id: newInboxId, title: node.title }); transferReminderAssignment('task', node.id, 'inbox', newInboxId, node.title); nodes = nodes.filter(n => n.id !== selectedNodeId); nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); }); deselectNode(); updateCalculations(); render(); renderInbox(); const panel = document.getElementById('inbox-panel'); if (panel.classList.contains('hidden')) toggleInboxModal(); saveToStorage(); }
+
+function demoteToInbox() {
+    if (!selectedNodeId) return;
+    const node = nodes.find(n => n.id === selectedNodeId);
+    if (!node) return;
+
+    const newInboxId = 'inbox_' + Date.now();
+    inbox.push({ id: newInboxId, title: node.title });
+    transferReminderAssignment('task', node.id, 'inbox', newInboxId, node.title);
+    nodes = nodes.filter(n => n.id !== selectedNodeId);
+    nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); });
+
+    deselectNode();
+    updateCalculations();
+    render();
+    renderInbox();
+    saveToStorage();
+
+    const inboxModal = document.getElementById('inbox-modal');
+    if (inboxModal && !inboxModal.classList.contains('visible')) {
+        toggleInboxModal();
+    }
+}
 
 function showNotification(msg) {
     const n = document.getElementById('notification');
@@ -1291,38 +1509,71 @@ function showNotification(msg) {
 
 
 // --- PINNED WINDOW LOGIC ---
-function togglePinnedWindow() {
-    const window = document.getElementById('pinned-window');
-    window.classList.toggle('hidden');
-    if (!window.classList.contains('hidden')) {
-        renderPinnedWindow();
+let currentNavigatorTab = getSavedNavigatorTab();
+
+function setNavigatorTab(tab = 'pinned') {
+    tab = normalizeNavigatorTab(tab);
+    currentNavigatorTab = tab;
+    try {
+        localStorage.setItem(NAVIGATOR_TAB_STORAGE_KEY, tab);
+    } catch (error) {
+        console.warn('[ui] Failed to persist navigator tab:', error);
     }
+
+    const panel = document.getElementById('navigator-panel');
+    if (!panel) return;
+
+    panel.querySelectorAll('.navigator-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.navTab === tab);
+    });
+
+    const sections = {
+        pinned: document.getElementById('navigator-tab-pinned'),
+        tasks: document.getElementById('navigator-tab-tasks'),
+        groups: document.getElementById('navigator-tab-groups')
+    };
+
+    Object.entries(sections).forEach(([key, el]) => {
+        if (!el) return;
+        el.classList.toggle('hidden', key !== tab);
+    });
+
+    if (tab === 'pinned') renderPinnedWindow();
+    else if (tab === 'tasks') renderTaskList();
+    else if (tab === 'groups') detectAndRenderNodeGroups();
+}
+
+function toggleNavigatorPanel(forceOpen = null, tab = currentNavigatorTab || 'pinned') {
+    const panel = document.getElementById('navigator-panel');
+    if (!panel) return;
+
+    const shouldOpen = forceOpen === true || (forceOpen === null && panel.classList.contains('hidden'));
+    if (shouldOpen) {
+        if (typeof closeInsightsDashboard === 'function') closeInsightsDashboard();
+        openRightDockPanel('navigator-panel', () => setNavigatorTab(tab));
+    } else {
+        closeRightDockPanel('navigator-panel');
+    }
+}
+
+function togglePinnedWindow() {
+    const panel = document.getElementById('navigator-panel');
+    if (panel && !panel.classList.contains('hidden') && currentNavigatorTab === 'pinned') {
+        closeRightDockPanel('navigator-panel');
+        return;
+    }
+    toggleNavigatorPanel(true, 'pinned');
 }
 
 let currentTaskFilter = 'all';
 
 function toggleTaskListWindow() {
-    const window = document.getElementById('task-list-window');
-    window.classList.toggle('hidden');
-    if (!window.classList.contains('hidden')) {
-        renderTaskList();
+    const panel = document.getElementById('navigator-panel');
+    if (panel && !panel.classList.contains('hidden') && currentNavigatorTab === 'tasks') {
+        closeRightDockPanel('navigator-panel');
+        return;
     }
-}
-
-function toggleAgenda() {
-    const panel = document.getElementById('agenda-panel');
-    const others = ['notes-panel', 'archive-panel', 'goals-panel', 'habits-panel'];
-    if (panel.classList.contains('hidden')) {
-        others.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.classList.add('hidden');
-        });
-        panel.classList.remove('hidden');
-        renderAgenda();
-        renderAgendaPanelUI(); // <--- Initialize UI
-    } else {
-        panel.classList.add('hidden');
-    }
+    toggleNavigatorPanel(true, 'tasks');
 }
 function setTaskFilter(filter) {
     currentTaskFilter = filter;

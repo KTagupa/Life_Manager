@@ -1,22 +1,25 @@
         // --- NOTES LOGIC ---
 
-        function toggleNotesPanel() {
+        function toggleNotesPanel(forceOpen = null) {
             const notesPanel = document.getElementById('notes-panel');
-            const archivePanel = document.getElementById('archive-panel');
-            const goalsPanel = document.getElementById('goals-panel');
             const aiModal = document.getElementById('ai-modal'); // Use aiModal for consistency
 
-            if (notesPanel.classList.contains('hidden')) {
-                // Opening Notes: Hide everything else
-                notesPanel.classList.remove('hidden');
-                archivePanel.classList.add('hidden');
-                goalsPanel.classList.add('hidden');
+            const shouldOpen = forceOpen === true || (forceOpen === null && notesPanel.classList.contains('hidden'));
+            if (shouldOpen) {
+                if (typeof openRightDockPanel === 'function') {
+                    openRightDockPanel('notes-panel', () => {
+                        renderNotesList();
+                    });
+                } else {
+                    notesPanel.classList.remove('hidden');
+                    renderNotesList();
+                }
                 if (aiModal.classList.contains('visible')) { // Check if AI modal is open
                     closeAIModal(); // Close AI modal if open
                 }
-                renderNotesList();
             } else {
-                notesPanel.classList.add('hidden');
+                if (typeof closeRightDockPanel === 'function') closeRightDockPanel('notes-panel');
+                else notesPanel.classList.add('hidden');
             }
         }
 
@@ -96,13 +99,10 @@
             const healthDash = document.getElementById('health-dashboard');
             makeHealthDashboardDraggable(healthDash);
 
-            // Node Groups Modal
-            const nodeGroupsModal = document.getElementById('node-groups-modal');
-            const nodeGroupsHeader = document.getElementById('node-groups-header');
-            makeModalDraggable(nodeGroupsModal, nodeGroupsHeader, 'nodeGroupsModalPosition');
         }
 
         function makeModalDraggable(modal, handle, positionKey) {
+            if (!modal || !handle) return;
             let isDragging = false;
             let currentX, currentY, initialX, initialY;
 
@@ -210,8 +210,8 @@
         window.jumpToTask = function (id) {
             // NEW: Check if it's an inbox temp task
             if (id && id.startsWith('inbox_temp_')) {
-                const inboxPanel = document.getElementById('inbox-panel');
-                if (inboxPanel.classList.contains('hidden')) {
+                const inboxModal = document.getElementById('inbox-modal');
+                if (inboxModal && !inboxModal.classList.contains('visible')) {
                     toggleInboxModal();
                 }
                 showNotification("This task is still in your Inbox");
@@ -221,6 +221,7 @@
             let node = nodes.find(n => n.id === id) || archivedNodes.find(n => n.id === id);
             if (!node) return;
             selectNode(id);
+            const isArchived = archivedNodes.some(n => n.id === id);
 
             if (!isArchived) {
                 scale = 1;
