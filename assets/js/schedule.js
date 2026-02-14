@@ -255,6 +255,7 @@ function getSavedPlannerTab() {
 }
 
 let currentPlannerTab = getSavedPlannerTab();
+let selectedHeatmapDate = null;
 
 function setPlannerTab(tab = 'agenda') {
     tab = normalizePlannerTab(tab);
@@ -324,31 +325,156 @@ function toggleHeatmap() {
     }
 }
 
-function changeHeatmapYear(delta) { currentHeatmapYear += delta; renderHeatmap(); }
+function formatHeatmapDate(dateStr) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (!year || !month || !day) return dateStr;
+    return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+}
+
+function updateHeatmapSelectedDay(dateStr, taskTitles = []) {
+    const summaryEl = document.getElementById('heatmap-selected-day');
+    if (!summaryEl) return;
+
+    document.querySelectorAll('#heatmap-container .day-cell.selected').forEach(cell => {
+        cell.classList.remove('selected');
+    });
+
+    if (!dateStr) {
+        summaryEl.textContent = 'Select a day to view details.';
+        return;
+    }
+
+    const selectedCell = document.querySelector(`#heatmap-container .day-cell[data-date="${dateStr}"]`);
+    if (selectedCell) selectedCell.classList.add('selected');
+
+    const prettyDate = formatHeatmapDate(dateStr);
+    if (!taskTitles.length) {
+        summaryEl.textContent = `${prettyDate}: no tasks scheduled.`;
+        return;
+    }
+
+    const preview = taskTitles.slice(0, 3).join(', ');
+    const remaining = taskTitles.length - 3;
+    summaryEl.textContent = `${prettyDate}: ${taskTitles.length} task${taskTitles.length === 1 ? '' : 's'} - ${preview}${remaining > 0 ? ` +${remaining} more` : ''}`;
+}
+
+function changeHeatmapYear(delta) {
+    currentHeatmapYear += delta;
+    selectedHeatmapDate = null;
+    renderHeatmap();
+}
+
 function renderHeatmap() {
-    const container = document.getElementById('heatmap-container'); document.getElementById('heatmap-title').textContent = `${currentHeatmapYear} Heatmap`; container.innerHTML = '';
-    const year = currentHeatmapYear; const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const counts = {};
-    [...nodes, ...archivedNodes].forEach(n => { if (n.dueDate) { counts[n.dueDate] = (counts[n.dueDate] || 0) + 1; } });
-    months.forEach((mName, mIdx) => {
-        const monthDiv = document.createElement('div'); monthDiv.className = 'heatmap-month-container';
-        const title = document.createElement('div'); title.className = 'heatmap-month-title'; title.textContent = mName; monthDiv.appendChild(title);
-        const grid = document.createElement('div'); grid.className = 'heatmap-month-grid';
-        const daysInMonth = new Date(year, mIdx + 1, 0).getDate(); const firstDayDow = new Date(year, mIdx, 1).getDay();
-        for (let i = 0; i < firstDayDow; i++) { const empty = document.createElement('div'); empty.className = 'day-cell'; empty.style.background = 'transparent'; grid.appendChild(empty); }
-        for (let d = 1; d <= daysInMonth; d++) {
-            const cell = document.createElement('div'); cell.className = 'day-cell'; cell.textContent = d;
-            const dateStr = `${year}-${String(mIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            if (counts[dateStr]) {
-                const count = counts[dateStr]; cell.classList.add('active'); if (count === 1) cell.classList.add('level-1'); else if (count === 2) cell.classList.add('level-2'); else if (count === 3) cell.classList.add('level-3'); else if (count === 4) cell.classList.add('level-4'); else cell.classList.add('level-5');
-                const tip = document.createElement('div'); tip.className = 'day-tooltip';
-                const taskNames = [...nodes, ...archivedNodes].filter(n => n.dueDate === dateStr).map(n => n.title).join(', ');
-                tip.textContent = `${count} tasks: ${taskNames}`; cell.appendChild(tip);
+    const container = document.getElementById('heatmap-container');
+    const titleEl = document.getElementById('heatmap-title');
+    const yearEl = document.getElementById('heatmap-year-label');
+    if (!container || !titleEl) return;
+
+    const year = currentHeatmapYear;
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    const tasksByDate = {};
+
+    titleEl.textContent = `${year} Heatmap`;
+    if (yearEl) yearEl.textContent = String(year);
+    container.innerHTML = '';
+
+    [...nodes, ...archivedNodes].forEach(node => {
+        if (!node.dueDate) return;
+        if (!tasksByDate[node.dueDate]) tasksByDate[node.dueDate] = [];
+        tasksByDate[node.dueDate].push(node.title || 'Untitled task');
+    });
+
+    months.forEach((monthName, monthIndex) => {
+        const monthDiv = document.createElement('div');
+        monthDiv.className = 'heatmap-month-container';
+
+        const monthTitle = document.createElement('div');
+        monthTitle.className = 'heatmap-month-title';
+        monthTitle.textContent = monthName;
+        monthDiv.appendChild(monthTitle);
+
+        const weekdayRow = document.createElement('div');
+        weekdayRow.className = 'heatmap-weekday-row';
+        weekdayLabels.forEach(label => {
+            const dayLabel = document.createElement('div');
+            dayLabel.className = 'heatmap-weekday';
+            dayLabel.textContent = label;
+            weekdayRow.appendChild(dayLabel);
+        });
+        monthDiv.appendChild(weekdayRow);
+
+        const grid = document.createElement('div');
+        grid.className = 'heatmap-month-grid';
+
+        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+        const firstDayDow = new Date(year, monthIndex, 1).getDay();
+
+        for (let i = 0; i < firstDayDow; i++) {
+            const emptyCell = document.createElement('div');
+            emptyCell.className = 'day-cell day-cell-empty';
+            emptyCell.setAttribute('aria-hidden', 'true');
+            grid.appendChild(emptyCell);
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const taskTitles = tasksByDate[dateStr] || [];
+            const count = taskTitles.length;
+
+            const cell = document.createElement('div');
+            cell.className = 'day-cell level-0';
+            cell.dataset.date = dateStr;
+            cell.textContent = String(day);
+            cell.tabIndex = 0;
+
+            const level = Math.min(count, 5);
+            if (count > 0) {
+                cell.classList.add('active', `level-${level}`);
+                const tip = document.createElement('div');
+                tip.className = 'day-tooltip';
+                tip.textContent = `${count} task${count === 1 ? '' : 's'}: ${taskTitles.join(', ')}`;
+                cell.appendChild(tip);
             }
+
+            cell.onclick = () => {
+                selectedHeatmapDate = dateStr;
+                updateHeatmapSelectedDay(dateStr, taskTitles);
+            };
+
+            cell.onkeydown = (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    selectedHeatmapDate = dateStr;
+                    updateHeatmapSelectedDay(dateStr, taskTitles);
+                }
+            };
+
             grid.appendChild(cell);
         }
-        monthDiv.appendChild(grid); container.appendChild(monthDiv);
+
+        monthDiv.appendChild(grid);
+        container.appendChild(monthDiv);
     });
+
+    const activeDatesInYear = Object.keys(tasksByDate)
+        .filter(dateStr => dateStr.startsWith(`${year}-`))
+        .sort();
+
+    if (selectedHeatmapDate && selectedHeatmapDate.startsWith(`${year}-`)) {
+        updateHeatmapSelectedDay(selectedHeatmapDate, tasksByDate[selectedHeatmapDate] || []);
+    } else if (activeDatesInYear.length) {
+        selectedHeatmapDate = activeDatesInYear[0];
+        updateHeatmapSelectedDay(selectedHeatmapDate, tasksByDate[selectedHeatmapDate] || []);
+    } else {
+        selectedHeatmapDate = null;
+        updateHeatmapSelectedDay(null);
+    }
 }
 
 function findGoalName(goalId) {
@@ -393,6 +519,7 @@ function getGoalPath(goalId) {
 // --- CALENDAR LOGIC ---
 let calendarView = 'day'; // day, week, month
 let calendarDate = new Date();
+const CALENDAR_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function toggleCalendar() {
     const plannerPanel = document.getElementById('agenda-panel');
@@ -410,7 +537,8 @@ function toggleCalendar() {
 }
 
 function setCalView(view) {
-    calendarView = view;
+    const validViews = ['day', 'week', 'month'];
+    calendarView = validViews.includes(view) ? view : 'day';
     renderCalendar();
 }
 
@@ -424,7 +552,18 @@ function changeCalDate(delta) {
 function renderCalendar() {
     const container = document.getElementById('cal-container');
     const title = document.getElementById('cal-title');
+    const weekdayHeader = document.getElementById('cal-weekday-header');
+    if (!container || !title) return;
+
     container.innerHTML = '';
+    if (weekdayHeader) {
+        weekdayHeader.innerHTML = '';
+        weekdayHeader.classList.add('hidden');
+    }
+
+    document.querySelectorAll('#calendar-panel .planner-subtab').forEach(button => {
+        button.classList.toggle('active', button.dataset.calView === calendarView);
+    });
 
     // Collect all time logs
     const allLogs = [];
@@ -475,7 +614,15 @@ function renderCalendar() {
                 el.style.height = dur + 'px';
                 el.style.background = log.active ? 'rgba(16, 185, 129, 0.2)' : '';
                 el.style.borderColor = log.active ? 'var(--ready-color)' : '';
-                el.innerHTML = `<b>${log.title}</b><br>${ls.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${le.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                const titleNode = document.createElement('div');
+                titleNode.className = 'cal-event-title';
+                titleNode.innerText = log.title;
+                el.appendChild(titleNode);
+
+                const timeNode = document.createElement('div');
+                timeNode.className = 'cal-event-time';
+                timeNode.innerText = `${ls.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${le.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                el.appendChild(timeNode);
                 el.onclick = () => { toggleCalendar(); jumpToTask(log.taskId); };
                 col.appendChild(el);
             }
@@ -519,12 +666,9 @@ function renderCalendar() {
                     const hPct = (durMins / 1440) * 100;
 
                     const blk = document.createElement('div');
-                    blk.style.position = 'absolute';
-                    blk.style.left = '2px'; blk.style.right = '2px';
+                    blk.className = `cal-week-event${log.active ? ' active' : ''}`;
                     blk.style.top = topPct + '%';
                     blk.style.height = Math.max(hPct, 1) + '%'; // Min 1% height
-                    blk.style.background = 'var(--accent)';
-                    blk.style.opacity = '0.5';
                     blk.title = `${log.title} (${Math.round(durMins)}m)`;
                     body.appendChild(blk);
                 }
@@ -537,6 +681,15 @@ function renderCalendar() {
 
     } else if (calendarView === 'month') {
         title.innerText = calendarDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        if (weekdayHeader) {
+            CALENDAR_WEEKDAYS.forEach(dayName => {
+                const chip = document.createElement('div');
+                chip.className = 'cal-weekday-chip';
+                chip.innerText = dayName;
+                weekdayHeader.appendChild(chip);
+            });
+            weekdayHeader.classList.remove('hidden');
+        }
 
         const view = document.createElement('div'); view.className = 'cal-month-view';
         const y = calendarDate.getFullYear(); const m = calendarDate.getMonth();
@@ -576,7 +729,7 @@ function renderCalendar() {
                 cell.appendChild(bar);
 
                 const txt = document.createElement('div');
-                txt.style.fontSize = '9px'; txt.style.color = '#666';
+                txt.className = 'cal-month-hours';
                 txt.innerText = `${hrs.toFixed(1)}h`;
                 cell.appendChild(txt);
             }
@@ -808,10 +961,11 @@ function toggleAgenda() {
 
 function renderAgenda() {
     const container = document.getElementById('agenda-list-container');
+    if (!container) return;
     document.getElementById('agenda-date-display').innerText = new Date().toLocaleDateString();
     container.innerHTML = '';
     if (agenda.length === 0) {
-        container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">No agenda set.</div>';
+        container.innerHTML = '<div class="agenda-empty-state">No agenda set.</div>';
         return;
     }
 
@@ -920,13 +1074,13 @@ function renderAgendaPanelUI() {
     const container = document.getElementById('agenda-selection-info');
     const panel = document.getElementById('agenda-panel');
 
-    if (titleEl) {
+    if (titleEl && container && panel) {
         if (selectedNodeId) {
             const node = nodes.find(n => n.id === selectedNodeId) || archivedNodes.find(n => n.id === selectedNodeId);
             if (node) {
                 titleEl.innerText = node.title;
                 titleEl.style.fontStyle = 'normal';
-                titleEl.style.color = 'white';
+                titleEl.style.color = 'var(--text-main)';
                 container.style.borderLeftColor = 'var(--accent)';
                 // Store ID in DOM for persistence
                 panel.dataset.selectedId = selectedNodeId;
@@ -934,7 +1088,7 @@ function renderAgendaPanelUI() {
         } else {
             titleEl.innerText = "(Select a task on the graph)";
             titleEl.style.fontStyle = 'italic';
-            titleEl.style.color = '#64748b';
+            titleEl.style.color = '#94a3b8';
             container.style.borderLeftColor = 'transparent';
             delete panel.dataset.selectedId;
         }
