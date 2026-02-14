@@ -17,15 +17,15 @@
         <div id="hud-doing-row" class="hud-row" style="display: none;">
             <div class="hud-task-info">
                 <span class="hud-label">CURRENTLY DOING</span>
-                <span class="hud-task-name" id="hud-doing-title" onclick="focusHUDTask('doing')">---</span>
+                <span class="hud-task-name" id="hud-doing-title" role="button" tabindex="0" onclick="focusHUDTask('doing')"
+                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusHUDTask('doing');}">---</span>
             </div>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <span class="hud-timer" id="hud-doing-time"
-                    style="color:var(--ready-color); font-family:monospace;">00:00</span>
-                <button class="btn" onclick="toggleFloatingWindow()" title="Float on Screen"
-                    style="padding: 2px 8px; font-size: 14px;">🚀</button>
-                <button class="btn-timer stop" style="width:28px; height:28px; border-radius:50%; padding:0;"
-                    onclick="toggleFocusTimer('doing')">🛑</button>
+            <div class="hud-row-actions">
+                <span class="hud-timer" id="hud-doing-time">00:00</span>
+                <button type="button" class="hud-action hud-action-float" onclick="toggleFloatingWindow()"
+                    title="Float on Screen">🚀</button>
+                <button type="button" class="hud-action hud-action-stop" onclick="toggleFocusTimer('doing')"
+                    title="Stop Timer">🛑</button>
             </div>
         </div>
 
@@ -35,14 +35,15 @@
         <div id="hud-should-row" class="hud-row should-be" style="display: none;">
             <div class="hud-task-info">
                 <span class="hud-label">SHOULD BE DOING</span>
-                <span class="hud-task-name" id="hud-should-title" onclick="focusHUDTask('should')">---</span>
+                <span class="hud-task-name" id="hud-should-title" role="button" tabindex="0"
+                    onclick="focusHUDTask('should')"
+                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusHUDTask('should');}">---</span>
             </div>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <span id="hud-should-interval" style="font-size:10px; color:#888; font-family:monospace;">00:00 -
+            <div class="hud-row-actions">
+                <span id="hud-should-interval" class="hud-chip hud-chip-interval">00:00 -
                     00:00</span>
-                <button class="btn-timer"
-                    style="width:28px; height:28px; border-radius:50%; padding:0; background:var(--accent);"
-                    onclick="toggleFocusTimer('should')">▶</button>
+                <button type="button" class="hud-action hud-action-start" onclick="toggleFocusTimer('should')"
+                    title="Start Scheduled Task">▶</button>
             </div>
         </div>
 
@@ -51,24 +52,24 @@
                 <span class="hud-label">TRACKING HABIT</span>
                 <span class="hud-task-name" id="hud-habit-title">---</span>
             </div>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <span class="hud-timer" id="hud-habit-time"
-                    style="color:var(--ready-color); font-family:monospace;">00:00</span>
-                <button class="btn-timer stop" id="hud-habit-stop-btn"
-                    style="width:28px; height:28px; border-radius:50%; padding:0;"
-                    onclick="toggleHabitFocusTimer()">🛑</button>
+            <div class="hud-row-actions">
+                <span class="hud-timer" id="hud-habit-time">00:00</span>
+                <button type="button" class="hud-action hud-action-stop" id="hud-habit-stop-btn"
+                    onclick="toggleHabitFocusTimer()" title="Stop Habit Timer">🛑</button>
             </div>
         </div>
 
         <div id="hud-upcoming-row" class="hud-row upcoming" style="display: none;">
             <div class="hud-task-info">
                 <span class="hud-label">UP NEXT</span>
-                <span class="hud-task-name" id="hud-upcoming-title" onclick="focusHUDTask('upcoming')">---</span>
+                <span class="hud-task-name" id="hud-upcoming-title" role="button" tabindex="0"
+                    onclick="focusHUDTask('upcoming')"
+                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusHUDTask('upcoming');}">---</span>
             </div>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <span id="hud-upcoming-countdown" style="font-size:11px; color:#fbbf24; font-family:monospace;">in
+            <div class="hud-row-actions">
+                <span id="hud-upcoming-countdown" class="hud-chip hud-chip-countdown">in
                     30m</span>
-                <span id="hud-upcoming-interval" style="font-size:10px; color:#888; font-family:monospace;">00:00 -
+                <span id="hud-upcoming-interval" class="hud-chip hud-chip-interval">00:00 -
                     00:00</span>
             </div>
         </div>

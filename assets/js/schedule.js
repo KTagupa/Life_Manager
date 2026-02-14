@@ -4,12 +4,52 @@ const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let pipCanvas = null;
 let pipCtx = null;
 
+function isFloatingWindowActive(video) {
+    if (!video) return false;
+    const standardPipActive = document.pictureInPictureElement === video;
+    const safariPipActive = video.webkitPresentationMode === 'picture-in-picture';
+    return standardPipActive || safariPipActive;
+}
+
+async function exitFloatingWindow(video) {
+    if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        return;
+    }
+    if (video && typeof video.webkitSetPresentationMode === 'function' &&
+        video.webkitPresentationMode === 'picture-in-picture') {
+        video.webkitSetPresentationMode('inline');
+    }
+}
+
+async function enterFloatingWindow(video) {
+    if (!video) throw new Error('PiP video source is missing.');
+
+    if (typeof video.requestPictureInPicture === 'function') {
+        await video.requestPictureInPicture();
+        return;
+    }
+
+    if (video.webkitSupportsPresentationMode &&
+        video.webkitSupportsPresentationMode('picture-in-picture') &&
+        typeof video.webkitSetPresentationMode === 'function') {
+        video.webkitSetPresentationMode('picture-in-picture');
+        return;
+    }
+
+    throw new Error('Picture-in-Picture is not supported in this browser.');
+}
+
 async function toggleFloatingWindow() {
     const video = document.getElementById('pip-stream-source');
+    if (!video) {
+        console.error('PiP video element not found.');
+        return;
+    }
 
     // 1. Exit if already open
-    if (document.pictureInPictureElement) {
-        document.exitPictureInPicture();
+    if (isFloatingWindowActive(video)) {
+        await exitFloatingWindow(video);
         return;
     }
 
@@ -39,22 +79,27 @@ async function toggleFloatingWindow() {
 
     // 5. Setup Stream
     if (!video.srcObject) {
+        if (typeof pipCanvas.captureStream !== 'function') {
+            alert("Float on Screen isn't supported in this Safari version.");
+            return;
+        }
         video.srcObject = pipCanvas.captureStream(30); // 30fps for smooth timer
     }
 
-    // 6. Request PiP (The "Power Move" sequence)
-    video.play().then(() => {
-        return video.requestPictureInPicture();
-    }).then(() => {
+    // 6. Request PiP (Safari can use webkit presentation mode instead of the standard API)
+    try {
+        await video.play();
+        await enterFloatingWindow(video);
         updatePipLoop();
-    }).catch(err => {
+    } catch (err) {
         console.error("PiP Denied:", err);
-        alert("Action Required: Please interact with the app (click anywhere) then try the 🚀 button again. Safari requires a fresh user gesture.");
-    });
+        alert("Float on Screen isn't available right now. Click anywhere in the app, then press 🚀 again.");
+    }
 }
 
 function updatePipLoop() {
-    if (!document.pictureInPictureElement) return;
+    const video = document.getElementById('pip-stream-source');
+    if (!isFloatingWindowActive(video)) return;
 
     const now = Date.now();
     const activeTask = nodes.find(n => n.activeTimerStart) || archivedNodes.find(n => n.activeTimerStart);
@@ -102,7 +147,7 @@ function updatePipLoop() {
     pipCtx.fillText("SCHEDULED", 40, 270);
 
     if (currentSlot) {
-        const scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
+        let scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
         // NEW: Check inbox if not found
         if (!scheduledTask && currentSlot.taskId.startsWith('inbox_temp_')) {
             const inboxItem = inbox.find(item => currentSlot.taskId.includes(item.id.split('_')[1]));
@@ -594,6 +639,8 @@ function updateFocusHUD(now) {
     const shouldRow = document.getElementById('hud-should-row');
     const upcomingRow = document.getElementById('hud-upcoming-row'); // NEW
     const habitRow = document.getElementById('hud-habit-row');
+    const countdownEl = document.getElementById('hud-upcoming-countdown');
+    if (!hud || !doingRow || !shouldRow || !upcomingRow || !habitRow || !countdownEl) return;
 
     // Identify "Doing" (Which task has an active timer?)
     const activeTask = nodes.find(n => n.activeTimerStart) || archivedNodes.find(n => n.activeTimerStart);
@@ -622,6 +669,8 @@ function updateFocusHUD(now) {
     }
 
     let hudActive = false;
+    doingRow.classList.remove('overtime');
+    upcomingRow.classList.remove('soon', 'imminent');
 
     // --- Render "Doing" Row ---
     if (activeTask) {
@@ -631,9 +680,7 @@ function updateFocusHUD(now) {
         document.getElementById('hud-doing-time').innerText = formatTime(getTotalTime(activeTask));
         hud.dataset.doingTaskId = activeTask.id;
 
-        if (currentSlot && activeTask.id === currentSlot.taskId) {
-            doingRow.classList.remove('overtime');
-        }
+        if (currentSlot && activeTask.id !== currentSlot.taskId) doingRow.classList.add('overtime');
     } else {
         doingRow.style.display = 'none';
     }
@@ -642,7 +689,7 @@ function updateFocusHUD(now) {
     if (currentSlot && (!activeTask || activeTask.id !== currentSlot.taskId)) {
         hudActive = true;
         shouldRow.style.display = 'flex';
-        const scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
+        let scheduledTask = nodes.find(n => n.id === currentSlot.taskId) || archivedNodes.find(n => n.id === currentSlot.taskId);
         // NEW: Check inbox if not found
         if (!scheduledTask && currentSlot.taskId.startsWith('inbox_temp_')) {
             const inboxItem = inbox.find(item => currentSlot.taskId.includes(item.id.split('_')[1]));
@@ -664,7 +711,7 @@ function updateFocusHUD(now) {
         hudActive = true;
         upcomingRow.style.display = 'flex';
 
-        const upcomingTask = nodes.find(n => n.id === upcomingSlot.taskId) || archivedNodes.find(n => n.id === upcomingSlot.taskId);
+        let upcomingTask = nodes.find(n => n.id === upcomingSlot.taskId) || archivedNodes.find(n => n.id === upcomingSlot.taskId);
         // NEW: Check inbox if not found
         if (!upcomingTask && upcomingSlot.taskId.startsWith('inbox_temp_')) {
             const inboxItem = inbox.find(item => upcomingSlot.taskId.includes(item.id.split('_')[1]));
@@ -674,16 +721,20 @@ function updateFocusHUD(now) {
 
         // Calculate minutes until start
         const startTime = new Date(upcomingSlot.start).getTime();
-        const minutesUntil = Math.round((startTime - now) / 60000);
-        const countdownEl = document.getElementById('hud-upcoming-countdown');
+        const minutesUntil = Math.max(0, Math.round((startTime - now) / 60000));
 
-        if (minutesUntil < 60) {
+        if (minutesUntil < 1) {
+            countdownEl.innerText = 'in <1m';
+        } else if (minutesUntil < 60) {
             countdownEl.innerText = `in ${minutesUntil}m`;
         } else {
             const hours = Math.floor(minutesUntil / 60);
             const mins = minutesUntil % 60;
             countdownEl.innerText = `in ${hours}h ${mins}m`;
         }
+
+        if (minutesUntil <= 10) upcomingRow.classList.add('imminent');
+        else if (minutesUntil <= 30) upcomingRow.classList.add('soon');
 
         const startStr = new Date(upcomingSlot.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const endStr = new Date(upcomingSlot.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -692,6 +743,7 @@ function updateFocusHUD(now) {
         hud.dataset.upcomingTaskId = upcomingSlot.taskId;
     } else {
         upcomingRow.style.display = 'none';
+        countdownEl.innerText = 'in 30m';
     }
 
     // --- Render Habit Row ---
