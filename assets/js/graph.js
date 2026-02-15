@@ -516,51 +516,66 @@ function render() {
         svg.appendChild(defs);
     }
 
-    // Filter out hidden groups
     let nodesToRender = nodes;
+    const focusSnapshot = (typeof getTaskGroupFocusSnapshot === 'function')
+        ? getTaskGroupFocusSnapshot({ refitOnMissing: true })
+        : { groups: [], activeGroup: null, activeIndex: -1 };
 
-    // Apply hidden groups filter
-    const groups = detectConnectedGroups();
-    const hiddenNodeIds = new Set();
-
-    groups.forEach((group, index) => {
-        const groupId = `group_${index}`;
-        if (hiddenNodeGroups.has(groupId)) {
-            group.nodes.forEach(n => hiddenNodeIds.add(n.id));
-        }
-    });
-
-    nodesToRender = nodesToRender.filter(n => !hiddenNodeIds.has(n.id));
-
-    // Filter nodes by goal if filter is active
-    if (currentGoalFilter) {
-        // Helper to recursively find all goal IDs (including sub-goals)
-        const getAllGoalIds = (goalList, targetId) => {
-            let result = [targetId];
-            const findGoal = (list, id) => {
-                for (const goal of list) {
-                    if (goal.id === id) {
-                        const addChildren = (g) => {
-                            result.push(g.id);
-                            if (g.children && g.children.length > 0) {
-                                g.children.forEach(addChildren);
-                            }
-                        };
-                        addChildren(goal);
-                        return true;
-                    }
-                    if (goal.children && goal.children.length > 0) {
-                        if (findGoal(goal.children, id)) return true;
-                    }
-                }
-                return false;
-            };
-            findGoal(goalList, targetId);
-            return result;
-        };
-        const goalIds = getAllGoalIds(lifeGoals[currentGoalYear] || [], currentGoalFilter);
-        nodesToRender = nodesToRender.filter(n => n.goalIds && n.goalIds.some(gid => goalIds.includes(gid)));
+    if (typeof updateTaskGroupFocusControls === 'function') {
+        updateTaskGroupFocusControls(focusSnapshot);
     }
+
+    if (typeof taskGroupFocusState !== 'undefined' && taskGroupFocusState.active && focusSnapshot.activeGroup) {
+        const activeNodeIds = new Set(focusSnapshot.activeGroup.nodeIds || []);
+        nodesToRender = nodes.filter(node => activeNodeIds.has(node.id));
+    } else {
+        const groups = (focusSnapshot && Array.isArray(focusSnapshot.groups))
+            ? focusSnapshot.groups
+            : (typeof buildTaskGroups === 'function')
+                ? buildTaskGroups({ includeSingles: true, sort: 'priority' })
+            : detectConnectedGroups();
+        const hiddenNodeIds = new Set();
+
+        groups.forEach(group => {
+            if (hiddenNodeGroups.has(group.id)) {
+                group.nodes.forEach(node => hiddenNodeIds.add(node.id));
+            }
+        });
+
+        nodesToRender = nodesToRender.filter(node => !hiddenNodeIds.has(node.id));
+
+        // Filter nodes by goal if filter is active
+        if (currentGoalFilter) {
+            // Helper to recursively find all goal IDs (including sub-goals)
+            const getAllGoalIds = (goalList, targetId) => {
+                let result = [targetId];
+                const findGoal = (list, id) => {
+                    for (const goal of list) {
+                        if (goal.id === id) {
+                            const addChildren = (g) => {
+                                result.push(g.id);
+                                if (g.children && g.children.length > 0) {
+                                    g.children.forEach(addChildren);
+                                }
+                            };
+                            addChildren(goal);
+                            return true;
+                        }
+                        if (goal.children && goal.children.length > 0) {
+                            if (findGoal(goal.children, id)) return true;
+                        }
+                    }
+                    return false;
+                };
+                findGoal(goalList, targetId);
+                return result;
+            };
+            const goalIds = getAllGoalIds(lifeGoals[currentGoalYear] || [], currentGoalFilter);
+            nodesToRender = nodesToRender.filter(n => n.goalIds && n.goalIds.some(gid => goalIds.includes(gid)));
+        }
+    }
+
+    const nodesToRenderIds = new Set(nodesToRender.map(node => node.id));
 
     // Ensure arrow marker exists at the start
     const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
@@ -576,7 +591,7 @@ function render() {
 
 
             // Only show connection if both nodes are in the filtered set
-            if (currentGoalFilter && !nodesToRender.includes(parent)) return;
+            if (!nodesToRenderIds.has(parent.id)) return;
 
             const isCritical = node._isCritical && parent._isCritical && dep.type === 'hard' && !parent.completed;
             const isUrgentPath = node._isUrgent && parent._isUrgent;
@@ -833,6 +848,14 @@ function setupInteractions() {
             e.target.isContentEditable;
 
         if (e.key === 'Escape') {
+            if (typeof taskGroupFocusState !== 'undefined' &&
+                taskGroupFocusState.active &&
+                typeof exitTaskGroupFocusMode === 'function') {
+                e.preventDefault();
+                exitTaskGroupFocusMode();
+                return;
+            }
+
             const picker = document.getElementById('note-task-picker');
             if (picker && !picker.classList.contains('hidden')) {
                 picker.classList.add('hidden');

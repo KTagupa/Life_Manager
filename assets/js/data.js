@@ -99,6 +99,12 @@
         let pinnedItems = []; // {type: 'task'|'note'|'habit', id: string}
         let quickLinks = []; // {id: string, label: string, url: string}
         let hiddenNodeGroups = new Set(); // Set of group IDs that are hidden
+        let taskGroupFocusState = {
+            active: false,
+            groupIds: [],
+            currentIndex: -1,
+            activeGroupId: null
+        };
         let nodeGroupsModalPosition = { x: null, y: null, width: 420, height: 600 };
         let aiModalPosition = { x: null, y: null, width: 450, height: 600 };
         let inboxModalPosition = { x: null, y: null, width: 380, height: 500 };
@@ -215,6 +221,12 @@
             reminders = [];
             pinnedItems = [];
             hiddenNodeGroups = new Set();
+            taskGroupFocusState = {
+                active: false,
+                groupIds: [],
+                currentIndex: -1,
+                activeGroupId: null
+            };
             saveToStorage();
         }
 
@@ -500,6 +512,12 @@
             quickLinks = parsed.quickLinks || [];
             remindersModalPosition = parsed.remindersModalPosition || remindersModalPosition;
             hiddenNodeGroups = parsed.hiddenNodeGroups ? new Set(parsed.hiddenNodeGroups) : new Set();
+            taskGroupFocusState = {
+                active: false,
+                groupIds: [],
+                currentIndex: -1,
+                activeGroupId: null
+            };
             if (parsed.noteSettings) noteSettings = parsed.noteSettings;
 
             sanitizeLoadedData();
@@ -791,6 +809,12 @@
                         reminders = parsed.reminders || [];
                         // Do NOT load tokens from file for security, unless specifically desired
                     }
+                    taskGroupFocusState = {
+                        active: false,
+                        groupIds: [],
+                        currentIndex: -1,
+                        activeGroupId: null
+                    };
 
                     // 3. Post-load updates
                     sanitizeLoadedData();
@@ -830,6 +854,12 @@
             reminders = [];
             pinnedItems = [];
             hiddenNodeGroups = new Set();
+            taskGroupFocusState = {
+                active: false,
+                groupIds: [],
+                currentIndex: -1,
+                activeGroupId: null
+            };
             lastKnownAgendaTaskId = null;
             selectedNodeId = null;
             selectedIds = new Set();

@@ -597,6 +597,95 @@
             }
         }
 
+        #task-group-focus-controls {
+            position: fixed;
+            top: 84px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2050;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(79, 156, 249, 0.35);
+            background: rgba(12, 18, 24, 0.85);
+            backdrop-filter: blur(8px) saturate(140%);
+            -webkit-backdrop-filter: blur(8px) saturate(140%);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+        }
+
+        #task-group-focus-controls.hidden {
+            display: none;
+        }
+
+        .task-group-focus-meta {
+            display: flex;
+            flex-direction: column;
+            min-width: 180px;
+            max-width: 280px;
+            text-align: center;
+            gap: 2px;
+        }
+
+        .task-group-focus-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .task-group-focus-count {
+            font-size: 10px;
+            color: var(--text-muted);
+            letter-spacing: 0.04em;
+        }
+
+        .task-group-focus-btn {
+            border: 1px solid rgba(79, 156, 249, 0.35);
+            background: rgba(79, 156, 249, 0.12);
+            color: var(--text-main);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .task-group-focus-btn:hover {
+            border-color: rgba(79, 156, 249, 0.7);
+            background: rgba(79, 156, 249, 0.2);
+        }
+
+        .task-group-focus-btn.exit {
+            border-color: rgba(239, 68, 68, 0.45);
+            background: rgba(239, 68, 68, 0.14);
+            color: #fecaca;
+        }
+
+        @media (max-width: 700px) {
+            #task-group-focus-controls {
+                top: 72px;
+                width: calc(100vw - 16px);
+                max-width: calc(100vw - 16px);
+                gap: 6px;
+                padding: 7px;
+            }
+
+            .task-group-focus-meta {
+                min-width: 0;
+                flex: 1;
+            }
+
+            .task-group-focus-btn {
+                padding: 6px 8px;
+                font-size: 11px;
+            }
+        }
+
         /* --- AGENDA PANEL STYLES --- */
         .agenda-slot {
             display: flex;
@@ -6112,6 +6201,11 @@
         .node-group-item:hover {
             border-color: var(--accent-border);
             background: var(--node-bg-hover);
+        }
+
+        .node-group-item.focused-group {
+            border-color: var(--accent-border);
+            box-shadow: inset 0 0 0 1px rgba(79, 156, 249, 0.35);
         }
 
         .node-group-item.hidden-group {
