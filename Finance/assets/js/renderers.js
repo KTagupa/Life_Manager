@@ -65,10 +65,24 @@
                 list.appendChild(div);
             });
 
-            document.getElementById('balance-display').innerText = fmt(bal);
+            const allTransactions = window.allDecryptedTransactions || [];
+            const runningBalance = allTransactions.reduce((sum, tx) => {
+                return (tx.type === 'income' || tx.type === 'debt_increase') ? sum + tx.amt : sum - tx.amt;
+            }, 0);
+
+            document.getElementById('balance-display').innerText = fmt(runningBalance);
             document.getElementById('income-display').innerText = fmt(inc);
             document.getElementById('expense-display').innerText = fmt(exp);
             document.getElementById('savings-rate-display').innerText = inc > 0 ? Math.round(((inc - exp) / inc) * 100) + '%' : '0%';
+
+            const monthFilter = document.getElementById('filter-month')?.value || 'all';
+            const yearFilter = document.getElementById('filter-year')?.value || 'all';
+            const searchQuery = (document.getElementById('search-transactions')?.value || '').trim();
+            const showingAllRecords = monthFilter === 'all' && yearFilter === 'all' && !searchQuery;
+
+            document.getElementById('balance-trend').innerText = showingAllRecords
+                ? 'Since beginning of records'
+                : `Filtered period: ${fmt(bal)}`;
 
             // Calculate trends
             calculateTrends(items);
