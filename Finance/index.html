@@ -13,14 +13,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
-    
+
     <link rel="stylesheet" href="assets/css/app.css">
 </head>
 
 <body class="bg-slate-50 min-h-screen pb-10">
 
-    <!-- Navigation -->
-    <nav class="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50">
+    <!-- Desktop Navigation -->
+    <nav class="hidden md:block bg-white/80 backdrop-blur-md border-b sticky top-0 z-50">
         <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
             <div class="flex items-center gap-2 font-black text-indigo-600 text-2xl tracking-tight">
                 <div class="bg-indigo-600 text-white p-1 rounded-lg">
@@ -150,30 +150,30 @@
             <!-- Left: Transactions & Tools -->
             <div class="lg:col-span-8 space-y-6">
                 <!-- Filters -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 flex items-center gap-4">
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 flex flex-wrap items-center gap-3">
                     <div class="flex items-center gap-2 text-slate-500">
                         <i data-lucide="calendar" class="w-5 h-5"></i>
                         <span class="font-bold text-sm hidden sm:inline">Filter:</span>
                     </div>
                     <select id="filter-month" onchange="applyFilters()"
-                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500">
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 shrink-0">
                         <!-- Populated by JS -->
                     </select>
                     <select id="filter-year" onchange="applyFilters()"
-                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500">
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 shrink-0">
                         <!-- Populated by JS -->
                     </select>
                     <select id="metric-scope" onchange="setMetricScope(this.value)"
-                        class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-indigo-500">
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-indigo-500 shrink-0">
                         <option value="selected_period">Scope: Selected</option>
                         <option value="current_month">Scope: Current Month</option>
                         <option value="all_time">Scope: All-Time</option>
                     </select>
                     <button onclick="resetFilters()"
-                        class="text-xs font-bold text-indigo-500 hover:text-indigo-700 ml-auto">Reset</button>
+                        class="text-xs font-bold text-indigo-500 hover:text-indigo-700 md:ml-auto shrink-0">Reset</button>
                     <input type="text" id="search-transactions" placeholder="Search transactions..."
                         oninput="applyFilters()"
-                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 w-64">
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 w-full md:w-64">
                 </div>
 
                 <!-- Recurring Reminders Banner -->
@@ -201,43 +201,44 @@
                 </div>
 
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div class="p-6 border-b border-slate-100 flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <h2 class="text-xl font-bold text-slate-800">Recent Movements</h2>
+                    <div class="p-4 sm:p-6 border-b border-slate-100 flex flex-wrap items-center gap-3">
+                        <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                            <h2 class="text-xl font-bold text-slate-800 shrink-0">Recent Movements</h2>
                             <select id="report-scope"
-                                class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none">
+                                class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none shrink-0">
                                 <option value="selected_period">Report: Selected</option>
                                 <option value="all_records">Report: All records</option>
                             </select>
                             <button onclick="exportToCSV()"
-                                class="text-xs font-bold text-indigo-500 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                class="text-xs font-bold text-indigo-500 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
                                 <i data-lucide="download" class="w-3 h-3 inline mr-1"></i> Export CSV
                             </button>
                             <button onclick="exportToPDF()"
-                                class="text-xs font-bold text-purple-500 hover:bg-purple-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                class="text-xs font-bold text-purple-500 hover:bg-purple-50 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
                                 <i data-lucide="file-text" class="w-3 h-3 inline mr-1"></i> Export PDF
                             </button>
                             <button onclick="openImportModal()"
-                                class="text-xs font-bold text-emerald-600 hover:bg-emerald-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                class="text-xs font-bold text-emerald-600 hover:bg-emerald-50 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
                                 <i data-lucide="upload" class="w-3 h-3 inline mr-1"></i> Import CSV
                             </button>
                             <button onclick="openCategorizationRulesModal()"
-                                class="text-xs font-bold text-amber-600 hover:bg-amber-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                class="text-xs font-bold text-amber-600 hover:bg-amber-50 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
                                 <i data-lucide="filter" class="w-3 h-3 inline mr-1"></i> Rules
                             </button>
                             <button onclick="undoLastDelete()"
-                                class="text-xs font-bold text-slate-600 hover:bg-slate-100 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                class="text-xs font-bold text-slate-600 hover:bg-slate-100 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
                                 <i data-lucide="rotate-ccw" class="w-3 h-3 inline mr-1"></i> Undo Delete
                             </button>
                         </div>
-                        <div class="flex gap-2">
-                            <button onclick="openPlanningModal()"
+                        <div class="flex items-center gap-2 ml-auto shrink-0">
+                            <button onclick="openPlanningModal()" title="Open planner" aria-label="Open planner"
                                 class="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200">
                                 <i data-lucide="rocket" class="w-5 h-5"></i>
                             </button>
-                            <button onclick="openTransactionModal()"
-                                class="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">
+                            <button onclick="openTransactionModal()" title="Add transaction" aria-label="Add transaction"
+                                class="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center gap-1.5">
                                 <i data-lucide="plus" class="w-5 h-5"></i>
+                                <span class="text-xs font-bold hidden lg:inline">Add</span>
                             </button>
                         </div>
                     </div>
@@ -1412,29 +1413,36 @@
                     <p class="text-sm font-bold text-slate-700">Step 2: Map CSV columns</p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <label class="text-xs font-bold text-slate-500">Date
-                            <select id="map-date" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                            <select id="map-date"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
                         </label>
                         <label class="text-xs font-bold text-slate-500">Description
                             <select id="map-description"
                                 class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
                         </label>
                         <label class="text-xs font-bold text-slate-500">Amount
-                            <select id="map-amount" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                            <select id="map-amount"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
                         </label>
                         <label class="text-xs font-bold text-slate-500">Type (optional)
-                            <select id="map-type" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                            <select id="map-type"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
                         </label>
                         <label class="text-xs font-bold text-slate-500">Category (optional)
-                            <select id="map-category" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                            <select id="map-category"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
                         </label>
                         <label class="text-xs font-bold text-slate-500">Currency (optional)
-                            <select id="map-currency" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                            <select id="map-currency"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
                         </label>
                         <label class="text-xs font-bold text-slate-500">Merchant (optional)
-                            <select id="map-merchant" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                            <select id="map-merchant"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
                         </label>
                         <label class="text-xs font-bold text-slate-500">Tags (optional, comma-separated)
-                            <select id="map-tags" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                            <select id="map-tags"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
                         </label>
                     </div>
                     <button onclick="buildImportPreview()"
@@ -1648,6 +1656,39 @@
     <script src="assets/js/planning.js"></script>
     <script src="assets/js/analytics.js"></script>
     <script src="assets/js/preferences.js"></script>
+    <!-- Mobile Bottom Navigation -->
+    <nav
+        class="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 z-50 pb-safe">
+        <div class="grid grid-cols-5 h-16 items-center justify-items-center">
+            <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
+                class="flex flex-col items-center gap-1 text-indigo-600">
+                <i data-lucide="home" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold">Home</span>
+            </button>
+            <button onclick="openTransactionModal()"
+                class="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-600 transition-colors">
+                <div
+                    class="bg-indigo-600 text-white p-2 rounded-full -mt-6 shadow-lg shadow-indigo-200 border-4 border-slate-50">
+                    <i data-lucide="plus" class="w-6 h-6"></i>
+                </div>
+            </button>
+            <button onclick="openBudgetModal()"
+                class="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-600 transition-colors">
+                <i data-lucide="pie-chart" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold">Budgets</span>
+            </button>
+            <button onclick="openRecurringModal()"
+                class="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-600 transition-colors">
+                <i data-lucide="bell" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold">Reminders</span>
+            </button>
+            <button onclick="toggleDarkMode()"
+                class="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-600 transition-colors">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold">Settings</span>
+            </button>
+        </div>
+    </nav>
 </body>
 
 </html>
