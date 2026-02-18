@@ -1,7 +1,8 @@
         function exportToCSV() {
-            if (!window.allDecryptedTransactions || window.allDecryptedTransactions.length === 0) return;
+            const transactions = getReportTransactions();
+            if (!transactions || transactions.length === 0) return;
             let csv = "Date,Description,Category,Type,Quantity,Amount,Unit Price\n";
-            window.allDecryptedTransactions.forEach(i => {
+            transactions.forEach(i => {
                 const qty = i.quantity || 1;
                 const unitPrice = i.amt / qty;
                 csv += `${new Date(i.date).toLocaleDateString()},"${i.desc}",${i.category},${i.type},${qty},${i.amt},${unitPrice.toFixed(2)}\n`;
@@ -24,25 +25,24 @@
 
             // Date range
             doc.setFontSize(10);
-            const m = document.getElementById('filter-month').value;
-            const y = document.getElementById('filter-year').value;
-            const dateRange = `Period: ${m === 'all' ? 'All Months' : new Date(2000, m - 1).toLocaleString('en', { month: 'long' })} ${y === 'all' ? 'All Years' : y}`;
+            const dateRange = `Period: ${getReportScopeLabel()}`;
             doc.text(dateRange, 14, 28);
 
             // Summary
-            const balance = document.getElementById('balance-display').innerText;
-            const income = document.getElementById('income-display').innerText;
-            const expense = document.getElementById('expense-display').innerText;
-            const savings = document.getElementById('savings-rate-display').innerText;
+            const reportScope = getReportScopeSelection();
+            const scopeForMetrics = reportScope === 'all_records' ? 'all_time' : 'selected_period';
+            const metrics = computeSummaryMetrics(window.allDecryptedTransactions || [], scopeForMetrics, {
+                filteredTransactions: window.filteredTransactions || []
+            });
 
             doc.setFontSize(12);
-            doc.text(`Balance: ${balance}`, 14, 40);
-            doc.text(`Income: ${income}`, 14, 47);
-            doc.text(`Expenses: ${expense}`, 14, 54);
-            doc.text(`Savings Rate: ${savings}`, 14, 61);
+            doc.text(`Balance: ${fmt(metrics.balance)}`, 14, 40);
+            doc.text(`Income: ${fmt(metrics.income)}`, 14, 47);
+            doc.text(`Expenses: ${fmt(metrics.expense)}`, 14, 54);
+            doc.text(`Savings Rate: ${metrics.savingsRate}%`, 14, 61);
 
             // Transactions table
-            const transactions = window.allDecryptedTransactions || [];
+            const transactions = getReportTransactions();
             const tableData = transactions.map(t => [
                 new Date(t.date).toLocaleDateString(),
                 t.desc,

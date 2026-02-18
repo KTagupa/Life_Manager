@@ -3,26 +3,12 @@
         // =============================================
         function renderTransactions(items) {
             const list = document.getElementById('transaction-list');
-            let bal = 0, inc = 0, exp = 0;
-            let catExp = {};
 
             list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No transactions found.</div>';
 
             items.forEach(i => {
                 const isInc = i.type === 'income';
                 const isDebtInc = i.type === 'debt_increase';
-
-                if (isInc) {
-                    inc += i.amt;
-                    bal += i.amt;
-                } else if (isDebtInc) {
-                    // Debt increase adds to balance but NOT to monthly income stats
-                    bal += i.amt;
-                } else {
-                    exp += i.amt;
-                    bal -= i.amt;
-                    catExp[i.category] = (catExp[i.category] || 0) + i.amt;
-                }
 
                 const div = document.createElement('div');
                 div.className = "p-4 flex items-center justify-between group hover:bg-slate-50 transition-colors cursor-pointer";
@@ -65,27 +51,13 @@
                 list.appendChild(div);
             });
 
-            const allTransactions = window.allDecryptedTransactions || [];
-            const runningBalance = allTransactions.reduce((sum, tx) => {
-                return (tx.type === 'income' || tx.type === 'debt_increase') ? sum + tx.amt : sum - tx.amt;
-            }, 0);
-
-            document.getElementById('balance-display').innerText = fmt(runningBalance);
-            document.getElementById('income-display').innerText = fmt(inc);
-            document.getElementById('expense-display').innerText = fmt(exp);
-            document.getElementById('savings-rate-display').innerText = inc > 0 ? Math.round(((inc - exp) / inc) * 100) + '%' : '0%';
-
-            const monthFilter = document.getElementById('filter-month')?.value || 'all';
-            const yearFilter = document.getElementById('filter-year')?.value || 'all';
-            const searchQuery = (document.getElementById('search-transactions')?.value || '').trim();
-            const showingAllRecords = monthFilter === 'all' && yearFilter === 'all' && !searchQuery;
-
-            document.getElementById('balance-trend').innerText = showingAllRecords
-                ? 'Since beginning of records'
-                : `Filtered period: ${fmt(bal)}`;
+            const metrics = computeSummaryMetrics(window.allDecryptedTransactions || [], metricScope, {
+                filteredTransactions: window.filteredTransactions || items
+            });
+            renderSummaryCards(metrics);
 
             // Calculate trends
-            calculateTrends(items);
+            calculateTrends();
 
             // Update Budget Inputs UI to include Debt categories if any
             populateBudgetInputs();
@@ -247,10 +219,11 @@
                 return;
             }
 
-            const actuals = {};
-            items.filter(i => i.type === 'expense').forEach(i => {
-                actuals[i.category] = (actuals[i.category] || 0) + i.amt;
+            const metrics = computeSummaryMetrics(window.allDecryptedTransactions || [], metricScope, {
+                scopeTransactions: items,
+                filteredTransactions: window.filteredTransactions || []
             });
+            const actuals = metrics.categoryExpenses;
 
             container.innerHTML = '';
             Object.entries(budgets).forEach(([cat, limit]) => {

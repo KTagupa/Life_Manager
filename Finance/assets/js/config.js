@@ -18,6 +18,7 @@
 
         let masterKey = null;
         let cryptoKey = null;
+        let kdfMeta = null;
         let activeCurrency = 'PHP';
         let exchangeRates = {
             PHP: 1,
@@ -36,8 +37,15 @@
         let budgets = {};
         let recurringTransactions = [];
         let customCategories = [];
+        let categorizationRules = [];
+        let financialGoals = [];
+        let importsLog = [];
+        let undoLog = [];
+        let metricScope = 'selected_period';
         let spendChart = null;
         let cryptoAllocationChart = null;
+        let scenarioChart = null;
         let investmentGoals = [];  // Array of { id, name, targetAmount, targetDate, createdAt }
+        let filteredTransactions = [];
 
         const standardCategories = ["Food", "Transport", "Bills", "Savings", "Entertainment", "Salary", "Others"];

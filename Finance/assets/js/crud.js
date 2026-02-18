@@ -435,6 +435,8 @@
 
             const encrypted = await encryptData({
                 desc,
+                merchant: null,
+                tags: [],
                 amt: amtInPHP,
                 originalAmt: amt,
                 originalCurrency: currency,
@@ -442,23 +444,36 @@
                 notes: notes,
                 type,
                 category,
-                date
+                date,
+                importId: null,
+                dedupeHash: null,
+                deletedAt: null
             });
 
             const db = await getDB();
             if (id) {
                 const idx = db.transactions.findIndex(t => t.id === id);
-                if (idx !== -1) db.transactions[idx] = { id, data: encrypted, lastModified: Date.now() };
+                if (idx !== -1) {
+                    const existing = db.transactions[idx] || {};
+                    db.transactions[idx] = {
+                        ...existing,
+                        id,
+                        data: encrypted,
+                        lastModified: Date.now(),
+                        deletedAt: existing.deletedAt || null
+                    };
+                }
             } else {
                 db.transactions.push({
                     id: Date.now().toString(36) + Math.random().toString(36).substr(2),
                     data: encrypted,
-                    createdAt: Date.now()
+                    createdAt: Date.now(),
+                    deletedAt: null
                 });
             }
             await saveDB(db);
 
-            rawTransactions = db.transactions;
+            rawTransactions = db.transactions.filter(t => !t.deletedAt);
             toggleModal('transaction-modal');
             await loadAndRender(); // Updates transaction list
 
@@ -487,12 +502,16 @@
 
             if (id) {
                 const idx = db.bills.findIndex(b => b.id === id);
-                if (idx !== -1) db.bills[idx] = { id, data: encrypted };
+                if (idx !== -1) {
+                    const existing = db.bills[idx] || {};
+                    db.bills[idx] = { ...existing, id, data: encrypted, lastModified: Date.now(), deletedAt: existing.deletedAt || null };
+                }
             } else {
                 billId = Date.now().toString(36) + Math.random().toString(36).substr(2);
                 db.bills.push({
                     id: billId,
-                    data: encrypted
+                    data: encrypted,
+                    deletedAt: null
                 });
             }
 
@@ -501,7 +520,7 @@
 
             await saveDB(db);
 
-            rawBills = db.bills;
+            rawBills = db.bills.filter(b => !b.deletedAt);
             toggleModal('bill-modal');
             renderBills(rawBills);
             checkRecurringReminders(); // Check if any reminders are due now
@@ -518,11 +537,12 @@
             db.debts = db.debts || [];
             db.debts.push({
                 id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-                data: encrypted
+                data: encrypted,
+                deletedAt: null
             });
             await saveDB(db);
 
-            rawDebts = db.debts;
+            rawDebts = db.debts.filter(d => !d.deletedAt);
             toggleModal('debt-modal');
             renderDebts(rawDebts);
             // Refresh budget inputs to include new debt category
@@ -582,23 +602,29 @@
             // Reuse generic save logic via manual construction
             const encrypted = await encryptData({
                 desc,
+                merchant: null,
+                tags: [],
                 amt: amount, // Assuming base currency for simplicity
                 quantity: 1,
                 type,
                 category,
-                date
+                date,
+                importId: null,
+                dedupeHash: null,
+                deletedAt: null
             });
 
             const db = await getDB();
             db.transactions.push({
                 id: Date.now().toString(36) + Math.random().toString(36).substr(2),
                 data: encrypted,
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                deletedAt: null
             });
 
             await saveDB(db);
 
-            rawTransactions = db.transactions;
+            rawTransactions = db.transactions.filter(t => !t.deletedAt);
             toggleModal('update-debt-modal');
             await loadAndRender(); // Updates transaction list
             await renderDebts(rawDebts); // Update debt progress
@@ -613,11 +639,12 @@
             db.lent = db.lent || [];
             db.lent.push({
                 id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-                data: encrypted
+                data: encrypted,
+                deletedAt: null
             });
             await saveDB(db);
 
-            rawLent = db.lent;
+            rawLent = db.lent.filter(l => !l.deletedAt);
             toggleModal('lent-modal');
             renderLent(rawLent);
             populateCategorySelect(document.getElementById('t-category'));
@@ -770,17 +797,27 @@
             db.wishlist = db.wishlist || [];
             if (id) {
                 const idx = db.wishlist.findIndex(w => w.id === id);
-                if (idx !== -1) db.wishlist[idx] = { id, data: encrypted, lastModified: Date.now() };
+                if (idx !== -1) {
+                    const existing = db.wishlist[idx] || {};
+                    db.wishlist[idx] = {
+                        ...existing,
+                        id,
+                        data: encrypted,
+                        lastModified: Date.now(),
+                        deletedAt: existing.deletedAt || null
+                    };
+                }
             } else {
                 db.wishlist.push({
                     id: Date.now().toString(36) + Math.random().toString(36).substr(2),
                     data: encrypted,
-                    createdAt: Date.now()
+                    createdAt: Date.now(),
+                    deletedAt: null
                 });
             }
 
             await saveDB(db);
-            rawWishlist = db.wishlist;
+            rawWishlist = db.wishlist.filter(w => !w.deletedAt);
             toggleModal('wishlist-modal');
             await loadAndRenderWishlist();
             showToast('✅ Wishlist updated');
@@ -794,9 +831,24 @@
 
         async function removeWishlistById(id) {
             const db = await getDB();
-            db.wishlist = (db.wishlist || []).filter(w => w.id !== id);
-            rawWishlist = db.wishlist;
+            const idx = (db.wishlist || []).findIndex(w => w.id === id);
+            if (idx === -1) return;
+
+            const deletedAt = new Date().toISOString();
+            const deleted = { ...db.wishlist[idx], deletedAt, lastModified: Date.now() };
+            db.wishlist[idx] = deleted;
+            db.undo_log = db.undo_log || [];
+            db.undo_log.push({
+                id: `undo_${Date.now().toString(36)}`,
+                entityType: 'wishlist',
+                entityId: id,
+                deletedAt,
+                payload: deleted
+            });
+
+            rawWishlist = db.wishlist.filter(w => !w.deletedAt);
             await saveDB(db);
+            undoLog = db.undo_log;
             await loadAndRenderWishlist();
         }
 
@@ -853,46 +905,139 @@
             }
         }
 
+        function collectionKeyFromDeleteType(col) {
+            if (col === 'transactions') return 'transactions';
+            if (col === 'bills') return 'bills';
+            if (col === 'debts') return 'debts';
+            if (col === 'lent') return 'lent';
+            if (col === 'crypto') return 'crypto';
+            if (col === 'wishlist') return 'wishlist';
+            return null;
+        }
+
+        async function undoLastDelete() {
+            const db = await getDB();
+            db.undo_log = db.undo_log || [];
+            if (db.undo_log.length === 0) {
+                showToast('ℹ️ Nothing to undo');
+                return;
+            }
+
+            const latest = db.undo_log[db.undo_log.length - 1];
+            const key = collectionKeyFromDeleteType(latest.entityType);
+            if (!key) {
+                db.undo_log.pop();
+                await saveDB(db);
+                showToast('⚠️ Could not restore item');
+                return;
+            }
+
+            const targetCollection = db[key] || [];
+            const existingIdx = targetCollection.findIndex(x => x.id === latest.entityId);
+            if (existingIdx >= 0) {
+                targetCollection[existingIdx] = {
+                    ...targetCollection[existingIdx],
+                    ...latest.payload,
+                    deletedAt: null,
+                    lastModified: Date.now()
+                };
+            } else {
+                targetCollection.push({
+                    ...latest.payload,
+                    deletedAt: null,
+                    lastModified: Date.now()
+                });
+            }
+
+            if (latest.entityType === 'bills' && latest.meta?.removedReminders?.length) {
+                db.recurring_transactions = db.recurring_transactions || [];
+                latest.meta.removedReminders.forEach(r => {
+                    const exists = db.recurring_transactions.some(x => x.id === r.id);
+                    if (!exists) db.recurring_transactions.push(r);
+                });
+            }
+
+            db[key] = targetCollection;
+            db.undo_log.pop();
+            await saveDB(db);
+            undoLog = db.undo_log;
+
+            showToast('↩️ Restored last deleted item');
+            await loadFromStorage();
+        }
+
         async function deleteItem(col, id) {
             if (!confirm("Are you sure?")) return;
             const db = await getDB();
+            const key = collectionKeyFromDeleteType(col);
+            if (!key) return;
+            const targetCollection = db[key] || [];
+            const idx = targetCollection.findIndex(item => item.id === id);
+            if (idx === -1) return;
+
+            const deletedAt = new Date().toISOString();
+            const deletedEntry = {
+                ...targetCollection[idx],
+                deletedAt,
+                lastModified: Date.now()
+            };
+            targetCollection[idx] = deletedEntry;
+
+            const undoEntry = {
+                id: `undo_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+                entityType: col,
+                entityId: id,
+                deletedAt,
+                payload: deletedEntry
+            };
 
             if (col === 'transactions') {
-                db.transactions = db.transactions.filter(t => t.id !== id);
-                rawTransactions = db.transactions;
+                db.transactions = targetCollection;
                 await saveDB(db);
+                rawTransactions = db.transactions.filter(t => !t.deletedAt);
                 await loadAndRender();
                 await renderDebts(rawDebts); // Update debt progress if a payment was deleted
             } else if (col === 'bills') {
-                db.bills = db.bills.filter(b => b.id !== id);
-                rawBills = db.bills;
-
                 // AUTO-SYNC: Remove corresponding reminder
+                const removedReminders = recurringTransactions.filter(r => r.linkedBillId === id);
                 recurringTransactions = recurringTransactions.filter(r => r.linkedBillId !== id);
                 db.recurring_transactions = recurringTransactions;
+                undoEntry.meta = { removedReminders };
 
+                db.bills = targetCollection;
                 await saveDB(db);
+                rawBills = db.bills.filter(b => !b.deletedAt);
                 renderBills(rawBills);
                 checkRecurringReminders(); // Update reminder banner
             } else if (col === 'debts') {
-                db.debts = db.debts.filter(d => d.id !== id);
-                rawDebts = db.debts;
+                db.debts = targetCollection;
                 await saveDB(db);
+                rawDebts = db.debts.filter(d => !d.deletedAt);
                 renderDebts(rawDebts);
                 populateBudgetInputs();
             } else if (col === 'lent') {
-                db.lent = db.lent.filter(l => l.id !== id);
-                rawLent = db.lent;
+                db.lent = targetCollection;
                 await saveDB(db);
+                rawLent = db.lent.filter(l => !l.deletedAt);
                 renderLent(rawLent);
             } else if (col === 'crypto') {
-                db.crypto = db.crypto.filter(c => c.id !== id);
-                rawCrypto = db.crypto;
+                db.crypto = targetCollection;
                 await saveDB(db);
+                rawCrypto = db.crypto.filter(c => !c.deletedAt);
                 renderCryptoPortfolio();
                 // re-calc holdings for widget
                 renderCryptoWidget();
+            } else if (col === 'wishlist') {
+                db.wishlist = targetCollection;
+                await saveDB(db);
+                rawWishlist = db.wishlist.filter(w => !w.deletedAt);
+                await loadAndRenderWishlist();
             }
+
+            db.undo_log = db.undo_log || [];
+            db.undo_log.push(undoEntry);
+            await saveDB(db);
+            undoLog = db.undo_log;
         }
 
         function toggleCurrency() {

@@ -129,12 +129,12 @@
                 <p class="text-xs text-indigo-200 mt-2" id="balance-trend">—</p>
             </div>
             <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
-                <p class="text-slate-400 text-sm font-medium mb-1">Monthly Income</p>
+                <p class="text-slate-400 text-sm font-medium mb-1">Income</p>
                 <h3 class="text-2xl font-bold text-emerald-600" id="income-display">₱0.00</h3>
                 <p class="text-xs mt-2" id="income-trend">—</p>
             </div>
             <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
-                <p class="text-slate-400 text-sm font-medium mb-1">Monthly Expenses</p>
+                <p class="text-slate-400 text-sm font-medium mb-1">Expenses</p>
                 <h3 class="text-2xl font-bold text-rose-600" id="expense-display">₱0.00</h3>
                 <p class="text-xs mt-2" id="expense-trend">—</p>
             </div>
@@ -162,6 +162,12 @@
                     <select id="filter-year" onchange="applyFilters()"
                         class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500">
                         <!-- Populated by JS -->
+                    </select>
+                    <select id="metric-scope" onchange="setMetricScope(this.value)"
+                        class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-indigo-500">
+                        <option value="selected_period">Scope: Selected</option>
+                        <option value="current_month">Scope: Current Month</option>
+                        <option value="all_time">Scope: All-Time</option>
                     </select>
                     <button onclick="resetFilters()"
                         class="text-xs font-bold text-indigo-500 hover:text-indigo-700 ml-auto">Reset</button>
@@ -198,6 +204,11 @@
                     <div class="p-6 border-b border-slate-100 flex items-center justify-between">
                         <div class="flex items-center gap-4">
                             <h2 class="text-xl font-bold text-slate-800">Recent Movements</h2>
+                            <select id="report-scope"
+                                class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none">
+                                <option value="selected_period">Report: Selected</option>
+                                <option value="all_records">Report: All records</option>
+                            </select>
                             <button onclick="exportToCSV()"
                                 class="text-xs font-bold text-indigo-500 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
                                 <i data-lucide="download" class="w-3 h-3 inline mr-1"></i> Export CSV
@@ -206,8 +217,24 @@
                                 class="text-xs font-bold text-purple-500 hover:bg-purple-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
                                 <i data-lucide="file-text" class="w-3 h-3 inline mr-1"></i> Export PDF
                             </button>
+                            <button onclick="openImportModal()"
+                                class="text-xs font-bold text-emerald-600 hover:bg-emerald-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                <i data-lucide="upload" class="w-3 h-3 inline mr-1"></i> Import CSV
+                            </button>
+                            <button onclick="openCategorizationRulesModal()"
+                                class="text-xs font-bold text-amber-600 hover:bg-amber-50 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                <i data-lucide="filter" class="w-3 h-3 inline mr-1"></i> Rules
+                            </button>
+                            <button onclick="undoLastDelete()"
+                                class="text-xs font-bold text-slate-600 hover:bg-slate-100 px-3 py-1 rounded-full transition-colors hidden sm:block">
+                                <i data-lucide="rotate-ccw" class="w-3 h-3 inline mr-1"></i> Undo Delete
+                            </button>
                         </div>
                         <div class="flex gap-2">
+                            <button onclick="openPlanningModal()"
+                                class="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200">
+                                <i data-lucide="rocket" class="w-5 h-5"></i>
+                            </button>
                             <button onclick="openTransactionModal()"
                                 class="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">
                                 <i data-lucide="plus" class="w-5 h-5"></i>
@@ -246,6 +273,20 @@
             <!-- Right: Bills, Debts & Rate Info -->
             <div class="lg:col-span-4 space-y-6">
 
+                <!-- Insights Hub -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="sparkles" class="w-5 h-5 text-emerald-600"></i>
+                            Insights Hub
+                        </h2>
+                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Live</span>
+                    </div>
+                    <div id="insights-panel" class="space-y-3">
+                        <div class="text-xs text-slate-400">Insights will appear after transactions are loaded.</div>
+                    </div>
+                </div>
+
                 <!-- Spending Trends Chart -->
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
                     <div class="flex justify-between items-center mb-4">
@@ -261,6 +302,23 @@
                     </div>
                     <div class="relative h-48 w-full">
                         <canvas id="trendsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Planning -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i data-lucide="target" class="w-5 h-5 text-indigo-600"></i>
+                            Financial Goals
+                        </h2>
+                        <button onclick="openPlanningModal()"
+                            class="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full transition-colors">
+                            Open Planner
+                        </button>
+                    </div>
+                    <div id="goals-summary-list" class="space-y-2">
+                        <div class="text-xs text-slate-400">No goals configured.</div>
                     </div>
                 </div>
 
@@ -521,7 +579,8 @@
                         <option value="expense">Expense</option>
                     </select>
 
-                    <select id="rec-frequency" class="p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    <select id="rec-frequency" onchange="onRecurringFrequencyChange()"
+                        class="p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
                         <option value="daily">Daily</option>
                         <option value="weekly">Weekly</option>
                         <option value="monthly">Monthly</option>
@@ -534,10 +593,25 @@
                 </select>
 
                 <div>
-                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Remind me on (optional)</label>
-                    <input type="number" id="rec-day" placeholder="Day of month (1-31)" min="1" max="31"
-                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
-                    <p class="text-[10px] text-slate-500 mt-1 ml-2">Leave blank for daily/weekly reminders</p>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Reminder Schedule</label>
+                    <div id="rec-weekly-wrap" class="hidden">
+                        <select id="rec-day-of-week"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                            <option value="1">Monday</option>
+                            <option value="2">Tuesday</option>
+                            <option value="3">Wednesday</option>
+                            <option value="4">Thursday</option>
+                            <option value="5">Friday</option>
+                            <option value="6">Saturday</option>
+                            <option value="0">Sunday</option>
+                        </select>
+                    </div>
+                    <div id="rec-monthly-wrap" class="hidden">
+                        <input type="number" id="rec-day-of-month" placeholder="Day of month (1-31)" min="1" max="31"
+                            class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-1 ml-2" id="rec-schedule-note">Daily reminders do not
+                        require an extra schedule field.</p>
                 </div>
 
                 <button onclick="addRecurringReminder()"
@@ -1308,8 +1382,257 @@
         </div>
     </div>
 
-    
+    <!-- Modal: CSV Import -->
+    <div id="import-modal"
+        class="fixed inset-0 z-[120] bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl w-full max-w-4xl max-h-[92vh] shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">CSV Import Wizard</h3>
+                    <p class="text-xs text-slate-500 mt-1">Map fields, preview conflicts, and import safely.</p>
+                </div>
+                <button onclick="closeImportModal()" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto custom-scrollbar space-y-6">
+                <div id="import-step-file" class="space-y-3">
+                    <p class="text-sm font-bold text-slate-700">Step 1: Select a CSV file</p>
+                    <input type="file" id="import-file-input" accept=".csv,text/csv" class="hidden"
+                        onchange="previewImportFile(event)">
+                    <button onclick="document.getElementById('import-file-input').click()"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700">
+                        Choose CSV File
+                    </button>
+                    <p class="text-xs text-slate-500" id="import-file-name">No file selected.</p>
+                </div>
+
+                <div id="import-step-mapping" class="hidden space-y-4">
+                    <p class="text-sm font-bold text-slate-700">Step 2: Map CSV columns</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label class="text-xs font-bold text-slate-500">Date
+                            <select id="map-date" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Description
+                            <select id="map-description"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Amount
+                            <select id="map-amount" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Type (optional)
+                            <select id="map-type" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Category (optional)
+                            <select id="map-category" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Currency (optional)
+                            <select id="map-currency" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Merchant (optional)
+                            <select id="map-merchant" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Tags (optional, comma-separated)
+                            <select id="map-tags" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg text-sm"></select>
+                        </label>
+                    </div>
+                    <button onclick="buildImportPreview()"
+                        class="px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700">
+                        Build Preview
+                    </button>
+                </div>
+
+                <div id="import-step-preview" class="hidden space-y-4">
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm font-bold text-slate-700">Step 3: Preview & conflict handling</p>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-slate-500">Duplicates:</span>
+                            <select id="import-duplicate-action"
+                                class="text-xs p-2 bg-slate-50 border rounded-lg font-bold">
+                                <option value="skip">Skip duplicates</option>
+                                <option value="import">Import duplicates too</option>
+                                <option value="merge">Merge duplicate metadata</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500" id="import-preview-summary">No preview yet.</p>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden">
+                        <div class="max-h-72 overflow-y-auto custom-scrollbar">
+                            <table class="w-full text-xs">
+                                <thead class="bg-slate-50 sticky top-0">
+                                    <tr class="text-left text-slate-500 uppercase tracking-wider">
+                                        <th class="p-2">Status</th>
+                                        <th class="p-2">Date</th>
+                                        <th class="p-2">Description</th>
+                                        <th class="p-2 text-right">Amount</th>
+                                        <th class="p-2">Category</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="import-preview-body" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <button onclick="confirmImportRows()"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700">
+                        Import Rows
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Categorization Rules -->
+    <div id="categorization-rules-modal"
+        class="fixed inset-0 z-[120] bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-2xl font-bold text-slate-800">Categorization Rules</h3>
+                <button onclick="toggleModal('categorization-rules-modal')" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto custom-scrollbar space-y-6">
+                <div id="rules-list" class="space-y-2">
+                    <div class="text-xs text-slate-400">No rules configured.</div>
+                </div>
+                <div class="border-t border-slate-100 pt-4 space-y-3">
+                    <input type="hidden" id="rule-id">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label class="text-xs font-bold text-slate-500">Contains text
+                            <input id="rule-text" type="text" placeholder="e.g. starbucks"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg">
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Category
+                            <select id="rule-category" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg"></select>
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Min amount
+                            <input id="rule-min-amount" type="number" step="0.01" placeholder="0"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg">
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Max amount
+                            <input id="rule-max-amount" type="number" step="0.01" placeholder="optional"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg">
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Direction
+                            <select id="rule-direction" class="w-full mt-1 p-2 bg-slate-50 border rounded-lg">
+                                <option value="any">Any</option>
+                                <option value="expense">Expense only</option>
+                                <option value="income">Income only</option>
+                            </select>
+                        </label>
+                        <label class="text-xs font-bold text-slate-500">Priority (lower first)
+                            <input id="rule-priority" type="number" min="1" value="10"
+                                class="w-full mt-1 p-2 bg-slate-50 border rounded-lg">
+                        </label>
+                    </div>
+                    <label class="inline-flex items-center gap-2 text-xs font-bold text-slate-600">
+                        <input id="rule-active" type="checkbox" checked>
+                        Active
+                    </label>
+                    <button onclick="saveCategorizationRule()"
+                        class="px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600">
+                        Save Rule
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Planning & Goals -->
+    <div id="planning-modal"
+        class="fixed inset-0 z-[120] bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl w-full max-w-6xl max-h-[95vh] shadow-2xl overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">Planner & Scenario Simulator</h3>
+                    <p class="text-xs text-slate-500 mt-1">Goals, 45-day forecast, and wishlist affordability.</p>
+                </div>
+                <button onclick="toggleModal('planning-modal')" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto custom-scrollbar grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div class="lg:col-span-5 space-y-4">
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                        <h4 class="font-bold text-slate-700 mb-3">Goals</h4>
+                        <div id="planning-goals-list" class="space-y-2 mb-4">
+                            <div class="text-xs text-slate-400">No goals yet.</div>
+                        </div>
+                        <input type="hidden" id="pg-id">
+                        <div class="grid grid-cols-2 gap-2 mb-2">
+                            <select id="pg-type" class="p-2 bg-white border rounded-lg text-sm">
+                                <option value="emergency_fund">Emergency Fund</option>
+                                <option value="debt_payoff">Debt Payoff</option>
+                                <option value="savings">Savings</option>
+                                <option value="purchase">Purchase</option>
+                            </select>
+                            <select id="pg-status" class="p-2 bg-white border rounded-lg text-sm">
+                                <option value="active">Active</option>
+                                <option value="paused">Paused</option>
+                                <option value="completed">Completed</option>
+                            </select>
+                        </div>
+                        <input id="pg-name" type="text" placeholder="Goal name"
+                            class="w-full mb-2 p-2 bg-white border rounded-lg text-sm">
+                        <div class="grid grid-cols-2 gap-2 mb-2">
+                            <input id="pg-target" type="number" step="0.01" placeholder="Target amount"
+                                class="p-2 bg-white border rounded-lg text-sm">
+                            <input id="pg-date" type="date" class="p-2 bg-white border rounded-lg text-sm">
+                        </div>
+                        <input id="pg-linked-category" type="text" placeholder="Linked category (optional)"
+                            class="w-full mb-3 p-2 bg-white border rounded-lg text-sm">
+                        <button onclick="saveFinancialGoal()"
+                            class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700">
+                            Save Goal
+                        </button>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-7 space-y-4">
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                        <h4 class="font-bold text-slate-700 mb-3">Scenario Inputs</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            <input id="sc-salary-day" type="number" min="1" max="31" placeholder="Salary day"
+                                class="p-2 bg-white border rounded-lg text-sm">
+                            <input id="sc-salary-amount" type="number" step="0.01" placeholder="Salary amount"
+                                class="p-2 bg-white border rounded-lg text-sm">
+                            <input id="sc-fixed-obligations" type="number" step="0.01" placeholder="Fixed monthly costs"
+                                class="p-2 bg-white border rounded-lg text-sm">
+                            <input id="sc-extra-saving" type="number" step="0.01" placeholder="Extra monthly saving"
+                                class="p-2 bg-white border rounded-lg text-sm">
+                        </div>
+                        <div class="mt-2">
+                            <input id="sc-extra-debt" type="number" step="0.01" placeholder="Extra monthly debt payment"
+                                class="w-full p-2 bg-white border rounded-lg text-sm">
+                        </div>
+                        <button onclick="runScenarioSimulation()"
+                            class="mt-3 px-3 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700">
+                            Run 45-Day Simulation
+                        </button>
+                    </div>
+
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                        <h4 class="font-bold text-slate-700 mb-3">Projection</h4>
+                        <div class="h-52">
+                            <canvas id="scenario-chart"></canvas>
+                        </div>
+                        <div id="scenario-summary" class="text-xs text-slate-600 mt-3">No simulation run yet.</div>
+                    </div>
+
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                        <h4 class="font-bold text-slate-700 mb-3">Wishlist Affordability</h4>
+                        <div id="wishlist-affordability" class="space-y-2 text-xs text-slate-600">
+                            No wishlist affordability insights yet.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="assets/js/config.js"></script>
+    <script src="assets/js/metrics.js"></script>
     <script src="assets/js/storage.js"></script>
     <script src="assets/js/auth.js"></script>
     <script src="assets/js/crypto.js"></script>
@@ -1320,6 +1643,9 @@
     <script src="assets/js/item-tracking.js"></script>
     <script src="assets/js/reminders.js"></script>
     <script src="assets/js/reports.js"></script>
+    <script src="assets/js/imports.js"></script>
+    <script src="assets/js/insights.js"></script>
+    <script src="assets/js/planning.js"></script>
     <script src="assets/js/analytics.js"></script>
     <script src="assets/js/preferences.js"></script>
 </body>

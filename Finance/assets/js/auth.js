@@ -1,13 +1,134 @@
         // =============================================
         // SECTION 3: AUTHENTICATION & ENCRYPTION
         // =============================================
-        async function deriveKey(password, salt) {
+        async function deriveKey(password, salt, iterations = 310000) {
             const enc = new TextEncoder();
             const keyMaterial = await window.crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
             return window.crypto.subtle.deriveKey(
-                { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+                { name: "PBKDF2", salt: salt, iterations: iterations, hash: "SHA-256" },
                 keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
             );
+        }
+
+        function bytesToBase64(bytes) {
+            let str = '';
+            bytes.forEach(b => str += String.fromCharCode(b));
+            return btoa(str);
+        }
+
+        function base64ToBytes(b64) {
+            const binary = atob(b64);
+            const arr = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+            return arr;
+        }
+
+        function getLegacyKdfMeta() {
+            return {
+                version: 1,
+                saltB64: bytesToBase64(new TextEncoder().encode("finance-flow-salt-v3")),
+                iterations: 100000,
+                legacy: true,
+                createdAt: new Date().toISOString()
+            };
+        }
+
+        function createNewKdfMeta() {
+            return {
+                version: 1,
+                saltB64: bytesToBase64(window.crypto.getRandomValues(new Uint8Array(16))),
+                iterations: 310000,
+                legacy: false,
+                createdAt: new Date().toISOString()
+            };
+        }
+
+        function hasVaultData(db) {
+            if (!db || typeof db !== 'object') return false;
+            const keys = ['transactions', 'bills', 'debts', 'lent', 'crypto', 'wishlist', 'recurring_transactions', 'goals', 'investment_goals'];
+            return keys.some(k => Array.isArray(db[k]) && db[k].length > 0);
+        }
+
+        async function persistKdfMeta(vaultId, meta) {
+            try {
+                localStorage.setItem(getKdfMetaStorageKey(vaultId), JSON.stringify(meta));
+            } catch (e) {
+                console.error('Failed to persist local KDF metadata', e);
+            }
+
+            try {
+                if (firestoreDB) {
+                    await firestoreDB.collection('vault_meta').doc(vaultId).set({
+                        kdfMeta: meta,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
+            } catch (e) {
+                console.error('Failed to persist remote KDF metadata', e);
+            }
+        }
+
+        async function loadRemoteKdfMeta(vaultId) {
+            try {
+                if (!firestoreDB) return null;
+                const doc = await firestoreDB.collection('vault_meta').doc(vaultId).get();
+                if (!doc.exists) return null;
+                return doc.data()?.kdfMeta || null;
+            } catch (e) {
+                console.error('Remote KDF metadata lookup failed', e);
+                return null;
+            }
+        }
+
+        async function resolveKdfMeta(password) {
+            const vaultId = await getVaultId(password);
+            let localMeta = null;
+            let remoteMeta = null;
+
+            try {
+                const raw = localStorage.getItem(getKdfMetaStorageKey(vaultId));
+                localMeta = raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                console.error('Local KDF metadata parse failed', e);
+            }
+
+            remoteMeta = await loadRemoteKdfMeta(vaultId);
+
+            if (remoteMeta || localMeta) {
+                const meta = remoteMeta || localMeta;
+                if (!localMeta && remoteMeta) {
+                    localStorage.setItem(getKdfMetaStorageKey(vaultId), JSON.stringify(remoteMeta));
+                }
+                return { vaultId, meta };
+            }
+
+            // No metadata exists yet: decide between legacy params (existing vault) or new random params.
+            let existingData = false;
+            try {
+                const localRaw = localStorage.getItem(DB_KEY);
+                if (localRaw) {
+                    existingData = hasVaultData(JSON.parse(localRaw));
+                }
+            } catch (e) {
+                console.error('Local vault probe failed', e);
+            }
+
+            if (!existingData) {
+                try {
+                    if (firestoreDB) {
+                        const doc = await firestoreDB.collection('vaults').doc(vaultId).get();
+                        if (doc.exists) {
+                            existingData = hasVaultData(doc.data()?.vaultData || {});
+                        }
+                    }
+                } catch (e) {
+                    console.error('Remote vault probe failed', e);
+                }
+            }
+
+            const meta = existingData ? getLegacyKdfMeta() : createNewKdfMeta();
+            await persistKdfMeta(vaultId, meta);
+            return { vaultId, meta };
         }
 
         async function encryptData(data) {
@@ -65,7 +186,13 @@
             await new Promise(r => setTimeout(r, 500));
 
             masterKey = input;
-            cryptoKey = await deriveKey(masterKey, new TextEncoder().encode("finance-flow-salt-v3"));
+            const { meta } = await resolveKdfMeta(masterKey);
+            kdfMeta = meta;
+            cryptoKey = await deriveKey(
+                masterKey,
+                base64ToBytes(meta.saltB64),
+                parseInt(meta.iterations || 310000, 10)
+            );
 
             await updateExchangeRates();
 
@@ -87,25 +214,25 @@
         async function loadFromStorage() {
             const db = await getDB();
 
-            rawTransactions = db.transactions || [];
+            rawTransactions = (db.transactions || []).filter(t => !t.deletedAt);
             await loadAndRender();
 
-            rawBills = db.bills || [];
+            rawBills = (db.bills || []).filter(b => !b.deletedAt);
             await renderBills(rawBills);
             // AUTO-SYNC: Sync all bills to reminders on load
             await syncAllBillsToReminders();
 
-            rawDebts = db.debts || [];
+            rawDebts = (db.debts || []).filter(d => !d.deletedAt);
             await renderDebts(rawDebts);
 
-            rawLent = db.lent || [];
+            rawLent = (db.lent || []).filter(l => !l.deletedAt);
             await renderLent(rawLent);
 
-            rawWishlist = db.wishlist || [];
+            rawWishlist = (db.wishlist || []).filter(w => !w.deletedAt);
             await loadAndRenderWishlist();
 
             // Crypto Loading
-            rawCrypto = db.crypto || [];
+            rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
             // We store crypto prices unencrypted usually for cache, but let's assume they are just a plain object in DB for simplicity
             // If they were encrypted, we'd decrypt here. Let's assume plain for cache speed.
             cryptoPrices = db.crypto_prices || {};
@@ -119,6 +246,12 @@
             customCategories = db.custom_categories || [];
             investmentGoals = db.investment_goals || [];
             recurringTransactions = db.recurring_transactions || [];
+            categorizationRules = db.categorization_rules || [];
+            financialGoals = db.goals || [];
+            importsLog = db.imports || [];
+            undoLog = db.undo_log || [];
             checkRecurringReminders();
             renderBudgets(window.allDecryptedTransactions || []);
+            if (typeof renderInsightsPanel === 'function') renderInsightsPanel();
+            if (typeof renderGoalsAndSimulator === 'function') renderGoalsAndSimulator();
         }

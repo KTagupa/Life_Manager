@@ -50,7 +50,26 @@
         function openRecurringModal() {
             populateCategorySelect(document.getElementById('rec-category'));
             renderRecurringList();
+            onRecurringFrequencyChange();
             toggleModal('recurring-modal');
+        }
+
+        function onRecurringFrequencyChange() {
+            const freq = document.getElementById('rec-frequency').value;
+            const weeklyWrap = document.getElementById('rec-weekly-wrap');
+            const monthlyWrap = document.getElementById('rec-monthly-wrap');
+            const note = document.getElementById('rec-schedule-note');
+
+            weeklyWrap.classList.toggle('hidden', freq !== 'weekly');
+            monthlyWrap.classList.toggle('hidden', freq !== 'monthly');
+
+            if (freq === 'weekly') {
+                note.innerText = 'Pick a weekday for weekly reminders.';
+            } else if (freq === 'monthly') {
+                note.innerText = 'Pick a day (1-31) for monthly reminders.';
+            } else {
+                note.innerText = 'Daily reminders do not require an extra schedule field.';
+            }
         }
 
         async function addRecurringReminder() {
@@ -58,7 +77,12 @@
             const type = document.getElementById('rec-type').value;
             const frequency = document.getElementById('rec-frequency').value;
             const category = document.getElementById('rec-category').value;
-            const day = document.getElementById('rec-day').value;
+            const dayOfWeek = frequency === 'weekly'
+                ? parseInt(document.getElementById('rec-day-of-week').value, 10)
+                : null;
+            const dayOfMonth = frequency === 'monthly'
+                ? parseInt(document.getElementById('rec-day-of-month').value || '1', 10)
+                : null;
 
             if (!desc) {
                 alert('Please enter a description');
@@ -71,7 +95,8 @@
                 type,
                 frequency,
                 category,
-                dayOfMonth: day ? parseInt(day) : null,
+                dayOfWeek: frequency === 'weekly' ? Math.max(0, Math.min(6, dayOfWeek || 1)) : undefined,
+                dayOfMonth: frequency === 'monthly' ? Math.max(1, Math.min(31, dayOfMonth || 1)) : undefined,
                 lastDismissed: null,
                 createdAt: new Date().toISOString()
             };
@@ -84,7 +109,8 @@
 
             // Clear form
             document.getElementById('rec-desc').value = '';
-            document.getElementById('rec-day').value = '';
+            document.getElementById('rec-day-of-month').value = '';
+            document.getElementById('rec-day-of-week').value = '1';
 
             renderRecurringList();
             checkRecurringReminders();
@@ -125,7 +151,14 @@
                 const icon = r.type === 'income' ? 'arrow-down-left' : 'arrow-up-right';
                 const color = r.type === 'income' ? 'emerald' : 'rose';
                 const freqLabel = r.frequency.charAt(0).toUpperCase() + r.frequency.slice(1);
-                const dayLabel = r.dayOfMonth ? ` (${r.dayOfMonth}${getDaySuffix(r.dayOfMonth)})` : '';
+                const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                let dayLabel = '';
+                if (r.frequency === 'weekly') {
+                    const day = typeof r.dayOfWeek === 'number' ? r.dayOfWeek : 1;
+                    dayLabel = ` (${weekdayNames[day]})`;
+                } else if (r.frequency === 'monthly') {
+                    dayLabel = r.dayOfMonth ? ` (${r.dayOfMonth}${getDaySuffix(r.dayOfMonth)})` : '';
+                }
 
                 const autoSyncBadge = r.autoSynced ? '<span class="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">AUTO-SYNCED</span>' : '';
                 const estimateText = r.estimatedAmount ? ` • Est. ${fmt(r.estimatedAmount)}` : '';
@@ -188,7 +221,7 @@
 
                 if (r.frequency === 'weekly') {
                     // If no specific day set, remind every Monday (1)
-                    const targetDay = r.dayOfMonth || 1;
+                    const targetDay = typeof r.dayOfWeek === 'number' ? r.dayOfWeek : 1;
                     return currentDayOfWeek === targetDay;
                 }
 

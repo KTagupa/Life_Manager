@@ -1,6 +1,68 @@
         // =============================================
         // SECTION 8: BACKUP & RESTORE
         // =============================================
+        async function computeBackupHash(dataObj) {
+            const json = JSON.stringify(dataObj);
+            const bytes = new TextEncoder().encode(json);
+            const hash = await crypto.subtle.digest('SHA-256', bytes);
+            return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function isEncryptedPayload(value) {
+            return !!(value && typeof value === 'object' && Array.isArray(value.iv) && Array.isArray(value.content));
+        }
+
+        async function validateBackupFilePayload(backup) {
+            const issues = [];
+            if (!backup || typeof backup !== 'object') {
+                issues.push('Backup payload is not an object.');
+                return { ok: false, issues, stats: null };
+            }
+
+            if (!backup.data || typeof backup.data !== 'object') {
+                issues.push('Missing data block.');
+                return { ok: false, issues, stats: null };
+            }
+
+            const data = backup.data;
+            const schemaVersion = parseInt(data.schema_version || 1, 10);
+            if (Number.isNaN(schemaVersion) || schemaVersion < 1) {
+                issues.push('Invalid schema_version.');
+            }
+
+            const stats = {
+                schemaVersion,
+                transactions: (data.transactions || []).length,
+                bills: (data.bills || []).length,
+                debts: (data.debts || []).length,
+                crypto: (data.crypto || []).length,
+                budgets: backup.metadata?.budgetCategoryCount || 0
+            };
+
+            const encryptedCollections = ['transactions', 'bills', 'debts', 'lent', 'crypto', 'wishlist'];
+            encryptedCollections.forEach(key => {
+                (data[key] || []).forEach((item, idx) => {
+                    if (!item || !item.data || !isEncryptedPayload(item.data)) {
+                        issues.push(`Invalid encrypted payload in ${key}[${idx}]`);
+                    }
+                });
+            });
+
+            if (backup.integrity?.hash) {
+                const expected = backup.integrity.hash;
+                const actual = await computeBackupHash(data);
+                if (expected !== actual) {
+                    issues.push('Integrity hash mismatch.');
+                }
+            }
+
+            return {
+                ok: issues.length === 0,
+                issues,
+                stats
+            };
+        }
+
         // Toggle backup dropdown menu
         function toggleBackupMenu() {
             const dropdown = document.getElementById('backup-dropdown');
@@ -53,10 +115,21 @@
 
             try {
                 const db = await getDB();
+                const dataHash = await computeBackupHash(db);
                 const backupData = {
-                    appVersion: "3.0",
+                    appVersion: "4.0",
                     backupDate: new Date().toISOString(),
+                    schemaVersion: db.schema_version || CURRENT_SCHEMA_VERSION,
                     encryptionVersion: "AES-GCM-v3",
+                    metadata: {
+                        budgetCategoryCount: Object.keys(budgets || {}).length,
+                        transactionCount: (db.transactions || []).length,
+                        conflictStrategy: db.sync?.conflictStrategy || 'local_wins'
+                    },
+                    integrity: {
+                        algorithm: "SHA-256",
+                        hash: dataHash
+                    },
                     data: db
                 };
 
@@ -125,9 +198,13 @@
                 const text = await file.text();
                 const backup = JSON.parse(text);
 
-                // Validate backup structure
                 if (!backup.data || !backup.appVersion) {
-                    throw new Error('Invalid backup file format');
+                    throw new Error('Invalid backup file');
+                }
+
+                const validation = await validateBackupFilePayload(backup);
+                if (!validation.ok) {
+                    throw new Error(validation.issues.join('\n'));
                 }
 
                 // Store backup data temporarily
@@ -144,7 +221,8 @@
                     <div class="flex justify-between"><span class="text-slate-500">Bills:</span><span class="font-bold text-slate-700">${data.bills?.length || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Debts:</span><span class="font-bold text-slate-700">${data.debts?.length || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Crypto Transactions:</span><span class="font-bold text-slate-700">${data.crypto?.length || 0}</span></div>
-                    <div class="flex justify-between"><span class="text-slate-500">Budget Categories:</span><span class="font-bold text-slate-700">${Object.keys(data.budgets?.data || {}).length || 0}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Budget Categories:</span><span class="font-bold text-slate-700">${backup.metadata?.budgetCategoryCount || 0}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Schema Version:</span><span class="font-bold text-slate-700">${validation.stats.schemaVersion}</span></div>
                 `;
 
                 document.getElementById('restore-select').classList.add('hidden');
@@ -168,6 +246,10 @@
 
             try {
                 const backup = window.pendingRestore;
+                const validation = await validateBackupFilePayload(backup);
+                if (!validation.ok) {
+                    throw new Error(`Backup validation failed: ${validation.issues.join('; ')}`);
+                }
 
                 // Save to localStorage
                 localStorage.setItem(DB_KEY, JSON.stringify(backup.data));
@@ -175,17 +257,8 @@
                 // Sync to Firebase
                 await saveDB(backup.data);
 
-                // Reload all data
-                rawTransactions = backup.data.transactions || [];
-                rawBills = backup.data.bills || [];
-                rawDebts = backup.data.debts || [];
-                rawCrypto = backup.data.crypto || [];
-                cryptoPrices = backup.data.crypto_prices || {};
-
-                await loadAndRender();
-                renderBills(rawBills);
-                renderDebts(rawDebts);
-                renderCryptoWidget();
+                // Reload all data safely through the normal pipeline
+                await loadFromStorage();
 
                 closeRestoreModal();
                 showToast('✅ Backup restored successfully!');

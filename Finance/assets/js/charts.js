@@ -16,6 +16,9 @@
 
             // Set current month default
             mSel.value = new Date().getMonth() + 1;
+
+            const metricScopeSel = document.getElementById('metric-scope');
+            if (metricScopeSel) metricScopeSel.value = metricScope;
         }
 
         let trendsChart = null;
@@ -144,9 +147,20 @@
                 );
             }
 
+            window.filteredTransactions = filtered;
+            filteredTransactions = filtered;
+
+            const scopedTransactions = getTransactionsForScope(metricScope, window.allDecryptedTransactions, filtered);
             renderTransactions(filtered);
-            updateChart(filtered);
-            renderBudgets(filtered);
+            updateChart(scopedTransactions);
+            renderBudgets(scopedTransactions);
+
+            if (typeof renderInsightsPanel === 'function') {
+                renderInsightsPanel();
+            }
+            if (typeof renderGoalsAndSimulator === 'function') {
+                renderGoalsAndSimulator();
+            }
         }
 
         function resetFilters() {
@@ -158,10 +172,11 @@
         function updateChart(items) {
             if (!spendChart) return;
 
-            const cats = {};
-            items.filter(i => i.type === 'expense').forEach(i => {
-                cats[i.category] = (cats[i.category] || 0) + i.amt;
+            const metrics = computeSummaryMetrics(window.allDecryptedTransactions || [], metricScope, {
+                scopeTransactions: items,
+                filteredTransactions: window.filteredTransactions || []
             });
+            const cats = metrics.categoryExpenses;
 
             spendChart.data.labels = Object.keys(cats);
             spendChart.data.datasets[0].data = Object.values(cats);

@@ -191,8 +191,8 @@
                     notes, exchange, strategy, date
                 };
 
-                db.crypto.push({ id: swapId + '_out', data: await encryptData(txOut) });
-                db.crypto.push({ id: swapId + '_in', data: await encryptData(txIn) });
+                db.crypto.push({ id: swapId + '_out', data: await encryptData(txOut), deletedAt: null });
+                db.crypto.push({ id: swapId + '_in', data: await encryptData(txIn), deletedAt: null });
 
             } else {
                 // Regular Buy/Sell
@@ -224,13 +224,14 @@
                 const encrypted = await encryptData(txData);
                 db.crypto.push({
                     id: Date.now().toString(36),
-                    data: encrypted
+                    data: encrypted,
+                    deletedAt: null
                 });
             }
 
             await saveDB(db);
 
-            rawCrypto = db.crypto;
+            rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
             toggleModal('crypto-transaction-modal');
             renderCryptoWidget(); // Refresh dashboard
             if (!document.getElementById('crypto-portfolio-modal').classList.contains('hidden')) {
