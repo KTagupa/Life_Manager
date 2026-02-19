@@ -20,17 +20,95 @@ function extractLink(text) {
 function toggleMenu() {
     const tb = document.getElementById('toolbar');
     const btn = document.getElementById('menu-btn');
-    const content = document.getElementById('toolbar-content');
+    const isCollapsed = tb.classList.toggle('collapsed');
+    const isExpanded = !isCollapsed;
 
-    tb.classList.toggle('collapsed');
+    btn.innerHTML = isCollapsed ? '☰' : '✕';
+    btn.setAttribute('aria-expanded', String(isExpanded));
+    btn.setAttribute('aria-label', isExpanded ? 'Close Menu (Optn+Q)' : 'Open Menu (Optn+Q)');
+    btn.title = isExpanded ? 'Close Menu (Optn+Q)' : 'Open Menu (Optn+Q)';
+    if (isCollapsed) hideToolbarActionTooltip();
+}
 
-    if (tb.classList.contains('collapsed')) {
-        btn.innerHTML = '☰';
-        content.style.display = 'none';
-    } else {
-        btn.innerHTML = '✕';
-        content.style.display = 'flex';
+function hideToolbarActionTooltip() {
+    const tooltip = document.getElementById('toolbar-action-tooltip');
+    if (!tooltip) return;
+    tooltip.classList.remove('visible');
+    tooltip.style.transform = 'translate(-9999px, -9999px)';
+}
+
+function setupToolbarActionTooltips() {
+    const grid = document.getElementById('toolbar-quick-actions-grid');
+    if (!grid || grid.dataset.tooltipReady === '1') return;
+    grid.dataset.tooltipReady = '1';
+
+    let tooltip = document.getElementById('toolbar-action-tooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'toolbar-action-tooltip';
+        document.body.appendChild(tooltip);
     }
+
+    let activeBtn = null;
+
+    const positionTooltip = (btn) => {
+        if (!btn || !tooltip) return;
+        const text = btn.getAttribute('data-tooltip') || btn.getAttribute('aria-label') || '';
+        if (!text) {
+            hideToolbarActionTooltip();
+            return;
+        }
+
+        tooltip.textContent = text;
+        tooltip.style.left = '0px';
+        tooltip.style.top = '0px';
+        tooltip.style.transform = 'translate(-9999px, -9999px)';
+        tooltip.classList.add('visible');
+
+        const rect = btn.getBoundingClientRect();
+        const tipRect = tooltip.getBoundingClientRect();
+        const gap = 12;
+        const margin = 8;
+
+        let left = rect.right + gap;
+        if (left + tipRect.width + margin > window.innerWidth) {
+            left = rect.left - tipRect.width - gap;
+        }
+        left = Math.max(margin, left);
+
+        let top = rect.top + (rect.height / 2) - (tipRect.height / 2);
+        top = Math.max(margin, Math.min(top, window.innerHeight - tipRect.height - margin));
+
+        tooltip.style.left = `${Math.round(left)}px`;
+        tooltip.style.top = `${Math.round(top)}px`;
+        tooltip.style.transform = 'translate(0, 0)';
+    };
+
+    const show = (btn) => {
+        activeBtn = btn;
+        positionTooltip(btn);
+    };
+
+    const hide = (btn) => {
+        if (btn && activeBtn && btn !== activeBtn) return;
+        activeBtn = null;
+        hideToolbarActionTooltip();
+    };
+
+    grid.querySelectorAll('.toolbar-menu-action').forEach(btn => {
+        btn.addEventListener('mouseenter', () => show(btn));
+        btn.addEventListener('focus', () => show(btn));
+        btn.addEventListener('mouseleave', () => hide(btn));
+        btn.addEventListener('blur', () => hide(btn));
+    });
+
+    grid.addEventListener('scroll', () => {
+        if (activeBtn) positionTooltip(activeBtn);
+    }, { passive: true });
+
+    window.addEventListener('resize', () => {
+        if (activeBtn) positionTooltip(activeBtn);
+    });
 }
 
 const WORKSPACE_SECTION_STORAGE_KEY = 'urgencyFlow_workspace_section';

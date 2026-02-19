@@ -88,7 +88,8 @@
 
     <div id="toolbar" class="collapsed">
         <div class="toolbar-actions">
-            <button id="menu-btn" onclick="toggleMenu()">☰</button>
+            <button id="menu-btn" onclick="toggleMenu()" title="Open Menu (Optn+Q)" aria-label="Open Menu (Optn+Q)"
+                aria-expanded="false">☰</button>
             <button id="btn-navigator" class="toolbar-icon-btn" title="Navigator (Opt+F)"
                 onclick="toggleNavigatorPanel(null, 'tasks')">🧭</button>
             <button id="btn-dashboard" class="toolbar-icon-btn" title="Dashboard (Opt+U)"
@@ -103,33 +104,27 @@
                 onclick="toggleShortcutsHelp()">⌨️</button>
         </div>
         <div id="toolbar-content">
-            <div id="workspace-nav" class="workspace-nav">
-                <button class="workspace-tab active" data-section="today" onclick="setWorkspaceSection('today')">Today</button>
-                <button class="workspace-tab" data-section="capture" onclick="setWorkspaceSection('capture')">Capture</button>
-                <button class="workspace-tab" data-section="knowledge" onclick="setWorkspaceSection('knowledge')">Knowledge</button>
-                <button class="workspace-tab" data-section="review" onclick="setWorkspaceSection('review')">Review</button>
-                <button class="workspace-tab" data-section="settings" onclick="setWorkspaceSection('settings')">Settings</button>
+            <div id="toolbar-quick-actions-grid" class="toolbar-quick-actions-grid">
+                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-primary" onclick="addNode()" data-tooltip="New Task (Optn+T)" aria-label="New Task (Optn+T)">＋</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleInboxModal()" data-tooltip="Inbox (Optn+B)" aria-label="Inbox (Optn+B)">📥</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleGoals()" data-tooltip="Life Goals (Optn+G)" aria-label="Life Goals (Optn+G)">🎯</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleHabits()" data-tooltip="Habits (Optn+H)" aria-label="Habits (Optn+H)">✅</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleAgenda()" data-tooltip="Planner (Optn+A)" aria-label="Planner (Optn+A)">📅</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleNotesPanel()" data-tooltip="Knowledge Base (Optn+N)" aria-label="Knowledge Base (Optn+N)">📝</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleArchivePanel()" data-tooltip="Archive (Optn+X)" aria-label="Archive (Optn+X)">🗄️</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleNavigatorPanel(null, 'tasks')" data-tooltip="Navigator (Optn+F)" aria-label="Navigator (Optn+F)">🧭</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="fitView()" data-tooltip="Recenter / Urgent (Optn+R)" aria-label="Recenter / Urgent (Optn+R)">📍</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="autoArrangeGraph()" data-tooltip="Declutter (Optn+D)" aria-label="Declutter (Optn+D)">🪄</button>
+                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-accent" onclick="toggleSyncPanel()" data-tooltip="Settings (Optn+S)" aria-label="Settings (Optn+S)">⚙️</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleRemindersModal()" data-tooltip="All Reminders (No Shortcut)" aria-label="All Reminders">🔔</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleGlobalSearch()" data-tooltip="Search (Optn+Space)" aria-label="Search (Optn+Space)">🔍</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="saveData(true)" data-tooltip="Save (Optn+V)" aria-label="Save (Optn+V)">💾</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="document.getElementById('file-input').click()" data-tooltip="Load (Optn+L)" aria-label="Load (Optn+L)">📂</button>
+                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-danger" onclick="clearData()" data-tooltip="Reset (Optn+K)" aria-label="Reset (Optn+K)">🗑️</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="exportNotesAsMarkdown()" data-tooltip="Export Notes (No Shortcut)" aria-label="Export Notes">📄</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" id="eco-toggle-btn" onclick="cycleEcoMode()" data-tooltip="Cycle Engine Mode (Optn+E) · Turbo"
+                    aria-label="Cycle Engine Mode (Optn+E)">🚀<span id="eco-status" class="toolbar-menu-action-status">Turbo</span></button>
             </div>
-            <button class="btn btn-primary" onclick="addNode()">+ New Task (Optn+T)</button>
-            <button class="btn" onclick="toggleInboxModal()">📥 Inbox (Optn+B)</button>
-            <button class="btn" onclick="toggleGoals()">🎯 Life Goals (Optn+G)</button>
-            <button class="btn" onclick="toggleHabits()">✅ Habits (Optn+H)</button>
-            <button class="btn" onclick="toggleAgenda()">📅 Planner (Optn+A)</button>
-            <button class="btn" onclick="toggleNotesPanel()">📝 Knowledge Base (Optn+N)</button>
-            <button class="btn" onclick="toggleArchivePanel()">🗄️ Archive (Optn+X)</button>
-            <button class="btn" onclick="toggleNavigatorPanel(null, 'tasks')">🧭 Navigator (Optn+F)</button>
-            <button class="btn" onclick="fitView()">Recenter / Urgent (Optn+R)</button>
-            <button class="btn" onclick="autoArrangeGraph()">🪄 Declutter (Optn+D)</button>
-            <button class="btn" style="border-color: var(--accent); color: var(--accent);"
-                onclick="toggleSyncPanel()">⚙️ Settings (Optn+S)</button>
-            <button class="btn" onclick="toggleRemindersModal()">🔔 All Reminders</button>
-            <button class="btn" onclick="toggleGlobalSearch()">🔍 Search (Optn+Space)</button>
-            <button class="btn" onclick="saveData(true)">Save (Optn+V)</button>
-            <button class="btn" onclick="document.getElementById('file-input').click()">Load (Optn+L)</button>
-            <button class="btn btn-danger" onclick="clearData()">Reset (Optn+K)</button>
-            <button class="btn" onclick="exportNotesAsMarkdown()">📄 Export Notes</button>
-            <button class="btn" id="eco-toggle-btn" onclick="cycleEcoMode()">🚀 Mode: <span id="eco-status">Turbo</span>
-                (Optn+E)</button>
         </div>
     </div>
 

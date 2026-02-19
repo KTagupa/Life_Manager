@@ -316,6 +316,12 @@ function applyEcoMode() {
 
     const settingsEcoStatus = document.getElementById('settings-eco-status');
     if (settingsEcoStatus && statusEl) settingsEcoStatus.innerText = statusEl.innerText;
+    if (btnEl && statusEl) {
+        const modeLabel = statusEl.innerText || "Turbo";
+        const tooltip = `Cycle Engine Mode (Optn+E) · ${modeLabel}`;
+        btnEl.setAttribute('data-tooltip', tooltip);
+        btnEl.setAttribute('aria-label', tooltip);
+    }
 
     render();
 }
@@ -935,6 +941,7 @@ function setupInteractions() {
             e.preventDefault();
             switch (e.code) {
                 case 'KeyT': addNode(); break;
+                case 'KeyQ': toggleMenu(); break;
                 case 'KeyG': toggleGoals(); break;
                 case 'KeyH': toggleHabits(); break;
                 case 'KeyA':
@@ -1213,6 +1220,7 @@ function toggleShortcutsHelp() {
                 <div><b>Ctrl+Z</b> - Undo</div>
                 <div><b>Ctrl+Shift+Z</b> - Redo</div>
                 <div><b>Alt+T</b> - New task</div>
+                <div><b>Alt+Q</b> - Toggle toolbar menu</div>
                 <div><b>Alt+B</b> - Inbox</div>
                 <div><b>Alt+N</b> - Notes</div>
                 <div><b>Alt+G</b> - Goals</div>

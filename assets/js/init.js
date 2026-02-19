@@ -88,6 +88,7 @@
             setupInteractions();
             setupPanelDrag();
             setupContextualMenu();
+            if (typeof setupToolbarActionTooltips === 'function') setupToolbarActionTooltips();
             renderPinnedWindow();
             renderQuickLinks();
             if (typeof setNavigatorTab === 'function' && typeof getSavedNavigatorTab === 'function') {
