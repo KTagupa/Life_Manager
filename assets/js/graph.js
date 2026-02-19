@@ -157,6 +157,8 @@ function autoArrangeGraph() {
         sortedRanks.forEach(rank => {
             const list = rankGroups.get(rank);
             maxNodesInCompRow = Math.max(maxNodesInCompRow, list.length);
+            const usedYsInRank = [];
+            const minVerticalGap = ROW_GAP;
             list.forEach((n, idx) => {
                 let tx = ACTIVE_START_X + (rank * COL_GAP);
                 // Timeline nudge (Only apply to future-dated active tasks)
@@ -166,7 +168,39 @@ function autoArrangeGraph() {
                     if (days > 0) tx += Math.min(COL_GAP * 0.4, days * TIME_SCALE);
                 }
                 n.x = tx;
-                n.y = currentY + (idx * ROW_GAP);
+
+                const baseY = currentY + (idx * ROW_GAP);
+                let ty = baseY;
+
+                // Prefer horizontal continuity: snap to parent Y when possible.
+                if (rank >= 0 && n.dependencies.length > 0) {
+                    const parentEntries = n.dependencies
+                        .map(dep => ({ dep, parent: comp.find(p => p.id === dep.id) }))
+                        .filter(entry => entry.parent && typeof entry.parent.y === 'number');
+
+                    if (parentEntries.length > 0) {
+                        const hardParentYs = parentEntries
+                            .filter(entry => entry.dep.type === 'hard')
+                            .map(entry => entry.parent.y);
+                        const anchorYs = hardParentYs.length > 0
+                            ? hardParentYs
+                            : parentEntries.map(entry => entry.parent.y);
+
+                        if (anchorYs.length === 1) {
+                            ty = anchorYs[0];
+                        } else if (anchorYs.length > 1) {
+                            // For merges, anchor to the highest upstream branch.
+                            ty = Math.min(...anchorYs);
+                        }
+                    }
+                }
+
+                while (usedYsInRank.some(y => Math.abs(y - ty) < minVerticalGap)) {
+                    ty += minVerticalGap;
+                }
+
+                usedYsInRank.push(ty);
+                n.y = ty;
             });
         });
 
