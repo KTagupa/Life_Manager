@@ -45,6 +45,14 @@
             const gistIdInput = document.getElementById('gist-id');
             if (gistIdInput && gistId) gistIdInput.value = gistId;
 
+            if (typeof syncNotesFromRepository === 'function') {
+                try {
+                    await syncNotesFromRepository({ render: false, preserveSelection: true });
+                } catch (error) {
+                    console.error('[init] Failed to sync notes from shared repository:', error);
+                }
+            }
+
             // Load API Key into input if exists
             const geminiKeyInput = document.getElementById('gemini-api-key-input');
             if (geminiKeyInput && geminiApiKey) geminiKeyInput.value = geminiApiKey;
@@ -109,6 +117,10 @@
 
             // Setup modal dragging
             setupModalDragging();
+
+            if (typeof initIndexNotesLiveSync === 'function') {
+                initIndexNotesLiveSync();
+            }
 
             // Load saved positions
             aiModalPosition = parseSavedJSON('aiModalPosition', aiModalPosition);

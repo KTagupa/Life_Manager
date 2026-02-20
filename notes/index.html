@@ -16,9 +16,9 @@
         }
 
         .notes-page {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 20px 18px;
         }
 
         .notes-topbar {
@@ -26,7 +26,8 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
         }
 
         .notes-title {
@@ -40,14 +41,14 @@
             font-size: 13px;
         }
 
-        .notes-grid {
+        .notes-layout {
             display: grid;
-            grid-template-columns: minmax(260px, 340px) 1fr;
+            grid-template-columns: minmax(280px, 360px) 1fr;
             gap: 16px;
-            min-height: calc(100vh - 120px);
+            min-height: calc(100vh - 112px);
         }
 
-        .notes-col {
+        .notes-panel {
             background: var(--panel-bg);
             border: 1px solid var(--border);
             border-radius: 10px;
@@ -56,13 +57,21 @@
             min-height: 0;
         }
 
-        .notes-col-header {
+        .notes-panel-header {
             padding: 12px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 10px;
+        }
+
+        .notes-list-controls {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
             gap: 8px;
+            align-items: center;
         }
 
         .notes-list-scroll {
@@ -109,7 +118,7 @@
             gap: 8px;
         }
 
-        .notes-editor {
+        .notes-editor-main {
             display: flex;
             flex-direction: column;
             min-height: 0;
@@ -118,15 +127,28 @@
             padding: 12px;
         }
 
-        .notes-editor label {
+        .editor-meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .editor-meta-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .editor-meta-field label {
             font-size: 11px;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.4px;
         }
 
-        .notes-editor input,
-        .notes-editor textarea,
+        .notes-editor-main input,
+        .notes-editor-main textarea,
+        .notes-editor-main select,
         #notes-search {
             width: 100%;
             box-sizing: border-box;
@@ -138,17 +160,100 @@
             font-size: 13px;
         }
 
-        .notes-editor textarea {
-            flex: 1;
-            min-height: 220px;
-            resize: vertical;
-            line-height: 1.45;
+        #note-title {
+            font-weight: 600;
         }
 
-        .notes-actions {
+        .editor-action-row {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .block-toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .block-list {
+            flex: 1;
+            min-height: 260px;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-right: 2px;
+        }
+
+        .note-block {
+            border: 1px solid rgba(0, 0, 0, 0.18);
+            border-radius: 9px;
+            padding: 9px;
+        }
+
+        .note-block-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .note-block-controls select {
+            max-width: 180px;
+        }
+
+        .note-block-controls input {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .note-block-controls button {
+            min-width: 34px;
+        }
+
+        .note-block textarea {
+            width: 100%;
+            box-sizing: border-box;
+            min-height: 120px;
+            resize: vertical;
+            border: 1px solid rgba(0, 0, 0, 0.18);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 13px;
+            line-height: 1.45;
+            color: #0f172a;
+            background: rgba(255, 255, 255, 0.75);
+        }
+
+        .note-block-preview {
+            width: 100%;
+            box-sizing: border-box;
+            min-height: 70px;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 13px;
+            line-height: 1.45;
+            color: #0f172a;
+            background: rgba(255, 255, 255, 0.78);
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .notes-btn-inline {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .notes-muted {
+            color: var(--text-muted);
+            font-size: 11px;
         }
 
         .notes-status {
@@ -165,55 +270,76 @@
         }
 
         @media (max-width: 900px) {
-            .notes-grid {
+            .notes-layout {
                 grid-template-columns: 1fr;
                 min-height: auto;
             }
 
-            .notes-col {
+            .notes-panel {
                 min-height: 280px;
+            }
+
+            .editor-meta-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 
 <body>
     <main class="notes-page">
         <div class="notes-topbar">
             <h1 class="notes-title">Notes Workspace</h1>
-            <a class="notes-topbar-link" href="../index.html">← Back to Main App</a>
+            <div style="display:flex; gap:12px; align-items:center;">
+                <span class="notes-muted">Shared with main app storage</span>
+                <a class="notes-topbar-link" href="../index.html">Back to Main App</a>
+            </div>
         </div>
 
-        <section class="notes-grid">
-            <aside class="notes-col">
-                <div class="notes-col-header">
+        <section class="notes-layout">
+            <aside class="notes-panel">
+                <div class="notes-panel-header">
                     <strong>All Notes</strong>
                     <span id="notes-count" class="notes-status"></span>
                 </div>
-                <div style="padding: 10px; border-bottom: 1px solid var(--border);">
+                <div class="notes-list-controls">
                     <input type="text" id="notes-search" placeholder="Search notes...">
+                    <button id="new-note-btn" class="btn notes-btn-inline">+ New</button>
                 </div>
                 <div id="notes-list" class="notes-list-scroll"></div>
             </aside>
 
-            <section class="notes-col">
-                <div class="notes-col-header">
+            <section class="notes-panel">
+                <div class="notes-panel-header">
                     <strong>Editor</strong>
+                    <span id="notes-status" class="notes-status"></span>
                 </div>
-                <div class="notes-editor">
-                    <label for="note-title">Title</label>
+                <div class="notes-editor-main">
                     <input type="text" id="note-title" placeholder="Note title">
 
-                    <label for="note-body">Body</label>
-                    <textarea id="note-body"
-                        placeholder="Write your note here. Existing block-formatted notes are preserved on save."></textarea>
-
-                    <div class="notes-actions">
-                        <button id="new-note-btn" class="btn">New</button>
-                        <button id="save-note-btn" class="btn btn-primary">Save</button>
-                        <button id="delete-note-btn" class="btn">Delete</button>
+                    <div class="editor-meta-grid">
+                        <div class="editor-meta-field">
+                            <label for="note-task-ids">Linked Task IDs (comma separated)</label>
+                            <input type="text" id="note-task-ids" placeholder="task_123, task_456">
+                        </div>
+                        <div class="editor-meta-field">
+                            <label for="bookmark-jump">Jump To Bookmark</label>
+                            <select id="bookmark-jump">
+                                <option value="">No bookmarks</option>
+                            </select>
+                        </div>
                     </div>
-                    <div id="notes-status" class="notes-status"></div>
+
+                    <div class="editor-action-row">
+                        <button id="add-block-btn" class="btn notes-btn-inline">+ Add Block</button>
+                        <button id="toggle-view-btn" class="btn notes-btn-inline">View Mode</button>
+                        <button id="pin-note-btn" class="btn notes-btn-inline">Pin</button>
+                        <button id="save-note-btn" class="btn btn-primary notes-btn-inline">Save</button>
+                        <button id="delete-note-btn" class="btn notes-btn-inline">Delete</button>
+                    </div>
+
+                    <div id="blocks-container" class="block-list"></div>
                 </div>
             </section>
         </section>

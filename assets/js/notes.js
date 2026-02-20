@@ -23,6 +23,112 @@
             }
         }
 
+        function hasSharedNotesRepository() {
+            return !!(
+                window.NotesRepository &&
+                typeof window.NotesRepository.listNotes === 'function' &&
+                typeof window.NotesRepository.createNote === 'function' &&
+                typeof window.NotesRepository.updateNote === 'function' &&
+                typeof window.NotesRepository.deleteNote === 'function'
+            );
+        }
+
+        function upsertLocalNote(note) {
+            if (!note || !note.id) return;
+            const idx = notes.findIndex(n => n.id === note.id);
+            if (idx === -1) notes.push(note);
+            else notes[idx] = note;
+        }
+
+        function persistCreatedNote(note) {
+            if (!hasSharedNotesRepository() || !note) return Promise.resolve(note);
+            return window.NotesRepository.createNote(note)
+                .then((created) => {
+                    if (created) upsertLocalNote(created);
+                    return created;
+                })
+                .catch((error) => {
+                    console.error('[notes] Failed to persist created note via repository:', error);
+                    return note;
+                });
+        }
+
+        function persistUpdatedNote(noteId, patch) {
+            if (!hasSharedNotesRepository() || !noteId) return Promise.resolve(null);
+            return window.NotesRepository.updateNote(noteId, patch || {})
+                .then((updated) => {
+                    if (updated) upsertLocalNote(updated);
+                    return updated;
+                })
+                .catch((error) => {
+                    console.error('[notes] Failed to persist updated note via repository:', error);
+                    return null;
+                });
+        }
+
+        function persistDeletedNote(noteId) {
+            if (!hasSharedNotesRepository() || !noteId) return Promise.resolve(false);
+            return window.NotesRepository.deleteNote(noteId)
+                .then((deleted) => {
+                    if (deleted) notes = notes.filter(n => n.id !== noteId);
+                    return deleted;
+                })
+                .catch((error) => {
+                    console.error('[notes] Failed to delete note via repository:', error);
+                    return false;
+                });
+        }
+
+        function broadcastNotesChange(type, id) {
+            if (!window.NotesSync || typeof window.NotesSync.broadcastNotesEvent !== 'function') return;
+            window.NotesSync.broadcastNotesEvent({ type, id });
+        }
+
+        function syncNotesFromRepository(options = {}) {
+            if (!hasSharedNotesRepository()) return Promise.resolve(notes);
+
+            const shouldRender = options.render !== false;
+            const preserveSelection = options.preserveSelection !== false;
+            const previousEditingId = preserveSelection ? currentEditingNoteId : null;
+
+            return window.NotesRepository.listNotes({ sort: 'pinned-timestamp-desc' })
+                .then((repoNotes) => {
+                    notes = Array.isArray(repoNotes) ? repoNotes : [];
+
+                    if (previousEditingId && !notes.some(n => n.id === previousEditingId)) {
+                        const editor = document.getElementById('note-editor');
+                        if (editor) editor.classList.add('hidden');
+                        currentEditingNoteId = null;
+                        currentNoteBlocks = [];
+                        activeBlockId = null;
+                    }
+
+                    if (shouldRender && typeof renderNotesList === 'function') {
+                        renderNotesList();
+                    }
+
+                    return notes;
+                })
+                .catch((error) => {
+                    console.error('[notes] Failed to sync notes from repository:', error);
+                    return notes;
+                });
+        }
+
+        function initIndexNotesLiveSync() {
+            if (!window.NotesSync || typeof window.NotesSync.initNotesChannel !== 'function') return null;
+
+            return window.NotesSync.initNotesChannel(() => {
+                syncNotesFromRepository({ render: true, preserveSelection: true }).then(() => {
+                    if (typeof updateAINoteSelectionSummary === 'function') updateAINoteSelectionSummary();
+                    if (selectedNodeId && typeof updateInspector === 'function') updateInspector();
+                });
+            });
+        }
+
+        window.syncNotesFromRepository = syncNotesFromRepository;
+        window.initIndexNotesLiveSync = initIndexNotesLiveSync;
+
         function togglePinNotePanel() {
             const panel = document.getElementById('notes-panel');
             const btn = document.getElementById('pin-note-btn');
@@ -1518,6 +1624,10 @@
             const newNote = createNoteObject(title, `${originText}${currentSelectionText}`);
             newNote.taskIds = parentTaskIDs;
             notes.push(newNote);
+            persistCreatedNote(newNote).then(() => {
+                syncNotesFromRepository({ render: true, preserveSelection: true });
+            });
+            broadcastNotesChange('create', newNote.id);
 
             // Only replace text if source is note
             if (currentSelectionSource === 'note' && noteSelectionRange) {
@@ -1625,6 +1735,8 @@
             const note = notes.find(n => n.id === currentEditingNoteId);
             if (note) {
                 note.isPinned = !note.isPinned;
+                persistUpdatedNote(note.id, { isPinned: note.isPinned });
+                broadcastNotesChange('update', note.id);
                 saveToStorage();
                 renderNotesList();
                 showNotification(note.isPinned ? "Note Pinned" : "Note Unpinned");
@@ -1647,6 +1759,10 @@
 
             const newNote = createNoteObject(noteTitle, "", safeTaskId);
             notes.push(newNote);
+            persistCreatedNote(newNote).then(() => {
+                syncNotesFromRepository({ render: true, preserveSelection: true });
+            });
+            broadcastNotesChange('create', newNote.id);
 
             // Save immediately
             saveToStorage();
@@ -1783,9 +1899,16 @@
             if (!currentEditingNoteId) return;
             const note = notes.find(n => n.id === currentEditingNoteId);
             if (!note) return;
+            const now = Date.now();
             note.title = document.getElementById('note-title-input').value;
             note.body = serializeNoteBlocks();
-            note.timestamp = Date.now();
+            note.timestamp = now;
+            persistUpdatedNote(note.id, {
+                title: note.title,
+                body: note.body,
+                timestamp: note.timestamp
+            });
+            broadcastNotesChange('update', note.id);
             saveToStorage();
         }
 
@@ -1804,6 +1927,8 @@
                 if (typeof toggleAINoteSelection === 'function') toggleAINoteSelection(deletedId, false);
 
                 closeNoteEditor();
+                persistDeletedNote(deletedId);
+                broadcastNotesChange('delete', deletedId);
                 saveToStorage();
                 renderNotesList();
 
@@ -1919,6 +2044,8 @@
             if (!note.taskIds) note.taskIds = [];
             if (!note.taskIds.includes(taskId)) {
                 note.taskIds.push(taskId);
+                persistUpdatedNote(note.id, { taskIds: [...note.taskIds] });
+                broadcastNotesChange('update', note.id);
                 saveToStorage();
                 renderNoteLinkedTasks();
                 if (selectedNodeId === taskId) updateInspector();
@@ -1930,6 +2057,8 @@
             const note = notes.find(n => n.id === currentEditingNoteId);
             if (!note) return;
             note.taskIds = (note.taskIds || []).filter(id => id !== taskId);
+            persistUpdatedNote(note.id, { taskIds: [...note.taskIds] });
+            broadcastNotesChange('update', note.id);
             saveToStorage();
             renderNoteLinkedTasks();
             if (selectedNodeId === taskId) updateInspector();
@@ -1943,6 +2072,8 @@
             if (!note.taskIds) note.taskIds = [];
             if (!note.taskIds.includes(taskId)) {
                 note.taskIds.push(taskId);
+                persistUpdatedNote(note.id, { taskIds: [...note.taskIds] });
+                broadcastNotesChange('update', note.id);
                 saveToStorage();
                 updateInspector();
                 showNotification("Note Linked to Task");
