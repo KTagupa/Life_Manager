@@ -68,7 +68,7 @@
 
             // Aggregate data
             transactions.forEach(t => {
-                const date = new Date(t.date);
+                const date = new Date(getTxTimestamp(t));
                 const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                 if (monthlyData[key]) {
                     if (t.type === 'income') monthlyData[key].income += t.amt;
@@ -118,8 +118,11 @@
             // Decrypt all first
             const decrypted = (await Promise.all(rawTransactions.map(async i => {
                 const d = await decryptData(i.data);
-                return d ? { ...d, id: i.id } : null;
-            }))).filter(x => x).sort((a, b) => new Date(b.date) - new Date(a.date));
+                if (!d) return null;
+                const hydrated = { ...d, id: i.id };
+                hydrateTransactionCache(hydrated);
+                return hydrated;
+            }))).filter(x => x).sort((a, b) => getTxTimestamp(b) - getTxTimestamp(a));
 
             // Store cleanly for usage
             window.allDecryptedTransactions = decrypted;
@@ -135,15 +138,14 @@
             let filtered = window.allDecryptedTransactions || [];
 
             if (y !== 'all') {
-                filtered = filtered.filter(t => new Date(t.date).getFullYear() == y);
+                filtered = filtered.filter(t => getTxYear(t) == y);
             }
             if (m !== 'all') {
-                filtered = filtered.filter(t => (new Date(t.date).getMonth() + 1) == m);
+                filtered = filtered.filter(t => getTxMonth(t) == m);
             }
             if (searchQuery) {
                 filtered = filtered.filter(t =>
-                    t.desc.toLowerCase().includes(searchQuery) ||
-                    t.category.toLowerCase().includes(searchQuery)
+                    getTxSearchText(t).includes(searchQuery)
                 );
             }
 

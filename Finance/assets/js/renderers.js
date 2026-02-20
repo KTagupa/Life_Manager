@@ -9,6 +9,11 @@
             items.forEach(i => {
                 const isInc = i.type === 'income';
                 const isDebtInc = i.type === 'debt_increase';
+                const encodedTxId = encodeInlineArg(i.id);
+                const safeDesc = escapeHTML(i.desc || 'Untitled');
+                const safeCategory = escapeHTML(i.category || 'Uncategorized');
+                const initials = escapeHTML(i.category ? i.category.substring(0, 2).toUpperCase() : '??');
+                const displayDate = new Date(i.date).toLocaleDateString();
 
                 const div = document.createElement('div');
                 div.className = "p-4 flex items-center justify-between group hover:bg-slate-50 transition-colors cursor-pointer";
@@ -18,7 +23,7 @@
                 };
 
                 const currencyBadge = i.originalCurrency && i.originalCurrency !== 'PHP'
-                    ? `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold">${i.originalCurrency}</span>`
+                    ? `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold">${escapeHTML(i.originalCurrency)}</span>`
                     : '';
 
                 // Icon & Color Logic
@@ -37,16 +42,16 @@
                 div.innerHTML = `
                     <div class="flex items-center gap-4">
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${iconBg} ${iconText}">
-                            ${i.category ? i.category.substring(0, 2).toUpperCase() : '??'}
+                            ${initials}
                         </div>
                         <div>
-                            <p class="font-bold text-slate-800">${i.desc} ${currencyBadge}</p>
-                            <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${new Date(i.date).toLocaleDateString()} • ${i.category}</p>
+                            <p class="font-bold text-slate-800">${safeDesc} ${currencyBadge}</p>
+                            <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${displayDate} • ${safeCategory}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-4">
                         <p class="font-bold ${amountColor}">${sign}${fmt(i.amt)}</p>
-                        <button onclick="deleteItem('transactions', '${i.id}')" class="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        <button onclick="deleteItem('transactions', decodeURIComponent('${encodedTxId}'))" class="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </div>`;
                 list.appendChild(div);
             });
@@ -86,6 +91,8 @@
             const allTrans = window.allDecryptedTransactions || [];
 
             decryptedDebts.forEach(d => {
+                const safeDebtName = escapeHTML(d.name || 'Debt');
+                const encodedDebtId = encodeInlineArg(d.id);
                 // Sum expenses that match debt name (Repayments)
                 const paid = allTrans
                     .filter(t => t.type === 'expense' && t.category === d.name)
@@ -111,14 +118,14 @@
                 div.innerHTML = `
                         <div class="flex justify-between items-end mb-1">
                             <div>
-                                <p class="text-sm font-bold text-slate-700">${d.name}</p>
+                                <p class="text-sm font-bold text-slate-700">${safeDebtName}</p>
                                 <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                                     Paid: ${fmt(paid)} / ${fmt(totalDebt)}
                                 </p>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-black text-rose-600">${percentage}%</span>
-                                <button onclick="deleteItem('debts', '${d.id}')" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
+                                <button onclick="deleteItem('debts', decodeURIComponent('${encodedDebtId}'))" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
                                     <i data-lucide="trash-2" class="w-3 h-3"></i>
                                 </button>
                             </div>
@@ -152,6 +159,8 @@
             const allTrans = window.allDecryptedTransactions || [];
 
             decryptedLent.forEach(l => {
+                const safeLentName = escapeHTML(l.name || 'Lent');
+                const encodedLentId = encodeInlineArg(l.id);
                 // Balance = Expenses (lent) - Income (repaid)
                 const expenses = allTrans
                     .filter(t => t.type === 'expense' && t.category === `Lent: ${l.name}`)
@@ -168,7 +177,7 @@
                 div.innerHTML = `
                     <div class="flex justify-between items-center">
                         <div>
-                            <p class="text-sm font-bold text-slate-700">${l.name}</p>
+                            <p class="text-sm font-bold text-slate-700">${safeLentName}</p>
                             <p class="text-[10px] text-slate-400 font-bold">Total Lent: ${fmt(expenses)} | Repaid: ${fmt(income)}</p>
                         </div>
                         <div class="text-right flex items-center gap-3">
@@ -176,7 +185,7 @@
                                 <p class="text-xs font-bold text-slate-400 uppercase">Balance</p>
                                 <p class="font-black ${balance > 0 ? 'text-emerald-600' : 'text-slate-400'}">${fmt(balance)}</p>
                             </div>
-                            <button onclick="deleteItem('lent', '${l.id}')" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
+                            <button onclick="deleteItem('lent', decodeURIComponent('${encodedLentId}'))" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
                         </div>
@@ -201,11 +210,14 @@
             }
 
             decrypted.forEach(b => {
+                const encodedBillId = encodeInlineArg(b.id);
+                const safeBillName = escapeHTML(b.name || 'Bill');
+                const safeBillDay = Number.isFinite(Number(b.day)) ? Number(b.day) : 1;
                 const div = document.createElement('div');
                 div.className = "p-3 bg-slate-50 rounded-2xl flex justify-between border items-center group hover:border-indigo-300 cursor-pointer transition-colors";
                 div.onclick = (e) => { if (!e.target.closest('button')) openBillModal(b.id); };
 
-                div.innerHTML = `<div><p class="text-xs font-bold text-slate-400 uppercase">Day ${b.day}</p><p class="font-bold text-slate-800">${b.name}</p></div><div class="flex items-center gap-3"><span class="font-bold text-slate-500">${fmt(b.amt)}</span><button onclick="deleteItem('bills', '${b.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button></div>`;
+                div.innerHTML = `<div><p class="text-xs font-bold text-slate-400 uppercase">Day ${safeBillDay}</p><p class="font-bold text-slate-800">${safeBillName}</p></div><div class="flex items-center gap-3"><span class="font-bold text-slate-500">${fmt(b.amt)}</span><button onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button></div>`;
                 list.appendChild(div);
             });
             lucide.createIcons();
@@ -231,11 +243,12 @@
                 const spent = actuals[cat] || 0;
                 const pct = Math.min((spent / limit) * 100, 100);
                 const isOver = spent > limit;
+                const safeCat = escapeHTML(cat);
 
                 const div = document.createElement('div');
                 div.innerHTML = `
                     <div class="flex justify-between text-xs font-bold mb-1">
-                        <span class="text-slate-600">${cat}</span>
+                        <span class="text-slate-600">${safeCat}</span>
                         <span class="${isOver ? 'text-rose-500' : 'text-slate-400'}">${fmt(spent)} / ${fmt(limit)}</span>
                     </div>
                     <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -270,6 +283,10 @@
                 const amountLabel = i.amt ? fmt(i.amt) : '—';
                 const categoryLabel = i.category ? i.category : 'Uncategorized';
                 const targetDate = i.targetDate ? new Date(i.targetDate).toLocaleDateString() : 'No date set';
+                const encodedWishlistId = encodeInlineArg(i.id);
+                const safeDesc = escapeHTML(i.desc || 'Wishlist item');
+                const safeCategory = escapeHTML(categoryLabel);
+                const safeTargetDate = escapeHTML(targetDate);
 
                 const div = document.createElement('div');
                 div.className = 'p-3 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all group cursor-pointer';
@@ -280,13 +297,13 @@
                 div.innerHTML = `
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex-1">
-                            <p class="font-bold text-slate-800">${i.desc}</p>
-                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${categoryLabel} • ${targetDate}</p>
+                            <p class="font-bold text-slate-800">${safeDesc}</p>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${safeCategory} • ${safeTargetDate}</p>
                             <p class="text-xs text-slate-500 mt-1">Planned: ${amountLabel}</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button onclick="convertWishlistToExpense('${i.id}')" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">Convert</button>
-                            <button onclick="deleteWishlistItem('${i.id}')" class="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all">
+                            <button onclick="convertWishlistToExpense(decodeURIComponent('${encodedWishlistId}'))" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">Convert</button>
+                            <button onclick="deleteWishlistItem(decodeURIComponent('${encodedWishlistId}'))" class="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
                         </div>

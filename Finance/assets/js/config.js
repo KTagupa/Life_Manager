@@ -49,3 +49,20 @@
         let filteredTransactions = [];
 
         const standardCategories = ["Food", "Transport", "Bills", "Savings", "Entertainment", "Salary", "Others"];
+
+        function escapeHTML(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function escapeAttr(value) {
+            return escapeHTML(value).replace(/`/g, '&#96;');
+        }
+
+        function encodeInlineArg(value) {
+            return encodeURIComponent(String(value ?? ''));
+        }

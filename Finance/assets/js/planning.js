@@ -37,13 +37,15 @@
             el.innerHTML = activeGoals.map(g => {
                 const progress = getGoalProgress(g, currentBalance);
                 const dateLabel = g.targetDate ? new Date(g.targetDate).toLocaleDateString() : 'No date';
+                const safeName = escapeHTML(g.name || 'Goal');
+                const safeDateLabel = escapeHTML(dateLabel);
                 return `
                     <div class="p-2 ${compact ? 'bg-slate-50 border border-slate-200 rounded-lg' : 'bg-white border border-slate-200 rounded-xl'}">
                         <div class="flex justify-between items-center">
-                            <p class="text-xs font-bold text-slate-700">${g.name}</p>
+                            <p class="text-xs font-bold text-slate-700">${safeName}</p>
                             <span class="text-[10px] font-bold text-slate-500">${progress.toFixed(0)}%</span>
                         </div>
-                        <p class="text-[10px] text-slate-500">${fmt(g.targetAmount)} • ${dateLabel}</p>
+                        <p class="text-[10px] text-slate-500">${fmt(g.targetAmount)} • ${safeDateLabel}</p>
                         <div class="h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
                             <div class="h-full bg-indigo-500" style="width:${progress}%"></div>
                         </div>
@@ -148,17 +150,22 @@
             el.innerHTML = financialGoals.map(g => {
                 const progress = getGoalProgress(g, currentBalance);
                 const statusColor = g.status === 'completed' ? 'emerald' : g.status === 'paused' ? 'amber' : 'indigo';
+                const safeName = escapeHTML(g.name || 'Goal');
+                const safeType = escapeHTML((g.type || 'savings').replace('_', ' '));
+                const safeStatus = escapeHTML(g.status || 'active');
+                const safeDate = g.targetDate ? `• ${escapeHTML(new Date(g.targetDate).toLocaleDateString())}` : '';
+                const encodedGoalId = encodeInlineArg(g.id);
                 return `
                     <div class="p-3 bg-white border border-slate-200 rounded-xl">
                         <div class="flex justify-between items-start gap-3">
                             <div>
-                                <p class="text-sm font-bold text-slate-700">${g.name}</p>
-                                <p class="text-[10px] text-slate-500 uppercase">${g.type.replace('_', ' ')} • ${g.status}</p>
-                                <p class="text-[10px] text-slate-500">${fmt(g.targetAmount)} ${g.targetDate ? `• ${new Date(g.targetDate).toLocaleDateString()}` : ''}</p>
+                                <p class="text-sm font-bold text-slate-700">${safeName}</p>
+                                <p class="text-[10px] text-slate-500 uppercase">${safeType} • ${safeStatus}</p>
+                                <p class="text-[10px] text-slate-500">${fmt(g.targetAmount)} ${safeDate}</p>
                             </div>
                             <div class="flex gap-2">
-                                <button onclick="hydrateGoalEditor('${g.id}')" class="text-[10px] font-bold text-indigo-600">Edit</button>
-                                <button onclick="deleteFinancialGoal('${g.id}')" class="text-[10px] font-bold text-rose-600">Delete</button>
+                                <button onclick="hydrateGoalEditor(decodeURIComponent('${encodedGoalId}'))" class="text-[10px] font-bold text-indigo-600">Edit</button>
+                                <button onclick="deleteFinancialGoal(decodeURIComponent('${encodedGoalId}'))" class="text-[10px] font-bold text-rose-600">Delete</button>
                             </div>
                         </div>
                         <div class="h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
@@ -232,8 +239,9 @@
                     score = 'medium';
                     color = 'text-amber-600';
                 }
+                const safeDesc = escapeHTML(item.desc || 'Item');
                 return `<div class="flex justify-between p-2 bg-white border border-slate-200 rounded-lg">
-                    <span>${item.desc}</span>
+                    <span>${safeDesc}</span>
                     <span class="font-bold ${color}">${score.toUpperCase()}</span>
                 </div>`;
             }).join('');
@@ -284,10 +292,12 @@
             if (minBalance < fixedMonthly * 0.2) warnings.push('Cash buffer is tight relative to fixed obligations.');
             if (!warnings.length) warnings.push('Projection remains within positive safety range.');
 
+            const safeEtaLines = escapeHTML(etaLines.length ? etaLines.join(' | ') : 'No active goals');
+            const safeWarnings = escapeHTML(warnings.join(' '));
             document.getElementById('scenario-summary').innerHTML = `
                 <p><strong>Start:</strong> ${fmt(startBalance)} | <strong>Projected Min:</strong> ${fmt(minBalance)} | <strong>End (45d):</strong> ${fmt(points[points.length - 1].balance)}</p>
-                <p class="mt-1"><strong>Goal ETA:</strong> ${etaLines.length ? etaLines.join(' | ') : 'No active goals'}</p>
-                <p class="mt-1"><strong>Risk:</strong> ${warnings.join(' ')}</p>
+                <p class="mt-1"><strong>Goal ETA:</strong> ${safeEtaLines}</p>
+                <p class="mt-1"><strong>Risk:</strong> ${safeWarnings}</p>
             `;
 
             renderWishlistAffordability(points, fixedMonthly);

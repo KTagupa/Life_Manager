@@ -1,3 +1,9 @@
+        function escapeCsvCell(value) {
+            const raw = String(value ?? '');
+            const formulaPrefixed = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+            return `"${formulaPrefixed.replace(/"/g, '""')}"`;
+        }
+
         function exportToCSV() {
             const transactions = getReportTransactions();
             if (!transactions || transactions.length === 0) return;
@@ -5,7 +11,15 @@
             transactions.forEach(i => {
                 const qty = i.quantity || 1;
                 const unitPrice = i.amt / qty;
-                csv += `${new Date(i.date).toLocaleDateString()},"${i.desc}",${i.category},${i.type},${qty},${i.amt},${unitPrice.toFixed(2)}\n`;
+                csv += [
+                    escapeCsvCell(new Date(i.date).toLocaleDateString()),
+                    escapeCsvCell(i.desc),
+                    escapeCsvCell(i.category),
+                    escapeCsvCell(i.type),
+                    escapeCsvCell(qty),
+                    escapeCsvCell(i.amt),
+                    escapeCsvCell(unitPrice.toFixed(2))
+                ].join(',') + '\n';
             });
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);

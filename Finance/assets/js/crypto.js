@@ -97,6 +97,9 @@
                 }
 
                 coins.forEach(c => {
+                    const safeName = escapeHTML(c.name || '');
+                    const safeSymbol = escapeHTML(c.symbol || '');
+                    const safeLogo = encodeURI(c.large || '');
                     const div = document.createElement('div');
                     div.className = "p-3 hover:bg-slate-50 cursor-pointer flex items-center gap-3 border-b border-slate-50 last:border-0";
                     div.onclick = () => {
@@ -106,10 +109,10 @@
                         resDiv.classList.add('hidden');
                     };
                     div.innerHTML = `
-                        <img src="${c.large}" class="w-6 h-6 rounded-full">
+                        <img src="${safeLogo}" class="w-6 h-6 rounded-full">
                         <div>
-                            <p class="text-sm font-bold text-slate-700">${c.name}</p>
-                            <p class="text-[10px] text-slate-400 font-bold uppercase">${c.symbol}</p>
+                            <p class="text-sm font-bold text-slate-700">${safeName}</p>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase">${safeSymbol}</p>
                         </div>
                     `;
                     resDiv.appendChild(div);
@@ -499,13 +502,15 @@
                 totalRealized += h.realizedPL;
 
                 if (h.amount > 0.000001) {
+                    const safeSymbol = escapeHTML((h.symbol || '').toUpperCase());
+                    const safeTokenId = escapeHTML(id);
                     const div = document.createElement('div');
                     div.className = "bg-slate-800 p-4 rounded-2xl flex items-center justify-between border border-slate-700";
                     div.innerHTML = `
                         <div>
                             <div class="flex items-center gap-2">
-                                <h4 class="font-bold text-white">${h.symbol.toUpperCase()}</h4>
-                                <span class="text-[10px] bg-slate-700 text-slate-400 px-1.5 rounded">${id}</span>
+                                <h4 class="font-bold text-white">${safeSymbol}</h4>
+                                <span class="text-[10px] bg-slate-700 text-slate-400 px-1.5 rounded">${safeTokenId}</span>
                             </div>
                             <p class="text-xs text-slate-400 mt-1">${h.amount.toFixed(4)} tokens @ ${fmt(avgPrice)} avg</p>
                             <p class="text-[10px] text-slate-500 mt-0.5">Invested: ${fmt(h.totalCost)} • Avg hold: ${weightedHoldingDays.toFixed(1)} days</p>
@@ -547,13 +552,17 @@
                         else actionText = `Received ${tx.symbol.toUpperCase()} (Swap)`;
                     }
 
+                    const safeActionText = escapeHTML(actionText);
+                    const safeSellSymbol = escapeHTML(tx.symbol ? tx.symbol.toUpperCase() : '');
+                    const encodedTxId = encodeInlineArg(tx.id);
+
                     div.innerHTML = `
                         <div class="flex items-center gap-3">
                              <div class="w-8 h-8 rounded-full flex items-center justify-center ${colorClass}">
                                  <i data-lucide="${icon}" class="w-4 h-4"></i>
                              </div>
                              <div>
-                                 <p class="text-sm font-bold text-slate-300 mobile-text-clip">${actionText} ${!isSwap && !isBuy ? tx.symbol.toUpperCase() : ''}</p>
+                                 <p class="text-sm font-bold text-slate-300 mobile-text-clip">${safeActionText} ${!isSwap && !isBuy ? safeSellSymbol : ''}</p>
                                  <p class="text-[10px] text-slate-500">${new Date(tx.date).toLocaleDateString()} ${!isSwap ? '• ' + formatCurrency(tx.price, tx.currency || 'PHP') + '/token' : ''}</p>
                              </div>
                         </div>
@@ -562,7 +571,7 @@
                                   <p class="text-sm font-bold text-slate-300">${!isSwap ? formatCurrency(tx.price * tx.amount, tx.currency || 'PHP') : ''}</p>
                                   <p class="text-[10px] text-slate-500">${tx.amount} tokens</p>
                               </div>
-                             <button onclick="deleteItem('crypto', '${tx.id}')" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <button onclick="deleteItem('crypto', decodeURIComponent('${encodedTxId}'))" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                              </button>
                         </div>
@@ -723,16 +732,19 @@
                 const progress = Math.min((currentTotalValue / g.targetAmount) * 100, 100);
                 const isMet = currentTotalValue >= g.targetAmount;
                 const dateStr = g.targetDate ? new Date(g.targetDate).toLocaleDateString() : 'No deadline';
+                const safeGoalName = escapeHTML(g.name || 'Goal');
+                const safeGoalDate = escapeHTML(dateStr);
+                const encodedGoalId = encodeInlineArg(g.id);
 
                 const div = document.createElement('div');
                 div.className = "bg-slate-900/40 p-3 rounded-xl border border-slate-700/50 relative group";
                 div.innerHTML = `
                     <div class="flex justify-between items-center mb-2">
                         <div>
-                            <p class="font-bold text-slate-300 text-sm">${g.name}</p>
-                            <p class="text-[10px] text-slate-500">Target: ${fmt(g.targetAmount)} • ${dateStr}</p>
+                            <p class="font-bold text-slate-300 text-sm">${safeGoalName}</p>
+                            <p class="text-[10px] text-slate-500">Target: ${fmt(g.targetAmount)} • ${safeGoalDate}</p>
                         </div>
-                        <button onclick="deleteGoal('${g.id}')" class="text-slate-500 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="deleteGoal(decodeURIComponent('${encodedGoalId}'))" class="text-slate-500 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
                             <i data-lucide="trash-2" class="w-3 h-3"></i>
                         </button>
                     </div>

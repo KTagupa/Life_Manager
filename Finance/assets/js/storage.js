@@ -207,9 +207,19 @@
                     const vaultId = await getVaultId(masterKey);
                     const doc = await firestoreDB.collection('vaults').doc(vaultId).get();
                     if (doc.exists) {
-                        resolvedDB = normalizeDBSchema(doc.data().vaultData || getDefaultDB());
+                        const remoteDB = normalizeDBSchema(doc.data().vaultData || getDefaultDB());
+                        const strategy = localDB.sync?.conflictStrategy || remoteDB.sync?.conflictStrategy || 'merge_safe_lists';
+
+                        if (strategy === 'remote_wins') {
+                            resolvedDB = remoteDB;
+                        } else {
+                            // Merge at read time to avoid overwriting unsynced local edits with stale remote snapshots.
+                            resolvedDB = mergeSafeDB(localDB, remoteDB);
+                            resolvedDB.sync.conflictStrategy = strategy;
+                            resolvedDB.sync.lastKnownRemoteRevision = remoteDB.sync?.revision || null;
+                        }
                         loadedFromRemote = true;
-                        console.log('✅ Loaded from Firebase');
+                        console.log(`✅ Loaded from Firebase (${strategy})`);
                     }
                 }
             } catch (error) {
@@ -220,7 +230,7 @@
                 localStorage.setItem(DB_KEY, JSON.stringify(resolvedDB));
             }
 
-            return resolvedDB;
+            return normalizeDBSchema(resolvedDB);
         }
 
         async function saveDB(inputDB) {

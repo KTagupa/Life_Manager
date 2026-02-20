@@ -60,8 +60,7 @@
 
             const spentMap = {};
             (window.allDecryptedTransactions || []).filter(t => {
-                const d = new Date(t.date);
-                return t.type === 'expense' && (d.getMonth() + 1) === targetM && d.getFullYear() === targetY;
+                return t.type === 'expense' && getTxMonth(t) === targetM && getTxYear(t) === targetY;
             }).forEach(t => {
                 spentMap[t.category] = (spentMap[t.category] || 0) + t.amt;
             });
@@ -75,6 +74,9 @@
                 const remaining = limit > 0 ? limit - spent : 0;
                 const isOver = limit > 0 && spent > limit;
                 const isCustom = customCategories.includes(c);
+                const safeCategory = escapeHTML(c);
+                const safeCategoryAttr = escapeAttr(c);
+                const encodedCategory = encodeInlineArg(c);
 
                 totalBudget += limit;
                 totalSpent += spent;
@@ -84,14 +86,14 @@
                     <div class="flex items-center justify-between mb-3">
                         <div class="flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full ${limit > 0 ? 'bg-emerald-500' : 'bg-slate-300'}"></span>
-                            <label class="text-sm font-bold text-slate-700">${c}</label>
+                            <label class="text-sm font-bold text-slate-700">${safeCategory}</label>
                             ${isCustom ? `
                                 <div class="flex gap-1">
-                                    <button onclick="editCustomCategory('${c}')" 
+                                    <button onclick="editCustomCategory(decodeURIComponent('${encodedCategory}'))" 
                                         class="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
                                         <i data-lucide="edit-2" class="w-3 h-3"></i>
                                     </button>
-                                    <button onclick="deleteCustomCategory('${c}')" 
+                                    <button onclick="deleteCustomCategory(decodeURIComponent('${encodedCategory}'))" 
                                         class="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors">
                                         <i data-lucide="trash-2" class="w-3 h-3"></i>
                                     </button>
@@ -100,7 +102,7 @@
                         </div>
                         <div class="text-right">
                            <span class="text-[10px] font-black uppercase text-slate-400 block mb-0.5">Budget Limit</span>
-                           <input type="number" data-cat="${c}" value="${limit || ''}" oninput="updateBudgetSummaries()" 
+                           <input type="number" data-cat="${safeCategoryAttr}" value="${limit || ''}" oninput="updateBudgetSummaries()" 
                                placeholder="0" class="budget-input w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm font-bold outline-none focus:border-emerald-500 text-right">
                         </div>
                     </div>
@@ -135,8 +137,7 @@
 
             const spentMap = {};
             (window.allDecryptedTransactions || []).filter(t => {
-                const d = new Date(t.date);
-                return t.type === 'expense' && (d.getMonth() + 1) === targetM && d.getFullYear() === targetY;
+                return t.type === 'expense' && getTxMonth(t) === targetM && getTxYear(t) === targetY;
             }).forEach(t => {
                 spentMap[t.category] = (spentMap[t.category] || 0) + t.amt;
             });
@@ -991,53 +992,44 @@
                 payload: deletedEntry
             };
 
-            if (col === 'transactions') {
-                db.transactions = targetCollection;
-                await saveDB(db);
-                rawTransactions = db.transactions.filter(t => !t.deletedAt);
-                await loadAndRender();
-                await renderDebts(rawDebts); // Update debt progress if a payment was deleted
-            } else if (col === 'bills') {
+            if (col === 'bills') {
                 // AUTO-SYNC: Remove corresponding reminder
                 const removedReminders = recurringTransactions.filter(r => r.linkedBillId === id);
                 recurringTransactions = recurringTransactions.filter(r => r.linkedBillId !== id);
                 db.recurring_transactions = recurringTransactions;
                 undoEntry.meta = { removedReminders };
-
-                db.bills = targetCollection;
-                await saveDB(db);
-                rawBills = db.bills.filter(b => !b.deletedAt);
-                renderBills(rawBills);
-                checkRecurringReminders(); // Update reminder banner
-            } else if (col === 'debts') {
-                db.debts = targetCollection;
-                await saveDB(db);
-                rawDebts = db.debts.filter(d => !d.deletedAt);
-                renderDebts(rawDebts);
-                populateBudgetInputs();
-            } else if (col === 'lent') {
-                db.lent = targetCollection;
-                await saveDB(db);
-                rawLent = db.lent.filter(l => !l.deletedAt);
-                renderLent(rawLent);
-            } else if (col === 'crypto') {
-                db.crypto = targetCollection;
-                await saveDB(db);
-                rawCrypto = db.crypto.filter(c => !c.deletedAt);
-                renderCryptoPortfolio();
-                // re-calc holdings for widget
-                renderCryptoWidget();
-            } else if (col === 'wishlist') {
-                db.wishlist = targetCollection;
-                await saveDB(db);
-                rawWishlist = db.wishlist.filter(w => !w.deletedAt);
-                await loadAndRenderWishlist();
             }
 
+            db[key] = targetCollection;
             db.undo_log = db.undo_log || [];
             db.undo_log.push(undoEntry);
-            await saveDB(db);
-            undoLog = db.undo_log;
+            const persistedDB = await saveDB(db);
+            undoLog = persistedDB.undo_log || [];
+
+            if (col === 'transactions') {
+                rawTransactions = (persistedDB.transactions || []).filter(t => !t.deletedAt);
+                await loadAndRender();
+                await renderDebts(rawDebts); // Update debt progress if a payment was deleted
+            } else if (col === 'bills') {
+                rawBills = (persistedDB.bills || []).filter(b => !b.deletedAt);
+                recurringTransactions = persistedDB.recurring_transactions || recurringTransactions;
+                await renderBills(rawBills);
+                checkRecurringReminders(); // Update reminder banner
+            } else if (col === 'debts') {
+                rawDebts = (persistedDB.debts || []).filter(d => !d.deletedAt);
+                await renderDebts(rawDebts);
+                populateBudgetInputs();
+            } else if (col === 'lent') {
+                rawLent = (persistedDB.lent || []).filter(l => !l.deletedAt);
+                await renderLent(rawLent);
+            } else if (col === 'crypto') {
+                rawCrypto = (persistedDB.crypto || []).filter(c => !c.deletedAt);
+                await renderCryptoPortfolio();
+                await renderCryptoWidget();
+            } else if (col === 'wishlist') {
+                rawWishlist = (persistedDB.wishlist || []).filter(w => !w.deletedAt);
+                await loadAndRenderWishlist();
+            }
         }
 
         function toggleCurrency() {

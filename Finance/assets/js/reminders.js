@@ -152,6 +152,10 @@
                 const color = r.type === 'income' ? 'emerald' : 'rose';
                 const freqLabel = r.frequency.charAt(0).toUpperCase() + r.frequency.slice(1);
                 const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const encodedReminderId = encodeInlineArg(r.id);
+                const safeDesc = escapeHTML(r.desc || 'Reminder');
+                const safeCategory = escapeHTML(r.category || 'Others');
+                const safeFreqLabel = escapeHTML(freqLabel);
                 let dayLabel = '';
                 if (r.frequency === 'weekly') {
                     const day = typeof r.dayOfWeek === 'number' ? r.dayOfWeek : 1;
@@ -159,12 +163,13 @@
                 } else if (r.frequency === 'monthly') {
                     dayLabel = r.dayOfMonth ? ` (${r.dayOfMonth}${getDaySuffix(r.dayOfMonth)})` : '';
                 }
+                const safeDayLabel = escapeHTML(dayLabel);
 
                 const autoSyncBadge = r.autoSynced ? '<span class="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">AUTO-SYNCED</span>' : '';
                 const estimateText = r.estimatedAmount ? ` • Est. ${fmt(r.estimatedAmount)}` : '';
                 const deleteButton = r.autoSynced
                     ? `<span class="text-[10px] text-slate-400 italic">Edit via Bills</span>`
-                    : `<button onclick="deleteRecurringReminder('${r.id}')" 
+                    : `<button onclick="deleteRecurringReminder(decodeURIComponent('${encodedReminderId}'))" 
                         class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-all">
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
                     </button>`;
@@ -177,10 +182,10 @@
                             </div>
                             <div class="flex-1">
                                 <div class="flex items-center gap-2">
-                                    <p class="font-bold text-slate-800 text-sm">${r.desc}</p>
+                                    <p class="font-bold text-slate-800 text-sm">${safeDesc}</p>
                                     ${autoSyncBadge}
                                 </div>
-                                <p class="text-xs text-slate-500">${freqLabel}${dayLabel} • ${r.category}${estimateText}</p>
+                                <p class="text-xs text-slate-500">${safeFreqLabel}${safeDayLabel} • ${safeCategory}${estimateText}</p>
                             </div>
                         </div>
                         ${deleteButton}
@@ -248,6 +253,9 @@
             list.innerHTML = reminders.map(r => {
                 const icon = r.type === 'income' ? 'arrow-down-left' : 'arrow-up-right';
                 const color = r.type === 'income' ? 'emerald' : 'amber';
+                const encodedReminderId = encodeInlineArg(r.id);
+                const safeDesc = escapeHTML(r.desc || 'Reminder');
+                const safeCategory = escapeHTML(r.category || 'Others');
 
                 const estimateText = r.estimatedAmount ? `~${fmt(r.estimatedAmount)}` : '';
                 const autoSyncBadge = r.autoSynced ? '<span class="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold ml-1">BILL</span>' : '';
@@ -256,17 +264,17 @@
                     <div class="flex items-center justify-between bg-white/50 p-2 rounded-lg">
                         <div class="flex items-center gap-2 flex-1">
                             <i data-lucide="${icon}" class="w-4 h-4 text-${color}-600"></i>
-                            <span class="text-sm font-bold text-slate-700">${r.desc}</span>
-                            <span class="text-xs text-slate-500">• ${r.category}</span>
+                            <span class="text-sm font-bold text-slate-700">${safeDesc}</span>
+                            <span class="text-xs text-slate-500">• ${safeCategory}</span>
                             ${autoSyncBadge}
                             ${estimateText ? `<span class="text-xs text-slate-400 ml-auto">${estimateText}</span>` : ''}
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="quickAddFromReminder('${r.id}')" 
+                            <button onclick="quickAddFromReminder(decodeURIComponent('${encodedReminderId}'))" 
                                 class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors">
                                 Quick Add
                             </button>
-                            <button onclick="dismissReminder('${r.id}')" 
+                            <button onclick="dismissReminder(decodeURIComponent('${encodedReminderId}'))" 
                                 class="px-2 py-1 text-slate-400 hover:text-slate-600 text-xs">
                                 <i data-lucide="x" class="w-4 h-4"></i>
                             </button>

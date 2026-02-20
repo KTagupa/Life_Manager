@@ -100,19 +100,22 @@
                 const isIncome = item.types.has('income');
                 const typeLabel = isExpense && isIncome ? 'Both' : isExpense ? 'Expense' : 'Income';
                 const typeColor = isExpense && isIncome ? 'purple' : isExpense ? 'rose' : 'emerald';
+                const encodedItemKey = encodeInlineArg(item.key);
+                const safeItemName = escapeHTML(item.name || 'Item');
+                const safeCategories = escapeHTML(Array.from(item.categories).join(', '));
 
                 return `
-                    <div onclick="openItemDetails('${item.key}')" 
+                    <div onclick="openItemDetails(decodeURIComponent('${encodedItemKey}'))" 
                         class="bg-slate-50 p-4 rounded-2xl border border-slate-200 hover:border-${typeColor}-300 hover:bg-${typeColor}-50/30 cursor-pointer transition-all group">
                         <div class="flex items-center justify-between">
                             <div class="flex-1">
                                 <div class="flex items-center gap-3 mb-2">
-                                    <h4 class="font-bold text-slate-800 text-lg">${item.name}</h4>
+                                    <h4 class="font-bold text-slate-800 text-lg">${safeItemName}</h4>
                                     <span class="text-xs font-bold bg-${typeColor}-100 text-${typeColor}-600 px-2 py-1 rounded-full">${typeLabel}</span>
                                 </div>
                                 <div class="flex items-center gap-4 text-xs text-slate-500">
                                     <span><i data-lucide="shopping-cart" class="w-3 h-3 inline mr-1"></i>${item.purchaseCount} purchases</span>
-                                    <span><i data-lucide="tag" class="w-3 h-3 inline mr-1"></i>${Array.from(item.categories).join(', ')}</span>
+                                    <span><i data-lucide="tag" class="w-3 h-3 inline mr-1"></i>${safeCategories}</span>
                                 </div>
                             </div>
                             <div class="text-right">
@@ -135,7 +138,7 @@
 
             // Sort transactions by date (oldest first for chart)
             const sortedTxs = [...item.transactions].sort((a, b) =>
-                new Date(a.date) - new Date(b.date)
+                getTxTimestamp(a) - getTxTimestamp(b)
             );
 
             // Calculate statistics
@@ -178,7 +181,7 @@
                 return `
                     <tr class="hover:bg-slate-50">
                         <td class="p-3 font-bold text-slate-700">${new Date(t.date).toLocaleDateString()}</td>
-                        <td class="p-3 text-slate-600">${t.category}</td>
+                        <td class="p-3 text-slate-600">${escapeHTML(t.category)}</td>
                         <td class="p-3 text-right text-slate-600">${qty.toFixed(2)}</td>
                         <td class="p-3 text-right font-bold text-slate-700">${fmt(unitPrice)}</td>
                         <td class="p-3 text-right font-bold text-indigo-600">${fmt(t.amt)}</td>
@@ -198,7 +201,7 @@
             }
 
             // Prepare data
-            const labels = transactions.map(t => new Date(t.date).toLocaleDateString());
+            const labels = transactions.map(t => new Date(getTxTimestamp(t)).toLocaleDateString());
             const prices = transactions.map(t => {
                 const qty = t.quantity || 1;
                 return (t.amt / qty);

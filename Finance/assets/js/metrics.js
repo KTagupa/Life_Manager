@@ -23,10 +23,52 @@
             return monthName;
         }
 
+        function hydrateTransactionCache(tx) {
+            if (!tx || typeof tx !== 'object') return tx;
+
+            if (!Number.isFinite(tx._ts)) {
+                const parsedTs = Date.parse(tx.date);
+                tx._ts = Number.isFinite(parsedTs) ? parsedTs : Date.now();
+            }
+
+            if (!Number.isInteger(tx._year) || !Number.isInteger(tx._month)) {
+                const d = new Date(tx._ts);
+                tx._year = d.getFullYear();
+                tx._month = d.getMonth() + 1;
+            }
+
+            if (typeof tx._searchText !== 'string') {
+                tx._searchText = `${String(tx.desc || '')} ${String(tx.category || '')}`.toLowerCase();
+            }
+
+            return tx;
+        }
+
+        function getTxTimestamp(tx) {
+            const cached = hydrateTransactionCache(tx);
+            return cached && Number.isFinite(cached._ts) ? cached._ts : 0;
+        }
+
+        function getTxYear(tx) {
+            const cached = hydrateTransactionCache(tx);
+            return cached && Number.isInteger(cached._year) ? cached._year : 1970;
+        }
+
+        function getTxMonth(tx) {
+            const cached = hydrateTransactionCache(tx);
+            return cached && Number.isInteger(cached._month) ? cached._month : 1;
+        }
+
+        function getTxSearchText(tx) {
+            const cached = hydrateTransactionCache(tx);
+            return cached && typeof cached._searchText === 'string' ? cached._searchText : '';
+        }
+
         function getCurrentMonthTransactions(transactions, referenceDate = new Date()) {
+            const refMonth = referenceDate.getMonth() + 1;
+            const refYear = referenceDate.getFullYear();
             return (transactions || []).filter(t => {
-                const d = new Date(t.date);
-                return d.getMonth() === referenceDate.getMonth() && d.getFullYear() === referenceDate.getFullYear();
+                return getTxMonth(t) === refMonth && getTxYear(t) === refYear;
             });
         }
 
@@ -46,7 +88,7 @@
 
             if (!scopedTransactions || scopedTransactions.length === 0) return 1;
 
-            const times = scopedTransactions.map(t => new Date(t.date).getTime()).filter(Number.isFinite);
+            const times = scopedTransactions.map(t => getTxTimestamp(t)).filter(Number.isFinite);
             if (!times.length) return 1;
 
             const minTs = Math.min(...times);

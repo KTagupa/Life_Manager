@@ -88,7 +88,19 @@
 
         function fillMappingSelect(id, headers, guessKeywords = []) {
             const el = document.getElementById(id);
-            el.innerHTML = `<option value="">-- none --</option>` + headers.map(h => `<option value="${h}">${h}</option>`).join('');
+            el.innerHTML = '';
+
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = '-- none --';
+            el.appendChild(defaultOption);
+
+            headers.forEach(h => {
+                const op = document.createElement('option');
+                op.value = h;
+                op.textContent = h;
+                el.appendChild(op);
+            });
 
             const guessed = headers.find(h => guessKeywords.some(k => h.toLowerCase().includes(k)));
             if (guessed) el.value = guessed;
@@ -187,7 +199,7 @@
             const normalizedDesc = normalizeTextForMatching(mappedRow.desc);
             const baseDate = new Date(mappedRow.date).getTime();
             return (existingTransactions || []).find(tx => {
-                const txDate = new Date(tx.date).getTime();
+                const txDate = getTxTimestamp(tx);
                 const daysDiff = Math.abs(txDate - baseDate) / (24 * 60 * 60 * 1000);
                 const txCurrency = tx.originalCurrency || 'PHP';
                 const txNormalizedDesc = normalizeTextForMatching(tx.desc);
@@ -264,9 +276,9 @@
                 <tr>
                     <td class="p-2 font-bold ${r.duplicate ? 'text-amber-600' : 'text-emerald-600'}">${r.duplicate ? 'Duplicate' : 'New'}</td>
                     <td class="p-2 text-slate-600">${new Date(r.date).toLocaleDateString()}</td>
-                    <td class="p-2 text-slate-700">${r.desc}</td>
+                    <td class="p-2 text-slate-700">${escapeHTML(r.desc)}</td>
                     <td class="p-2 text-right text-slate-700">${formatCurrency(r.amount, r.currency)}</td>
-                    <td class="p-2 text-slate-600">${r.category}</td>
+                    <td class="p-2 text-slate-600">${escapeHTML(r.category)}</td>
                 </tr>
             `).join('');
 
@@ -368,7 +380,13 @@
         function openCategorizationRulesModal() {
             const categorySelect = document.getElementById('rule-category');
             const categories = getAllCategoryChoices();
-            categorySelect.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+            categorySelect.innerHTML = '';
+            categories.forEach(c => {
+                const op = document.createElement('option');
+                op.value = c;
+                op.textContent = c;
+                categorySelect.appendChild(op);
+            });
             resetRuleForm();
             renderCategorizationRulesList();
             toggleModal('categorization-rules-modal');
@@ -397,12 +415,12 @@
             list.innerHTML = rules.map(rule => `
                 <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center">
                     <div>
-                        <p class="text-sm font-bold text-slate-700">${rule.contains_text || '(any text)'} → ${rule.category}</p>
-                        <p class="text-[10px] text-slate-500">Priority ${rule.priority || 999} • Direction: ${rule.direction || 'any'} • ${rule.active === false ? 'Inactive' : 'Active'}</p>
+                        <p class="text-sm font-bold text-slate-700">${escapeHTML(rule.contains_text || '(any text)')} → ${escapeHTML(rule.category)}</p>
+                        <p class="text-[10px] text-slate-500">Priority ${rule.priority || 999} • Direction: ${escapeHTML(rule.direction || 'any')} • ${rule.active === false ? 'Inactive' : 'Active'}</p>
                     </div>
                     <div class="flex gap-2">
-                        <button onclick="editCategorizationRule('${rule.id}')" class="text-xs font-bold text-indigo-600">Edit</button>
-                        <button onclick="deleteCategorizationRule('${rule.id}')" class="text-xs font-bold text-rose-600">Delete</button>
+                        <button onclick="editCategorizationRule(decodeURIComponent('${encodeInlineArg(rule.id)}'))" class="text-xs font-bold text-indigo-600">Edit</button>
+                        <button onclick="deleteCategorizationRule(decodeURIComponent('${encodeInlineArg(rule.id)}'))" class="text-xs font-bold text-rose-600">Delete</button>
                     </div>
                 </div>
             `).join('');
