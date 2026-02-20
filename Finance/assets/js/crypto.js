@@ -463,15 +463,267 @@
             plSpan.className = `text-xs font-bold ${unrealizedPL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
         }
 
+        let cryptoTargetLossesOnly = true;
+        let cryptoTargetByToken = {};
+
+        function setCryptoTargetLossesOnly(checked) {
+            cryptoTargetLossesOnly = !!checked;
+            renderCryptoPortfolio();
+        }
+
+        function setCryptoTokenTarget(tokenIdEncoded, value) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            if (!tokenId) return;
+            const parsed = parseFloat(value);
+            if (!Number.isFinite(parsed)) {
+                delete cryptoTargetByToken[tokenId];
+            } else {
+                cryptoTargetByToken[tokenId] = parsed;
+            }
+            renderCryptoPortfolio();
+        }
+
+        function clearCryptoTokenTarget(tokenIdEncoded) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            if (!tokenId) return;
+            delete cryptoTargetByToken[tokenId];
+            renderCryptoPortfolio();
+        }
+
+        function getCryptoTokenTargetPct(tokenId, defaultPct) {
+            const override = cryptoTargetByToken[tokenId];
+            return Number.isFinite(override) ? override : defaultPct;
+        }
+
+        function simulateRemainingLotsAfterSell(lots, sellAmount, method) {
+            const arr = (lots || [])
+                .filter(lot => lot && lot.amount > 0.000001)
+                .map(lot => ({ amount: lot.amount, price: lot.price }));
+            let remainingToSell = Math.max(0, sellAmount);
+
+            while (remainingToSell > 0.000001 && arr.length > 0) {
+                const lotIndex = method === 'lifo' ? arr.length - 1 : 0;
+                const lot = arr[lotIndex];
+                const sold = Math.min(lot.amount, remainingToSell);
+                lot.amount -= sold;
+                remainingToSell -= sold;
+                if (lot.amount <= 0.000001) {
+                    arr.splice(lotIndex, 1);
+                }
+            }
+
+            const remainingAmount = arr.reduce((sum, lot) => sum + lot.amount, 0);
+            const remainingCost = arr.reduce((sum, lot) => sum + (lot.amount * lot.price), 0);
+            return { remainingAmount, remainingCost };
+        }
+
+        function calculateSellNeededForTargetUnrealizedPct(holding, currentPrice, targetPct, taxMethod) {
+            const amount = holding?.amount || 0;
+            const totalCost = holding?.totalCost || 0;
+            const currentValue = amount * currentPrice;
+            const unrealized = currentValue - totalCost;
+            const currentPct = totalCost > 0 ? (unrealized / totalCost) * 100 : 0;
+            const target = targetPct;
+
+            if (!Number.isFinite(currentPrice) || currentPrice <= 0 || amount <= 0.000001 || totalCost <= 0) {
+                return { status: 'invalid', message: 'Needs current price and holding data.' };
+            }
+            if (unrealized <= 0) {
+                return { status: 'impossible', message: 'Sell target is only for positions currently in gain.' };
+            }
+            if (!Number.isFinite(target) || target <= 0) {
+                return { status: 'impossible', message: 'For gains, target must be above 0%.' };
+            }
+            if (target > currentPct + 1e-9) {
+                return { status: 'impossible', message: 'Selling cannot increase unrealized gain %.' };
+            }
+            if (Math.abs(target - currentPct) < 1e-6) {
+                return { status: 'at_target', requiredSell: 0 };
+            }
+
+            // Under average cost, partial sells keep unrealized % unchanged.
+            if (taxMethod === 'avg') {
+                return { status: 'impossible', message: 'With average cost, selling does not change unrealized gain %.' };
+            }
+
+            const lots = holding.lots || [];
+            const evaluatePct = (sellAmount) => {
+                const sim = simulateRemainingLotsAfterSell(lots, sellAmount, taxMethod);
+                if (sim.remainingAmount <= 0.000001 || sim.remainingCost <= 0.000001) {
+                    return null;
+                }
+                const remainingValue = sim.remainingAmount * currentPrice;
+                return ((remainingValue - sim.remainingCost) / sim.remainingCost) * 100;
+            };
+
+            const maxSell = Math.max(0, amount - 0.000001);
+            if (maxSell <= 0) {
+                return { status: 'impossible', message: 'Not enough amount to simulate a sell target.' };
+            }
+
+            let prevSell = 0;
+            let prevPct = currentPct;
+            let bestSell = 0;
+            let bestPct = currentPct;
+            let bestDiff = Math.abs(currentPct - target);
+            const steps = 240;
+            let crossing = null;
+
+            for (let i = 1; i <= steps; i++) {
+                const sell = (maxSell * i) / steps;
+                const pct = evaluatePct(sell);
+                if (!Number.isFinite(pct)) continue;
+
+                const diff = Math.abs(pct - target);
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    bestSell = sell;
+                    bestPct = pct;
+                }
+
+                const crossed = (prevPct - target) * (pct - target) <= 0;
+                if (!crossing && crossed) {
+                    crossing = { lowSell: prevSell, highSell: sell, lowPct: prevPct, highPct: pct };
+                    break;
+                }
+
+                prevSell = sell;
+                prevPct = pct;
+            }
+
+            if (crossing) {
+                let lo = crossing.lowSell;
+                let hi = crossing.highSell;
+                let bestMid = (lo + hi) / 2;
+                for (let i = 0; i < 28; i++) {
+                    const mid = (lo + hi) / 2;
+                    const midPct = evaluatePct(mid);
+                    if (!Number.isFinite(midPct)) break;
+                    bestMid = mid;
+                    if (Math.abs(midPct - target) < 0.0001) break;
+                    const loPct = evaluatePct(lo);
+                    if (!Number.isFinite(loPct)) break;
+                    if ((loPct - target) * (midPct - target) <= 0) hi = mid;
+                    else lo = mid;
+                }
+                const matchedPct = evaluatePct(bestMid);
+                return { status: 'sell', requiredSell: bestMid * currentPrice, requiredSellAmount: bestMid, matchedPct };
+            }
+
+            if (bestDiff <= 0.1) {
+                return { status: 'sell', requiredSell: bestSell * currentPrice, requiredSellAmount: bestSell, matchedPct: bestPct, approximate: true };
+            }
+
+            return { status: 'impossible', message: 'Target not reachable by selling under current lot order.' };
+        }
+
+        function calculateAdjustmentForTargetUnrealized(totalCost, currentValue, targetPct) {
+            if (!Number.isFinite(totalCost) || totalCost <= 0 || !Number.isFinite(currentValue) || currentValue < 0) {
+                return { status: 'invalid', message: 'Not enough data yet.' };
+            }
+
+            const unrealized = currentValue - totalCost;
+            const currentRatio = unrealized / totalCost;
+            const targetRatio = targetPct / 100;
+
+            if (!Number.isFinite(targetRatio)) {
+                return { status: 'invalid', message: 'Invalid target percentage.' };
+            }
+
+            if (Math.abs(unrealized) < 1e-9) {
+                if (Math.abs(targetRatio) < 1e-9) {
+                    return { status: 'at_target', requiredAmount: 0, action: 'none', currentRatio, targetRatio };
+                }
+                return {
+                    status: 'impossible',
+                    message: 'At break-even. Price movement is needed to move away from 0%.',
+                    currentRatio,
+                    targetRatio
+                };
+            }
+
+            if (Math.abs(targetRatio) < 1e-9) {
+                return {
+                    status: 'impossible',
+                    message: '0% cannot be reached with a finite buy at the same price.',
+                    currentRatio,
+                    targetRatio
+                };
+            }
+
+            // Adjustments at current price move unrealized % toward 0 while keeping its sign.
+            if (unrealized < 0) {
+                if (targetRatio >= 0) {
+                    return {
+                        status: 'impossible',
+                        message: 'For a losing position, target must stay below 0%.',
+                        currentRatio,
+                        targetRatio
+                    };
+                }
+                if (targetRatio < currentRatio - 1e-9) {
+                    return {
+                        status: 'impossible',
+                        message: 'Target is deeper loss than current. Buying only improves % toward 0.',
+                        currentRatio,
+                        targetRatio
+                    };
+                }
+            } else {
+                if (targetRatio <= 0) {
+                    return {
+                        status: 'impossible',
+                        message: 'For a winning position, target must stay above 0%.',
+                        currentRatio,
+                        targetRatio
+                    };
+                }
+                if (targetRatio > currentRatio + 1e-9) {
+                    return {
+                        status: 'impossible',
+                        message: 'Selling at current price cannot increase gain %.',
+                        currentRatio,
+                        targetRatio
+                    };
+                }
+            }
+
+            if (Math.abs(targetRatio - currentRatio) < 1e-9) {
+                return { status: 'at_target', requiredAmount: 0, action: 'none', currentRatio, targetRatio };
+            }
+
+            // For loss case, compute buy needed using adjusted denominator.
+            if (unrealized < 0) {
+                const requiredBuy = (unrealized / targetRatio) - totalCost;
+                if (!Number.isFinite(requiredBuy) || requiredBuy < 0) {
+                    return { status: 'impossible', message: 'Target cannot be reached by buying at current price.', currentRatio, targetRatio };
+                }
+                return { status: 'buy', requiredAmount: requiredBuy, action: 'buy', currentRatio, targetRatio };
+            }
+
+            // Portfolio-level gains are lot-dependent; we handle sell targets at per-token level.
+            return {
+                status: 'impossible',
+                message: 'For gain-side sell targets, use per-token calculations below.',
+                currentRatio,
+                targetRatio
+            };
+        }
+
         async function renderCryptoPortfolio() {
             let taxMethod = document.getElementById('cost-basis-method')?.value || 'fifo';
             if (taxMethod === 'average') taxMethod = 'avg';
+            const targetPctRaw = parseFloat(document.getElementById('cp-target-unrealized-pct')?.value);
+            const targetUnrealizedPct = Number.isFinite(targetPctRaw) ? targetPctRaw : -5;
+            const lossesOnlyEl = document.getElementById('cp-target-losses-only');
+            if (lossesOnlyEl) lossesOnlyEl.checked = cryptoTargetLossesOnly;
             const holdings = await calculateHoldings(taxMethod);
             const list = document.getElementById('crypto-holdings-list');
             list.innerHTML = '';
 
             let totalVal = 0, totalInvested = 0, totalRealized = 0, totalUnrealized = 0;
             let lastUpdate = 0;
+            let pricedTargetValue = 0, pricedTargetCost = 0, unpricedTargetCount = 0;
 
             let bestPerf = { symbol: '-', pct: -Infinity };
             let worstPerf = { symbol: '-', pct: Infinity };
@@ -494,6 +746,12 @@
                     totalVal += value;
                     totalInvested += h.totalCost;
                     totalUnrealized += unrealized;
+                    if (currentPrice > 0) {
+                        pricedTargetValue += value;
+                        pricedTargetCost += h.totalCost;
+                    } else {
+                        unpricedTargetCount += 1;
+                    }
 
                     // Track Best/Worst
                     if (pnlPct > bestPerf.pct) bestPerf = { symbol: h.symbol, pct: pnlPct };
@@ -504,6 +762,49 @@
                 if (h.amount > 0.000001) {
                     const safeSymbol = escapeHTML((h.symbol || '').toUpperCase());
                     const safeTokenId = escapeHTML(id);
+                    const encodedTokenId = encodeInlineArg(id);
+                    const tokenTargetPct = getCryptoTokenTargetPct(id, targetUnrealizedPct);
+                    const showTokenTarget = !cryptoTargetLossesOnly || unrealized < 0;
+                    let tokenTargetUI = '';
+                    let tokenTargetNote = '';
+
+                    if (showTokenTarget) {
+                        tokenTargetUI = `
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-[10px] text-slate-500">Target %</span>
+                                <input type="number" step="0.1" value="${tokenTargetPct.toFixed(1)}"
+                                    onchange="setCryptoTokenTarget('${encodedTokenId}', this.value)"
+                                    class="w-16 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-right text-slate-300 outline-none focus:border-cyan-500">
+                                <button onclick="clearCryptoTokenTarget('${encodedTokenId}')"
+                                    class="text-[10px] text-slate-500 hover:text-slate-300">reset</button>
+                            </div>
+                        `;
+                    }
+
+                    if (currentPrice <= 0) {
+                        tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Needs latest price to estimate target action.</p>';
+                    } else if (!showTokenTarget && unrealized > 0) {
+                        tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Enable gains in toggle above to compute sell target for this token.</p>';
+                    } else {
+                        const targetCalc = unrealized < 0
+                            ? calculateAdjustmentForTargetUnrealized(h.totalCost, value, tokenTargetPct)
+                            : calculateSellNeededForTargetUnrealizedPct(h, currentPrice, tokenTargetPct, taxMethod);
+
+                        if (targetCalc.status === 'buy') {
+                            const tokensToBuy = targetCalc.requiredAmount / currentPrice;
+                            tokenTargetNote = `<p class="text-[10px] text-cyan-400 mt-0.5">Target ${tokenTargetPct.toFixed(1)}%: Buy ${fmt(targetCalc.requiredAmount)} (${tokensToBuy.toFixed(4)} tokens)</p>`;
+                        } else if (targetCalc.status === 'sell') {
+                            const amountText = targetCalc.requiredSellAmount?.toFixed(4) || '0.0000';
+                            const approxPrefix = targetCalc.approximate ? '~' : '';
+                            tokenTargetNote = `<p class="text-[10px] text-amber-400 mt-0.5">Target ${tokenTargetPct.toFixed(1)}%: Sell ${approxPrefix}${fmt(targetCalc.requiredSell)} (${approxPrefix}${amountText} tokens)</p>`;
+                        } else if (targetCalc.status === 'at_target') {
+                            tokenTargetNote = `<p class="text-[10px] text-emerald-400 mt-0.5">Already at target ${tokenTargetPct.toFixed(1)}%.</p>`;
+                        } else {
+                            const safeMsg = escapeHTML(targetCalc.message || 'Target is not reachable at current price.');
+                            tokenTargetNote = `<p class="text-[10px] text-slate-500 mt-0.5">${safeMsg}</p>`;
+                        }
+                    }
+
                     const div = document.createElement('div');
                     div.className = "bg-slate-800 p-4 rounded-2xl flex items-center justify-between border border-slate-700";
                     div.innerHTML = `
@@ -515,6 +816,8 @@
                             <p class="text-xs text-slate-400 mt-1">${h.amount.toFixed(4)} tokens @ ${fmt(avgPrice)} avg</p>
                             <p class="text-[10px] text-slate-500 mt-0.5">Invested: ${fmt(h.totalCost)} • Avg hold: ${weightedHoldingDays.toFixed(1)} days</p>
                             <p class="text-[10px] text-slate-500 mt-0.5">${taxMethod.toUpperCase()} Basis</p>
+                            ${tokenTargetUI}
+                            ${tokenTargetNote}
                         </div>
                         <div class="text-right">
                             <p class="font-bold text-white">${currentPrice > 0 ? fmt(value) : 'Needs Update'}</p>
@@ -592,6 +895,43 @@
             uEl.innerText = (totalUnrealized >= 0 ? '+' : '') + fmt(totalUnrealized);
             uEl.className = `text-xl font-bold mt-1 ${totalUnrealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
 
+            const currentPctEl = document.getElementById('cp-target-current-pct');
+            const actionLabelEl = document.getElementById('cp-target-action-label');
+            const neededBuyEl = document.getElementById('cp-target-needed-buy');
+            const helperEl = document.getElementById('cp-target-helper');
+            if (currentPctEl && neededBuyEl && helperEl && actionLabelEl) {
+                if (pricedTargetCost > 0) {
+                    const targetCalc = calculateAdjustmentForTargetUnrealized(pricedTargetCost, pricedTargetValue, targetUnrealizedPct);
+                    const currentPct = ((pricedTargetValue - pricedTargetCost) / pricedTargetCost) * 100;
+                    currentPctEl.innerText = `${currentPct >= 0 ? '+' : ''}${currentPct.toFixed(2)}%`;
+                    currentPctEl.className = `text-sm font-bold mt-1 ${currentPct >= 0 ? 'text-emerald-300' : 'text-rose-300'}`;
+                    const missingPriceSuffix = unpricedTargetCount > 0 ? ` ${unpricedTargetCount} holding(s) skipped (no price).` : '';
+
+                    actionLabelEl.innerText = currentPct < 0 ? 'Needed Buy' : (currentPct > 0 ? 'Needed Sell' : 'Needed Action');
+
+                    if (targetCalc.status === 'buy') {
+                        neededBuyEl.innerText = fmt(targetCalc.requiredAmount);
+                        neededBuyEl.className = 'text-sm font-bold text-cyan-300 mt-1';
+                        helperEl.innerText = `Buy at current prices to move unrealized P/L toward ${targetUnrealizedPct.toFixed(1)}%.${missingPriceSuffix}`;
+                    } else if (targetCalc.status === 'at_target') {
+                        neededBuyEl.innerText = fmt(0);
+                        neededBuyEl.className = 'text-sm font-bold text-emerald-300 mt-1';
+                        helperEl.innerText = `Portfolio is already at ${targetUnrealizedPct.toFixed(1)}%.${missingPriceSuffix}`;
+                    } else {
+                        neededBuyEl.innerText = '--';
+                        neededBuyEl.className = 'text-sm font-bold text-slate-400 mt-1';
+                        helperEl.innerText = (targetCalc.message || 'Target is not reachable with the current assumptions.') + missingPriceSuffix;
+                    }
+                } else {
+                    actionLabelEl.innerText = 'Needed Action';
+                    currentPctEl.innerText = '--';
+                    currentPctEl.className = 'text-sm font-bold mt-1 text-slate-400';
+                    neededBuyEl.innerText = '--';
+                    neededBuyEl.className = 'text-sm font-bold text-slate-400 mt-1';
+                    helperEl.innerText = 'Add holdings first to use this calculator.';
+                }
+            }
+
             // ROI & Best/Worst
             const roi = totalInvested > 0 ? ((totalVal - totalInvested) / totalInvested) * 100 : 0;
             const roiEl = document.getElementById('cp-roi');
@@ -600,10 +940,10 @@
                 roiEl.className = `text-lg font-bold ${roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
             }
 
-            const bestEl = document.getElementById('cp-best-perf');
+            const bestEl = document.getElementById('cp-best-perf') || document.getElementById('cp-best');
             if (bestEl) bestEl.innerText = bestPerf.symbol !== '-' ? `${bestPerf.symbol} (${bestPerf.pct > 0 ? '+' : ''}${bestPerf.pct.toFixed(0)}%)` : '-';
 
-            const worstEl = document.getElementById('cp-worst-perf');
+            const worstEl = document.getElementById('cp-worst-perf') || document.getElementById('cp-worst');
             if (worstEl) worstEl.innerText = worstPerf.symbol !== '-' ? `${worstPerf.symbol} (${worstPerf.pct > 0 ? '+' : ''}${worstPerf.pct.toFixed(0)}%)` : '-';
 
             const timeStr = lastUpdate > 0 ? new Date(lastUpdate).toLocaleTimeString() : 'Never';
