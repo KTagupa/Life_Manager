@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes | Urgency Flow</title>
+    <link rel="stylesheet" href="../assets/css/app.css">
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .notes-page {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .notes-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .notes-title {
+            font-size: 22px;
+            margin: 0;
+        }
+
+        .notes-topbar-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .notes-grid {
+            display: grid;
+            grid-template-columns: minmax(260px, 340px) 1fr;
+            gap: 16px;
+            min-height: calc(100vh - 120px);
+        }
+
+        .notes-col {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .notes-col-header {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .notes-list-scroll {
+            overflow: auto;
+            padding: 8px;
+            min-height: 0;
+            flex: 1;
+        }
+
+        .notes-list-item {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .notes-list-item.active {
+            border-color: var(--accent);
+            background: rgba(79, 156, 249, 0.12);
+        }
+
+        .notes-list-item-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-main);
+        }
+
+        .notes-list-item-preview {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.35;
+            margin-bottom: 6px;
+        }
+
+        .notes-list-item-meta {
+            font-size: 10px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .notes-editor {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            flex: 1;
+            gap: 10px;
+            padding: 12px;
+        }
+
+        .notes-editor label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .notes-editor input,
+        .notes-editor textarea,
+        #notes-search {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid var(--border);
+            background: var(--panel-bg-elevated);
+            color: var(--text-main);
+            border-radius: 8px;
+            padding: 9px 10px;
+            font-size: 13px;
+        }
+
+        .notes-editor textarea {
+            flex: 1;
+            min-height: 220px;
+            resize: vertical;
+            line-height: 1.45;
+        }
+
+        .notes-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .notes-status {
+            font-size: 11px;
+            color: var(--text-muted);
+            min-height: 16px;
+        }
+
+        .empty-state {
+            color: var(--text-muted);
+            text-align: center;
+            font-size: 12px;
+            padding: 24px 12px;
+        }
+
+        @media (max-width: 900px) {
+            .notes-grid {
+                grid-template-columns: 1fr;
+                min-height: auto;
+            }
+
+            .notes-col {
+                min-height: 280px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="notes-page">
+        <div class="notes-topbar">
+            <h1 class="notes-title">Notes Workspace</h1>
+            <a class="notes-topbar-link" href="../index.html">← Back to Main App</a>
+        </div>
+
+        <section class="notes-grid">
+            <aside class="notes-col">
+                <div class="notes-col-header">
+                    <strong>All Notes</strong>
+                    <span id="notes-count" class="notes-status"></span>
+                </div>
+                <div style="padding: 10px; border-bottom: 1px solid var(--border);">
+                    <input type="text" id="notes-search" placeholder="Search notes...">
+                </div>
+                <div id="notes-list" class="notes-list-scroll"></div>
+            </aside>
+
+            <section class="notes-col">
+                <div class="notes-col-header">
+                    <strong>Editor</strong>
+                </div>
+                <div class="notes-editor">
+                    <label for="note-title">Title</label>
+                    <input type="text" id="note-title" placeholder="Note title">
+
+                    <label for="note-body">Body</label>
+                    <textarea id="note-body"
+                        placeholder="Write your note here. Existing block-formatted notes are preserved on save."></textarea>
+
+                    <div class="notes-actions">
+                        <button id="new-note-btn" class="btn">New</button>
+                        <button id="save-note-btn" class="btn btn-primary">Save</button>
+                        <button id="delete-note-btn" class="btn">Delete</button>
+                    </div>
+                    <div id="notes-status" class="notes-status"></div>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script defer src="../assets/js/db.js"></script>
+    <script defer src="../assets/js/notesRepository.js"></script>
+    <script defer src="../assets/js/notesSync.js"></script>
+    <script defer src="notes.js"></script>
+</body>
+
+</html>
