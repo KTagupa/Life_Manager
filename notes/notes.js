@@ -392,6 +392,14 @@
             return;
         }
 
+        if (options.flushPending === true && state.dirty) {
+            try {
+                await flushPendingSave();
+            } catch (error) {
+                console.error('[notes-page] Failed to flush pending save before refresh:', error);
+            }
+        }
+
         const keepSelection = options.keepSelection !== false;
         const reloadEditor = options.reloadEditor !== false;
         const silent = options.silent === true;
@@ -411,7 +419,7 @@
         state.selectedId = nextSelection;
 
         renderList();
-        if (reloadEditor) loadSelectedNoteIntoEditor();
+        if (reloadEditor || previousSelection !== state.selectedId) loadSelectedNoteIntoEditor();
         updateCount();
 
         if (!silent) setStatus('Notes loaded.');
@@ -594,7 +602,7 @@
         sync.initNotesChannel((message) => {
             if (!state.isReady) return;
             const sameNote = !!(message && message.id && message.id === state.selectedId);
-            const reloadEditor = !(state.dirty && sameNote);
+            const reloadEditor = !state.dirty;
             refreshNotes({
                 keepSelection: true,
                 reloadEditor,
@@ -614,7 +622,7 @@
     function bindEvents() {
         if (els.search) {
             els.search.addEventListener('input', () => {
-                refreshNotes({ keepSelection: true, silent: true }).catch((error) => {
+                refreshNotes({ keepSelection: true, silent: true, flushPending: true }).catch((error) => {
                     console.error('[notes-page] Search refresh failed:', error);
                 });
             });

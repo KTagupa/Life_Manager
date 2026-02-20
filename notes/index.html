@@ -7,18 +7,31 @@
     <title>Notes | Urgency Flow</title>
     <link rel="stylesheet" href="../assets/css/app.css">
     <style>
+        html,
         body {
             margin: 0;
+            height: 100%;
+        }
+
+        body {
             min-height: 100vh;
             background: var(--bg-color);
             color: var(--text-main);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            display: block;
+            width: auto;
+            overflow: auto;
+            touch-action: auto;
         }
 
         .notes-page {
             max-width: 1400px;
             margin: 0 auto;
             padding: 20px 18px;
+            min-height: 100vh;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
 
         .notes-topbar {
@@ -45,7 +58,8 @@
             display: grid;
             grid-template-columns: minmax(280px, 360px) 1fr;
             gap: 16px;
-            min-height: calc(100vh - 112px);
+            flex: 1;
+            min-height: 0;
         }
 
         .notes-panel {
@@ -55,6 +69,7 @@
             display: flex;
             flex-direction: column;
             min-height: 0;
+            overflow: hidden;
         }
 
         .notes-panel-header {
@@ -75,10 +90,12 @@
         }
 
         .notes-list-scroll {
-            overflow: auto;
+            overflow-y: auto;
+            overflow-x: hidden;
             padding: 8px;
             min-height: 0;
             flex: 1;
+            -webkit-overflow-scrolling: touch;
         }
 
         .notes-list-item {
@@ -180,12 +197,14 @@
 
         .block-list {
             flex: 1;
-            min-height: 260px;
-            overflow: auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
             display: flex;
             flex-direction: column;
             gap: 10px;
             padding-right: 2px;
+            -webkit-overflow-scrolling: touch;
         }
 
         .note-block {
@@ -284,7 +303,7 @@
             }
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 
 <body>
