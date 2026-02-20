@@ -2,6 +2,38 @@
         // SECTION 4: CRYPTO / INVESTING MODULE
         // =============================================
 
+        let cryptoComputationCache = {
+            sourceRef: null,
+            length: -1,
+            decryptedTxs: null,
+            pendingDecryptPromise: null,
+            holdingsByMethod: new Map()
+        };
+
+        function invalidateCryptoComputationCache() {
+            cryptoComputationCache.sourceRef = null;
+            cryptoComputationCache.length = -1;
+            cryptoComputationCache.decryptedTxs = null;
+            cryptoComputationCache.pendingDecryptPromise = null;
+            cryptoComputationCache.holdingsByMethod = new Map();
+        }
+
+        function ensureCryptoComputationCacheFresh() {
+            const source = rawCrypto || [];
+            if (cryptoComputationCache.sourceRef !== source || cryptoComputationCache.length !== source.length) {
+                cryptoComputationCache.sourceRef = source;
+                cryptoComputationCache.length = source.length;
+                cryptoComputationCache.decryptedTxs = null;
+                cryptoComputationCache.pendingDecryptPromise = null;
+                cryptoComputationCache.holdingsByMethod = new Map();
+            }
+        }
+
+        function normalizeCostBasisMethod(method) {
+            if (method === 'average') return 'avg';
+            return method || 'fifo';
+        }
+
 
         function openCryptoPortfolio() {
             document.getElementById('crypto-portfolio-modal').classList.remove('hidden');
@@ -235,6 +267,7 @@
             await saveDB(db);
 
             rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
+            invalidateCryptoComputationCache();
             toggleModal('crypto-transaction-modal');
             renderCryptoWidget(); // Refresh dashboard
             if (!document.getElementById('crypto-portfolio-modal').classList.contains('hidden')) {
@@ -243,13 +276,30 @@
         }
 
         async function getDecryptedCrypto() {
-            const txs = await Promise.all(rawCrypto.map(async item => {
+            ensureCryptoComputationCacheFresh();
+            if (cryptoComputationCache.decryptedTxs) {
+                return cryptoComputationCache.decryptedTxs;
+            }
+            if (cryptoComputationCache.pendingDecryptPromise) {
+                return cryptoComputationCache.pendingDecryptPromise;
+            }
+
+            cryptoComputationCache.pendingDecryptPromise = Promise.all((rawCrypto || []).map(async item => {
                 const d = await decryptData(item.data);
                 return d ? { ...d, id: item.id } : null;
-            }));
-            // Sort: oldest first for math, but we return sorted by date (newest first) for display usually
-            // Here we return newest first
-            return txs.filter(x => x).sort((a, b) => new Date(b.date) - new Date(a.date));
+            })).then(txs => txs
+                .filter(x => x)
+                .sort((a, b) => new Date(b.date) - new Date(a.date)));
+
+            try {
+                const decrypted = await cryptoComputationCache.pendingDecryptPromise;
+                cryptoComputationCache.decryptedTxs = decrypted;
+                // Sort: oldest first for math, but we return sorted by date (newest first) for display usually
+                // Here we return newest first
+                return decrypted;
+            } finally {
+                cryptoComputationCache.pendingDecryptPromise = null;
+            }
         }
 
         function calculateWeightedHoldingDays(lots) {
@@ -271,6 +321,11 @@
         }
 
         async function calculateHoldings(method = 'fifo') {
+            const normalizedMethod = normalizeCostBasisMethod(method);
+            ensureCryptoComputationCacheFresh();
+            const cached = cryptoComputationCache.holdingsByMethod.get(normalizedMethod);
+            if (cached) return cached;
+
             const txs = await getDecryptedCrypto();
             const holdings = {};
             // holdings structure: 
@@ -308,7 +363,7 @@
                     let remainingToSell = tx.amount;
                     let soldAmount = 0;
 
-                    if (method === 'avg') {
+                    if (normalizedMethod === 'avg') {
                         const totalAmountBeforeSell = h.amount;
                         soldAmount = Math.min(tx.amount, totalAmountBeforeSell);
                         const avgPrice = totalAmountBeforeSell > 0 ? (h.totalCost / totalAmountBeforeSell) : 0;
@@ -335,7 +390,7 @@
                     } else {
                         // FIFO/LIFO
                         while (remainingToSell > 0.000001 && h.lots.length > 0) {
-                            const lotIndex = method === 'fifo' ? 0 : h.lots.length - 1;
+                            const lotIndex = normalizedMethod === 'fifo' ? 0 : h.lots.length - 1;
                             const lot = h.lots[lotIndex];
 
                             if (lot.amount <= remainingToSell) {
@@ -387,6 +442,7 @@
                 }
             });
 
+            cryptoComputationCache.holdingsByMethod.set(normalizedMethod, holdings);
             return holdings;
         }
 

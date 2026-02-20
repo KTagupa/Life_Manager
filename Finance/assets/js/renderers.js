@@ -69,6 +69,43 @@
             lucide.createIcons();
         }
 
+        function buildDebtAndLentAggregates(transactions) {
+            const debtPaidByCategory = Object.create(null);
+            const debtBorrowedByCategory = Object.create(null);
+            const lentExpensesByCategory = Object.create(null);
+            const lentIncomeByCategory = Object.create(null);
+
+            (transactions || []).forEach(t => {
+                const category = (t && typeof t.category === 'string') ? t.category : '';
+                if (!category) return;
+
+                const amt = Number(t.amt) || 0;
+                if (amt <= 0) return;
+
+                if (t.type === 'expense') {
+                    debtPaidByCategory[category] = (debtPaidByCategory[category] || 0) + amt;
+                    if (category.startsWith('Lent: ')) {
+                        lentExpensesByCategory[category] = (lentExpensesByCategory[category] || 0) + amt;
+                    }
+                    return;
+                }
+
+                if (t.type === 'income' || t.type === 'debt_increase') {
+                    debtBorrowedByCategory[category] = (debtBorrowedByCategory[category] || 0) + amt;
+                    if (t.type === 'income' && category.startsWith('Lent: ')) {
+                        lentIncomeByCategory[category] = (lentIncomeByCategory[category] || 0) + amt;
+                    }
+                }
+            });
+
+            return {
+                debtPaidByCategory,
+                debtBorrowedByCategory,
+                lentExpensesByCategory,
+                lentIncomeByCategory
+            };
+        }
+
         async function renderDebts(items) {
             const list = document.getElementById('debt-list');
             list.innerHTML = '';
@@ -89,19 +126,16 @@
             // Calculate paid amounts from transaction history (Expenses with category == Debt Name)
             // Note: We use all transactions (historical), not just filtered ones, to show true debt progress
             const allTrans = window.allDecryptedTransactions || [];
+            const {
+                debtPaidByCategory,
+                debtBorrowedByCategory
+            } = buildDebtAndLentAggregates(allTrans);
 
             decryptedDebts.forEach(d => {
                 const safeDebtName = escapeHTML(d.name || 'Debt');
                 const encodedDebtId = encodeInlineArg(d.id);
-                // Sum expenses that match debt name (Repayments)
-                const paid = allTrans
-                    .filter(t => t.type === 'expense' && t.category === d.name)
-                    .reduce((acc, curr) => acc + curr.amt, 0);
-
-                // Sum income or debt_increase that matches debt name (Additional Loans)
-                const borrowedMore = allTrans
-                    .filter(t => (t.type === 'income' || t.type === 'debt_increase') && t.category === d.name)
-                    .reduce((acc, curr) => acc + curr.amt, 0);
+                const paid = debtPaidByCategory[d.name] || 0;
+                const borrowedMore = debtBorrowedByCategory[d.name] || 0;
 
                 const totalDebt = d.amount + borrowedMore;
                 const percentage = totalDebt > 0 ? Math.min(100, Math.round((paid / totalDebt) * 100)) : 100;
@@ -157,18 +191,17 @@
             }
 
             const allTrans = window.allDecryptedTransactions || [];
+            const {
+                lentExpensesByCategory,
+                lentIncomeByCategory
+            } = buildDebtAndLentAggregates(allTrans);
 
             decryptedLent.forEach(l => {
                 const safeLentName = escapeHTML(l.name || 'Lent');
                 const encodedLentId = encodeInlineArg(l.id);
-                // Balance = Expenses (lent) - Income (repaid)
-                const expenses = allTrans
-                    .filter(t => t.type === 'expense' && t.category === `Lent: ${l.name}`)
-                    .reduce((acc, curr) => acc + curr.amt, 0);
-
-                const income = allTrans
-                    .filter(t => t.type === 'income' && t.category === `Lent: ${l.name}`)
-                    .reduce((acc, curr) => acc + curr.amt, 0);
+                const lentCategory = `Lent: ${l.name}`;
+                const expenses = lentExpensesByCategory[lentCategory] || 0;
+                const income = lentIncomeByCategory[lentCategory] || 0;
 
                 const balance = expenses - income;
 

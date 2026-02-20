@@ -2,12 +2,14 @@
         // RECURRING REMINDERS SYSTEM
         // =============================================
 
-        async function syncBillToReminder(billId, billName, dayOfMonth, estimatedAmount) {
+        async function syncBillToReminder(billId, billName, dayOfMonth, estimatedAmount, options = {}) {
+            const shouldPersist = options.persist !== false;
             // Check if reminder already exists for this bill
             const existingReminderIndex = recurringTransactions.findIndex(r => r.linkedBillId === billId);
+            const existingReminder = existingReminderIndex >= 0 ? recurringTransactions[existingReminderIndex] : null;
 
             const reminderData = {
-                id: existingReminderIndex >= 0 ? recurringTransactions[existingReminderIndex].id : `bill_${billId}`,
+                id: existingReminder ? existingReminder.id : `bill_${billId}`,
                 desc: billName,
                 type: 'expense',
                 frequency: 'monthly',
@@ -15,10 +17,21 @@
                 dayOfMonth: dayOfMonth,
                 estimatedAmount: estimatedAmount, // Store estimate for reference
                 linkedBillId: billId, // Link back to original bill
-                lastDismissed: existingReminderIndex >= 0 ? recurringTransactions[existingReminderIndex].lastDismissed : null,
-                createdAt: existingReminderIndex >= 0 ? recurringTransactions[existingReminderIndex].createdAt : new Date().toISOString(),
+                lastDismissed: existingReminder ? existingReminder.lastDismissed : null,
+                createdAt: existingReminder ? existingReminder.createdAt : new Date().toISOString(),
                 autoSynced: true // Flag to indicate this was auto-created from a bill
             };
+            const changed = !existingReminder
+                || existingReminder.desc !== reminderData.desc
+                || existingReminder.dayOfMonth !== reminderData.dayOfMonth
+                || existingReminder.estimatedAmount !== reminderData.estimatedAmount
+                || existingReminder.type !== reminderData.type
+                || existingReminder.frequency !== reminderData.frequency
+                || existingReminder.category !== reminderData.category
+                || existingReminder.linkedBillId !== reminderData.linkedBillId
+                || existingReminder.autoSynced !== reminderData.autoSynced;
+
+            if (!changed) return false;
 
             if (existingReminderIndex >= 0) {
                 // Update existing reminder
@@ -28,9 +41,12 @@
                 recurringTransactions.push(reminderData);
             }
 
-            const db = await getDB();
-            db.recurring_transactions = recurringTransactions;
-            await saveDB(db);
+            if (shouldPersist) {
+                const db = await getDB();
+                db.recurring_transactions = recurringTransactions;
+                await saveDB(db);
+            }
+            return true;
         }
 
         async function syncAllBillsToReminders() {
@@ -41,9 +57,17 @@
                 return data ? { ...data, id: b.id } : null;
             }));
 
+            let hasChanges = false;
             for (const bill of decryptedBills.filter(b => b)) {
-                await syncBillToReminder(bill.id, bill.name, bill.day, bill.amt);
+                const changed = await syncBillToReminder(bill.id, bill.name, bill.day, bill.amt, { persist: false });
+                hasChanges = hasChanges || changed;
             }
+
+            if (!hasChanges) return;
+
+            const db = await getDB();
+            db.recurring_transactions = recurringTransactions;
+            await saveDB(db);
         }
 
 

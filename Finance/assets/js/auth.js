@@ -214,29 +214,27 @@
         async function loadFromStorage() {
             const db = await getDB();
 
+            recurringTransactions = db.recurring_transactions || [];
             rawTransactions = (db.transactions || []).filter(t => !t.deletedAt);
             await loadAndRender();
 
             rawBills = (db.bills || []).filter(b => !b.deletedAt);
-            await renderBills(rawBills);
+            rawDebts = (db.debts || []).filter(d => !d.deletedAt);
+            rawLent = (db.lent || []).filter(l => !l.deletedAt);
+            rawWishlist = (db.wishlist || []).filter(w => !w.deletedAt);
+            rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
+            cryptoPrices = db.crypto_prices || {};
+            invalidateCryptoComputationCache();
+
+            await Promise.all([
+                renderBills(rawBills),
+                renderDebts(rawDebts),
+                renderLent(rawLent),
+                loadAndRenderWishlist(),
+                renderCryptoWidget()
+            ]);
             // AUTO-SYNC: Sync all bills to reminders on load
             await syncAllBillsToReminders();
-
-            rawDebts = (db.debts || []).filter(d => !d.deletedAt);
-            await renderDebts(rawDebts);
-
-            rawLent = (db.lent || []).filter(l => !l.deletedAt);
-            await renderLent(rawLent);
-
-            rawWishlist = (db.wishlist || []).filter(w => !w.deletedAt);
-            await loadAndRenderWishlist();
-
-            // Crypto Loading
-            rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
-            // We store crypto prices unencrypted usually for cache, but let's assume they are just a plain object in DB for simplicity
-            // If they were encrypted, we'd decrypt here. Let's assume plain for cache speed.
-            cryptoPrices = db.crypto_prices || {};
-            await renderCryptoWidget();
 
             if (db.budgets && db.budgets.data) {
                 budgets = await decryptData(db.budgets.data) || {};
@@ -245,7 +243,6 @@
             }
             customCategories = db.custom_categories || [];
             investmentGoals = db.investment_goals || [];
-            recurringTransactions = db.recurring_transactions || [];
             categorizationRules = db.categorization_rules || [];
             financialGoals = db.goals || [];
             importsLog = db.imports || [];
