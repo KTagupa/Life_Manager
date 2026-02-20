@@ -214,6 +214,14 @@
         async function loadFromStorage() {
             const db = await getDB();
 
+            const runLoadStep = async (label, fn) => {
+                try {
+                    await fn();
+                } catch (err) {
+                    console.error(`Load step failed: ${label}`, err);
+                }
+            };
+
             recurringTransactions = db.recurring_transactions || [];
             rawTransactions = (db.transactions || []).filter(t => !t.deletedAt);
             await loadAndRender();
@@ -224,17 +232,17 @@
             rawWishlist = (db.wishlist || []).filter(w => !w.deletedAt);
             rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
             cryptoPrices = db.crypto_prices || {};
-            invalidateCryptoComputationCache();
+            if (typeof invalidateCryptoComputationCache === 'function') {
+                invalidateCryptoComputationCache();
+            }
 
-            await Promise.all([
-                renderBills(rawBills),
-                renderDebts(rawDebts),
-                renderLent(rawLent),
-                loadAndRenderWishlist(),
-                renderCryptoWidget()
-            ]);
+            await runLoadStep('bills', async () => renderBills(rawBills));
+            await runLoadStep('debts', async () => renderDebts(rawDebts));
+            await runLoadStep('lent', async () => renderLent(rawLent));
+            await runLoadStep('wishlist', async () => loadAndRenderWishlist());
+            await runLoadStep('crypto-widget', async () => renderCryptoWidget());
             // AUTO-SYNC: Sync all bills to reminders on load
-            await syncAllBillsToReminders();
+            await runLoadStep('sync-bills-reminders', async () => syncAllBillsToReminders());
 
             if (db.budgets && db.budgets.data) {
                 budgets = await decryptData(db.budgets.data) || {};
