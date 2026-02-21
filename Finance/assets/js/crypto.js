@@ -446,7 +446,7 @@
             return holdings;
         }
 
-        async function fetchCryptoPrices() {
+	        async function fetchCryptoPrices() {
             const holdings = await calculateHoldings();
             const ids = Object.keys(holdings).filter(k => holdings[k].amount > 0.000001);
             const statusEl = document.getElementById('crypto-last-updated');
@@ -463,32 +463,32 @@
             if (icon) icon.classList.add('animate-spin');
             if (statusEl) statusEl.innerText = "Updating prices...";
 
-            try {
-                // Using PHP as base currency since app is PHP-centric
-                const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=php,usd,jpy`);
-                if (!res.ok) throw new Error("API Limit or Error");
-                const data = await res.json();
+	            try {
+	                // Using PHP as base currency since app is PHP-centric
+	                const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=php,usd,jpy`);
+	                if (!res.ok) throw new Error("API Limit or Error");
+	                const data = await res.json();
 
-                // Update cache
-                const db = await getDB();
-                const now = Date.now();
-                Object.keys(data).forEach(id => {
-                    db.crypto_prices[id] = {
-                        php: data[id].php,
-                        usd: data[id].usd,
-                        jpy: data[id].jpy,
-                        price: data[id].php, // Backward compatibility
-                        updated: now
-                    };
-                });
-                await saveDB(db);
-                cryptoPrices = db.crypto_prices;
-                renderCryptoPortfolio();
-            } catch (e) {
-                console.error(e);
-                if (statusEl) statusEl.innerText = "Update Failed (Rate Limit?)";
-                alert("Could not fetch prices. The free API might be rate-limited. Please try again in a minute.");
-            } finally {
+	                // Update cache locally only (avoid Firestore upload on price refresh)
+	                const db = await getDB();
+	                const now = Date.now();
+	                Object.keys(data).forEach(id => {
+	                    db.crypto_prices[id] = {
+	                        php: data[id].php,
+	                        usd: data[id].usd,
+	                        jpy: data[id].jpy,
+	                        price: data[id].php, // Backward compatibility
+	                        updated: now
+	                    };
+	                });
+	                await persistLocalDBSnapshot(db);
+	                cryptoPrices = db.crypto_prices || {};
+	                renderCryptoPortfolio();
+	            } catch (e) {
+	                console.error(e);
+	                if (statusEl) statusEl.innerText = "Update Failed (Rate Limit?)";
+	                alert("Could not fetch prices. The free API might be rate-limited. Please try again in a minute.");
+	            } finally {
                 if (icon) icon.classList.remove('animate-spin');
             }
         }

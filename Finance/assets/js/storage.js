@@ -534,9 +534,9 @@
             return Array.from(merged.values());
         }
 
-        function mergeSafeDB(localDB, remoteDB) {
-            const merged = normalizeDBSchema(remoteDB);
-            const local = normalizeDBSchema(localDB);
+	        function mergeSafeDB(localDB, remoteDB) {
+	            const merged = normalizeDBSchema(remoteDB);
+	            const local = normalizeDBSchema(localDB);
 
             merged.transactions = mergeSafeList(local.transactions, merged.transactions);
             merged.bills = mergeSafeList(local.bills, merged.bills);
@@ -562,13 +562,26 @@
                 }
             });
 
-            merged.budgets = local.budgets?.data ? local.budgets : merged.budgets;
-            merged.sync.conflictStrategy = local.sync?.conflictStrategy || merged.sync.conflictStrategy || 'merge_safe_lists';
-            return normalizeDBSchema(merged);
-        }
+	            merged.budgets = local.budgets?.data ? local.budgets : merged.budgets;
+	            merged.sync.conflictStrategy = local.sync?.conflictStrategy || merged.sync.conflictStrategy || 'merge_safe_lists';
+	            return normalizeDBSchema(merged);
+	        }
+	
+	        function applyLocalOnlyFields(targetDB, localDB) {
+	            const target = normalizeDBSchema(targetDB);
+	            const local = normalizeDBSchema(localDB);
+	            target.crypto_prices = { ...(local.crypto_prices || {}) };
+	            return target;
+	        }
+	
+	        function buildRemoteVaultPayload(db) {
+	            const remotePayload = normalizeDBSchema(db);
+	            delete remotePayload.crypto_prices;
+	            return remotePayload;
+	        }
 
-        async function getDB() {
-            let localDB = normalizeDBSchema(getDefaultDB());
+	        async function getDB() {
+	            let localDB = normalizeDBSchema(getDefaultDB());
             try {
                 localDB = await getLocalDBSnapshot();
             } catch (e) {
@@ -586,18 +599,19 @@
                         const remoteDB = normalizeDBSchema(doc.data().vaultData || getDefaultDB());
                         const strategy = localDB.sync?.conflictStrategy || remoteDB.sync?.conflictStrategy || 'merge_safe_lists';
 
-                        if (strategy === 'remote_wins') {
-                            resolvedDB = remoteDB;
-                        } else {
-                            // Merge at read time to avoid overwriting unsynced local edits with stale remote snapshots.
-                            resolvedDB = mergeSafeDB(localDB, remoteDB);
-                            resolvedDB.sync.conflictStrategy = strategy;
-                            resolvedDB.sync.lastKnownRemoteRevision = remoteDB.sync?.revision || null;
-                        }
-                        loadedFromRemote = true;
-                        console.log(`✅ Loaded from Firebase (${strategy})`);
-                    }
-                }
+	                        if (strategy === 'remote_wins') {
+	                            resolvedDB = remoteDB;
+	                        } else {
+	                            // Merge at read time to avoid overwriting unsynced local edits with stale remote snapshots.
+	                            resolvedDB = mergeSafeDB(localDB, remoteDB);
+	                            resolvedDB.sync.conflictStrategy = strategy;
+	                            resolvedDB.sync.lastKnownRemoteRevision = remoteDB.sync?.revision || null;
+	                        }
+	                        resolvedDB = applyLocalOnlyFields(resolvedDB, localDB);
+	                        loadedFromRemote = true;
+	                        console.log(`✅ Loaded from Firebase (${strategy})`);
+	                    }
+	                }
             } catch (error) {
                 console.error('Firebase load failed, using localStorage:', error);
             }
@@ -611,6 +625,7 @@
 
 	        async function saveDB(inputDB) {
 	            let db = normalizeDBSchema(inputDB);
+	            const localCryptoPrices = { ...(db.crypto_prices || {}) };
 	            // Lightweight sync diagnostics. Enable via `window.DEBUG_SYNC_DIAGNOSTICS = true`.
 	            try {
 	                if (typeof window !== 'undefined') {
@@ -659,28 +674,31 @@
                                 (!knownRemoteRev && localRev && remoteRev !== localRev))
                         );
 
-                        if (conflictDetected) {
-                            if (strategy === 'remote_wins') {
-                                db = remoteDB;
-                            } else if (strategy === 'merge_safe_lists') {
-                                db = mergeSafeDB(db, remoteDB);
-                            }
-                        }
-                    }
+	                        if (conflictDetected) {
+	                            if (strategy === 'remote_wins') {
+	                                db = remoteDB;
+	                            } else if (strategy === 'merge_safe_lists') {
+	                                db = mergeSafeDB(db, remoteDB);
+	                            }
+	                        }
+	                    }
+	
+	                    // Keep market prices local-only, regardless of conflict strategy.
+	                    db.crypto_prices = localCryptoPrices;
 
-                    const newRevision = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-                    db.sync.revision = newRevision;
-                    db.sync.lastKnownRemoteRevision = newRevision;
-                    db.sync.updatedAt = nowISO;
+	                    const newRevision = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+	                    db.sync.revision = newRevision;
+	                    db.sync.lastKnownRemoteRevision = newRevision;
+	                    db.sync.updatedAt = nowISO;
 
                     await persistLocalDBSnapshot(db);
 
-                    await ref.set({
-                        vaultData: db,
-                        kdfMeta: kdfMeta || null,
-                        kdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        lastModified: firebase.firestore.FieldValue.serverTimestamp()
-                    });
+	                    await ref.set({
+	                        vaultData: buildRemoteVaultPayload(db),
+	                        kdfMeta: kdfMeta || null,
+	                        kdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+	                        lastModified: firebase.firestore.FieldValue.serverTimestamp()
+	                    });
                     console.log('✅ Synced to Firebase');
                     return db;
                 }
