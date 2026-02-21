@@ -325,6 +325,7 @@
             rawWishlist = (db.wishlist || []).filter(w => !w.deletedAt);
             rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
             cryptoPrices = db.crypto_prices || {};
+            cryptoInterestByToken = db.crypto_interest || {};
             if (typeof invalidateCryptoComputationCache === 'function') {
                 invalidateCryptoComputationCache();
             }

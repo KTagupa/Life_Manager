@@ -320,6 +320,219 @@
             return totalAmount > 0 ? (weightedDays / totalAmount) : 0;
         }
 
+        function normalizeCryptoInterestEntry(entry) {
+            const rewards = Array.isArray(entry?.rewards) ? entry.rewards : [];
+            return {
+                enabled: !!entry?.enabled,
+                rewards: rewards
+                    .map(reward => {
+                        const rewardTokenId = String(reward?.tokenId || '').trim();
+                        if (!rewardTokenId) return null;
+                        const parsedAmount = Number(reward?.amount);
+                        return {
+                            tokenId: rewardTokenId,
+                            symbol: String(reward?.symbol || rewardTokenId).trim() || rewardTokenId,
+                            amount: Number.isFinite(parsedAmount) ? Math.max(parsedAmount, 0) : 0
+                        };
+                    })
+                    .filter(Boolean),
+                lastModified: Number.isFinite(Number(entry?.lastModified)) ? Number(entry.lastModified) : 0
+            };
+        }
+
+        function getCryptoInterestEntry(tokenId) {
+            const source = cryptoInterestByToken && typeof cryptoInterestByToken === 'object' ? cryptoInterestByToken : {};
+            return normalizeCryptoInterestEntry(source[tokenId]);
+        }
+
+        function setCryptoInterestEntry(tokenId, nextEntry) {
+            cryptoInterestByToken = cryptoInterestByToken && typeof cryptoInterestByToken === 'object' ? cryptoInterestByToken : {};
+            cryptoInterestByToken[tokenId] = normalizeCryptoInterestEntry(nextEntry);
+        }
+
+        async function persistCryptoInterestState() {
+            const db = await getDB();
+            db.crypto_interest = cryptoInterestByToken && typeof cryptoInterestByToken === 'object' ? cryptoInterestByToken : {};
+            const saved = await saveDB(db);
+            cryptoInterestByToken = saved.crypto_interest || {};
+        }
+
+        async function setCryptoInterestEnabled(tokenIdEncoded, checked) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            if (!tokenId) return;
+            const current = getCryptoInterestEntry(tokenId);
+            setCryptoInterestEntry(tokenId, {
+                ...current,
+                enabled: !!checked,
+                lastModified: Date.now()
+            });
+            await persistCryptoInterestState();
+            await renderCryptoPortfolio();
+        }
+
+        async function addCryptoInterestReward(tokenIdEncoded) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            if (!tokenId) return;
+            const current = getCryptoInterestEntry(tokenId);
+            const nextRewards = [...(current.rewards || []), { tokenId, symbol: tokenId, amount: 0 }];
+            setCryptoInterestEntry(tokenId, {
+                ...current,
+                enabled: true,
+                rewards: nextRewards,
+                lastModified: Date.now()
+            });
+            await persistCryptoInterestState();
+            await renderCryptoPortfolio();
+        }
+
+        async function updateCryptoInterestRewardToken(tokenIdEncoded, rewardIndexRaw, rewardTokenId) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            const rewardIndex = Number(rewardIndexRaw);
+            const cleanedRewardTokenId = String(rewardTokenId || '').trim();
+            if (!tokenId || !Number.isInteger(rewardIndex) || rewardIndex < 0 || !cleanedRewardTokenId) return;
+
+            const current = getCryptoInterestEntry(tokenId);
+            const nextRewards = [...(current.rewards || [])];
+            if (!nextRewards[rewardIndex]) return;
+            nextRewards[rewardIndex] = {
+                ...nextRewards[rewardIndex],
+                tokenId: cleanedRewardTokenId,
+                symbol: cleanedRewardTokenId
+            };
+            setCryptoInterestEntry(tokenId, {
+                ...current,
+                rewards: nextRewards,
+                lastModified: Date.now()
+            });
+            await persistCryptoInterestState();
+            await renderCryptoPortfolio();
+        }
+
+        async function updateCryptoInterestRewardAmount(tokenIdEncoded, rewardIndexRaw, amountRaw) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            const rewardIndex = Number(rewardIndexRaw);
+            if (!tokenId || !Number.isInteger(rewardIndex) || rewardIndex < 0) return;
+
+            const current = getCryptoInterestEntry(tokenId);
+            const nextRewards = [...(current.rewards || [])];
+            if (!nextRewards[rewardIndex]) return;
+            const parsedAmount = Number(amountRaw);
+            nextRewards[rewardIndex] = {
+                ...nextRewards[rewardIndex],
+                amount: Number.isFinite(parsedAmount) ? Math.max(parsedAmount, 0) : 0
+            };
+            setCryptoInterestEntry(tokenId, {
+                ...current,
+                rewards: nextRewards,
+                lastModified: Date.now()
+            });
+            await persistCryptoInterestState();
+            await renderCryptoPortfolio();
+        }
+
+        async function removeCryptoInterestReward(tokenIdEncoded, rewardIndexRaw) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            const rewardIndex = Number(rewardIndexRaw);
+            if (!tokenId || !Number.isInteger(rewardIndex) || rewardIndex < 0) return;
+
+            const current = getCryptoInterestEntry(tokenId);
+            const nextRewards = (current.rewards || []).filter((_, idx) => idx !== rewardIndex);
+            setCryptoInterestEntry(tokenId, {
+                ...current,
+                rewards: nextRewards,
+                lastModified: Date.now()
+            });
+            await persistCryptoInterestState();
+            await renderCryptoPortfolio();
+        }
+
+        function buildCryptoTokenUniverse(holdings, txs) {
+            const map = new Map();
+            Object.entries(holdings || {}).forEach(([id, h]) => {
+                if (!id) return;
+                const symbol = String(h?.symbol || id).toUpperCase();
+                map.set(id, symbol);
+            });
+            (txs || []).forEach(tx => {
+                if (!tx?.tokenId) return;
+                const symbol = String(tx.symbol || tx.tokenId).toUpperCase();
+                if (!map.has(tx.tokenId)) map.set(tx.tokenId, symbol);
+            });
+            Object.values(cryptoInterestByToken || {}).forEach(cfg => {
+                (cfg?.rewards || []).forEach(reward => {
+                    if (!reward?.tokenId) return;
+                    const symbol = String(reward.symbol || reward.tokenId).toUpperCase();
+                    if (!map.has(reward.tokenId)) map.set(reward.tokenId, symbol);
+                });
+            });
+
+            return Array.from(map.entries())
+                .map(([id, symbol]) => ({ id, symbol }))
+                .sort((a, b) => a.symbol.localeCompare(b.symbol) || a.id.localeCompare(b.id));
+        }
+
+        function buildCryptoInterestRewardTokenOptions(tokenUniverse, selectedTokenId) {
+            const selected = String(selectedTokenId || '').trim();
+            const hasSelected = !!selected && tokenUniverse.some(opt => opt.id === selected);
+            const options = hasSelected || !selected
+                ? tokenUniverse
+                : [{ id: selected, symbol: selected.toUpperCase() }, ...tokenUniverse];
+
+            return options.map(opt => {
+                const safeId = escapeAttr(opt.id);
+                const safeLabel = `${escapeHTML(opt.symbol)} (${escapeHTML(opt.id)})`;
+                const isSelected = opt.id === selected ? 'selected' : '';
+                return `<option value="${safeId}" ${isSelected}>${safeLabel}</option>`;
+            }).join('');
+        }
+
+        function calculateCryptoInterestApy(holding, interestEntry) {
+            const weightedHoldingDays = calculateWeightedHoldingDays(holding?.lots || []);
+            const principal = Number(holding?.totalCost || 0);
+            const rewards = Array.isArray(interestEntry?.rewards) ? interestEntry.rewards : [];
+            let earnedValue = 0;
+            let hasAmount = false;
+            let missingPriceCount = 0;
+
+            rewards.forEach(reward => {
+                const amount = Number(reward?.amount || 0);
+                if (!Number.isFinite(amount) || amount <= 0) return;
+                hasAmount = true;
+                const price = Number(cryptoPrices?.[reward.tokenId]?.price || 0);
+                if (price > 0) {
+                    earnedValue += amount * price;
+                } else {
+                    missingPriceCount += 1;
+                }
+            });
+
+            if (principal <= 0) {
+                return { status: 'invalid', message: 'No invested value yet for APY computation.' };
+            }
+            if (weightedHoldingDays <= 0) {
+                return { status: 'invalid', message: 'Holding time is too short to annualize APY.' };
+            }
+            if (!hasAmount) {
+                return { status: 'pending', message: 'Enter earned amounts to compute APY.' };
+            }
+            if (earnedValue <= 0) {
+                return { status: 'pending', message: 'Missing reward token prices. Refresh crypto prices first.' };
+            }
+
+            const years = weightedHoldingDays / 365;
+            const periodReturnPct = (earnedValue / principal) * 100;
+            const apyPct = years > 0 ? (periodReturnPct / years) : 0;
+
+            return {
+                status: 'ok',
+                earnedValue,
+                apyPct,
+                periodReturnPct,
+                weightedHoldingDays,
+                missingPriceCount
+            };
+        }
+
         async function calculateHoldings(method = 'fifo') {
             const normalizedMethod = normalizeCostBasisMethod(method);
             ensureCryptoComputationCacheFresh();
@@ -448,11 +661,19 @@
 
 	        async function fetchCryptoPrices() {
             const holdings = await calculateHoldings();
-            const ids = Object.keys(holdings).filter(k => holdings[k].amount > 0.000001);
+            const trackedIds = new Set(Object.keys(holdings).filter(k => holdings[k].amount > 0.000001));
+            Object.values(cryptoInterestByToken || {}).forEach(entry => {
+                if (!entry?.enabled) return;
+                (entry.rewards || []).forEach(reward => {
+                    const rewardTokenId = String(reward?.tokenId || '').trim();
+                    if (rewardTokenId) trackedIds.add(rewardTokenId);
+                });
+            });
+            const ids = Array.from(trackedIds);
             const statusEl = document.getElementById('crypto-last-updated');
 
             if (ids.length === 0) {
-                if (statusEl) statusEl.innerText = "No assets to track";
+                if (statusEl) statusEl.innerText = "No assets or rewards to track";
                 return;
             }
 
@@ -774,6 +995,8 @@
             const lossesOnlyEl = document.getElementById('cp-target-losses-only');
             if (lossesOnlyEl) lossesOnlyEl.checked = cryptoTargetLossesOnly;
             const holdings = await calculateHoldings(taxMethod);
+            const allTxs = await getDecryptedCrypto();
+            const tokenUniverse = buildCryptoTokenUniverse(holdings, allTxs);
             const list = document.getElementById('crypto-holdings-list');
             list.innerHTML = '';
 
@@ -861,6 +1084,65 @@
                         }
                     }
 
+                    const interestEntry = getCryptoInterestEntry(id);
+                    let interestMarkup = `
+                        <div class="mt-2 pt-2 border-t border-slate-700/70">
+                            <label class="inline-flex items-center gap-2 text-[11px] text-slate-300">
+                                <input type="checkbox" ${interestEntry.enabled ? 'checked' : ''}
+                                    onchange="setCryptoInterestEnabled('${encodedTokenId}', this.checked)"
+                                    class="accent-cyan-500">
+                                Earns interest
+                            </label>
+                    `;
+
+                    if (interestEntry.enabled) {
+                        const rewardRows = interestEntry.rewards.map((reward, rewardIdx) => {
+                            const rewardTokenOptions = buildCryptoInterestRewardTokenOptions(tokenUniverse, reward.tokenId);
+                            return `
+                                <div class="grid grid-cols-[minmax(0,1fr)_110px_auto] gap-2 mt-2 items-center">
+                                    <select onchange="updateCryptoInterestRewardToken('${encodedTokenId}', ${rewardIdx}, this.value)"
+                                        class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200 outline-none focus:border-cyan-500">
+                                        ${rewardTokenOptions}
+                                    </select>
+                                    <input type="number" step="any" min="0" value="${escapeAttr(reward.amount)}"
+                                        onchange="updateCryptoInterestRewardAmount('${encodedTokenId}', ${rewardIdx}, this.value)"
+                                        placeholder="Earned"
+                                        class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-right text-slate-200 outline-none focus:border-cyan-500">
+                                    <button onclick="removeCryptoInterestReward('${encodedTokenId}', ${rewardIdx})"
+                                        class="text-[10px] text-rose-400 hover:text-rose-300">remove</button>
+                                </div>
+                            `;
+                        }).join('');
+
+                        const interestApy = calculateCryptoInterestApy(h, interestEntry);
+                        let interestSummary = '';
+                        if (interestApy.status === 'ok') {
+                            const missingNote = interestApy.missingPriceCount > 0
+                                ? `<p class="text-[10px] text-amber-300 mt-0.5">${interestApy.missingPriceCount} reward token(s) missing price and excluded.</p>`
+                                : '';
+                            interestSummary = `
+                                <p class="text-[10px] text-cyan-300 mt-2">APY so far: ${interestApy.apyPct.toFixed(2)}%</p>
+                                <p class="text-[10px] text-slate-400 mt-0.5">Earned value: ${fmt(interestApy.earnedValue)} • Period return: ${interestApy.periodReturnPct.toFixed(2)}% • Weighted hold: ${interestApy.weightedHoldingDays.toFixed(1)}d</p>
+                                ${missingNote}
+                            `;
+                        } else {
+                            const safeApyMsg = escapeHTML(interestApy.message || 'Add reward amounts to estimate APY.');
+                            interestSummary = `<p class="text-[10px] text-slate-500 mt-2">${safeApyMsg}</p>`;
+                        }
+
+                        interestMarkup += `
+                            <div class="mt-2 bg-slate-900/60 border border-slate-700/70 rounded-lg p-2">
+                                <p class="text-[10px] text-slate-400">Reward Tokens and Amount Earned So Far</p>
+                                ${rewardRows || '<p class="text-[10px] text-slate-500 mt-2">No reward tokens yet.</p>'}
+                                <button onclick="addCryptoInterestReward('${encodedTokenId}')"
+                                    class="mt-2 text-[10px] text-cyan-400 hover:text-cyan-300">+ add reward token</button>
+                                ${interestSummary}
+                            </div>
+                        `;
+                    }
+
+                    interestMarkup += '</div>';
+
                     const div = document.createElement('div');
                     div.className = "bg-slate-800 p-4 rounded-2xl flex items-center justify-between border border-slate-700";
                     div.innerHTML = `
@@ -874,6 +1156,7 @@
                             <p class="text-[10px] text-slate-500 mt-0.5">${taxMethod.toUpperCase()} Basis</p>
                             ${tokenTargetUI}
                             ${tokenTargetNote}
+                            ${interestMarkup}
                         </div>
                         <div class="text-right">
                             <p class="font-bold text-white">${currentPrice > 0 ? fmt(value) : 'Needs Update'}</p>
@@ -890,7 +1173,6 @@
             // RENDER HISTORY
             const historyList = document.getElementById('crypto-history-list');
             historyList.innerHTML = '';
-            const allTxs = await getDecryptedCrypto();
 
             if (allTxs.length === 0) {
                 historyList.innerHTML = '<div class="text-slate-600 text-xs italic">No history available.</div>';

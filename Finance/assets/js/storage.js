@@ -424,6 +424,7 @@
                 lent: [],
                 crypto: [],
                 crypto_prices: {},
+                crypto_interest: {},
                 wishlist: [],
                 budgets: { data: null },
                 custom_categories: [],
@@ -529,6 +530,38 @@
             }).filter(Boolean);
         }
 
+        function normalizeCryptoInterestShape(rawMap) {
+            if (!rawMap || typeof rawMap !== 'object' || Array.isArray(rawMap)) return {};
+            const out = {};
+            Object.entries(rawMap).forEach(([tokenId, cfg]) => {
+                if (!tokenId || !cfg || typeof cfg !== 'object') return;
+                const rewards = Array.isArray(cfg.rewards) ? cfg.rewards : [];
+                const normalizedRewards = rewards
+                    .map(reward => {
+                        if (!reward || typeof reward !== 'object') return null;
+                        const rewardTokenId = String(reward.tokenId || '').trim();
+                        if (!rewardTokenId) return null;
+                        const parsedAmount = Number(reward.amount);
+                        const amount = Number.isFinite(parsedAmount) ? Math.max(parsedAmount, 0) : 0;
+                        const rewardSymbol = String(reward.symbol || rewardTokenId).trim();
+                        return {
+                            tokenId: rewardTokenId,
+                            symbol: rewardSymbol || rewardTokenId,
+                            amount
+                        };
+                    })
+                    .filter(Boolean);
+
+                const parsedLastModified = Number(cfg.lastModified);
+                out[String(tokenId)] = {
+                    enabled: !!cfg.enabled,
+                    rewards: normalizedRewards,
+                    lastModified: Number.isFinite(parsedLastModified) ? parsedLastModified : 0
+                };
+            });
+            return out;
+        }
+
         function normalizeDBSchema(rawDB) {
             const base = getDefaultDB();
             const db = { ...base, ...(rawDB || {}) };
@@ -541,6 +574,7 @@
             db.crypto = normalizeCollectionEntries(db.crypto);
             db.wishlist = normalizeCollectionEntries(db.wishlist);
             db.crypto_prices = db.crypto_prices || {};
+            db.crypto_interest = normalizeCryptoInterestShape(db.crypto_interest);
             db.budgets = db.budgets && typeof db.budgets === 'object' ? db.budgets : { data: null };
             db.custom_categories = Array.isArray(db.custom_categories) ? db.custom_categories : [];
             db.investment_goals = Array.isArray(db.investment_goals) ? db.investment_goals : [];
@@ -614,6 +648,16 @@
                 const remotePrice = merged.crypto_prices[key];
                 if (!remotePrice || (localPrice.updated || 0) >= (remotePrice.updated || 0)) {
                     merged.crypto_prices[key] = localPrice;
+                }
+            });
+
+            merged.crypto_interest = { ...(merged.crypto_interest || {}) };
+            Object.entries(local.crypto_interest || {}).forEach(([tokenId, localCfg]) => {
+                const remoteCfg = merged.crypto_interest[tokenId];
+                const localTs = Number(localCfg?.lastModified || 0);
+                const remoteTs = Number(remoteCfg?.lastModified || 0);
+                if (!remoteCfg || localTs >= remoteTs) {
+                    merged.crypto_interest[tokenId] = localCfg;
                 }
             });
 
