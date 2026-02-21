@@ -350,11 +350,82 @@
             cryptoInterestByToken[tokenId] = normalizeCryptoInterestEntry(nextEntry);
         }
 
-        async function persistCryptoInterestState() {
+        let cryptoInterestPersistTimer = null;
+        let cryptoInterestPersistInFlight = false;
+        let cryptoInterestPersistQueued = false;
+        let cryptoInterestRenderQueued = false;
+        let cryptoPortfolioRenderContext = null;
+        const cryptoInterestRenderTokenIds = new Set();
+
+        async function persistCryptoInterestStateNow() {
             const db = await getDB();
             db.crypto_interest = cryptoInterestByToken && typeof cryptoInterestByToken === 'object' ? cryptoInterestByToken : {};
             const saved = await saveDB(db);
             cryptoInterestByToken = saved.crypto_interest || {};
+        }
+
+        async function flushCryptoInterestPersistence() {
+            if (cryptoInterestPersistInFlight) {
+                cryptoInterestPersistQueued = true;
+                return;
+            }
+
+            cryptoInterestPersistInFlight = true;
+            try {
+                do {
+                    cryptoInterestPersistQueued = false;
+                    await persistCryptoInterestStateNow();
+                } while (cryptoInterestPersistQueued);
+            } catch (error) {
+                console.error('Failed to persist crypto interest settings.', error);
+            } finally {
+                cryptoInterestPersistInFlight = false;
+            }
+        }
+
+        function scheduleCryptoInterestPersistence(delayMs = 250) {
+            cryptoInterestPersistQueued = true;
+            if (cryptoInterestPersistTimer) clearTimeout(cryptoInterestPersistTimer);
+            cryptoInterestPersistTimer = setTimeout(() => {
+                cryptoInterestPersistTimer = null;
+                flushCryptoInterestPersistence();
+            }, Math.max(0, delayMs));
+        }
+
+        function queueCryptoInterestRender(tokenId) {
+            if (tokenId) {
+                cryptoInterestRenderTokenIds.add(tokenId);
+            }
+            if (cryptoInterestRenderQueued) return;
+
+            cryptoInterestRenderQueued = true;
+            requestAnimationFrame(() => {
+                cryptoInterestRenderQueued = false;
+                const tokenIds = Array.from(cryptoInterestRenderTokenIds);
+                cryptoInterestRenderTokenIds.clear();
+
+                (async () => {
+                    if (tokenIds.length === 0) {
+                        await renderCryptoPortfolio();
+                        return;
+                    }
+
+                    let needsFullRender = false;
+                    for (const id of tokenIds) {
+                        const updated = await renderCryptoHoldingCardByTokenId(id);
+                        if (!updated) {
+                            needsFullRender = true;
+                            break;
+                        }
+                    }
+
+                    if (needsFullRender) {
+                        await renderCryptoPortfolio();
+                    }
+                })().catch(error => {
+                    console.error('Failed to render crypto portfolio after interest update.', error);
+                });
+            });
         }
 
         async function setCryptoInterestEnabled(tokenIdEncoded, checked) {
@@ -366,8 +437,8 @@
                 enabled: !!checked,
                 lastModified: Date.now()
             });
-            await persistCryptoInterestState();
-            await renderCryptoPortfolio();
+            queueCryptoInterestRender(tokenId);
+            scheduleCryptoInterestPersistence(0);
         }
 
         async function addCryptoInterestReward(tokenIdEncoded) {
@@ -381,8 +452,8 @@
                 rewards: nextRewards,
                 lastModified: Date.now()
             });
-            await persistCryptoInterestState();
-            await renderCryptoPortfolio();
+            queueCryptoInterestRender(tokenId);
+            scheduleCryptoInterestPersistence();
         }
 
         async function updateCryptoInterestRewardToken(tokenIdEncoded, rewardIndexRaw, rewardTokenId) {
@@ -404,8 +475,8 @@
                 rewards: nextRewards,
                 lastModified: Date.now()
             });
-            await persistCryptoInterestState();
-            await renderCryptoPortfolio();
+            queueCryptoInterestRender(tokenId);
+            scheduleCryptoInterestPersistence();
         }
 
         async function updateCryptoInterestRewardAmount(tokenIdEncoded, rewardIndexRaw, amountRaw) {
@@ -426,8 +497,8 @@
                 rewards: nextRewards,
                 lastModified: Date.now()
             });
-            await persistCryptoInterestState();
-            await renderCryptoPortfolio();
+            queueCryptoInterestRender(tokenId);
+            scheduleCryptoInterestPersistence(350);
         }
 
         async function removeCryptoInterestReward(tokenIdEncoded, rewardIndexRaw) {
@@ -442,8 +513,8 @@
                 rewards: nextRewards,
                 lastModified: Date.now()
             });
-            await persistCryptoInterestState();
-            await renderCryptoPortfolio();
+            queueCryptoInterestRender(tokenId);
+            scheduleCryptoInterestPersistence();
         }
 
         function buildCryptoTokenUniverse(holdings, txs) {
@@ -987,16 +1058,210 @@
             };
         }
 
-        async function renderCryptoPortfolio() {
+        function getCryptoHoldingCardDomId(tokenId) {
+            return `crypto-holding-card-${encodeInlineArg(tokenId)}`;
+        }
+
+        function getCurrentCryptoPortfolioControls() {
             let taxMethod = document.getElementById('cost-basis-method')?.value || 'fifo';
             if (taxMethod === 'average') taxMethod = 'avg';
             const targetPctRaw = parseFloat(document.getElementById('cp-target-unrealized-pct')?.value);
             const targetUnrealizedPct = Number.isFinite(targetPctRaw) ? targetPctRaw : -5;
+            return { taxMethod, targetUnrealizedPct };
+        }
+
+        function createCryptoHoldingCardElement({
+            id,
+            h,
+            currentPrice,
+            value,
+            avgPrice,
+            unrealized,
+            pnlPct,
+            weightedHoldingDays,
+            taxMethod,
+            targetUnrealizedPct,
+            tokenUniverse
+        }) {
+            const safeSymbol = escapeHTML((h.symbol || '').toUpperCase());
+            const safeTokenId = escapeHTML(id);
+            const encodedTokenId = encodeInlineArg(id);
+            const tokenTargetPct = getCryptoTokenTargetPct(id, targetUnrealizedPct);
+            const showTokenTarget = !cryptoTargetLossesOnly || unrealized < 0;
+            let tokenTargetUI = '';
+            let tokenTargetNote = '';
+
+            if (showTokenTarget) {
+                tokenTargetUI = `
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-[10px] text-slate-500">Target %</span>
+                        <input type="number" step="0.1" value="${tokenTargetPct.toFixed(1)}"
+                            onchange="setCryptoTokenTarget('${encodedTokenId}', this.value)"
+                            class="w-16 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-right text-slate-300 outline-none focus:border-cyan-500">
+                        <button onclick="clearCryptoTokenTarget('${encodedTokenId}')"
+                            class="text-[10px] text-slate-500 hover:text-slate-300">reset</button>
+                    </div>
+                `;
+            }
+
+            if (currentPrice <= 0) {
+                tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Needs latest price to estimate target action.</p>';
+            } else if (!showTokenTarget && unrealized > 0) {
+                tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Enable gains in toggle above to compute sell target for this token.</p>';
+            } else {
+                const targetCalc = unrealized < 0
+                    ? calculateAdjustmentForTargetUnrealized(h.totalCost, value, tokenTargetPct)
+                    : calculateSellNeededForTargetUnrealizedPct(h, currentPrice, tokenTargetPct, taxMethod);
+
+                if (targetCalc.status === 'buy') {
+                    const tokensToBuy = targetCalc.requiredAmount / currentPrice;
+                    tokenTargetNote = `<p class="text-[10px] text-cyan-400 mt-0.5">Target ${tokenTargetPct.toFixed(1)}%: Buy ${fmt(targetCalc.requiredAmount)} (${tokensToBuy.toFixed(4)} tokens)</p>`;
+                } else if (targetCalc.status === 'sell') {
+                    const amountText = targetCalc.requiredSellAmount?.toFixed(4) || '0.0000';
+                    const approxPrefix = targetCalc.approximate ? '~' : '';
+                    tokenTargetNote = `<p class="text-[10px] text-amber-400 mt-0.5">Target ${tokenTargetPct.toFixed(1)}%: Sell ${approxPrefix}${fmt(targetCalc.requiredSell)} (${approxPrefix}${amountText} tokens)</p>`;
+                } else if (targetCalc.status === 'at_target') {
+                    tokenTargetNote = `<p class="text-[10px] text-emerald-400 mt-0.5">Already at target ${tokenTargetPct.toFixed(1)}%.</p>`;
+                } else {
+                    const safeMsg = escapeHTML(targetCalc.message || 'Target is not reachable at current price.');
+                    tokenTargetNote = `<p class="text-[10px] text-slate-500 mt-0.5">${safeMsg}</p>`;
+                }
+            }
+
+            const interestEntry = getCryptoInterestEntry(id);
+            let interestMarkup = `
+                <div class="mt-2 pt-2 border-t border-slate-700/70">
+                    <label class="inline-flex items-center gap-2 text-[11px] text-slate-300">
+                        <input type="checkbox" ${interestEntry.enabled ? 'checked' : ''}
+                            onchange="setCryptoInterestEnabled('${encodedTokenId}', this.checked)"
+                            class="accent-cyan-500">
+                        Earns interest
+                    </label>
+            `;
+
+            if (interestEntry.enabled) {
+                const rewardRows = interestEntry.rewards.map((reward, rewardIdx) => {
+                    const rewardTokenOptions = buildCryptoInterestRewardTokenOptions(tokenUniverse, reward.tokenId);
+                    return `
+                        <div class="grid grid-cols-[minmax(0,1fr)_110px_auto] gap-2 mt-2 items-center">
+                            <select onchange="updateCryptoInterestRewardToken('${encodedTokenId}', ${rewardIdx}, this.value)"
+                                class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200 outline-none focus:border-cyan-500">
+                                ${rewardTokenOptions}
+                            </select>
+                            <input type="number" step="any" min="0" value="${escapeAttr(reward.amount)}"
+                                onchange="updateCryptoInterestRewardAmount('${encodedTokenId}', ${rewardIdx}, this.value)"
+                                placeholder="Earned"
+                                class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-right text-slate-200 outline-none focus:border-cyan-500">
+                            <button onclick="removeCryptoInterestReward('${encodedTokenId}', ${rewardIdx})"
+                                class="text-[10px] text-rose-400 hover:text-rose-300">remove</button>
+                        </div>
+                    `;
+                }).join('');
+
+                const interestApy = calculateCryptoInterestApy(h, interestEntry);
+                let interestSummary = '';
+                if (interestApy.status === 'ok') {
+                    const missingNote = interestApy.missingPriceCount > 0
+                        ? `<p class="text-[10px] text-amber-300 mt-0.5">${interestApy.missingPriceCount} reward token(s) missing price and excluded.</p>`
+                        : '';
+                    interestSummary = `
+                        <p class="text-[10px] text-cyan-300 mt-2">APY so far: ${interestApy.apyPct.toFixed(2)}%</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">Earned value: ${fmt(interestApy.earnedValue)} • Period return: ${interestApy.periodReturnPct.toFixed(2)}% • Weighted hold: ${interestApy.weightedHoldingDays.toFixed(1)}d</p>
+                        ${missingNote}
+                    `;
+                } else {
+                    const safeApyMsg = escapeHTML(interestApy.message || 'Add reward amounts to estimate APY.');
+                    interestSummary = `<p class="text-[10px] text-slate-500 mt-2">${safeApyMsg}</p>`;
+                }
+
+                interestMarkup += `
+                    <div class="mt-2 bg-slate-900/60 border border-slate-700/70 rounded-lg p-2">
+                        <p class="text-[10px] text-slate-400">Reward Tokens and Amount Earned So Far</p>
+                        ${rewardRows || '<p class="text-[10px] text-slate-500 mt-2">No reward tokens yet.</p>'}
+                        <button onclick="addCryptoInterestReward('${encodedTokenId}')"
+                            class="mt-2 text-[10px] text-cyan-400 hover:text-cyan-300">+ add reward token</button>
+                        ${interestSummary}
+                    </div>
+                `;
+            }
+
+            interestMarkup += '</div>';
+
+            const div = document.createElement('div');
+            div.id = getCryptoHoldingCardDomId(id);
+            div.dataset.tokenId = id;
+            div.className = "bg-slate-800 p-4 rounded-2xl flex items-center justify-between border border-slate-700";
+            div.innerHTML = `
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h4 class="font-bold text-white">${safeSymbol}</h4>
+                        <span class="text-[10px] bg-slate-700 text-slate-400 px-1.5 rounded">${safeTokenId}</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1">${h.amount.toFixed(4)} tokens @ ${fmt(avgPrice)} avg</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Invested: ${fmt(h.totalCost)} • Avg hold: ${weightedHoldingDays.toFixed(1)} days</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">${taxMethod.toUpperCase()} Basis</p>
+                    ${tokenTargetUI}
+                    ${tokenTargetNote}
+                    ${interestMarkup}
+                </div>
+                <div class="text-right">
+                    <p class="font-bold text-white">${currentPrice > 0 ? fmt(value) : 'Needs Update'}</p>
+                    <p class="text-xs font-bold ${unrealized >= 0 ? 'text-emerald-500' : 'text-rose-500'}">
+                        ${currentPrice > 0 ? pnlPct.toFixed(1) + '%' : '--'}
+                    </p>
+                        <p class="text-[10px] text-slate-500">${unrealized >= 0 ? '+' : ''}${fmt(unrealized)}</p>
+                </div>
+            `;
+            return div;
+        }
+
+        async function renderCryptoHoldingCardByTokenId(tokenId) {
+            const list = document.getElementById('crypto-holdings-list');
+            const existing = document.getElementById(getCryptoHoldingCardDomId(tokenId));
+            if (!list || !existing) return false;
+            if (!cryptoPortfolioRenderContext?.holdings || !cryptoPortfolioRenderContext.holdings[tokenId]) return false;
+
+            const h = cryptoPortfolioRenderContext.holdings[tokenId];
+            if (!h || h.amount <= 0.000001) return false;
+
+            const { taxMethod, targetUnrealizedPct } = getCurrentCryptoPortfolioControls();
+            const tokenUniverse = buildCryptoTokenUniverse(
+                cryptoPortfolioRenderContext.holdings,
+                cryptoPortfolioRenderContext.allTxs || []
+            );
+            const cache = cryptoPrices[tokenId];
+            const currentPrice = cache?.price || 0;
+            const value = h.amount * currentPrice;
+            const avgPrice = h.amount > 0 ? h.totalCost / h.amount : 0;
+            const unrealized = currentPrice > 0 ? (value - h.totalCost) : 0;
+            const pnlPct = h.totalCost > 0 ? (unrealized / h.totalCost) * 100 : 0;
+            const weightedHoldingDays = calculateWeightedHoldingDays(h.lots);
+
+            const updatedEl = createCryptoHoldingCardElement({
+                id: tokenId,
+                h,
+                currentPrice,
+                value,
+                avgPrice,
+                unrealized,
+                pnlPct,
+                weightedHoldingDays,
+                taxMethod,
+                targetUnrealizedPct,
+                tokenUniverse
+            });
+            existing.replaceWith(updatedEl);
+            return true;
+        }
+
+        async function renderCryptoPortfolio() {
+            const { taxMethod, targetUnrealizedPct } = getCurrentCryptoPortfolioControls();
             const lossesOnlyEl = document.getElementById('cp-target-losses-only');
             if (lossesOnlyEl) lossesOnlyEl.checked = cryptoTargetLossesOnly;
             const holdings = await calculateHoldings(taxMethod);
             const allTxs = await getDecryptedCrypto();
             const tokenUniverse = buildCryptoTokenUniverse(holdings, allTxs);
+            cryptoPortfolioRenderContext = { holdings, allTxs };
             const list = document.getElementById('crypto-holdings-list');
             list.innerHTML = '';
 
@@ -1039,133 +1304,19 @@
                 totalRealized += h.realizedPL;
 
                 if (h.amount > 0.000001) {
-                    const safeSymbol = escapeHTML((h.symbol || '').toUpperCase());
-                    const safeTokenId = escapeHTML(id);
-                    const encodedTokenId = encodeInlineArg(id);
-                    const tokenTargetPct = getCryptoTokenTargetPct(id, targetUnrealizedPct);
-                    const showTokenTarget = !cryptoTargetLossesOnly || unrealized < 0;
-                    let tokenTargetUI = '';
-                    let tokenTargetNote = '';
-
-                    if (showTokenTarget) {
-                        tokenTargetUI = `
-                            <div class="flex items-center gap-2 mt-1">
-                                <span class="text-[10px] text-slate-500">Target %</span>
-                                <input type="number" step="0.1" value="${tokenTargetPct.toFixed(1)}"
-                                    onchange="setCryptoTokenTarget('${encodedTokenId}', this.value)"
-                                    class="w-16 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-right text-slate-300 outline-none focus:border-cyan-500">
-                                <button onclick="clearCryptoTokenTarget('${encodedTokenId}')"
-                                    class="text-[10px] text-slate-500 hover:text-slate-300">reset</button>
-                            </div>
-                        `;
-                    }
-
-                    if (currentPrice <= 0) {
-                        tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Needs latest price to estimate target action.</p>';
-                    } else if (!showTokenTarget && unrealized > 0) {
-                        tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Enable gains in toggle above to compute sell target for this token.</p>';
-                    } else {
-                        const targetCalc = unrealized < 0
-                            ? calculateAdjustmentForTargetUnrealized(h.totalCost, value, tokenTargetPct)
-                            : calculateSellNeededForTargetUnrealizedPct(h, currentPrice, tokenTargetPct, taxMethod);
-
-                        if (targetCalc.status === 'buy') {
-                            const tokensToBuy = targetCalc.requiredAmount / currentPrice;
-                            tokenTargetNote = `<p class="text-[10px] text-cyan-400 mt-0.5">Target ${tokenTargetPct.toFixed(1)}%: Buy ${fmt(targetCalc.requiredAmount)} (${tokensToBuy.toFixed(4)} tokens)</p>`;
-                        } else if (targetCalc.status === 'sell') {
-                            const amountText = targetCalc.requiredSellAmount?.toFixed(4) || '0.0000';
-                            const approxPrefix = targetCalc.approximate ? '~' : '';
-                            tokenTargetNote = `<p class="text-[10px] text-amber-400 mt-0.5">Target ${tokenTargetPct.toFixed(1)}%: Sell ${approxPrefix}${fmt(targetCalc.requiredSell)} (${approxPrefix}${amountText} tokens)</p>`;
-                        } else if (targetCalc.status === 'at_target') {
-                            tokenTargetNote = `<p class="text-[10px] text-emerald-400 mt-0.5">Already at target ${tokenTargetPct.toFixed(1)}%.</p>`;
-                        } else {
-                            const safeMsg = escapeHTML(targetCalc.message || 'Target is not reachable at current price.');
-                            tokenTargetNote = `<p class="text-[10px] text-slate-500 mt-0.5">${safeMsg}</p>`;
-                        }
-                    }
-
-                    const interestEntry = getCryptoInterestEntry(id);
-                    let interestMarkup = `
-                        <div class="mt-2 pt-2 border-t border-slate-700/70">
-                            <label class="inline-flex items-center gap-2 text-[11px] text-slate-300">
-                                <input type="checkbox" ${interestEntry.enabled ? 'checked' : ''}
-                                    onchange="setCryptoInterestEnabled('${encodedTokenId}', this.checked)"
-                                    class="accent-cyan-500">
-                                Earns interest
-                            </label>
-                    `;
-
-                    if (interestEntry.enabled) {
-                        const rewardRows = interestEntry.rewards.map((reward, rewardIdx) => {
-                            const rewardTokenOptions = buildCryptoInterestRewardTokenOptions(tokenUniverse, reward.tokenId);
-                            return `
-                                <div class="grid grid-cols-[minmax(0,1fr)_110px_auto] gap-2 mt-2 items-center">
-                                    <select onchange="updateCryptoInterestRewardToken('${encodedTokenId}', ${rewardIdx}, this.value)"
-                                        class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200 outline-none focus:border-cyan-500">
-                                        ${rewardTokenOptions}
-                                    </select>
-                                    <input type="number" step="any" min="0" value="${escapeAttr(reward.amount)}"
-                                        onchange="updateCryptoInterestRewardAmount('${encodedTokenId}', ${rewardIdx}, this.value)"
-                                        placeholder="Earned"
-                                        class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-right text-slate-200 outline-none focus:border-cyan-500">
-                                    <button onclick="removeCryptoInterestReward('${encodedTokenId}', ${rewardIdx})"
-                                        class="text-[10px] text-rose-400 hover:text-rose-300">remove</button>
-                                </div>
-                            `;
-                        }).join('');
-
-                        const interestApy = calculateCryptoInterestApy(h, interestEntry);
-                        let interestSummary = '';
-                        if (interestApy.status === 'ok') {
-                            const missingNote = interestApy.missingPriceCount > 0
-                                ? `<p class="text-[10px] text-amber-300 mt-0.5">${interestApy.missingPriceCount} reward token(s) missing price and excluded.</p>`
-                                : '';
-                            interestSummary = `
-                                <p class="text-[10px] text-cyan-300 mt-2">APY so far: ${interestApy.apyPct.toFixed(2)}%</p>
-                                <p class="text-[10px] text-slate-400 mt-0.5">Earned value: ${fmt(interestApy.earnedValue)} • Period return: ${interestApy.periodReturnPct.toFixed(2)}% • Weighted hold: ${interestApy.weightedHoldingDays.toFixed(1)}d</p>
-                                ${missingNote}
-                            `;
-                        } else {
-                            const safeApyMsg = escapeHTML(interestApy.message || 'Add reward amounts to estimate APY.');
-                            interestSummary = `<p class="text-[10px] text-slate-500 mt-2">${safeApyMsg}</p>`;
-                        }
-
-                        interestMarkup += `
-                            <div class="mt-2 bg-slate-900/60 border border-slate-700/70 rounded-lg p-2">
-                                <p class="text-[10px] text-slate-400">Reward Tokens and Amount Earned So Far</p>
-                                ${rewardRows || '<p class="text-[10px] text-slate-500 mt-2">No reward tokens yet.</p>'}
-                                <button onclick="addCryptoInterestReward('${encodedTokenId}')"
-                                    class="mt-2 text-[10px] text-cyan-400 hover:text-cyan-300">+ add reward token</button>
-                                ${interestSummary}
-                            </div>
-                        `;
-                    }
-
-                    interestMarkup += '</div>';
-
-                    const div = document.createElement('div');
-                    div.className = "bg-slate-800 p-4 rounded-2xl flex items-center justify-between border border-slate-700";
-                    div.innerHTML = `
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <h4 class="font-bold text-white">${safeSymbol}</h4>
-                                <span class="text-[10px] bg-slate-700 text-slate-400 px-1.5 rounded">${safeTokenId}</span>
-                            </div>
-                            <p class="text-xs text-slate-400 mt-1">${h.amount.toFixed(4)} tokens @ ${fmt(avgPrice)} avg</p>
-                            <p class="text-[10px] text-slate-500 mt-0.5">Invested: ${fmt(h.totalCost)} • Avg hold: ${weightedHoldingDays.toFixed(1)} days</p>
-                            <p class="text-[10px] text-slate-500 mt-0.5">${taxMethod.toUpperCase()} Basis</p>
-                            ${tokenTargetUI}
-                            ${tokenTargetNote}
-                            ${interestMarkup}
-                        </div>
-                        <div class="text-right">
-                            <p class="font-bold text-white">${currentPrice > 0 ? fmt(value) : 'Needs Update'}</p>
-                            <p class="text-xs font-bold ${unrealized >= 0 ? 'text-emerald-500' : 'text-rose-500'}">
-                                ${currentPrice > 0 ? pnlPct.toFixed(1) + '%' : '--'}
-                            </p>
-                             <p class="text-[10px] text-slate-500">${unrealized >= 0 ? '+' : ''}${fmt(unrealized)}</p>
-                        </div>
-                    `;
+                    const div = createCryptoHoldingCardElement({
+                        id,
+                        h,
+                        currentPrice,
+                        value,
+                        avgPrice,
+                        unrealized,
+                        pnlPct,
+                        weightedHoldingDays,
+                        taxMethod,
+                        targetUnrealizedPct,
+                        tokenUniverse
+                    });
                     list.appendChild(div);
                 }
             });
