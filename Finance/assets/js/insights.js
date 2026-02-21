@@ -44,12 +44,12 @@
                 }, 0);
         }
 
-        async function updateInsightSnapshots(currentMonthMetrics, categoryExpenses) {
-            const key = monthKey(new Date());
-            const topCategories = Object.entries(categoryExpenses || {})
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3)
-                .map(([category, amount]) => ({ category, amount }));
+	        async function updateInsightSnapshots(currentMonthMetrics, categoryExpenses) {
+	            const key = monthKey(new Date());
+	            const topCategories = Object.entries(categoryExpenses || {})
+	                .sort((a, b) => b[1] - a[1])
+	                .slice(0, 3)
+	                .map(([category, amount]) => ({ category, amount }));
 
             const payload = {
                 month: key,
@@ -61,21 +61,38 @@
                 topCategories
             };
 
-            const sig = JSON.stringify(payload);
-            if (window.lastInsightSnapshotSig === sig) return;
-            window.lastInsightSnapshotSig = sig;
+	            const sig = JSON.stringify(payload);
+	            if (window.lastInsightSnapshotSig === sig) return;
 
-            try {
-                const db = await getDB();
-                db.insight_snapshots = db.insight_snapshots || [];
-                const idx = db.insight_snapshots.findIndex(s => s.month === key);
-                if (idx >= 0) db.insight_snapshots[idx] = payload;
-                else db.insight_snapshots.push(payload);
-                await saveDB(db);
-            } catch (err) {
-                console.error('Insight snapshot update failed:', err);
-            }
-        }
+	            try {
+	                const db = await getDB();
+	                db.insight_snapshots = db.insight_snapshots || [];
+	
+	                // Avoid writing on every app open if the snapshot is already identical.
+	                const existing = (db.insight_snapshots || []).find(s => s && s.month === key);
+	                if (existing) {
+	                    const normalizedExisting = {
+	                        month: existing.month,
+	                        income: existing.income,
+	                        expense: existing.expense,
+	                        savingsRate: existing.savingsRate,
+	                        topCategories: existing.topCategories
+	                    };
+	                    if (JSON.stringify(normalizedExisting) === sig) {
+	                        window.lastInsightSnapshotSig = sig;
+	                        return;
+	                    }
+	                }
+
+	                const idx = db.insight_snapshots.findIndex(s => s.month === key);
+	                if (idx >= 0) db.insight_snapshots[idx] = payload;
+	                else db.insight_snapshots.push(payload);
+	                window.lastInsightSnapshotSig = sig;
+	                await saveDB(db);
+	            } catch (err) {
+	                console.error('Insight snapshot update failed:', err);
+	            }
+	        }
 
         function renderInsightsPanel() {
             const panel = document.getElementById('insights-panel');

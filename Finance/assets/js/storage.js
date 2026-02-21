@@ -609,13 +609,40 @@
             return normalizeDBSchema(resolvedDB);
         }
 
-        async function saveDB(inputDB) {
-            let db = normalizeDBSchema(inputDB);
-            const nowISO = new Date().toISOString();
-            db.sync.updatedAt = nowISO;
+	        async function saveDB(inputDB) {
+	            let db = normalizeDBSchema(inputDB);
+	            // Lightweight sync diagnostics. Enable via `window.DEBUG_SYNC_DIAGNOSTICS = true`.
+	            try {
+	                if (typeof window !== 'undefined') {
+	                    window.__syncDiagnostics = window.__syncDiagnostics || {
+	                        count: 0,
+	                        totalBytes: 0,
+	                        lastBytes: 0,
+	                        lastAt: 0
+	                    };
+	                }
+	            } catch (_) { }
+	
+	            const estimatedBytes = estimateSerializedBytes(db);
+	            try {
+	                if (typeof window !== 'undefined' && window.__syncDiagnostics) {
+	                    window.__syncDiagnostics.count += 1;
+	                    window.__syncDiagnostics.lastBytes = estimatedBytes;
+	                    window.__syncDiagnostics.totalBytes += estimatedBytes;
+	                    window.__syncDiagnostics.lastAt = Date.now();
+	                }
+	                if (typeof window !== 'undefined' && window.DEBUG_SYNC_DIAGNOSTICS) {
+	                    console.log(`[sync] saveDB call #${window.__syncDiagnostics?.count || 0} ~${formatBytes(estimatedBytes)}`);
+	                    // Useful to pinpoint callers that are saving too frequently.
+	                    console.trace('[sync] saveDB stack');
+	                }
+	            } catch (_) { }
 
-            try {
-                if (masterKey && firestoreDB) {
+	            const nowISO = new Date().toISOString();
+	            db.sync.updatedAt = nowISO;
+
+	            try {
+	                if (masterKey && firestoreDB) {
                     const vaultId = await getVaultId(masterKey);
                     const ref = firestoreDB.collection('vaults').doc(vaultId);
                     const remoteDoc = await ref.get();
