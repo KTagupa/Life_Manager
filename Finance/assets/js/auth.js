@@ -49,6 +49,69 @@
             return keys.some(k => Array.isArray(db[k]) && db[k].length > 0);
         }
 
+        function isValidKdfMeta(meta) {
+            if (!meta || typeof meta !== 'object') return false;
+            const iterations = parseInt(meta.iterations || 0, 10);
+            return typeof meta.saltB64 === 'string' && meta.saltB64.length > 0 && Number.isFinite(iterations) && iterations > 0;
+        }
+
+        function isEncryptedVaultPayload(value) {
+            return !!(value && Array.isArray(value.iv) && Array.isArray(value.content));
+        }
+
+        function countEncryptedVaultEntries(db) {
+            if (!db || typeof db !== 'object') return 0;
+            const collectionKeys = ['transactions', 'bills', 'debts', 'lent', 'crypto', 'wishlist'];
+            let count = 0;
+            collectionKeys.forEach(key => {
+                count += (db[key] || []).filter(item => item && !item.deletedAt && isEncryptedVaultPayload(item.data)).length;
+            });
+            if (db.budgets && isEncryptedVaultPayload(db.budgets.data)) count += 1;
+            if (isEncryptedVaultPayload(db.vault_probe)) count += 1;
+            return count;
+        }
+
+        function collectVaultDecryptProbes(db) {
+            const probes = [];
+
+            if (isEncryptedVaultPayload(db?.vault_probe)) probes.push(db.vault_probe);
+
+            const collectionKeys = ['transactions', 'bills', 'debts', 'lent', 'crypto', 'wishlist'];
+            collectionKeys.forEach(key => {
+                const sample = (db?.[key] || []).find(item => item && !item.deletedAt && isEncryptedVaultPayload(item.data));
+                if (sample && sample.data) probes.push(sample.data);
+            });
+
+            if (db?.budgets && isEncryptedVaultPayload(db.budgets.data)) probes.push(db.budgets.data);
+            return probes;
+        }
+
+        async function verifyVaultDecryption(db) {
+            const encryptedEntryCount = countEncryptedVaultEntries(db);
+            if (encryptedEntryCount === 0) {
+                return { ok: true, encryptedEntryCount };
+            }
+
+            const probes = collectVaultDecryptProbes(db);
+            for (const payload of probes) {
+                const decrypted = await decryptData(payload);
+                if (decrypted) {
+                    return { ok: true, encryptedEntryCount };
+                }
+            }
+
+            return { ok: false, encryptedEntryCount };
+        }
+
+        async function ensureVaultProbe(db) {
+            if (!db || isEncryptedVaultPayload(db.vault_probe)) return;
+            db.vault_probe = await encryptData({
+                marker: 'finance-flow-vault-probe-v1',
+                createdAt: new Date().toISOString()
+            });
+            await saveDB(db);
+        }
+
         async function persistKdfMeta(vaultId, meta) {
             try {
                 localStorage.setItem(getKdfMetaStorageKey(vaultId), JSON.stringify(meta));
@@ -62,6 +125,11 @@
                         kdfMeta: meta,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
+
+                    await firestoreDB.collection('vaults').doc(vaultId).set({
+                        kdfMeta: meta,
+                        kdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
                 }
             } catch (e) {
                 console.error('Failed to persist remote KDF metadata', e);
@@ -71,9 +139,13 @@
         async function loadRemoteKdfMeta(vaultId) {
             try {
                 if (!firestoreDB) return null;
-                const doc = await firestoreDB.collection('vault_meta').doc(vaultId).get();
-                if (!doc.exists) return null;
-                return doc.data()?.kdfMeta || null;
+                const metaDoc = await firestoreDB.collection('vault_meta').doc(vaultId).get();
+                const metaFromMetaDoc = metaDoc.exists ? metaDoc.data()?.kdfMeta : null;
+                if (isValidKdfMeta(metaFromMetaDoc)) return metaFromMetaDoc;
+
+                const vaultDoc = await firestoreDB.collection('vaults').doc(vaultId).get();
+                const metaFromVaultDoc = vaultDoc.exists ? vaultDoc.data()?.kdfMeta : null;
+                return isValidKdfMeta(metaFromVaultDoc) ? metaFromVaultDoc : null;
             } catch (e) {
                 console.error('Remote KDF metadata lookup failed', e);
                 return null;
@@ -91,8 +163,10 @@
             } catch (e) {
                 console.error('Local KDF metadata parse failed', e);
             }
+            if (!isValidKdfMeta(localMeta)) localMeta = null;
 
             remoteMeta = await loadRemoteKdfMeta(vaultId);
+            if (!isValidKdfMeta(remoteMeta)) remoteMeta = null;
 
             if (remoteMeta || localMeta) {
                 const meta = remoteMeta || localMeta;
@@ -194,6 +268,18 @@
                 parseInt(meta.iterations || 310000, 10)
             );
 
+            document.getElementById('auth-status').innerText = "Verifying vault...";
+            const db = await getDB();
+            const verifyResult = await verifyVaultDecryption(db);
+            if (!verifyResult.ok) {
+                masterKey = null;
+                cryptoKey = null;
+                kdfMeta = null;
+                document.getElementById('auth-status').innerText = "Unlock failed";
+                alert("Could not decrypt existing vault data. This usually means the key is incorrect or vault metadata is missing.");
+                return;
+            }
+
             await updateExchangeRates();
 
             document.getElementById('auth-overlay').classList.add('hidden');
@@ -206,6 +292,10 @@
             // Check for auto-backup
             await checkAndPerformAutoBackup();
             checkRecurringReminders();
+
+            if (!isEncryptedVaultPayload(db.vault_probe)) {
+                ensureVaultProbe(db).catch(err => console.error('Failed to persist vault probe', err));
+            }
 
             // Setup hourly check for auto-backup (in case app stays open past 8 PM)
             setInterval(checkAndPerformAutoBackup, 60 * 60 * 1000); // Every hour

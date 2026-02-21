@@ -274,6 +274,8 @@
 
                     await ref.set({
                         vaultData: db,
+                        kdfMeta: kdfMeta || null,
+                        kdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                         lastModified: firebase.firestore.FieldValue.serverTimestamp()
                     });
                     console.log('✅ Synced to Firebase');
