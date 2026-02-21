@@ -251,10 +251,7 @@
                     throw new Error(`Backup validation failed: ${validation.issues.join('; ')}`);
                 }
 
-                // Save to localStorage
-                localStorage.setItem(DB_KEY, JSON.stringify(backup.data));
-
-                // Sync to Firebase
+                // Persist locally + sync to Firebase
                 await saveDB(backup.data);
 
                 // Reload all data safely through the normal pipeline

@@ -179,10 +179,13 @@
             // No metadata exists yet: decide between legacy params (existing vault) or new random params.
             let existingData = false;
             try {
-                const localRaw = localStorage.getItem(DB_KEY);
-                if (localRaw) {
-                    existingData = hasVaultData(JSON.parse(localRaw));
-                }
+                const localDB = (typeof getLocalDBSnapshot === 'function')
+                    ? await getLocalDBSnapshot()
+                    : (() => {
+                        const raw = localStorage.getItem(DB_KEY);
+                        return raw ? JSON.parse(raw) : null;
+                    })();
+                existingData = hasVaultData(localDB);
             } catch (e) {
                 console.error('Local vault probe failed', e);
             }
@@ -349,4 +352,7 @@
             renderBudgets(window.allDecryptedTransactions || []);
             if (typeof renderInsightsPanel === 'function') renderInsightsPanel();
             if (typeof renderGoalsAndSimulator === 'function') renderGoalsAndSimulator();
+            if (typeof refreshStorageDiagnosticsPanel === 'function') {
+                await runLoadStep('storage-diagnostics', async () => refreshStorageDiagnosticsPanel());
+            }
         }
