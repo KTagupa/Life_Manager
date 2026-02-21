@@ -11,6 +11,7 @@
         const LOCAL_DB_STORE = 'app_kv';
 
         let localIndexedDBPromise = null;
+        let latestStorageDiagnostics = null;
 
         function canUseIndexedDB() {
             return typeof window !== 'undefined' && 'indexedDB' in window;
@@ -167,13 +168,16 @@
 
         async function getLocalDBSnapshot() {
             const rawLocalStorageDB = readDBFromLocalStorage();
+            const rawLocalStorageStr = rawLocalStorageDB ? JSON.stringify(rawLocalStorageDB) : null;
             let localStorageDB = rawLocalStorageDB ? normalizeDBSchema(rawLocalStorageDB) : null;
+            let rawIndexedDBData = null;
             let indexedDBData = null;
             try {
-                const rawIDB = await readDBFromIndexedDB();
-                indexedDBData = rawIDB ? normalizeDBSchema(rawIDB) : null;
+                rawIndexedDBData = await readDBFromIndexedDB();
+                indexedDBData = rawIndexedDBData ? normalizeDBSchema(rawIndexedDBData) : null;
             } catch (error) {
                 console.error('IndexedDB local snapshot read failed.', error);
+                rawIndexedDBData = null;
                 indexedDBData = null;
             }
 
@@ -182,13 +186,16 @@
 
             const resolvedStr = JSON.stringify(resolved);
             const localStr = localStorageDB ? JSON.stringify(localStorageDB) : null;
+            const rawIdbStr = rawIndexedDBData ? JSON.stringify(rawIndexedDBData) : null;
             const idbStr = indexedDBData ? JSON.stringify(indexedDBData) : null;
+            const localWasNormalized = rawLocalStorageStr !== localStr;
+            const idbWasNormalized = rawIdbStr !== idbStr;
 
             // Keep both local stores aligned after reads, but avoid redundant writes.
-            if (idbStr !== resolvedStr) {
+            if (idbWasNormalized || idbStr !== resolvedStr) {
                 await writeDBToIndexedDB(resolved);
             }
-            if (localStr !== resolvedStr) {
+            if (localWasNormalized || localStr !== resolvedStr) {
                 try {
                     localStorage.setItem(DB_KEY, resolvedStr);
                 } catch (error) {
@@ -233,7 +240,8 @@
                 debts: (safe.debts || []).filter(i => i && !i.deletedAt).length,
                 lent: (safe.lent || []).filter(i => i && !i.deletedAt).length,
                 crypto: (safe.crypto || []).filter(i => i && !i.deletedAt).length,
-                wishlist: (safe.wishlist || []).filter(i => i && !i.deletedAt).length
+                wishlist: (safe.wishlist || []).filter(i => i && !i.deletedAt).length,
+                undoLog: (safe.undo_log || []).length
             };
         }
 
@@ -297,11 +305,13 @@
         function copyTextFallback(text) {
             const ta = document.createElement('textarea');
             ta.value = text;
-            ta.setAttribute('readonly', '');
             ta.style.position = 'fixed';
             ta.style.left = '-9999px';
             ta.style.top = '0';
+            ta.style.opacity = '0';
+            ta.style.pointerEvents = 'none';
             document.body.appendChild(ta);
+            ta.focus();
             ta.select();
             ta.setSelectionRange(0, ta.value.length);
             let ok = false;
@@ -314,10 +324,24 @@
             return ok;
         }
 
+        function downloadDiagnosticsJSON(json) {
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `financeflow_diagnostics_${stamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
         async function copyStorageDiagnosticsJSON() {
             setDiagText('diag-status', 'Preparing diagnostics JSON...');
             try {
-                const diagnostics = await getStorageDiagnostics();
+                const diagnostics = latestStorageDiagnostics || await getStorageDiagnostics();
+                latestStorageDiagnostics = diagnostics;
                 const payload = {
                     exportedAt: new Date().toISOString(),
                     appId: typeof appId !== 'undefined' ? appId : null,
@@ -326,7 +350,7 @@
                 const json = JSON.stringify(payload, null, 2);
 
                 let copied = false;
-                if (navigator.clipboard && window.isSecureContext) {
+                if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
                     try {
                         await navigator.clipboard.writeText(json);
                         copied = true;
@@ -335,7 +359,13 @@
                     }
                 }
                 if (!copied) copied = copyTextFallback(json);
-                if (!copied) throw new Error('Clipboard copy failed');
+                if (!copied) {
+                    downloadDiagnosticsJSON(json);
+                    const timeLabel = new Date().toLocaleTimeString();
+                    setDiagText('diag-status', `Clipboard blocked. Downloaded diagnostics JSON at ${timeLabel}`);
+                    if (typeof showToast === 'function') showToast('ℹ️ Clipboard blocked, diagnostics JSON downloaded');
+                    return;
+                }
 
                 const timeLabel = new Date().toLocaleTimeString();
                 setDiagText('diag-status', `Diagnostics JSON copied at ${timeLabel}`);
@@ -354,6 +384,7 @@
             setDiagText('diag-status', 'Refreshing...');
             try {
                 const diag = await getStorageDiagnostics();
+                latestStorageDiagnostics = diag;
                 const localStatus = diag.localStorage.hasData ? 'Data present' : 'No data';
                 const idbStatus = !diag.indexedDB.supported
                     ? 'Not supported'
@@ -375,7 +406,7 @@
                 setDiagText('diag-idb-write', writeTs);
                 setDiagText(
                     'diag-counts',
-                    `Tx ${diag.counts.transactions} • Bills ${diag.counts.bills} • Debts ${diag.counts.debts} • Lent ${diag.counts.lent} • Crypto ${diag.counts.crypto} • Wishlist ${diag.counts.wishlist}`
+                    `Tx ${diag.counts.transactions} • Bills ${diag.counts.bills} • Debts ${diag.counts.debts} • Lent ${diag.counts.lent} • Crypto ${diag.counts.crypto} • Wishlist ${diag.counts.wishlist} • Undo ${diag.counts.undoLog}`
                 );
                 setDiagText('diag-status', `Last refresh: ${new Date().toLocaleTimeString()}`);
             } catch (error) {
@@ -438,6 +469,30 @@
             });
         }
 
+        function getUndoEntryKey(entry) {
+            if (!entry || typeof entry !== 'object') return null;
+            if (entry.id) return `id:${entry.id}`;
+            return `legacy:${entry.entityType || ''}:${entry.entityId || ''}:${entry.deletedAt || ''}`;
+        }
+
+        function dedupeUndoLogEntries(undoEntries) {
+            const source = Array.isArray(undoEntries) ? undoEntries : [];
+            const seen = new Set();
+            const out = [];
+
+            for (let i = source.length - 1; i >= 0; i -= 1) {
+                const entry = source[i];
+                if (!entry || typeof entry !== 'object') continue;
+                const key = getUndoEntryKey(entry);
+                if (!key || seen.has(key)) continue;
+                seen.add(key);
+                out.push(entry);
+            }
+
+            out.reverse();
+            return out;
+        }
+
         function normalizeReminderShape(reminder) {
             if (!reminder || typeof reminder !== 'object') return null;
             const out = { ...reminder };
@@ -493,7 +548,7 @@
             db.categorization_rules = Array.isArray(db.categorization_rules) ? db.categorization_rules : [];
             db.imports = Array.isArray(db.imports) ? db.imports : [];
             db.insight_snapshots = Array.isArray(db.insight_snapshots) ? db.insight_snapshots : [];
-            db.undo_log = pruneUndoLog(Array.isArray(db.undo_log) ? db.undo_log : []);
+            db.undo_log = pruneUndoLog(dedupeUndoLogEntries(Array.isArray(db.undo_log) ? db.undo_log : []));
 
             db.recurring_transactions = (Array.isArray(db.recurring_transactions) ? db.recurring_transactions : [])
                 .map(normalizeReminderShape)
@@ -549,7 +604,7 @@
             merged.goals = mergeSafeList(local.goals, merged.goals);
             merged.investment_goals = mergeSafeList(local.investment_goals, merged.investment_goals);
             merged.imports = mergeSafeList(local.imports, merged.imports);
-            merged.undo_log = pruneUndoLog([...(merged.undo_log || []), ...(local.undo_log || [])]);
+            merged.undo_log = pruneUndoLog(dedupeUndoLogEntries([...(merged.undo_log || []), ...(local.undo_log || [])]));
 
             merged.categorization_rules = mergeSafeList(local.categorization_rules, merged.categorization_rules)
                 .sort((a, b) => (a.priority || 999) - (b.priority || 999));
