@@ -1,0 +1,439 @@
+        /* --- ENHANCED FOCUS HUD --- */
+        #focus-hud {
+            --hud-border: rgba(191, 222, 208, 0.22);
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translate(-50%, -12px) scale(0.98);
+            z-index: 2000;
+            background:
+                radial-gradient(circle at 18% -20%, rgba(120, 209, 174, 0.2), transparent 44%),
+                radial-gradient(circle at 82% -26%, rgba(79, 156, 249, 0.18), transparent 38%),
+                linear-gradient(140deg, rgba(29, 42, 37, 0.9), rgba(14, 21, 18, 0.75));
+            backdrop-filter: blur(22px) saturate(160%);
+            -webkit-backdrop-filter: blur(22px) saturate(160%);
+            border: 1px solid var(--hud-border);
+            border-top: none;
+            border-bottom-left-radius: var(--radius-xl);
+            border-bottom-right-radius: var(--radius-xl);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow:
+                0 18px 44px rgba(0, 0, 0, 0.45),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            min-width: 440px;
+            max-width: min(720px, calc(100vw - 24px));
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            overflow: hidden;
+            transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+                opacity 0.24s ease,
+                visibility 0s linear 0.35s;
+        }
+
+        #focus-hud::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 12%;
+            right: 12%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+            opacity: 0.55;
+            pointer-events: none;
+        }
+
+        #focus-hud::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at 50% -40%, rgba(255, 255, 255, 0.2), transparent 62%);
+            pointer-events: none;
+            mix-blend-mode: screen;
+            opacity: 0.45;
+        }
+
+        #focus-hud.active {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translate(-50%, 0) scale(1);
+            transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.24s ease;
+        }
+
+        .hud-row {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 8px 10px;
+            min-height: 48px;
+            border-radius: 12px;
+            border: 1px solid rgba(171, 199, 188, 0.15);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .hud-row::before {
+            content: "";
+            position: absolute;
+            left: 8px;
+            top: 8px;
+            bottom: 8px;
+            width: 3px;
+            border-radius: 999px;
+            background: var(--accent);
+            opacity: 0.7;
+        }
+
+        .hud-label {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: 0.12em;
+        }
+
+        .hud-task-info {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 0;
+            gap: 2px;
+            padding-left: 10px;
+        }
+
+        .hud-task-name {
+            color: var(--text-main);
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.2;
+            cursor: pointer;
+            text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .hud-task-name:hover {
+            color: #f8fffb;
+            text-decoration: none;
+        }
+
+        .hud-task-name[role="button"]:focus-visible {
+            outline: 2px solid rgba(79, 156, 249, 0.6);
+            outline-offset: 2px;
+            border-radius: 6px;
+        }
+
+        .hud-row-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .hud-timer {
+            color: #86efac;
+            font-size: 13px;
+            font-weight: 700;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            letter-spacing: 0.02em;
+            min-width: 66px;
+            text-align: center;
+            padding: 4px 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(34, 197, 94, 0.35);
+            background: rgba(34, 197, 94, 0.13);
+        }
+
+        .hud-chip {
+            font-size: 10px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            color: var(--text-secondary);
+            border: 1px solid rgba(178, 201, 192, 0.28);
+            border-radius: 999px;
+            background: rgba(4, 7, 6, 0.32);
+            padding: 4px 8px;
+            white-space: nowrap;
+        }
+
+        .hud-chip-countdown {
+            color: #fcd34d;
+            border-color: rgba(251, 191, 36, 0.45);
+            background: rgba(251, 191, 36, 0.14);
+        }
+
+        .hud-action {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            border: 1px solid rgba(210, 231, 224, 0.28);
+            background: linear-gradient(135deg, rgba(39, 54, 48, 0.95), rgba(19, 29, 26, 0.95));
+            color: #f0f8f5;
+            display: grid;
+            place-items: center;
+            font-size: 14px;
+            padding: 0;
+            cursor: pointer;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 5px 12px rgba(0, 0, 0, 0.25);
+            transition: transform var(--transition-fast), border-color var(--transition-fast), filter var(--transition-fast);
+        }
+
+        .hud-action:hover {
+            transform: translateY(-1px);
+            border-color: rgba(231, 245, 239, 0.42);
+            filter: brightness(1.08);
+        }
+
+        .hud-action:active {
+            transform: translateY(0);
+        }
+
+        .hud-action:focus-visible {
+            outline: 2px solid rgba(79, 156, 249, 0.65);
+            outline-offset: 2px;
+        }
+
+        .hud-action-start {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(29, 78, 216, 0.95));
+            border-color: rgba(147, 197, 253, 0.5);
+        }
+
+        .hud-action-stop {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(127, 29, 29, 0.95));
+            border-color: rgba(252, 165, 165, 0.55);
+        }
+
+        .hud-action-float {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.95), rgba(37, 99, 235, 0.92));
+            border-color: rgba(147, 197, 253, 0.55);
+        }
+
+        .hud-row.should-be {
+            border-color: rgba(251, 191, 36, 0.24);
+        }
+
+        .hud-row.upcoming {
+            border-color: rgba(251, 191, 36, 0.2);
+        }
+
+        .hud-row.habit-row {
+            border-color: rgba(34, 197, 94, 0.24);
+        }
+
+        .habit-row .hud-label {
+            color: #10b981;
+        }
+
+        .upcoming .hud-label {
+            color: var(--upcoming-color);
+        }
+
+        .should-be .hud-label {
+            color: var(--critical-path);
+        }
+
+        .should-be::before {
+            background: var(--critical-path);
+        }
+
+        .upcoming::before {
+            background: var(--upcoming-color);
+        }
+
+        .habit-row::before {
+            background: var(--ready-color);
+        }
+
+        .hud-row.overtime {
+            border-color: rgba(248, 113, 113, 0.55);
+            background: linear-gradient(135deg, rgba(153, 27, 27, 0.34), rgba(69, 10, 10, 0.48));
+            animation: hud-overtime-pulse 2.2s ease-in-out infinite;
+        }
+
+        .hud-row.upcoming.soon .hud-chip-countdown {
+            border-color: rgba(245, 158, 11, 0.65);
+            color: #fed7aa;
+            background: rgba(245, 158, 11, 0.2);
+        }
+
+        .hud-row.upcoming.imminent .hud-chip-countdown {
+            border-color: rgba(248, 113, 113, 0.8);
+            color: #fee2e2;
+            background: rgba(220, 38, 38, 0.3);
+            animation: hud-countdown-alert 1.25s ease-in-out infinite;
+        }
+
+        @keyframes hud-overtime-pulse {
+            0%,
+            100% {
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 0 rgba(248, 113, 113, 0.18);
+            }
+
+            50% {
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 6px rgba(248, 113, 113, 0);
+            }
+        }
+
+        @keyframes hud-countdown-alert {
+            0%,
+            100% {
+                filter: brightness(1);
+            }
+
+            50% {
+                filter: brightness(1.15);
+            }
+        }
+
+        @media (max-width: 700px) {
+            #focus-hud {
+                width: calc(100vw - 14px);
+                min-width: 0;
+                max-width: calc(100vw - 14px);
+                padding: 8px;
+                gap: 6px;
+            }
+
+            .hud-row {
+                min-height: 44px;
+                gap: 8px;
+                padding: 7px 8px;
+            }
+
+            .hud-task-info {
+                padding-left: 8px;
+            }
+
+            .hud-label {
+                font-size: 8px;
+            }
+
+            .hud-task-name {
+                font-size: 12px;
+            }
+
+            .hud-chip,
+            .hud-timer {
+                font-size: 10px;
+                padding: 3px 7px;
+            }
+
+            .hud-action {
+                width: 30px;
+                height: 30px;
+                border-radius: 9px;
+                font-size: 13px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #focus-hud,
+            .hud-action {
+                transition: none;
+            }
+
+            .hud-row.overtime,
+            .hud-row.upcoming.imminent .hud-chip-countdown {
+                animation: none;
+            }
+        }
+
+        @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+            #focus-hud {
+                background: rgba(22, 32, 28, 0.95);
+            }
+        }
+
+        #task-group-focus-controls {
+            position: fixed;
+            top: 84px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2050;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(79, 156, 249, 0.35);
+            background: rgba(12, 18, 24, 0.85);
+            backdrop-filter: blur(8px) saturate(140%);
+            -webkit-backdrop-filter: blur(8px) saturate(140%);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+        }
+
+        #task-group-focus-controls.hidden {
+            display: none;
+        }
+
+        .task-group-focus-meta {
+            display: flex;
+            flex-direction: column;
+            min-width: 180px;
+            max-width: 280px;
+            text-align: center;
+            gap: 2px;
+        }
+
+        .task-group-focus-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .task-group-focus-count {
+            font-size: 10px;
+            color: var(--text-muted);
+            letter-spacing: 0.04em;
+        }
+
+        .task-group-focus-btn {
+            border: 1px solid rgba(79, 156, 249, 0.35);
+            background: rgba(79, 156, 249, 0.12);
+            color: var(--text-main);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .task-group-focus-btn:hover {
+            border-color: rgba(79, 156, 249, 0.7);
+            background: rgba(79, 156, 249, 0.2);
+        }
+
+        .task-group-focus-btn.exit {
+            border-color: rgba(239, 68, 68, 0.45);
+            background: rgba(239, 68, 68, 0.14);
+            color: #fecaca;
+        }
+
+        @media (max-width: 700px) {
+            #task-group-focus-controls {
+                top: 72px;
+                width: calc(100vw - 16px);
+                max-width: calc(100vw - 16px);
+                gap: 6px;
+                padding: 7px;
+            }
+
+            .task-group-focus-meta {
+                min-width: 0;
+                flex: 1;
+            }
+
+            .task-group-focus-btn {
+                padding: 6px 8px;
+                font-size: 11px;
+            }
+        }

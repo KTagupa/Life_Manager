@@ -1,0 +1,95 @@
+        /* --- AGENDA PANEL STYLES --- */
+        .agenda-slot {
+            display: flex;
+            gap: 12px;
+            padding: 14px;
+            background: linear-gradient(135deg, rgba(28, 37, 35, 0.95), rgba(21, 31, 42, 0.9));
+            border: 1px solid rgba(79, 156, 249, 0.2);
+            border-left: 4px solid var(--accent);
+            margin-bottom: 10px;
+            border-radius: 10px;
+        }
+
+        .agenda-slot.current {
+            background: linear-gradient(135deg, rgba(16, 28, 24, 0.95), rgba(16, 34, 52, 0.95));
+            border-left-color: var(--ready-color);
+            border-color: rgba(34, 197, 94, 0.35);
+            box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.15);
+        }
+
+        .agenda-slot.done {
+            border-color: rgba(34, 197, 94, 0.2);
+            background: rgba(22, 28, 26, 0.9);
+        }
+
+        .agenda-time {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.55;
+            color: var(--text-secondary);
+            min-width: 88px;
+        }
+
+        .agenda-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .agenda-task-title {
+            font-size: 16px;
+            line-height: 1.3;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .agenda-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            opacity: 0.9;
+            flex-wrap: wrap;
+        }
+
+        .agenda-slot:hover .agenda-actions {
+            opacity: 1;
+        }
+
+        .agenda-empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 14px;
+            padding: 24px 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            background-image:
+                radial-gradient(circle at 1px 1px, var(--dots-color) 1px, transparent 0);
+            background-size: 24px 24px;
+            background-position: 0 0, 12px 12px;
+            color: var(--text-main);
+            height: 100vh;
+            height: 100dvh;
+            width: 100vw;
+            display: flex;
+            touch-action: none;
+            font-size: 14px;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }

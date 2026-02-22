@@ -477,44 +477,7 @@ function renderHeatmap() {
     }
 }
 
-function findGoalName(goalId) {
-    const search = (list) => {
-        for (const g of list) {
-            if (g.id === goalId) return g.text;
-            if (g.children) {
-                const found = search(g.children);
-                if (found) return found;
-            }
-        }
-        return null;
-    };
-    for (const year in lifeGoals) {
-        const result = search(lifeGoals[year]);
-        if (result) return result;
-    }
-    return 'Unknown Goal';
-}
-
-function getGoalPath(goalId) {
-    const buildPath = (list, targetId, path = []) => {
-        for (const g of list) {
-            if (g.id === targetId) {
-                return [...path, g.text].join(' → ');
-            }
-            if (g.children) {
-                const result = buildPath(g.children, targetId, [...path, g.text]);
-                if (result) return result;
-            }
-        }
-        return null;
-    };
-
-    for (const year in lifeGoals) {
-        const result = buildPath(lifeGoals[year], goalId);
-        if (result) return result;
-    }
-    return null;
-}
+// findGoalName() and getGoalPath() are now in utils.js
 
 // --- CALENDAR LOGIC ---
 let calendarView = 'day'; // day, week, month

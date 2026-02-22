@@ -7,9 +7,20 @@
     <title>Urgency Flow: Project Management Edition - Enhanced UI</title>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="stylesheet" href="assets/css/core.css">
+    <link rel="stylesheet" href="assets/css/hud.css">
+    <link rel="stylesheet" href="assets/css/agenda.css">
+    <link rel="stylesheet" href="assets/css/layout.css">
+    <link rel="stylesheet" href="assets/css/grid.css">
+    <link rel="stylesheet" href="assets/css/notes.css">
+    <link rel="stylesheet" href="assets/css/dashboard.css">
+    <link rel="stylesheet" href="assets/css/goals-habits.css">
+    <link rel="stylesheet" href="assets/css/graph.css">
+    <link rel="stylesheet" href="assets/css/panels-modals.css">
+    <link rel="stylesheet" href="assets/css/calendar.css">
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="assets/css/extracted-inline.css">
 </head>
 
 <body>
@@ -17,7 +28,8 @@
         <div id="hud-doing-row" class="hud-row" style="display: none;">
             <div class="hud-task-info">
                 <span class="hud-label">CURRENTLY DOING</span>
-                <span class="hud-task-name" id="hud-doing-title" role="button" tabindex="0" onclick="focusHUDTask('doing')"
+                <span class="hud-task-name" id="hud-doing-title" role="button" tabindex="0"
+                    onclick="focusHUDTask('doing')"
                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusHUDTask('doing');}">---</span>
             </div>
             <div class="hud-row-actions">
@@ -30,7 +42,7 @@
         </div>
 
         <video id="pip-stream-source" autoplay muted playsinline
-            style="position:fixed; top:0; left:0; width:1px; height:1px; opacity:0; pointer-events:none;"></video>
+             class="layout-group-1"></video>
 
         <div id="hud-should-row" class="hud-row should-be" style="display: none;">
             <div class="hud-task-info">
@@ -105,25 +117,45 @@
         </div>
         <div id="toolbar-content">
             <div id="toolbar-quick-actions-grid" class="toolbar-quick-actions-grid">
-                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-primary" onclick="addNode()" data-tooltip="New Task (Optn+T)" aria-label="New Task (Optn+T)">＋</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleInboxModal()" data-tooltip="Inbox (Optn+B)" aria-label="Inbox (Optn+B)">📥</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleGoals()" data-tooltip="Life Goals (Optn+G)" aria-label="Life Goals (Optn+G)">🎯</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleHabits()" data-tooltip="Habits (Optn+H)" aria-label="Habits (Optn+H)">✅</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleAgenda()" data-tooltip="Planner (Optn+A)" aria-label="Planner (Optn+A)">📅</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleNotesPanel()" data-tooltip="Knowledge Base (Optn+N)" aria-label="Knowledge Base (Optn+N)">📝</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleArchivePanel()" data-tooltip="Archive (Optn+X)" aria-label="Archive (Optn+X)">🗄️</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleNavigatorPanel(null, 'tasks')" data-tooltip="Navigator (Optn+F)" aria-label="Navigator (Optn+F)">🧭</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="fitView()" data-tooltip="Recenter / Urgent (Optn+R)" aria-label="Recenter / Urgent (Optn+R)">📍</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="autoArrangeGraph()" data-tooltip="Declutter (Optn+D)" aria-label="Declutter (Optn+D)">🪄</button>
-                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-accent" onclick="toggleSyncPanel()" data-tooltip="Settings (Optn+S)" aria-label="Settings (Optn+S)">⚙️</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleRemindersModal()" data-tooltip="All Reminders (No Shortcut)" aria-label="All Reminders">🔔</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleGlobalSearch()" data-tooltip="Search (Optn+Space)" aria-label="Search (Optn+Space)">🔍</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="saveData(true)" data-tooltip="Save (Optn+V)" aria-label="Save (Optn+V)">💾</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="document.getElementById('file-input').click()" data-tooltip="Load (Optn+L)" aria-label="Load (Optn+L)">📂</button>
-                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-danger" onclick="clearData()" data-tooltip="Reset (Optn+K)" aria-label="Reset (Optn+K)">🗑️</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="exportNotesAsMarkdown()" data-tooltip="Export Notes (No Shortcut)" aria-label="Export Notes">📄</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" id="eco-toggle-btn" onclick="cycleEcoMode()" data-tooltip="Cycle Engine Mode (Optn+E) · Turbo"
-                    aria-label="Cycle Engine Mode (Optn+E)">🚀<span id="eco-status" class="toolbar-menu-action-status">Turbo</span></button>
+                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-primary" onclick="addNode()"
+                    data-tooltip="New Task (Optn+T)" aria-label="New Task (Optn+T)">＋</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleInboxModal()"
+                    data-tooltip="Inbox (Optn+B)" aria-label="Inbox (Optn+B)">📥</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleGoals()"
+                    data-tooltip="Life Goals (Optn+G)" aria-label="Life Goals (Optn+G)">🎯</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleHabits()"
+                    data-tooltip="Habits (Optn+H)" aria-label="Habits (Optn+H)">✅</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleAgenda()"
+                    data-tooltip="Planner (Optn+A)" aria-label="Planner (Optn+A)">📅</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleNotesPanel()"
+                    data-tooltip="Knowledge Base (Optn+N)" aria-label="Knowledge Base (Optn+N)">📝</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleArchivePanel()"
+                    data-tooltip="Archive (Optn+X)" aria-label="Archive (Optn+X)">🗄️</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleNavigatorPanel(null, 'tasks')"
+                    data-tooltip="Navigator (Optn+F)" aria-label="Navigator (Optn+F)">🧭</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="fitView()"
+                    data-tooltip="Recenter / Urgent (Optn+R)" aria-label="Recenter / Urgent (Optn+R)">📍</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="autoArrangeGraph()"
+                    data-tooltip="Declutter (Optn+D)" aria-label="Declutter (Optn+D)">🪄</button>
+                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-accent"
+                    onclick="toggleSyncPanel()" data-tooltip="Settings (Optn+S)"
+                    aria-label="Settings (Optn+S)">⚙️</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleRemindersModal()"
+                    data-tooltip="All Reminders (No Shortcut)" aria-label="All Reminders">🔔</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleGlobalSearch()"
+                    data-tooltip="Search (Optn+Space)" aria-label="Search (Optn+Space)">🔍</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="saveData(true)"
+                    data-tooltip="Save (Optn+V)" aria-label="Save (Optn+V)">💾</button>
+                <button class="toolbar-icon-btn toolbar-menu-action"
+                    onclick="document.getElementById('file-input').click()" data-tooltip="Load (Optn+L)"
+                    aria-label="Load (Optn+L)">📂</button>
+                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-danger" onclick="clearData()"
+                    data-tooltip="Reset (Optn+K)" aria-label="Reset (Optn+K)">🗑️</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="exportNotesAsMarkdown()"
+                    data-tooltip="Export Notes (No Shortcut)" aria-label="Export Notes">📄</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" id="eco-toggle-btn" onclick="cycleEcoMode()"
+                    data-tooltip="Cycle Engine Mode (Optn+E) · Turbo" aria-label="Cycle Engine Mode (Optn+E)">🚀<span
+                        id="eco-status" class="toolbar-menu-action-status">Turbo</span></button>
             </div>
         </div>
     </div>
@@ -132,17 +164,21 @@
         <button class="right-rail-tab" data-panel-id="notes-panel" onclick="openRightRailTab('notes')">Notes</button>
         <button class="right-rail-tab" data-panel-id="goals-panel" onclick="openRightRailTab('goals')">Goals</button>
         <button class="right-rail-tab" data-panel-id="habits-panel" onclick="openRightRailTab('habits')">Habits</button>
-        <button class="right-rail-tab" data-panel-id="agenda-panel" onclick="openRightRailTab('planner')">Planner</button>
-        <button class="right-rail-tab" data-panel-id="archive-panel" onclick="openRightRailTab('archive')">Archive</button>
-        <button class="right-rail-tab" data-panel-id="navigator-panel" onclick="openRightRailTab('navigator')">Navigator</button>
-        <button class="right-rail-tab" data-panel-id="sync-panel" onclick="openRightRailTab('settings')">Settings</button>
+        <button class="right-rail-tab" data-panel-id="agenda-panel"
+            onclick="openRightRailTab('planner')">Planner</button>
+        <button class="right-rail-tab" data-panel-id="archive-panel"
+            onclick="openRightRailTab('archive')">Archive</button>
+        <button class="right-rail-tab" data-panel-id="navigator-panel"
+            onclick="openRightRailTab('navigator')">Navigator</button>
+        <button class="right-rail-tab" data-panel-id="sync-panel"
+            onclick="openRightRailTab('settings')">Settings</button>
     </div>
 
     <input type="file" id="file-input" style="display:none" onchange="loadFile(this)">
 
     <div id="graph-container">
         <div id="transform-layer"
-            style="transform-origin: 0 0; position: absolute; top:0; left:0; width:100%; height:100%;">
+             class="layout-group-2">
             <svg id="connections"></svg>
             <div id="nodes-layer"></div>
         </div>
@@ -158,25 +194,25 @@
     <div id="sync-panel" class="hidden">
         <div class="sync-header">
             <span>⚙️ Settings Hub</span>
-            <div style="display: flex; align-items: center; gap: 10px;">
+            <div  class="layout-group-3">
                 <span id="connection-status"
-                    style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #333;">Checking...</span>
-                <span style="cursor:pointer" onclick="toggleSyncPanel()">✕</span>
+                     class="layout-group-4">Checking...</span>
+                <span  class="layout-group-5" onclick="toggleSyncPanel()">✕</span>
             </div>
         </div>
 
-        <div class="panel-list" style="padding: 12px;">
-            <div class="sync-info" style="margin-bottom: 12px;">
+        <div class=" layout-group-6" >
+            <div class=" layout-group-7" >
                 Centralized controls for sync, AI, backups, and performance.
             </div>
 
             <div class="form-group">
                 <label>☁️ GitHub Gist Sync</label>
-                <div style="display:flex; gap:5px; margin-top:6px;">
+                <div  class="layout-group-8">
                     <input type="password" id="github-token" placeholder="ghp_xxxxxxxxxxxx"
-                        onchange="saveGithubToken(this.value)" style="flex-grow:1;">
-                    <button class="btn" onclick="testGithubConnection()" title="Test Token"
-                        style="white-space:nowrap;">🧪 Test</button>
+                        onchange="saveGithubToken(this.value)"  class="layout-group-9">
+                    <button class=" layout-group-10" onclick="testGithubConnection()" title="Test Token"
+                        >🧪 Test</button>
                 </div>
             </div>
 
@@ -185,42 +221,42 @@
                 <input type="text" id="gist-id" placeholder="Autogenerated..." readonly>
             </div>
 
-            <div style="display:flex; gap:10px; margin-bottom: 14px;">
-                <button class="btn" style="flex:1" onclick="pullFromGist()">⬇ Pull</button>
-                <button class="btn btn-primary" style="flex:1" onclick="pushToGist()">⬆ Push</button>
+            <div  class="layout-group-11">
+                <button class=" layout-group-12"  onclick="pullFromGist()">⬇ Pull</button>
+                <button class=" layout-group-13"  onclick="pushToGist()">⬆ Push</button>
             </div>
 
-            <div class="form-group" style="border-top: 1px solid #333; padding-top: 12px;">
+            <div class=" layout-group-14" >
                 <label>✨ Gemini API Key</label>
                 <input type="password" id="settings-gemini-key-input" placeholder="Paste API key..."
-                    onchange="saveGeminiKey(this.value)" style="margin-top:6px;">
-                <div style="display:flex; gap:10px; margin-top:8px;">
-                    <button class="btn" style="flex:1" onclick="toggleAIModal()">Open AI Workspace</button>
-                    <button class="btn" style="flex:1" onclick="toggleAIPresets()">Quick Presets</button>
+                    onchange="saveGeminiKey(this.value)"  class="layout-group-15">
+                <div  class="layout-group-16">
+                    <button class=" layout-group-17"  onclick="toggleAIModal()">Open AI Workspace</button>
+                    <button class=" layout-group-18"  onclick="toggleAIPresets()">Quick Presets</button>
                 </div>
             </div>
 
-            <div class="form-group" style="border-top: 1px solid #333; padding-top: 12px;">
+            <div class=" layout-group-19" >
                 <label>🧰 System Controls</label>
-                <div style="display:flex; gap:10px; margin-top:8px;">
-                    <button class="btn" style="flex:1" onclick="cycleEcoMode()">Mode: <span
+                <div  class="layout-group-20">
+                    <button class=" layout-group-21"  onclick="cycleEcoMode()">Mode: <span
                             id="settings-eco-status">Turbo</span></button>
-                    <button class="btn" style="flex:1" onclick="cleanAppMemory()">🧹 Clean Memory</button>
+                    <button class=" layout-group-22"  onclick="cleanAppMemory()">🧹 Clean Memory</button>
                 </div>
-                <div style="display:flex; gap:10px; margin-top:8px;">
-                    <button class="btn" style="flex:1" onclick="saveData(true)">⬇ Backup Now</button>
-                    <button class="btn" style="flex:1" onclick="updateDataMetrics()">↻ Refresh Metrics</button>
+                <div  class="layout-group-23">
+                    <button class=" layout-group-24"  onclick="saveData(true)">⬇ Backup Now</button>
+                    <button class=" layout-group-25"  onclick="updateDataMetrics()">↻ Refresh Metrics</button>
                 </div>
-                <div style="margin-top:8px; font-size:10px; color:var(--text-muted);">
+                <div  class="layout-group-26">
                     Last auto backup: <span id="backup-timestamp-settings">None</span>
                 </div>
             </div>
 
-            <div id="data-health-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #333;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <span style="font-size:11px; font-weight:bold; color:#eee;">📊 Data Health & Metrics</span>
+            <div id="data-health-panel"  class="layout-group-27">
+                <div  class="layout-group-28">
+                    <span  class="layout-group-29">📊 Data Health & Metrics</span>
                     <span id="total-gist-size"
-                        style="font-size:10px; color:var(--ready-color); font-family:monospace;">0.0
+                         class="layout-group-30">0.0
                         KB</span>
                 </div>
                 <div id="metrics-breakdown" class="metrics-breakdown">
@@ -237,33 +273,33 @@
     <div id="ai-modal">
         <div class="modal-header-enhanced" id="ai-modal-header">
             <div class="modal-title-enhanced">
-                <span style="font-size: 24px;">✨</span>
+                <span  class="layout-group-31">✨</span>
                 <span>AI Project Assistant</span>
             </div>
-            <div style="display: flex; gap: 8px;">
-                <button class="modal-close-btn" onclick="toggleAIPresets()" title="Quick Tasks"
-                    style="width: auto; padding: 0 12px; font-size: 14px;">✨</button>
-                <button class="modal-close-btn" onclick="toggleAISettings()" title="Settings"
-                    style="width: auto; padding: 0 12px; font-size: 14px;">⚙️</button>
+            <div  class="layout-group-32">
+                <button class=" layout-group-33" onclick="toggleAIPresets()" title="Quick Tasks"
+                    >✨</button>
+                <button class=" layout-group-34" onclick="toggleAISettings()" title="Settings"
+                    >⚙️</button>
                 <button class="modal-close-btn" onclick="closeAIModal()">✕</button>
             </div>
         </div>
 
         <div id="ai-settings-pane">
-            <label style="margin-bottom:5px; display:block;">Gemini API Key</label>
+            <label  class="layout-group-35">Gemini API Key</label>
             <input type="password" id="gemini-api-key-input" placeholder="Paste API Key here..."
-                onchange="saveGeminiKey(this.value)" style="width:100%; margin-bottom:5px;">
-            <div style="font-size:10px; color:#888;">Key is saved to your browser's Local Storage.</div>
+                onchange="saveGeminiKey(this.value)"  class="layout-group-36">
+            <div  class="layout-group-37">Key is saved to your browser's Local Storage.</div>
         </div>
 
         <!-- AI Task Presets Panel -->
         <div id="ai-presets-pane"
-            style="padding: 12px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border); display: none;">
+             class="layout-group-38">
             <div
-                style="margin-bottom: 8px; font-size: 10px; font-weight: 700; color: var(--ai-accent); letter-spacing: 0.5px;">
+                 class="layout-group-39">
                 QUICK TASKS
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px;">
+            <div  class="layout-group-40">
                 <button class="ai-preset-btn" onclick="selectAIPreset('analyze-risks')">
                     ⚠️ Analyze Risks
                 </button>
@@ -291,10 +327,10 @@
             </div>
 
             <div
-                style="margin-bottom: 8px; font-size: 10px; font-weight: 700; color: var(--ai-accent); letter-spacing: 0.5px;">
+                 class="layout-group-41">
                 INCLUDE DATA
             </div>
-            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <div  class="layout-group-42">
                 <button class="ai-data-toggle active" data-type="tasks" onclick="toggleAIData('tasks')">
                     📋 Tasks
                 </button>
@@ -319,32 +355,32 @@
             </div>
         </div>
 
-        <div id="ai-chat-history" class="panel-list"
-            style="padding: 15px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
+        <div id="ai-chat-history" class=" layout-group-43"
+            >
             <div class="ai-msg bot">Hello! I can analyze your tasks, notes, and life goals to provide strategic
                 insights. <br><br>Please click the ⚙️ icon to set your Google Gemini API Key to get started.</div>
         </div>
 
-        <div id="ai-loading" class="hidden" style="padding: 0 15px 10px; color: var(--ai-accent); font-size: 11px;">
+        <div id="ai-loading" class=" layout-group-44" >
             Gemini is thinking...</div>
 
         <div id="ai-suggestions"
-            style="padding: 5px 10px; display: flex; gap: 5px; flex-wrap: wrap; border-top: 1px solid #333; background: rgba(0,0,0,0.1);">
-            <button class="btn" style="font-size: 10px; padding: 4px 8px;"
+             class="layout-group-45">
+            <button class=" layout-group-46" 
                 onclick="quickPrompt('Analyze my Inbox and my current Life Goals. Which ideas should I promote to tasks immediately to maintain momentum?')">🎯
                 Goal Alignment</button>
-            <button class="btn" style="font-size: 10px; padding: 4px 8px;"
+            <button class=" layout-group-47" 
                 onclick="quickPrompt('Identify the Critical Path tasks that are currently blocked. What is the single most important thing I must finish today to prevent a cascade of delays?')">⚠️
                 Risk Check</button>
-            <button class="btn" style="font-size: 10px; padding: 4px 8px;"
+            <button class=" layout-group-48" 
                 onclick="quickPrompt('Look at my archived and completed tasks plus habit consistency. Write a brief executive summary of what I achieved this week and what my top 3 priorities should be for next week.')">📝
                 Weekly Recap</button>
         </div>
 
-        <div style="padding: 10px; border-top: 1px solid #333; display: flex; gap: 5px;">
+        <div  class="layout-group-49">
             <input type="text" id="ai-input" placeholder="Analyze my current risks..."
                 onkeypress="if(event.key==='Enter') askAI()">
-            <button class="btn btn-primary" style="background: var(--ai-accent); border-color: var(--ai-accent);"
+            <button class=" layout-group-50" 
                 onclick="askAI()">Ask</button>
         </div>
     </div>
@@ -361,7 +397,7 @@
                 <span id="goals-year-display" class="year-title">2024</span>
                 <button class="btn" onclick="changeGoalYear(1)">&gt;</button>
             </div>
-            <div style="display:flex; gap:5px">
+            <div  class="layout-group-51">
                 <input type="text" id="new-goal-input" placeholder="New root goal..."
                     onkeypress="if(event.key==='Enter') addRootGoal()">
                 <button class="btn btn-primary" onclick="addRootGoal()">Add</button>
@@ -379,9 +415,11 @@
 
         <div class="habit-composer">
             <div class="habit-composer-row">
-                <input type="text" id="new-habit-input" placeholder="New habit..." style="flex-grow:1;"
+                <input type="text" id="new-habit-input" placeholder="New habit..."  class="layout-group-52"
                     onkeypress="if(event.key==='Enter') addHabit()">
-                <button class="btn btn-primary" onclick="addHabit()">Add</button>
+                <button id="habit-submit-btn" class="btn btn-primary" onclick="addHabit()">Add</button>
+                <button id="habit-cancel-edit-btn" class="btn" style="display:none;"
+                    onclick="cancelHabitEdit()">Cancel</button>
             </div>
 
             <div class="habit-type-row">
@@ -436,7 +474,7 @@
 
     <div id="notes-panel" class="hidden side-panel">
         <div class="panel-header-row" id="notes-header-drag-handle">
-            <div style="display:flex; align-items:center; gap:5px;">
+            <div  class="layout-group-53">
                 <span>📝 Knowledge Base</span>
                 <button class="tool-btn" id="pin-note-btn" onclick="togglePinNotePanel()"
                     title="Pin/Detach Panel">📌</button>
@@ -444,20 +482,22 @@
             <button class="btn" onclick="toggleNotesPanel()">✕</button>
         </div>
 
-        <div style="padding: 10px; border-bottom: 1px solid #333;">
+        <div  class="layout-group-54">
             <input type="text" id="note-search-input" placeholder="Search notes or tags..." oninput="renderNotesList()">
-            <div id="note-tags-filter" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:5px;"></div>
+            <div id="note-tags-filter"  class="layout-group-55"></div>
             <div class="ai-note-selection-row">
                 <div id="ai-note-selection-summary">AI context selection: 0 full note(s), 0 block(s)</div>
-                <button class="btn" style="padding:2px 8px; font-size:10px;" onclick="clearAINoteSelection()">Clear</button>
+                <button class=" layout-group-56" 
+                    onclick="clearAINoteSelection()">Clear</button>
             </div>
         </div>
 
         <div class="panel-list" id="notes-list-container"></div>
 
-        <div style="padding: 10px; border-top: 1px solid #333;">
-            <button class="btn btn-primary" style="width:100%" onclick="createNewNote()">+ New Independent Note</button>
-            <a class="btn" href="notes/index.html" style="width:100%; margin-top:8px; display:block; text-align:center;">Open
+        <div  class="layout-group-57">
+            <button class=" layout-group-58"  onclick="createNewNote()">+ New Independent Note</button>
+            <a class=" layout-group-59" href="notes/index.html"
+                >Open
                 Full Notes Page ↗</a>
         </div>
     </div>
@@ -468,8 +508,10 @@
             <button class="btn planner-close-btn" onclick="toggleAgenda()" aria-label="Close planner">✕</button>
         </div>
         <div class="planner-tabs" role="tablist" aria-label="Planner Views">
-            <button class="planner-tab active" data-planner-tab="agenda" onclick="setPlannerTab('agenda')">Agenda</button>
-            <button class="planner-tab" data-planner-tab="calendar" onclick="setPlannerTab('calendar')">Calendar</button>
+            <button class="planner-tab active" data-planner-tab="agenda"
+                onclick="setPlannerTab('agenda')">Agenda</button>
+            <button class="planner-tab" data-planner-tab="calendar"
+                onclick="setPlannerTab('calendar')">Calendar</button>
             <button class="planner-tab" data-planner-tab="heatmap" onclick="setPlannerTab('heatmap')">Heatmap</button>
         </div>
 
@@ -482,7 +524,8 @@
 
                 <div id="agenda-selection-info" class="agenda-selection-card">
                     <div class="agenda-selection-label">Selected Task</div>
-                    <div id="agenda-selected-task-title" class="agenda-selection-title">(Select a task on the graph)</div>
+                    <div id="agenda-selected-task-title" class="agenda-selection-title">(Select a task on the graph)
+                    </div>
                 </div>
 
                 <div class="agenda-time-row">
@@ -514,13 +557,17 @@
         <div id="calendar-panel" class="planner-tab-content hidden">
             <div class="planner-subheader cal-toolbar">
                 <div class="cal-controls">
-                    <button class="btn planner-icon-btn" onclick="changeCalDate(-1)" aria-label="Previous period">&lt;</button>
+                    <button class="btn planner-icon-btn" onclick="changeCalDate(-1)"
+                        aria-label="Previous period">&lt;</button>
                     <div class="cal-view-toggle" role="tablist" aria-label="Calendar View Mode">
-                        <button class="planner-subtab active" data-cal-view="day" onclick="setCalView('day')">Day</button>
+                        <button class="planner-subtab active" data-cal-view="day"
+                            onclick="setCalView('day')">Day</button>
                         <button class="planner-subtab" data-cal-view="week" onclick="setCalView('week')">Week</button>
-                        <button class="planner-subtab" data-cal-view="month" onclick="setCalView('month')">Month</button>
+                        <button class="planner-subtab" data-cal-view="month"
+                            onclick="setCalView('month')">Month</button>
                     </div>
-                    <button class="btn planner-icon-btn" onclick="changeCalDate(1)" aria-label="Next period">&gt;</button>
+                    <button class="btn planner-icon-btn" onclick="changeCalDate(1)"
+                        aria-label="Next period">&gt;</button>
                 </div>
                 <div id="cal-title" class="cal-title">January 2026</div>
                 <div id="cal-weekday-header" class="cal-weekday-header hidden"></div>
@@ -533,9 +580,11 @@
                 <div class="heatmap-top-row">
                     <h2 id="heatmap-title" class="heatmap-title">2024 Heatmap</h2>
                     <div class="heatmap-controls">
-                        <button class="btn planner-icon-btn" onclick="changeHeatmapYear(-1)" aria-label="Previous year">&lt;</button>
+                        <button class="btn planner-icon-btn" onclick="changeHeatmapYear(-1)"
+                            aria-label="Previous year">&lt;</button>
                         <span id="heatmap-year-label" class="heatmap-year-label">2024</span>
-                        <button class="btn planner-icon-btn" onclick="changeHeatmapYear(1)" aria-label="Next year">&gt;</button>
+                        <button class="btn planner-icon-btn" onclick="changeHeatmapYear(1)"
+                            aria-label="Next year">&gt;</button>
                     </div>
                 </div>
                 <div id="heatmap-selected-day" class="heatmap-selected-day">Select a day to view details.</div>
@@ -595,16 +644,16 @@
             </div>
 
             <div class="note-toolbar-group note-edit-only-ui">
-                <button class="note-toolbar-btn" onclick="createTaskFromBlockSelection()"
-                    title="Convert Selection to Task" style="color:var(--critical-path)">
+                <button class=" layout-group-60" onclick="createTaskFromBlockSelection()"
+                    title="Convert Selection to Task" >
                     ✨ Task
                 </button>
-                <button class="note-toolbar-btn" onclick="toggleNoteTaskSearch()" title="Link Note to Tasks"
-                    style="color:var(--accent)">
+                <button class=" layout-group-61" onclick="toggleNoteTaskSearch()" title="Link Note to Tasks"
+                    >
                     🔗 Link Tasks
                 </button>
-                <button class="note-toolbar-btn" onclick="toggleNoteHabitSearch()" title="Link Note to Habits"
-                    style="color:#10b981">
+                <button class=" layout-group-62" onclick="toggleNoteHabitSearch()" title="Link Note to Habits"
+                    >
                     ✅ Link Habits
                 </button>
             </div>
@@ -644,12 +693,12 @@
         <!-- Task Search Overlay -->
         <div id="note-task-search-overlay">
             <div class="note-search-window">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem">
+                <div  class="layout-group-63">
                     <h3>Link Note to Task</h3>
-                    <button class="icon-btn" style="color:white" onclick="toggleNoteTaskSearch()">✕</button>
+                    <button class=" layout-group-64"  onclick="toggleNoteTaskSearch()">✕</button>
                 </div>
-                <div style="position:relative">
-                    <span style="position:absolute; left:12px; top:10px; color:var(--text-muted)">🔍</span>
+                <div  class="layout-group-65">
+                    <span  class="layout-group-66">🔍</span>
                     <input type="text" id="note-task-search-input" class="note-search-input"
                         placeholder="Search tasks by name..." oninput="filterNoteTaskSearch(this.value)"
                         onkeydown="if(event.key==='Escape'){ toggleNoteTaskSearch(); event.stopPropagation(); }">
@@ -662,14 +711,14 @@
 
         <!-- Habit Search Overlay -->
         <div id="note-habit-search-overlay"
-            style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.95); z-index: 200; padding: 2rem; justify-content: center; align-items: flex-start;">
+             class="layout-group-67">
             <div class="note-search-window">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem">
+                <div  class="layout-group-68">
                     <h3>Link Note to Habit</h3>
-                    <button class="icon-btn" style="color:white" onclick="toggleNoteHabitSearch()">✕</button>
+                    <button class=" layout-group-69"  onclick="toggleNoteHabitSearch()">✕</button>
                 </div>
-                <div style="position:relative">
-                    <span style="position:absolute; left:12px; top:10px; color:var(--text-muted)">🔍</span>
+                <div  class="layout-group-70">
+                    <span  class="layout-group-71">🔍</span>
                     <input type="text" id="note-habit-search-input" class="note-search-input"
                         placeholder="Search habits by name..." oninput="filterNoteHabitSearch(this.value)"
                         onkeydown="if(event.key==='Escape'){ toggleNoteHabitSearch(); event.stopPropagation(); }">
@@ -688,7 +737,7 @@
                     <!-- Linked task tags render here -->
                 </div>
 
-                <div class="note-linked-tasks-container" id="note-linked-habits-list" style="margin-top: 10px;">
+                <div class=" layout-group-72" id="note-linked-habits-list" >
                     <span class="note-linked-label">Linked Habits:</span>
                     <!-- Linked habit tags render here -->
                 </div>
@@ -697,7 +746,7 @@
                         <div class="note-status-dot"></div>
                         <span id="note-save-status">All changes synced</span>
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted)">
+                    <div  class="layout-group-73">
                         Last synced: <span id="note-sync-time">Just now</span>
                     </div>
                 </div>
@@ -747,7 +796,7 @@
             <span>🗄️ Completed & Archived</span>
             <button class="btn" onclick="toggleArchivePanel()">✕</button>
         </div>
-        <div style="padding: 10px; font-size: 11px; color: #888; border-bottom: 1px solid #333;">
+        <div  class="layout-group-74">
             Tasks are auto-archived here 15 days after completion.
         </div>
         <div class="panel-list" id="archive-list-container">
@@ -758,22 +807,22 @@
     <div id="inbox-modal">
         <div class="modal-header-enhanced" id="inbox-modal-header">
             <div class="modal-title-enhanced">
-                <span style="font-size: 24px;">📥</span>
+                <span  class="layout-group-75">📥</span>
                 <span>Quick Capture Inbox</span>
             </div>
             <button class="modal-close-btn" onclick="closeInboxModal()">✕</button>
         </div>
 
-        <div class="panel-list" id="inbox-modal-list" style="flex-grow: 1; overflow-y: auto; padding: 10px;">
+        <div class=" layout-group-76" id="inbox-modal-list" >
             <!-- Inbox items will render here -->
         </div>
 
         <div
-            style="padding: 12px; border-top: 1px solid var(--border); display: flex; gap: 8px; background: rgba(0,0,0,0.2);">
+             class="layout-group-77">
             <input type="text" id="inbox-modal-input" placeholder="Quick task or idea..."
-                onkeypress="if(event.key==='Enter') addToInboxModal()" style="flex: 1;">
-            <button class="btn btn-primary" onclick="addToInboxModal()"
-                style="background: var(--ready-color); border-color: var(--ready-color);">Add</button>
+                onkeypress="if(event.key==='Enter') addToInboxModal()"  class="layout-group-78">
+            <button class=" layout-group-79" onclick="addToInboxModal()"
+                >Add</button>
         </div>
     </div>
 
@@ -781,16 +830,16 @@
     <div id="reminders-modal">
         <div class="modal-header-enhanced" id="reminders-modal-header">
             <div class="modal-title-enhanced">
-                <span style="font-size: 24px;">🔔</span>
+                <span  class="layout-group-80">🔔</span>
                 <span>All Reminders</span>
             </div>
             <button class="modal-close-btn" onclick="closeRemindersModal()">✕</button>
         </div>
         <div
-            style="padding: 10px 12px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); font-size: 11px; color: var(--text-muted);">
+             class="layout-group-81">
             Edit date/time/all-day here. Fired reminders can be kept or discarded.
         </div>
-        <div id="reminders-modal-list" class="panel-list" style="flex-grow: 1; overflow-y: auto; padding: 10px;">
+        <div id="reminders-modal-list" class=" layout-group-82" >
             <!-- Reminder cards -->
         </div>
     </div>
@@ -801,7 +850,8 @@
             <button class="btn" onclick="toggleNavigatorPanel()">✕</button>
         </div>
         <div class="navigator-tabs">
-            <button class="navigator-tab active" data-nav-tab="pinned" onclick="setNavigatorTab('pinned')">Pinned</button>
+            <button class="navigator-tab active" data-nav-tab="pinned"
+                onclick="setNavigatorTab('pinned')">Pinned</button>
             <button class="navigator-tab" data-nav-tab="tasks" onclick="setNavigatorTab('tasks')">Tasks</button>
             <button class="navigator-tab" data-nav-tab="groups" onclick="setNavigatorTab('groups')">Groups</button>
         </div>
@@ -819,7 +869,8 @@
                 <button class="filter-btn" data-filter="critical" onclick="setTaskFilter('critical')">Critical</button>
                 <button class="filter-btn" data-filter="ready" onclick="setTaskFilter('ready')">Ready</button>
                 <button class="filter-btn" data-filter="blocked" onclick="setTaskFilter('blocked')">Blocked</button>
-                <button class="filter-btn" data-filter="completed" onclick="setTaskFilter('completed')">Completed</button>
+                <button class="filter-btn" data-filter="completed"
+                    onclick="setTaskFilter('completed')">Completed</button>
             </div>
             <div class="task-list-content" id="task-list-content">
                 <!-- Tasks render here -->
@@ -828,22 +879,24 @@
 
         <div id="navigator-tab-groups" class="navigator-tab-content hidden">
             <div
-                style="padding: 12px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); font-size: 11px; color: var(--text-muted);">
-                Groups include dependency clusters and standalone tasks. Toggle visibility to declutter, or click a card to enter focus mode.
+                 class="layout-group-83">
+                Groups include dependency clusters and standalone tasks. Toggle visibility to declutter, or click a card
+                to enter focus mode.
             </div>
-            <div class="panel-list" id="node-groups-list" style="flex-grow: 1; overflow-y: auto; padding: 10px;">
+            <div class=" layout-group-84" id="node-groups-list" >
                 <!-- Groups render here -->
             </div>
         </div>
     </div>
 
     <div id="inspector" class="hidden">
-        <div id="insp-content" style="display:flex; flex-direction:column; height:100%;">
+        <div id="insp-content"  class="layout-group-85">
         </div>
     </div>
 
     <div id="insights-dashboard-overlay" class="hidden" onclick="if (event.target === this) closeInsightsDashboard();">
-        <div class="insights-dashboard-shell" role="dialog" aria-modal="true" aria-labelledby="insights-dashboard-title">
+        <div class="insights-dashboard-shell" role="dialog" aria-modal="true"
+            aria-labelledby="insights-dashboard-title">
             <header class="insights-header">
                 <div class="insights-title-wrap">
                     <h1 id="insights-dashboard-title">The Canopy</h1>
@@ -939,37 +992,37 @@
                         </div>
                         <div class="metrics-breakdown">
                             <div class="metric-item">
-                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                <div  class="layout-group-86">
                                     <span class="metric-label">Task Load</span>
                                     <span class="metric-value" id="review-health-load">0 Act / 0 Arch</span>
                                 </div>
                             </div>
                             <div class="metric-item">
-                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                <div  class="layout-group-87">
                                     <span class="metric-label">Storage</span>
                                     <span class="metric-value" id="review-health-storage">0 KB</span>
                                 </div>
                             </div>
                             <div class="metric-item">
-                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                <div  class="layout-group-88">
                                     <span class="metric-label">Render</span>
                                     <span class="metric-value" id="review-health-render">0ms</span>
                                 </div>
                             </div>
                             <div class="metric-item">
-                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                <div  class="layout-group-89">
                                     <span class="metric-label">Sync</span>
                                     <span class="metric-value" id="review-health-sync">Ready</span>
                                 </div>
                             </div>
                             <div class="metric-item">
-                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                <div  class="layout-group-90">
                                     <span class="metric-label">Virtualization</span>
                                     <span class="metric-value" id="review-health-virt">Off</span>
                                 </div>
                             </div>
                             <div class="metric-item">
-                                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                                <div  class="layout-group-91">
                                     <span class="metric-label">Backup</span>
                                     <span class="metric-value" id="review-health-backup">None</span>
                                 </div>
@@ -981,7 +1034,7 @@
                         <div class="insights-card-head">
                             <h2>Data Footprint</h2>
                             <span id="total-gist-size-review"
-                                style="font-size:10px; color:var(--ready-color); font-family:monospace;">0.0 KB</span>
+                                 class="layout-group-92">0.0 KB</span>
                         </div>
                         <div id="metrics-breakdown-review" class="metrics-breakdown">
                             <!-- Filled via JS -->
@@ -1013,7 +1066,7 @@
         </div>
         <div class="health-row" title="IndexedDB Storage (High Capacity)">
             <span class="health-label">DB Size</span>
-            <div style="display:flex; align-items:center;">
+            <div  class="layout-group-93">
                 <span class="health-val" id="hd-storage-text">0%</span>
                 <div class="health-bar-bg">
                     <div class="health-bar-fill" id="hd-storage-bar"></div>
@@ -1022,8 +1075,8 @@
         </div>
 
         <div class="health-row health-btn" title="Click to flush memory & cool down CPU" onclick="cleanAppMemory()">
-            <span class="health-label" style="pointer-events: none;">Engine 🧹</span>
-            <div style="display:flex; align-items:center; pointer-events: none;">
+            <span class=" layout-group-94" >Engine 🧹</span>
+            <div  class="layout-group-95">
                 <div class="health-dot ok" id="hd-fps-dot"></div>
                 <span class="health-val" id="hd-fps">0ms</span>
             </div>
@@ -1034,21 +1087,21 @@
             <span class="health-val" id="hd-virt-status">OFF</span>
         </div>
 
-        <div class="health-row" style="margin-top:2px; border-top:1px solid #333; padding-top:2px;">
+        <div class=" layout-group-96" >
             <span class="health-label">Sync</span>
             <span class="health-val" id="hd-sync">Ready</span>
         </div>
         <div class="health-row" title="Last automated offline backup (8PM daily)">
             <span class="health-label">Backup</span>
-            <span class="health-val" id="backup-timestamp"
-                style="font-size: 10px; color: var(--ready-color);">None</span>
+            <span class=" layout-group-97" id="backup-timestamp"
+                >None</span>
         </div>
     </div>
 
     <div id="maximized-block-window">
         <div class="maximized-block-header">
             <div class="maximized-block-category" id="max-block-category">Category Name</div>
-            <div style="display:flex; gap:8px;">
+            <div  class="layout-group-98">
                 <button class="icon-btn" onclick="closeMaximizedBlock()" title="Minimize">🗗</button>
             </div>
         </div>
@@ -1073,8 +1126,8 @@
             </div>
 
             <div class="note-toolbar-group">
-                <button class="note-toolbar-btn" onclick="convertMaxBlockSelectionToTask()"
-                    title="Convert Selection to Task" style="color:var(--critical-path)">
+                <button class=" layout-group-99" onclick="convertMaxBlockSelectionToTask()"
+                    title="Convert Selection to Task" >
                     ✨ Selection → Task
                 </button>
             </div>
@@ -1092,18 +1145,18 @@
             </div>
 
             <div class="note-toolbar-group">
-                <button class="note-toolbar-btn" style="color:#8b5cf6" onclick="applyMaxBlockAI('grammar')"
+                <button class=" layout-group-100"  onclick="applyMaxBlockAI('grammar')"
                     title="AI Grammar">
                     ✨ Grammar
                 </button>
-                <button class="note-toolbar-btn" style="color:#8b5cf6" onclick="applyMaxBlockAI('clarity')"
+                <button class=" layout-group-101"  onclick="applyMaxBlockAI('clarity')"
                     title="AI Clarity">
                     💡 Clarity
                 </button>
             </div>
 
             <div class="note-toolbar-group">
-                <button class="note-toolbar-btn" style="color:var(--blocked-color)" onclick="deleteMaxBlock()"
+                <button class=" layout-group-102"  onclick="deleteMaxBlock()"
                     title="Delete Block">
                     🗑️ Delete
                 </button>
@@ -1120,9 +1173,15 @@
     <script defer src="assets/js/db.js"></script>
     <script defer src="assets/js/notesRepository.js"></script>
     <script defer src="assets/js/notesSync.js"></script>
+    <script defer src="assets/js/utils.js"></script>
     <script defer src="assets/js/data.js"></script>
     <script defer src="assets/js/ui.js"></script>
+    <script defer src="assets/js/reminders.js"></script>
+    <script defer src="assets/js/task-groups.js"></script>
+    <script defer src="assets/js/navigator.js"></script>
     <script defer src="assets/js/integrations.js"></script>
+    <script defer src="assets/js/note-editor.js"></script>
+    <script defer src="assets/js/note-maximize.js"></script>
     <script defer src="assets/js/notes.js"></script>
     <script defer src="assets/js/goals-habits.js"></script>
     <script defer src="assets/js/graph.js"></script>

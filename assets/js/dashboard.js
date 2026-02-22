@@ -48,14 +48,7 @@
         return {};
     }
 
-    function escapeHtml(text) {
-        return String(text || '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
+    // escapeHtml() is now in utils.js (global scope)
 
     function parseDateKey(dateKey) {
         const m = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -367,34 +360,9 @@
     }
 
     function resolveGoalText(goalId) {
+        // Delegates to the shared getGoalTextById in utils.js
         if (!goalId) return '';
-        if (typeof getGoalTextById === 'function') {
-            const text = getGoalTextById(goalId);
-            if (text) return String(text);
-        } else if (typeof window.getGoalTextById === 'function') {
-            const text = window.getGoalTextById(goalId);
-            if (text) return String(text);
-        }
-
-        const searchGoal = (list) => {
-            for (const goal of safeArray(list)) {
-                if (goal && goal.id === goalId) return goal.text || '';
-                if (goal && goal.children && goal.children.length > 0) {
-                    const found = searchGoal(goal.children);
-                    if (found) return found;
-                }
-            }
-            return '';
-        };
-
-        const goalsStore = getLifeGoalsStore();
-        const years = Object.keys(goalsStore);
-        for (const year of years) {
-            const found = searchGoal(goalsStore[year]);
-            if (found) return found;
-        }
-
-        return '';
+        return getGoalTextById(goalId) || '';
     }
 
     function buildHabitSummary() {

@@ -527,346 +527,328 @@ window.handleNodeTimerClick = function (e, id) { e.stopPropagation(); toggleTime
 
 // --- RENDERING ---
 function render() {
-    const startRender = performance.now();
-
-    const container = document.getElementById('nodes-layer');
-    const svg = document.getElementById('connections');
-
-    // --- CONDITIONAL VIRTUALIZATION ---
-    window.visibleCount = 0;
-    window.culledCount = 0;
-
-    // Always clear for fresh render
-    container.innerHTML = '';
-    svg.innerHTML = '';
-    window.fullRenderNeeded = true;
-
-    window.lastRenderScale = scale;
-    window.lastPanX = panX;
-    window.lastPanY = panY;
-
-    // --- VIEWPORT CULLING (Performance Optimization) ---
-    // Virtualization removed per user request
-    let viewportLeft, viewportTop, viewportRight, viewportBottom;
-
-    // If full render, set up defs
-    if (window.fullRenderNeeded) {
+    try {
+        const startRender = performance.now();
+    
+        const container = document.getElementById('nodes-layer');
+        const svg = document.getElementById('connections');
+    
+        // --- CONDITIONAL VIRTUALIZATION ---
+        window.visibleCount = 0;
+        window.culledCount = 0;
+    
+        // Always clear for fresh render
+        container.innerHTML = '';
+        svg.innerHTML = '';
+        window.fullRenderNeeded = true;
+    
+        window.lastRenderScale = scale;
+        window.lastPanX = panX;
+        window.lastPanY = panY;
+    
+        // --- VIEWPORT CULLING (Performance Optimization) ---
+        // Virtualization removed per user request
+        let viewportLeft, viewportTop, viewportRight, viewportBottom;
+    
+        // If full render, set up defs
+        if (window.fullRenderNeeded) {
+            const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+            defs.innerHTML = `<marker id=\"arrow\" markerWidth=\"10\" markerHeight=\"7\" refX=\"10\" refY=\"3.5\" orient=\"auto\"><polygon points=\"0 0, 10 3.5, 0 7\" fill=\"#666\"/></marker>`;
+            svg.appendChild(defs);
+        }
+    
+        let nodesToRender = nodes;
+        const focusSnapshot = (typeof getTaskGroupFocusSnapshot === 'function')
+            ? getTaskGroupFocusSnapshot({ refitOnMissing: true })
+            : { groups: [], activeGroup: null, activeIndex: -1 };
+    
+        if (typeof updateTaskGroupFocusControls === 'function') {
+            updateTaskGroupFocusControls(focusSnapshot);
+        }
+    
+        if (typeof taskGroupFocusState !== 'undefined' && taskGroupFocusState.active && focusSnapshot.activeGroup) {
+            const activeNodeIds = new Set(focusSnapshot.activeGroup.nodeIds || []);
+            nodesToRender = nodes.filter(node => activeNodeIds.has(node.id));
+        } else {
+            const groups = (focusSnapshot && Array.isArray(focusSnapshot.groups))
+                ? focusSnapshot.groups
+                : (typeof buildTaskGroups === 'function')
+                    ? buildTaskGroups({ includeSingles: true, sort: 'priority' })
+                    : detectConnectedGroups();
+            const hiddenNodeIds = new Set();
+    
+            groups.forEach(group => {
+                if (hiddenNodeGroups.has(group.id)) {
+                    group.nodes.forEach(node => hiddenNodeIds.add(node.id));
+                }
+            });
+    
+            nodesToRender = nodesToRender.filter(node => !hiddenNodeIds.has(node.id));
+    
+            // Filter nodes by goal if filter is active
+            if (currentGoalFilter) {
+                // getAllGoalIds is now in utils.js
+                const goalIds = getAllGoalIds(lifeGoals[currentGoalYear] || [], currentGoalFilter);
+                nodesToRender = nodesToRender.filter(n => n.goalIds && n.goalIds.some(gid => goalIds.includes(gid)));
+            }
+        }
+    
+        const nodesToRenderIds = new Set(nodesToRender.map(node => node.id));
+    
+        // Ensure arrow marker exists at the start
         const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-        defs.innerHTML = `<marker id=\"arrow\" markerWidth=\"10\" markerHeight=\"7\" refX=\"10\" refY=\"3.5\" orient=\"auto\"><polygon points=\"0 0, 10 3.5, 0 7\" fill=\"#666\"/></marker>`;
+        defs.innerHTML = `<marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#666"/></marker>`;
         svg.appendChild(defs);
-    }
-
-    let nodesToRender = nodes;
-    const focusSnapshot = (typeof getTaskGroupFocusSnapshot === 'function')
-        ? getTaskGroupFocusSnapshot({ refitOnMissing: true })
-        : { groups: [], activeGroup: null, activeIndex: -1 };
-
-    if (typeof updateTaskGroupFocusControls === 'function') {
-        updateTaskGroupFocusControls(focusSnapshot);
-    }
-
-    if (typeof taskGroupFocusState !== 'undefined' && taskGroupFocusState.active && focusSnapshot.activeGroup) {
-        const activeNodeIds = new Set(focusSnapshot.activeGroup.nodeIds || []);
-        nodesToRender = nodes.filter(node => activeNodeIds.has(node.id));
-    } else {
-        const groups = (focusSnapshot && Array.isArray(focusSnapshot.groups))
-            ? focusSnapshot.groups
-            : (typeof buildTaskGroups === 'function')
-                ? buildTaskGroups({ includeSingles: true, sort: 'priority' })
-            : detectConnectedGroups();
-        const hiddenNodeIds = new Set();
-
-        groups.forEach(group => {
-            if (hiddenNodeGroups.has(group.id)) {
-                group.nodes.forEach(node => hiddenNodeIds.add(node.id));
-            }
-        });
-
-        nodesToRender = nodesToRender.filter(node => !hiddenNodeIds.has(node.id));
-
-        // Filter nodes by goal if filter is active
-        if (currentGoalFilter) {
-            // Helper to recursively find all goal IDs (including sub-goals)
-            const getAllGoalIds = (goalList, targetId) => {
-                let result = [targetId];
-                const findGoal = (list, id) => {
-                    for (const goal of list) {
-                        if (goal.id === id) {
-                            const addChildren = (g) => {
-                                result.push(g.id);
-                                if (g.children && g.children.length > 0) {
-                                    g.children.forEach(addChildren);
-                                }
-                            };
-                            addChildren(goal);
-                            return true;
-                        }
-                        if (goal.children && goal.children.length > 0) {
-                            if (findGoal(goal.children, id)) return true;
-                        }
+    
+        // --- Render Connections (Lines) ---
+        nodesToRender.forEach(node => {
+            node.dependencies.forEach((dep, depIndex) => {
+                const parent = nodes.find(n => n.id === dep.id);
+                if (!parent) return;
+    
+    
+    
+                // Only show connection if both nodes are in the filtered set
+                if (!nodesToRenderIds.has(parent.id)) return;
+    
+                const isCritical = node._isCritical && parent._isCritical && dep.type === 'hard' && !parent.completed;
+                const isUrgentPath = node._isUrgent && parent._isUrgent;
+    
+                let color = '#666';
+                if (dep.type === 'soft') color = 'var(--soft-dep-color)';
+                if (isUrgentPath) color = '#ff4d4d';
+                else if (isCritical) color = 'var(--critical-path)';
+    
+                const width = (isCritical || isUrgentPath) ? 3 : 2;
+    
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.classList.add('connection-line');
+                const startX = parent.x + 180 + 2;
+                const startY = parent.y + 40;
+                const endX = node.x - 2;
+                const endY = node.y + 40;
+    
+                // --- Updated Eco Rendering ---
+                let d;
+                let midX;
+                let midY;
+                if (isEcoMode) {
+                    // ECO: Straight Line + No Arrowheads = Minimum CPU usage
+                    d = `M ${startX} ${startY} L ${endX} ${endY}`;
+                    path.setAttribute('marker-end', '');
+                    midX = (startX + endX) / 2;
+                    midY = (startY + endY) / 2;
+                } else {
+                    // TURBO: Smooth Curves + Arrowheads
+                    const c1x = startX + 50;
+                    const c1y = startY;
+                    const c2x = endX - 50;
+                    const c2y = endY;
+                    d = `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}`;
+                    path.setAttribute('marker-end', 'url(#arrow)');
+                    // Cubic Bezier midpoint at t=0.5
+                    midX = (startX + (3 * c1x) + (3 * c2x) + endX) / 8;
+                    midY = (startY + (3 * c1y) + (3 * c2y) + endY) / 8;
+                }
+    
+                path.setAttribute('d', d);
+                path.setAttribute('stroke', color);
+                path.setAttribute('stroke-width', width);
+    
+                if (dep.type === 'soft') path.classList.add('soft');
+                if (isCritical || isUrgentPath) path.classList.add('critical');
+                svg.appendChild(path);
+    
+                const hitPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                hitPath.classList.add('connection-hit-area');
+                hitPath.setAttribute('d', d);
+                svg.appendChild(hitPath);
+    
+                const insertBtn = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                insertBtn.classList.add('connection-insert-btn');
+                insertBtn.setAttribute('transform', `translate(${midX} ${midY})`);
+    
+                const insertBtnCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                insertBtnCircle.setAttribute('cx', '0');
+                insertBtnCircle.setAttribute('cy', '0');
+                insertBtnCircle.setAttribute('r', '11');
+    
+                const plusLineH = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                plusLineH.setAttribute('x1', '-4');
+                plusLineH.setAttribute('y1', '0');
+                plusLineH.setAttribute('x2', '4');
+                plusLineH.setAttribute('y2', '0');
+    
+                const plusLineV = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                plusLineV.setAttribute('x1', '0');
+                plusLineV.setAttribute('y1', '-4');
+                plusLineV.setAttribute('x2', '0');
+                plusLineV.setAttribute('y2', '4');
+    
+                insertBtn.appendChild(insertBtnCircle);
+                insertBtn.appendChild(plusLineH);
+                insertBtn.appendChild(plusLineV);
+                svg.appendChild(insertBtn);
+    
+                let hideInsertBtnTimeout = null;
+                const showInsertBtn = () => {
+                    if (hideInsertBtnTimeout) {
+                        clearTimeout(hideInsertBtnTimeout);
+                        hideInsertBtnTimeout = null;
                     }
-                    return false;
+                    insertBtn.classList.add('visible');
                 };
-                findGoal(goalList, targetId);
-                return result;
-            };
-            const goalIds = getAllGoalIds(lifeGoals[currentGoalYear] || [], currentGoalFilter);
-            nodesToRender = nodesToRender.filter(n => n.goalIds && n.goalIds.some(gid => goalIds.includes(gid)));
-        }
-    }
-
-    const nodesToRenderIds = new Set(nodesToRender.map(node => node.id));
-
-    // Ensure arrow marker exists at the start
-    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-    defs.innerHTML = `<marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#666"/></marker>`;
-    svg.appendChild(defs);
-
-    // --- Render Connections (Lines) ---
-    nodesToRender.forEach(node => {
-        node.dependencies.forEach((dep, depIndex) => {
-            const parent = nodes.find(n => n.id === dep.id);
-            if (!parent) return;
-
-
-
-            // Only show connection if both nodes are in the filtered set
-            if (!nodesToRenderIds.has(parent.id)) return;
-
-            const isCritical = node._isCritical && parent._isCritical && dep.type === 'hard' && !parent.completed;
-            const isUrgentPath = node._isUrgent && parent._isUrgent;
-
-            let color = '#666';
-            if (dep.type === 'soft') color = 'var(--soft-dep-color)';
-            if (isUrgentPath) color = '#ff4d4d';
-            else if (isCritical) color = 'var(--critical-path)';
-
-            const width = (isCritical || isUrgentPath) ? 3 : 2;
-
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.classList.add('connection-line');
-            const startX = parent.x + 180 + 2;
-            const startY = parent.y + 40;
-            const endX = node.x - 2;
-            const endY = node.y + 40;
-
-            // --- Updated Eco Rendering ---
-            let d;
-            let midX;
-            let midY;
-            if (isEcoMode) {
-                // ECO: Straight Line + No Arrowheads = Minimum CPU usage
-                d = `M ${startX} ${startY} L ${endX} ${endY}`;
-                path.setAttribute('marker-end', '');
-                midX = (startX + endX) / 2;
-                midY = (startY + endY) / 2;
-            } else {
-                // TURBO: Smooth Curves + Arrowheads
-                const c1x = startX + 50;
-                const c1y = startY;
-                const c2x = endX - 50;
-                const c2y = endY;
-                d = `M ${startX} ${startY} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${endY}`;
-                path.setAttribute('marker-end', 'url(#arrow)');
-                // Cubic Bezier midpoint at t=0.5
-                midX = (startX + (3 * c1x) + (3 * c2x) + endX) / 8;
-                midY = (startY + (3 * c1y) + (3 * c2y) + endY) / 8;
-            }
-
-            path.setAttribute('d', d);
-            path.setAttribute('stroke', color);
-            path.setAttribute('stroke-width', width);
-
-            if (dep.type === 'soft') path.classList.add('soft');
-            if (isCritical || isUrgentPath) path.classList.add('critical');
-            svg.appendChild(path);
-
-            const hitPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            hitPath.classList.add('connection-hit-area');
-            hitPath.setAttribute('d', d);
-            svg.appendChild(hitPath);
-
-            const insertBtn = document.createElementNS("http://www.w3.org/2000/svg", "g");
-            insertBtn.classList.add('connection-insert-btn');
-            insertBtn.setAttribute('transform', `translate(${midX} ${midY})`);
-
-            const insertBtnCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            insertBtnCircle.setAttribute('cx', '0');
-            insertBtnCircle.setAttribute('cy', '0');
-            insertBtnCircle.setAttribute('r', '11');
-
-            const plusLineH = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            plusLineH.setAttribute('x1', '-4');
-            plusLineH.setAttribute('y1', '0');
-            plusLineH.setAttribute('x2', '4');
-            plusLineH.setAttribute('y2', '0');
-
-            const plusLineV = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            plusLineV.setAttribute('x1', '0');
-            plusLineV.setAttribute('y1', '-4');
-            plusLineV.setAttribute('x2', '0');
-            plusLineV.setAttribute('y2', '4');
-
-            insertBtn.appendChild(insertBtnCircle);
-            insertBtn.appendChild(plusLineH);
-            insertBtn.appendChild(plusLineV);
-            svg.appendChild(insertBtn);
-
-            let hideInsertBtnTimeout = null;
-            const showInsertBtn = () => {
-                if (hideInsertBtnTimeout) {
-                    clearTimeout(hideInsertBtnTimeout);
-                    hideInsertBtnTimeout = null;
-                }
-                insertBtn.classList.add('visible');
-            };
-            const hideInsertBtn = () => {
-                if (hideInsertBtnTimeout) clearTimeout(hideInsertBtnTimeout);
-                hideInsertBtnTimeout = setTimeout(() => {
-                    insertBtn.classList.remove('visible');
-                }, 120);
-            };
-
-            hitPath.addEventListener('mouseenter', showInsertBtn);
-            hitPath.addEventListener('mouseleave', hideInsertBtn);
-            insertBtn.addEventListener('mouseenter', showInsertBtn);
-            insertBtn.addEventListener('mouseleave', hideInsertBtn);
-            insertBtn.addEventListener('mousedown', (e) => e.stopPropagation());
-            insertBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                insertTaskBetweenDependency(node.id, depIndex);
+                const hideInsertBtn = () => {
+                    if (hideInsertBtnTimeout) clearTimeout(hideInsertBtnTimeout);
+                    hideInsertBtnTimeout = setTimeout(() => {
+                        insertBtn.classList.remove('visible');
+                    }, 120);
+                };
+    
+                hitPath.addEventListener('mouseenter', showInsertBtn);
+                hitPath.addEventListener('mouseleave', hideInsertBtn);
+                insertBtn.addEventListener('mouseenter', showInsertBtn);
+                insertBtn.addEventListener('mouseleave', hideInsertBtn);
+                insertBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+                insertBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    insertTaskBetweenDependency(node.id, depIndex);
+                });
             });
         });
-    });
-
-    // --- Nodes render follows ---
-
-    // --- Render Nodes ---
-    nodesToRender.forEach(node => {
-
-        window.visibleCount++;
-
-        const el = document.createElement('div');
-        el.className = 'node';
-        el.style.left = node.x + 'px';
-        el.style.top = node.y + 'px';
-        el.dataset.id = node.id;
-
-        if (node.id === selectedNodeId || selectedIds.has(node.id)) el.classList.add('selected');
-
-        if (!node.completed) {
-            if (node._isUrgent) el.classList.add('critical-urgent');
-            else if (node._isCritical) el.classList.add('critical');
-            if (node._isBlocked) el.classList.add('blocked');
-        }
-
-        if (node._hasCycleError) {
-            el.style.border = '3px solid #ff0000';
-            el.style.boxShadow = '0 0 20px rgba(255,0,0,0.5)';
-            const warning = document.createElement('div');
-            warning.innerText = '⚠️ CIRCULAR';
-            warning.style.cssText = 'position: absolute; top: -20px; left: 0; background: #ff0000; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold;';
-            el.appendChild(warning);
-        }
-        if (node.completed) el.classList.add('completed');
-
-        // Badges Generation
-        let badgesHtml = '';
-        if (!isUltraEcoMode && !node.completed) {
-            if (node._isUrgent) badgesHtml += `<span class="badge urgent-badge">URGENT</span>`;
-            else if (node._isCritical) badgesHtml += `<span class="badge critical-badge">CP</span>`;
-            if (node._downstreamWeight > 0) badgesHtml += `<span class="badge weight">⚡${node._downstreamWeight}</span>`;
-
-            // Expiration Warning - ENHANCED
-            if (node.expiresOnDue && node.dueDate && !node.completed) {
-                const dueTime = new Date(node.dueDate).getTime();
-                const now = Date.now();
-                const hoursLeft = (dueTime - now) / (1000 * 60 * 60);
-
-                if (hoursLeft <= 24 && hoursLeft > 0) {
-                    // Less than 24 hours - show hours remaining
-                    badgesHtml += `<span class="badge" style="background:#dc2626; color:white; border-color:#dc2626; font-weight:800; animation: pulse 2s infinite;">⏰ ${Math.floor(hoursLeft)}h LEFT</span>`;
-                } else if (hoursLeft <= 0) {
-                    // Already expired
-                    badgesHtml += `<span class="badge" style="background:#7f1d1d; color:white; border-color:#991b1b; font-weight:800; animation: pulse 2s infinite;">⏰ EXPIRED</span>`;
+    
+        // --- Nodes render follows ---
+    
+        // --- Render Nodes ---
+        nodesToRender.forEach(node => {
+    
+            window.visibleCount++;
+    
+            const el = document.createElement('div');
+            el.className = 'node';
+            el.style.left = node.x + 'px';
+            el.style.top = node.y + 'px';
+            el.dataset.id = node.id;
+    
+            if (node.id === selectedNodeId || selectedIds.has(node.id)) el.classList.add('selected');
+    
+            if (!node.completed) {
+                if (node._isUrgent) el.classList.add('critical-urgent');
+                else if (node._isCritical) el.classList.add('critical');
+                if (node._isBlocked) el.classList.add('blocked');
+            }
+    
+            if (node._hasCycleError) {
+                el.style.border = '3px solid #ff0000';
+                el.style.boxShadow = '0 0 20px rgba(255,0,0,0.5)';
+                const warning = document.createElement('div');
+                warning.innerText = '⚠️ CIRCULAR';
+                warning.style.cssText = 'position: absolute; top: -20px; left: 0; background: #ff0000; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold;';
+                el.appendChild(warning);
+            }
+            if (node.completed) el.classList.add('completed');
+    
+            // Badges Generation
+            let badgesHtml = '';
+            if (!isUltraEcoMode && !node.completed) {
+                if (node._isUrgent) badgesHtml += `<span class="badge urgent-badge">URGENT</span>`;
+                else if (node._isCritical) badgesHtml += `<span class="badge critical-badge">CP</span>`;
+                if (node._downstreamWeight > 0) badgesHtml += `<span class="badge weight">⚡${node._downstreamWeight}</span>`;
+    
+                // Expiration Warning - ENHANCED
+                if (node.expiresOnDue && node.dueDate && !node.completed) {
+                    const dueTime = new Date(node.dueDate).getTime();
+                    const now = Date.now();
+                    const hoursLeft = (dueTime - now) / (1000 * 60 * 60);
+    
+                    if (hoursLeft <= 24 && hoursLeft > 0) {
+                        // Less than 24 hours - show hours remaining
+                        badgesHtml += `<span class="badge" style="background:#dc2626; color:white; border-color:#dc2626; font-weight:800; animation: pulse 2s infinite;">⏰ ${Math.floor(hoursLeft)}h LEFT</span>`;
+                    } else if (hoursLeft <= 0) {
+                        // Already expired
+                        badgesHtml += `<span class="badge" style="background:#7f1d1d; color:white; border-color:#991b1b; font-weight:800; animation: pulse 2s infinite;">⏰ EXPIRED</span>`;
+                    }
                 }
             }
-        }
-
-        const totalTime = getTotalTime(node);
-        const isActive = !!node.activeTimerStart;
-        if (totalTime > 0 || isActive) {
-            badgesHtml += `<span class="badge time-badge ${isActive ? 'active' : ''}" data-node-id="${node.id}">${isActive ? '🔴' : '⏱'} ${formatTime(getTotalTime(node))}</span>`;
-        }
-
-        if (node.dueDate && !node.completed) {
-            const due = new Date(node.dueDate);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const isOverdue = due < today;
-            const dateStr = due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-            const style = isOverdue ? 'background:#ef4444; color:white; border-color:#ef4444' : '';
-            badgesHtml += `<span class="badge date-badge" style="${style}">📅 ${dateStr}</span>`;
-        }
-
-        // Display linked goals
-        if (node.goalIds && node.goalIds.length > 0) {
-            const goalNames = node.goalIds.map(gid => {
-                const name = findGoalName(gid);
-                return name ? name.substring(0, 15) + (name.length > 15 ? '...' : '') : 'Goal';
-            });
-            badgesHtml += `<span class="badge" style="background:rgba(251,191,36,0.2); color:#fbbf24; border-color:rgba(251,191,36,0.3);">🎯 ${goalNames.join(', ')}</span>`;
-        }
-
-        let icon = '';
-        if (node.completed) icon = '✅';
-        else if (node._isBlocked) icon = '<span class="icon-lock">🔒</span>';
-
-        const totalSubs = node.subtasks.length;
-
-        const timerBtnIcon = isActive ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M6 6h12v12H6z"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>';
-        const timerBtnClass = isActive ? 'node-timer-control stop running' : 'node-timer-control play';
-
-        // Generate HTML
-        el.innerHTML = `
-                    ${!isUltraEcoMode ? `
-                    <div class="${timerBtnClass}" 
-                         onmousedown="event.stopPropagation();"
-                         onclick="event.stopPropagation(); handleNodeTimerClick(event, '${node.id}')" 
-                         title="${isActive ? 'Stop Timer' : 'Start Timer'}">
-                        ${timerBtnIcon}
-                    </div>
-                    ${totalSubs > 0 ? `
-                    <div class="node-subtask-expand" 
-                         onmousedown="event.stopPropagation();" 
-                         onclick="event.stopPropagation(); toggleSubtaskExpansion('${node.id}', event)" 
-                         title="Show Subtasks">
-                        ☰
-                    </div>
-                    ` : ''}
-                    ` : ''}
-                    <div class="node-header">
-                        <div style="display:flex; align-items:center;">
-                            ${!isUltraEcoMode ? `
-                            <div class="node-checkin-btn" 
-                                 onmousedown="event.stopPropagation();"
-                                 onclick="event.stopPropagation(); handleCheckIn(event, '${node.id}')" 
-                                 title="Fast Check-in">
-                                ✓
-                            </div>` : ''}
-                            <span>${icon} ${node.title}</span>
+    
+            const totalTime = getTotalTime(node);
+            const isActive = !!node.activeTimerStart;
+            if (totalTime > 0 || isActive) {
+                badgesHtml += `<span class="badge time-badge ${isActive ? 'active' : ''}" data-node-id="${node.id}">${isActive ? '🔴' : '⏱'} ${formatTime(getTotalTime(node))}</span>`;
+            }
+    
+            if (node.dueDate && !node.completed) {
+                const due = new Date(node.dueDate);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const isOverdue = due < today;
+                const dateStr = due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                const style = isOverdue ? 'background:#ef4444; color:white; border-color:#ef4444' : '';
+                badgesHtml += `<span class="badge date-badge" style="${style}">📅 ${dateStr}</span>`;
+            }
+    
+            // Display linked goals
+            if (node.goalIds && node.goalIds.length > 0) {
+                const goalNames = node.goalIds.map(gid => {
+                    const name = findGoalName(gid);
+                    return name ? name.substring(0, 15) + (name.length > 15 ? '...' : '') : 'Goal';
+                });
+                badgesHtml += `<span class="badge" style="background:rgba(251,191,36,0.2); color:#fbbf24; border-color:rgba(251,191,36,0.3);">🎯 ${goalNames.join(', ')}</span>`;
+            }
+    
+            let icon = '';
+            if (node.completed) icon = '✅';
+            else if (node._isBlocked) icon = '<span class="icon-lock">🔒</span>';
+    
+            const totalSubs = node.subtasks.length;
+    
+            const timerBtnIcon = isActive ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M6 6h12v12H6z"/></svg>' : '<svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>';
+            const timerBtnClass = isActive ? 'node-timer-control stop running' : 'node-timer-control play';
+    
+            // Generate HTML
+            el.innerHTML = `
+                        ${!isUltraEcoMode ? `
+                        <div class="${timerBtnClass}" 
+                             onmousedown="event.stopPropagation();"
+                             onclick="event.stopPropagation(); handleNodeTimerClick(event, '${node.id}')" 
+                             title="${isActive ? 'Stop Timer' : 'Start Timer'}">
+                            ${timerBtnIcon}
                         </div>
-                    </div>
-                    ${!isUltraEcoMode ? `<div class="node-meta">${badgesHtml}</div>` : ''}
-                `;
-
-        el.onmousedown = (e) => startNodeDrag(e, node.id);
-        container.appendChild(el);
-    });
-
-    const endRender = performance.now(); // Stop timer
-    lastRenderTime = endRender - startRender;
-    updateHealthMonitor(); // <--- Trigger Dashboard Update
+                        ${totalSubs > 0 ? `
+                        <div class="node-subtask-expand" 
+                             onmousedown="event.stopPropagation();" 
+                             onclick="event.stopPropagation(); toggleSubtaskExpansion('${node.id}', event)" 
+                             title="Show Subtasks">
+                            ☰
+                        </div>
+                        ` : ''}
+                        ` : ''}
+                        <div class="node-header">
+                            <div style="display:flex; align-items:center;">
+                                ${!isUltraEcoMode ? `
+                                <div class="node-checkin-btn" 
+                                     onmousedown="event.stopPropagation();"
+                                     onclick="event.stopPropagation(); handleCheckIn(event, '${node.id}')" 
+                                     title="Fast Check-in">
+                                    ✓
+                                </div>` : ''}
+                                <span>${icon} ${node.title}</span>
+                            </div>
+                        </div>
+                        ${!isUltraEcoMode ? `<div class="node-meta">${badgesHtml}</div>` : ''}
+                    `;
+    
+            el.onmousedown = (e) => startNodeDrag(e, node.id);
+            container.appendChild(el);
+        });
+    
+        const endRender = performance.now(); // Stop timer
+        lastRenderTime = endRender - startRender;
+        updateHealthMonitor(); // <--- Trigger Dashboard Update
+    } catch (error) {
+        console.error("Error in render:", error);
+        if(typeof showNotification === "function") showNotification("Render Error: Check console", "error");
+    }
 }
 
 // --- INTERACTIONS ---
@@ -1420,6 +1402,7 @@ function selectNode(id) {
     // AI panel can stay open
     const notePanel = document.getElementById('notes-panel');
     if (!notePanel.classList.contains('pinned')) notePanel.classList.add('hidden');
+    if (typeof syncRightRailTabs === 'function') syncRightRailTabs();
     document.getElementById('inspector').classList.remove('hidden');
     render();
     if (document.getElementById('archive-panel').classList.contains('hidden') === false) renderArchiveList();

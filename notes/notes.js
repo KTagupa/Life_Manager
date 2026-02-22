@@ -200,11 +200,7 @@
         return esc(source || '_Empty_').replace(/\n/g, '<br>');
     }
 
-    function autoResizeTextarea(textarea) {
-        if (!textarea) return;
-        textarea.style.height = 'auto';
-        textarea.style.height = `${textarea.scrollHeight}px`;
-    }
+    // autoResizeTextarea() is now in utils.js
 
     function updatePinButton() {
         if (!els.pinBtn) return;

@@ -1,0 +1,247 @@
+:root {
+            /* Enhanced Modern Dark Theme with Better Contrast */
+            --bg-color: #0a0f0c;
+            --dots-color: #1a2520;
+            --panel-bg: #141b18;
+            --panel-bg-elevated: #1a2520;
+            --panel-bg-hover: #1f2a25;
+
+            /* Improved Text Colors */
+            --text-main: #f0f4f2;
+            --text-secondary: #c8d4d0;
+            --text-muted: #8a9a94;
+            --text-disabled: #5a6a64;
+
+            /* Enhanced Accent Colors */
+            --accent: #4f9cf9;
+            --accent-hover: #3b82f6;
+            --accent-light: rgba(79, 156, 249, 0.1);
+            --accent-border: rgba(79, 156, 249, 0.3);
+
+            /* Improved Borders */
+            --border: #2a3530;
+            --border-light: #1f2a25;
+            --border-hover: #3a4540;
+
+            /* Enhanced Node Colors */
+            --node-bg: #1e2724;
+            --node-bg-hover: #25302c;
+            --node-border: #2f3a35;
+            --node-selected: #4f9cf9;
+            --node-shadow: rgba(0, 0, 0, 0.4);
+
+            /* Logic Colors - Enhanced */
+            --critical-path: #ffd700;
+            --critical-path-light: rgba(255, 215, 0, 0.15);
+            --ready-color: #22c55e;
+            --ready-color-light: rgba(34, 197, 94, 0.15);
+            --blocked-color: #ef4444;
+            --blocked-color-light: rgba(239, 68, 68, 0.15);
+            --soft-dep-color: #64748b;
+
+            /* AI Colors - Enhanced */
+            --ai-accent: #a78bfa;
+            --ai-accent-light: rgba(167, 139, 250, 0.15);
+
+            /* Upcoming Colors */
+            --upcoming-color: #fbbf24;
+            --upcoming-color-light: rgba(251, 191, 36, 0.15);
+
+            /* Block Note Category Colors - Refined */
+            --cat-1: #f1f5f9;
+            --cat-2: #ffedd5;
+            --cat-3: #fef9c3;
+            --cat-4: #dcfce7;
+            --cat-5: #d1fae5;
+            --cat-6: #e0f2fe;
+            --cat-7: #e0e7ff;
+            --cat-8: #fae8ff;
+            --cat-9: #ffe4e6;
+            --cat-10: #fee2e2;
+
+            /* Spacing System */
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+
+            /* Border Radius */
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+
+            /* Shadows */
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+            --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+            /* Transitions */
+            --transition-fast: 0.15s ease;
+            --transition-base: 0.2s ease;
+            --transition-slow: 0.3s ease;
+            --right-rail-reserved-top: 0px;
+            --right-rail-open-offset: 430px;
+        }
+
+        .pinned-header {
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pinned-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .pinned-node {
+            position: relative;
+            background: var(--node-bg);
+            border: 1px solid var(--node-border);
+            border-radius: 6px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pinned-node:hover {
+            border-color: var(--accent);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .pinned-node.critical {
+            border-color: var(--critical-path);
+            background: linear-gradient(145deg, #2d2d2d, #3d3410);
+        }
+
+        .pinned-node.critical-urgent {
+            border-color: #ff4d4d;
+            background: linear-gradient(145deg, #2d2d2d, #4d1515);
+        }
+
+        .pinned-node.completed {
+            background: #1e3a2f;
+            border-color: #10b981;
+            opacity: 0.7;
+        }
+
+        .pinned-unpin {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(0, 0, 0, 0.6);
+            border: none;
+            color: #999;
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .pinned-node:hover .pinned-unpin {
+            opacity: 1;
+        }
+
+        .pinned-unpin:hover {
+            background: var(--blocked-color);
+            color: white;
+        }
+
+        /* Data Health Metrics */
+        .metrics-breakdown {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .metric-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .metric-label {
+            font-size: 9px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .metric-value {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .bookmark-link {
+            color: var(--accent);
+            cursor: pointer;
+            text-decoration: underline;
+            font-weight: 500;
+        }
+
+        .bookmark-link:hover {
+            color: #fff;
+            background: var(--accent);
+            text-decoration: none;
+            border-radius: 3px;
+            padding: 0 2px;
+        }
+
+        .pinned-habit {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid transparent;
+            border-radius: 6px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .pinned-habit:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: #333;
+        }
+
+        .pinned-habit.done-today {
+            border-color: var(--ready-color);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .pinned-note {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .pinned-note:hover {
+            border-color: var(--accent);
+        }
