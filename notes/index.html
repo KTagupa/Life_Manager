@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes | Urgency Flow</title>
+    <link rel="stylesheet" href="../assets/css/app.css">
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            display: block;
+            width: auto;
+            overflow: auto;
+            touch-action: auto;
+        }
+
+        .notes-page {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px 18px;
+            min-height: 100vh;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .notes-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .notes-title {
+            font-size: 22px;
+            margin: 0;
+        }
+
+        .notes-topbar-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .notes-layout {
+            display: grid;
+            grid-template-columns: minmax(250px, 320px) 1fr;
+            gap: 16px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .notes-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .notes-panel-header {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .editor-header-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .notes-help-btn {
+            min-width: 28px;
+            height: 28px;
+            padding: 0 9px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .notes-list-controls {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .notes-list-controls-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .notes-list-controls-row #notes-search {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .notes-list-filters {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .notes-list-scroll {
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 8px;
+            min-height: 0;
+            flex: 1;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .notes-list-item {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .notes-list-item.active {
+            border-color: var(--accent);
+            background: rgba(79, 156, 249, 0.12);
+        }
+
+        .notes-list-item-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-main);
+        }
+
+        .notes-list-item-preview {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.35;
+            margin-bottom: 6px;
+        }
+
+        .notes-list-item-meta {
+            font-size: 10px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .notes-editor-main {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            flex: 1;
+            gap: 10px;
+            padding: 12px;
+        }
+
+        .editor-meta-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+
+        .editor-meta-grid[hidden] {
+            display: none !important;
+        }
+
+        .editor-meta-toggle-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .editor-meta-toggle-btn {
+            font-size: 12px;
+        }
+
+        .editor-meta-toggle-btn.is-active {
+            border-color: rgba(79, 156, 249, 0.6);
+            box-shadow: inset 0 0 0 1px rgba(79, 156, 249, 0.3);
+        }
+
+        .editor-meta-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .editor-meta-field label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .notes-editor-main input,
+        .notes-editor-main textarea,
+        .notes-editor-main select,
+        #notes-search {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid var(--border);
+            background: var(--panel-bg-elevated);
+            color: var(--text-main);
+            border-radius: 8px;
+            padding: 9px 10px;
+            font-size: 13px;
+        }
+
+        #note-title {
+            font-weight: 600;
+        }
+
+        .editor-action-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .block-toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .block-list {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-right: 2px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Override global app.css #blocks-container spacing for the dedicated notes page */
+        #blocks-container.block-list {
+            padding: 0 2px 8px 0;
+            gap: 10px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .note-block {
+            border: 1px solid rgba(0, 0, 0, 0.18);
+            border-radius: 9px;
+            padding: 9px;
+            transition: box-shadow 0.15s ease;
+        }
+
+        .note-block-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .note-block-controls select {
+            max-width: 180px;
+        }
+
+        .note-block-controls input {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .note-block-controls button {
+            min-width: 34px;
+        }
+
+        .note-block-drag-handle {
+            cursor: grab;
+            font-size: 11px;
+            min-width: 50px;
+        }
+
+        .note-block-drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .note-block.drag-target-before {
+            box-shadow: inset 0 2px 0 0 var(--accent);
+        }
+
+        .note-block.drag-target-after {
+            box-shadow: inset 0 -2px 0 0 var(--accent);
+        }
+
+        .task-picker {
+            position: relative;
+            border: 1px solid var(--border);
+            background: var(--panel-bg-elevated);
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        /* Override global app.css floating picker styles for the dedicated notes page */
+        #note-task-picker {
+            position: relative;
+            left: auto;
+            bottom: auto;
+            width: auto;
+            max-width: none;
+            display: block;
+            transform: none;
+            transform-origin: initial;
+            transition: none;
+            z-index: auto;
+            box-shadow: none;
+        }
+
+        .task-chip-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 6px;
+            min-height: 22px;
+        }
+
+        .task-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(79, 156, 249, 0.14);
+            border: 1px solid rgba(79, 156, 249, 0.35);
+            color: var(--text-main);
+            border-radius: 999px;
+            font-size: 11px;
+            padding: 4px 8px;
+            max-width: 100%;
+        }
+
+        .task-chip-label {
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .task-chip-remove {
+            border: none;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            font-size: 12px;
+        }
+
+        .task-picker-search-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        #note-task-search {
+            border: none;
+            background: transparent;
+            padding: 5px 4px;
+            font-size: 13px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        #note-task-search:focus {
+            outline: none;
+        }
+
+        .task-suggestions {
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            top: calc(100% - 2px);
+            z-index: 24;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--panel-bg-elevated);
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .task-suggestions[hidden] {
+            display: none !important;
+        }
+
+        .task-suggestion-item {
+            width: 100%;
+            border: none;
+            background: transparent;
+            color: var(--text-main);
+            text-align: left;
+            cursor: pointer;
+            padding: 8px 10px;
+            font-size: 12px;
+            line-height: 1.3;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .task-suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .task-suggestion-item:hover,
+        .task-suggestion-item:focus-visible {
+            background: rgba(79, 156, 249, 0.16);
+            outline: none;
+        }
+
+        .task-suggestion-title {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .task-suggestion-meta {
+            display: block;
+            color: var(--text-muted);
+            font-size: 10px;
+        }
+
+        .task-chip-empty {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .note-block textarea {
+            width: 100%;
+            box-sizing: border-box;
+            min-height: 120px;
+            resize: none;
+            overflow-y: hidden;
+            border: 1px solid rgba(0, 0, 0, 0.18);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 13px;
+            line-height: 1.45;
+            color: #0f172a;
+            background: rgba(255, 255, 255, 0.75);
+        }
+
+        .note-block-preview {
+            width: 100%;
+            box-sizing: border-box;
+            min-height: 70px;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 13px;
+            line-height: 1.45;
+            color: #0f172a;
+            background: rgba(255, 255, 255, 0.78);
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .note-block-split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            align-items: stretch;
+        }
+
+        .note-block-split-pane {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .note-block-split .note-block-preview {
+            min-height: 120px;
+            max-height: none;
+            overflow: visible;
+            flex: 1;
+        }
+
+        .note-block-split textarea {
+            resize: none;
+            overflow-y: hidden;
+        }
+
+        .notes-btn-inline {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .notes-muted {
+            color: var(--text-muted);
+            font-size: 11px;
+        }
+
+        .notes-status {
+            font-size: 11px;
+            color: var(--text-muted);
+            min-height: 16px;
+        }
+
+        .notes-dirty-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            min-height: 16px;
+            color: var(--text-muted);
+        }
+
+        .notes-dirty-indicator::before {
+            content: '●';
+            font-size: 10px;
+            line-height: 1;
+        }
+
+        .notes-dirty-indicator.clean::before {
+            color: #10b981;
+            opacity: 0.8;
+        }
+
+        .notes-dirty-indicator.dirty::before {
+            color: #f59e0b;
+        }
+
+        .notes-dirty-indicator.saving::before {
+            color: var(--accent);
+        }
+
+        .notes-save-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            min-height: 18px;
+        }
+
+        .notes-conflict-banner {
+            border: 1px solid rgba(245, 158, 11, 0.45);
+            background: rgba(245, 158, 11, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .notes-conflict-banner[hidden] {
+            display: none !important;
+        }
+
+        .notes-conflict-message {
+            font-size: 12px;
+            color: #fcd34d;
+            line-height: 1.35;
+            flex: 1;
+            min-width: 180px;
+        }
+
+        .notes-conflict-actions {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .empty-state {
+            color: var(--text-muted);
+            text-align: center;
+            font-size: 12px;
+            padding: 24px 12px;
+        }
+
+        .command-palette-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 1400;
+            display: none;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 9vh 14px 14px;
+            background: rgba(2, 6, 23, 0.72);
+            backdrop-filter: blur(3px);
+        }
+
+        .command-palette-overlay.is-open {
+            display: flex;
+        }
+
+        .command-palette-overlay[hidden] {
+            display: none !important;
+        }
+
+        .command-palette-window {
+            width: min(760px, 100%);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--panel-bg);
+            box-shadow: 0 20px 52px rgba(0, 0, 0, 0.45);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .command-palette-head {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .command-palette-input {
+            width: 100%;
+            border: 1px solid var(--border);
+            background: var(--panel-bg-elevated);
+            color: var(--text-main);
+            border-radius: 8px;
+            padding: 10px 11px;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+
+        .command-palette-list {
+            max-height: min(56vh, 480px);
+            overflow-y: auto;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .command-palette-item {
+            width: 100%;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-main);
+            text-align: left;
+            cursor: pointer;
+            padding: 9px 10px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            grid-template-rows: auto auto;
+            column-gap: 10px;
+            row-gap: 2px;
+        }
+
+        .command-palette-item:hover,
+        .command-palette-item.active {
+            background: rgba(79, 156, 249, 0.12);
+            border-color: rgba(79, 156, 249, 0.35);
+        }
+
+        .command-palette-item:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .command-palette-item-title {
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+
+        .command-palette-item-meta {
+            grid-column: 1 / 2;
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.25;
+        }
+
+        .command-palette-shortcut {
+            grid-column: 2 / 3;
+            grid-row: 1 / 3;
+            align-self: center;
+            font-size: 10px;
+            color: var(--text-muted);
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            border-radius: 999px;
+            padding: 2px 7px;
+            white-space: nowrap;
+        }
+
+        .command-palette-empty {
+            padding: 16px 12px;
+            font-size: 12px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .command-palette-footer {
+            border-top: 1px solid var(--border);
+            padding: 8px 10px;
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .notes-shortcuts-window {
+            width: min(860px, 100%);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--panel-bg);
+            box-shadow: 0 20px 52px rgba(0, 0, 0, 0.45);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .notes-shortcuts-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .notes-shortcuts-title {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .notes-shortcuts-body {
+            max-height: min(62vh, 540px);
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .notes-shortcuts-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .notes-shortcuts-table th,
+        .notes-shortcuts-table td {
+            border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+            padding: 8px 6px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .notes-shortcuts-table th {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .notes-shortcuts-key {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .notes-shortcuts-foot {
+            border-top: 1px solid var(--border);
+            padding: 8px 10px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        @media (max-width: 900px) {
+            .notes-layout {
+                grid-template-columns: 1fr;
+                min-height: auto;
+            }
+
+            .notes-panel {
+                min-height: 280px;
+            }
+
+            .editor-meta-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .notes-list-filters {
+                grid-template-columns: 1fr;
+            }
+
+            .task-chip-label {
+                max-width: 180px;
+            }
+
+            .editor-header-meta {
+                justify-content: flex-start;
+            }
+
+            .note-block-split {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+
+<body>
+    <main class="notes-page">
+        <div class="notes-topbar">
+            <h1 class="notes-title">Notes Workspace</h1>
+            <div style="display:flex; gap:12px; align-items:center;">
+                <span class="notes-muted">Shared with main app storage</span>
+                <a class="notes-topbar-link" href="../index.html">Back to Main App</a>
+            </div>
+        </div>
+
+        <section class="notes-layout">
+            <aside class="notes-panel">
+                <div class="notes-panel-header">
+                    <strong>All Notes</strong>
+                    <span id="notes-count" class="notes-status"></span>
+                </div>
+                <div class="notes-list-controls">
+                    <div class="notes-list-controls-row">
+                        <input type="text" id="notes-search" placeholder="Search notes...">
+                        <button id="new-note-btn" class="btn notes-btn-inline">+ New</button>
+                    </div>
+                    <div class="notes-list-filters">
+                        <select id="notes-filter-select" aria-label="Filter notes">
+                            <option value="all">Filter: All Notes</option>
+                            <option value="pinned">Filter: Pinned</option>
+                            <option value="linked">Filter: Linked to Tasks</option>
+                            <option value="bookmarked">Filter: With Bookmarks</option>
+                            <option value="unlinked">Filter: No Task Links</option>
+                            <option value="has-reminder">Filter: Has Reminder</option>
+                            <option value="urgent-linked">Filter: Urgent-linked</option>
+                            <option value="recently-edited">Filter: Recently Edited</option>
+                        </select>
+                        <select id="notes-sort-select" aria-label="Sort notes">
+                            <option value="pinned-timestamp-desc">Sort: Pinned + Recent</option>
+                            <option value="timestamp-desc">Sort: Recently Updated</option>
+                            <option value="timestamp-asc">Sort: Oldest Updated</option>
+                            <option value="title-asc">Sort: Title A-Z</option>
+                            <option value="title-desc">Sort: Title Z-A</option>
+                        </select>
+                        <select id="notes-tag-filter-select" aria-label="Filter notes by tag">
+                            <option value="all">Tag: All Tags</option>
+                        </select>
+                        <select id="notes-recent-window-select" aria-label="Recent edit window">
+                            <option value="24h">Recent Window: Last 24 Hours</option>
+                            <option value="7d" selected>Recent Window: Last 7 Days</option>
+                            <option value="30d">Recent Window: Last 30 Days</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="notes-list" class="notes-list-scroll"></div>
+            </aside>
+
+            <section class="notes-panel">
+                <div class="notes-panel-header">
+                    <strong>Editor</strong>
+                    <div class="editor-header-meta">
+                        <button id="notes-shortcuts-btn" type="button" class="btn notes-btn-inline notes-help-btn"
+                            title="Show commands and shortcuts" aria-label="Show commands and shortcuts">(i)</button>
+                        <span id="notes-dirty-indicator" class="notes-dirty-indicator clean">All changes saved</span>
+                        <span id="notes-status" class="notes-status"></span>
+                    </div>
+                </div>
+                <div class="notes-editor-main">
+                    <input type="text" id="note-title" placeholder="Note title">
+
+                    <div class="editor-meta-toggle-row">
+                        <button id="meta-linked-toggle-btn" type="button" class="btn notes-btn-inline editor-meta-toggle-btn"
+                            aria-expanded="false" aria-controls="meta-linked-field">Linked Tasks (0)</button>
+                        <button id="meta-bookmark-toggle-btn" type="button" class="btn notes-btn-inline editor-meta-toggle-btn"
+                            aria-expanded="false" aria-controls="meta-bookmark-field">Bookmarks (0)</button>
+                    </div>
+
+                    <div id="editor-meta-grid" class="editor-meta-grid" hidden>
+                        <div id="meta-linked-field" class="editor-meta-field" hidden>
+                            <label for="note-task-search">Linked Tasks</label>
+                            <div id="note-task-picker" class="task-picker">
+                                <div id="note-task-chip-list" class="task-chip-list"></div>
+                                <div class="task-picker-search-row">
+                                    <input type="text" id="note-task-search" placeholder="Search tasks by title or ID">
+                                    <button id="note-task-clear-btn" type="button" class="btn notes-btn-inline">Clear</button>
+                                </div>
+                                <div id="note-task-suggestions" class="task-suggestions" hidden></div>
+                            </div>
+                        </div>
+                        <div id="meta-bookmark-field" class="editor-meta-field" hidden>
+                            <label for="bookmark-jump">Jump To Bookmark</label>
+                            <select id="bookmark-jump">
+                                <option value="">No bookmarks</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="editor-action-row">
+                        <button id="add-block-btn" class="btn notes-btn-inline">+ Add Block</button>
+                        <button id="toggle-view-btn" class="btn notes-btn-inline">View Mode</button>
+                        <button id="pin-note-btn" class="btn notes-btn-inline">Pin</button>
+                        <button id="save-note-btn" class="btn btn-primary notes-btn-inline">Save</button>
+                        <button id="delete-note-btn" class="btn notes-btn-inline">Delete</button>
+                    </div>
+
+                    <div class="notes-save-row">
+                        <span id="notes-last-saved" class="notes-muted">Last saved: --</span>
+                    </div>
+
+                    <div id="notes-conflict-banner" class="notes-conflict-banner" hidden>
+                        <div id="notes-conflict-message" class="notes-conflict-message">
+                            Remote changes were detected while you were editing.
+                        </div>
+                        <div class="notes-conflict-actions">
+                            <button id="notes-conflict-keep-btn" class="btn btn-primary notes-btn-inline">Keep Mine (Save)</button>
+                            <button id="notes-conflict-reload-btn" class="btn notes-btn-inline">Reload Remote</button>
+                        </div>
+                    </div>
+
+                    <div id="blocks-container" class="block-list"></div>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <div id="command-palette-overlay" class="command-palette-overlay" hidden>
+        <div id="command-palette-window" class="command-palette-window" role="dialog" aria-modal="true"
+            aria-label="Command palette">
+            <div class="command-palette-head">
+                <input id="command-palette-input" class="command-palette-input" type="text"
+                    placeholder="Type a command or note title...">
+                <button id="command-palette-close-btn" type="button" class="btn notes-btn-inline">Esc</button>
+            </div>
+            <div id="command-palette-list" class="command-palette-list"></div>
+            <div class="command-palette-footer">
+                <span>Enter to run | Up/Down to navigate</span>
+                <span>Shortcuts: Ctrl/Cmd+K and Ctrl/Cmd+Shift+P</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="notes-shortcuts-overlay" class="command-palette-overlay" hidden>
+        <div id="notes-shortcuts-window" class="notes-shortcuts-window" role="dialog" aria-modal="true"
+            aria-label="Notes command reference">
+            <div class="notes-shortcuts-head">
+                <span class="notes-shortcuts-title">Notes Commands</span>
+                <button id="notes-shortcuts-close-btn" type="button" class="btn notes-btn-inline">Close</button>
+            </div>
+            <div id="notes-shortcuts-body" class="notes-shortcuts-body"></div>
+            <div class="notes-shortcuts-foot">Tip: Open palette with Ctrl/Cmd+K. Open this panel with Ctrl/Cmd+/.</div>
+        </div>
+    </div>
+
+    <script defer src="../assets/js/db.js"></script>
+    <script defer src="../assets/js/notesRepository.js"></script>
+    <script defer src="../assets/js/notesSync.js"></script>
+    <script defer src="../assets/js/utils.js"></script>
+    <script defer src="notes.js"></script>
+</body>
+
+</html>

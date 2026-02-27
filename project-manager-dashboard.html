@@ -1,0 +1,1753 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Manager Dashboard | Urgency Flow</title>
+    <style>
+        :root {
+            --project-canvas: #0a0d0a;
+            --project-panel: #121813;
+            --project-card: #18201a;
+            --project-olive: #3d4c39;
+            --project-peach: #ecb48c;
+            --project-sage: #b6d4b5;
+            --project-mustard: #b1ad41;
+            --project-blue: #79aaf7;
+            --project-forest: #2d5335;
+            --project-rust: #c96a52;
+            --project-text-main: #e8ece9;
+            --project-text-muted: #8ba38d;
+            --project-border: rgba(61, 76, 57, 0.62);
+            --project-shadow: 0 18px 32px rgba(3, 7, 4, 0.55);
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 9px;
+            --font-main: "Avenir Next", "Segoe UI Variable", "Trebuchet MS", sans-serif;
+            --font-mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            color: var(--project-text-main);
+            font-family: var(--font-main);
+            background:
+                radial-gradient(900px 460px at 8% -10%, rgba(121, 170, 247, 0.2), transparent 55%),
+                radial-gradient(760px 440px at 92% -10%, rgba(177, 173, 65, 0.18), transparent 55%),
+                radial-gradient(880px 540px at 50% 115%, rgba(45, 83, 53, 0.25), transparent 62%),
+                linear-gradient(180deg, #0e130f 0%, var(--project-canvas) 100%);
+        }
+
+        .pm-shell {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 20px 18px 36px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .pm-header {
+            border: 1px solid var(--project-border);
+            border-radius: var(--radius-lg);
+            background: linear-gradient(180deg, rgba(18, 24, 19, 0.94), rgba(10, 13, 10, 0.94));
+            box-shadow: var(--project-shadow);
+            padding: 14px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            animation: reveal 0.35s ease both;
+        }
+
+        .pm-brand {
+            min-width: 220px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .pm-brand-top {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .pm-logo {
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            border: 1px solid rgba(121, 170, 247, 0.5);
+            background:
+                radial-gradient(circle at 25% 30%, rgba(121, 170, 247, 0.9), transparent 55%),
+                linear-gradient(145deg, rgba(61, 76, 57, 0.88), rgba(24, 32, 26, 0.95));
+        }
+
+        .pm-subtitle {
+            color: var(--project-text-muted);
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        .pm-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .pm-search,
+        .pm-select,
+        .pm-btn {
+            border: 1px solid var(--project-border);
+            border-radius: var(--radius-sm);
+            color: var(--project-text-main);
+            background: rgba(10, 13, 10, 0.82);
+            min-height: 36px;
+            font-size: 12px;
+            font-family: inherit;
+        }
+
+        .pm-search {
+            width: min(360px, 62vw);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            gap: 8px;
+        }
+
+        .pm-search input {
+            width: 100%;
+            border: 0;
+            outline: none;
+            background: transparent;
+            color: inherit;
+            font-size: 12px;
+            font-family: inherit;
+        }
+
+        .pm-search input::placeholder {
+            color: rgba(139, 163, 141, 0.85);
+        }
+
+        .pm-select {
+            padding: 0 10px;
+            cursor: pointer;
+            min-width: 118px;
+            outline: none;
+        }
+
+        .pm-select:focus,
+        .pm-btn:focus,
+        .pm-search:focus-within {
+            border-color: rgba(236, 180, 140, 0.86);
+            box-shadow: 0 0 0 2px rgba(236, 180, 140, 0.18);
+        }
+
+        .pm-btn {
+            padding: 0 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: filter 0.2s ease, transform 0.2s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+        }
+
+        .pm-btn:hover {
+            filter: brightness(1.04);
+            transform: translateY(-1px);
+        }
+
+        .pm-btn-primary {
+            background: rgba(121, 170, 247, 0.14);
+            border-color: rgba(121, 170, 247, 0.5);
+            color: #dce9ff;
+        }
+
+        .pm-btn-warm {
+            background: rgba(236, 180, 140, 0.14);
+            border-color: rgba(236, 180, 140, 0.62);
+            color: #f8e7d8;
+        }
+
+        .pm-status {
+            border: 1px solid rgba(61, 76, 57, 0.68);
+            border-radius: var(--radius-sm);
+            background: rgba(18, 24, 19, 0.76);
+            color: var(--project-text-muted);
+            font-size: 11px;
+            padding: 9px 11px;
+            font-family: var(--font-mono);
+        }
+
+        .pm-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .pm-kpi {
+            border: 1px solid var(--project-border);
+            border-left-width: 3px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(175deg, rgba(24, 32, 26, 0.94), rgba(14, 20, 15, 0.9));
+            padding: 12px;
+            box-shadow: 0 12px 24px rgba(3, 7, 4, 0.45);
+            min-height: 94px;
+            animation: reveal 0.4s ease both;
+            animation-delay: var(--d, 0ms);
+        }
+
+        .pm-kpi.tone-blue {
+            border-left-color: var(--project-blue);
+        }
+
+        .pm-kpi.tone-sage {
+            border-left-color: var(--project-sage);
+        }
+
+        .pm-kpi.tone-amber {
+            border-left-color: var(--project-mustard);
+        }
+
+        .pm-kpi.tone-rust {
+            border-left-color: var(--project-rust);
+        }
+
+        .pm-kpi-label {
+            color: var(--project-text-muted);
+            font-size: 10px;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .pm-kpi-value {
+            margin-top: 7px;
+            font-size: 26px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .pm-kpi-meta {
+            margin-top: 6px;
+            font-size: 11px;
+            color: rgba(232, 236, 233, 0.82);
+        }
+
+        .pm-main-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+            gap: 12px;
+        }
+
+        .pm-card {
+            border: 1px solid var(--project-border);
+            border-radius: var(--radius-lg);
+            background: linear-gradient(180deg, rgba(24, 32, 26, 0.93), rgba(10, 13, 10, 0.93));
+            box-shadow: var(--project-shadow);
+            min-height: 130px;
+            animation: reveal 0.45s ease both;
+        }
+
+        .pm-card-head {
+            border-bottom: 1px solid rgba(61, 76, 57, 0.62);
+            padding: 12px 14px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pm-card-title {
+            margin: 0;
+            font-size: 13px;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        .pm-card-subtitle {
+            margin: 4px 0 0;
+            color: var(--project-text-muted);
+            font-size: 12px;
+        }
+
+        .pm-card-body {
+            padding: 12px 14px 14px;
+        }
+
+        .pm-focus-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .pm-focus-name {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .pm-focus-desc {
+            margin: 8px 0 0;
+            color: rgba(232, 236, 233, 0.86);
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .pm-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-top: 10px;
+        }
+
+        .pm-chip {
+            border: 1px solid rgba(61, 76, 57, 0.8);
+            border-radius: 999px;
+            padding: 3px 9px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--project-text-main);
+            background: rgba(18, 24, 19, 0.86);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .pm-chip.level-1 {
+            border-color: rgba(121, 170, 247, 0.55);
+            background: rgba(121, 170, 247, 0.12);
+            color: rgba(121, 170, 247, 0.98);
+        }
+
+        .pm-chip.level-2 {
+            border-color: rgba(182, 212, 181, 0.52);
+            background: rgba(182, 212, 181, 0.12);
+            color: rgba(182, 212, 181, 0.96);
+        }
+
+        .pm-chip.level-3 {
+            border-color: rgba(177, 173, 65, 0.58);
+            background: rgba(177, 173, 65, 0.14);
+            color: rgba(224, 220, 107, 0.97);
+        }
+
+        .pm-chip.level-4 {
+            border-color: rgba(236, 180, 140, 0.58);
+            background: rgba(236, 180, 140, 0.15);
+            color: rgba(247, 209, 177, 0.98);
+        }
+
+        .pm-chip.level-5 {
+            border-color: rgba(201, 106, 82, 0.7);
+            background: rgba(201, 106, 82, 0.18);
+            color: rgba(248, 183, 168, 0.99);
+        }
+
+        .pm-stat-grid {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .pm-stat {
+            border: 1px solid rgba(61, 76, 57, 0.6);
+            border-radius: var(--radius-sm);
+            background: rgba(18, 24, 19, 0.84);
+            padding: 8px;
+        }
+
+        .pm-stat-value {
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .pm-stat-label {
+            margin-top: 5px;
+            color: var(--project-text-muted);
+            font-size: 10px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .pm-progress {
+            margin-top: 12px;
+            border: 1px solid rgba(61, 76, 57, 0.8);
+            border-radius: 999px;
+            height: 10px;
+            overflow: hidden;
+            background: rgba(10, 13, 10, 0.8);
+        }
+
+        .pm-progress > div {
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            background: linear-gradient(90deg, rgba(121, 170, 247, 0.86), rgba(182, 212, 181, 0.86));
+        }
+
+        .pm-next-list {
+            margin-top: 12px;
+            display: grid;
+            gap: 7px;
+        }
+
+        .pm-next-item {
+            border: 1px solid rgba(61, 76, 57, 0.62);
+            border-radius: 10px;
+            background: rgba(18, 24, 19, 0.78);
+            padding: 8px 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .pm-next-title {
+            font-size: 12px;
+            color: var(--project-text-main);
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            flex: 1;
+        }
+
+        .pm-next-meta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--project-text-muted);
+            font-family: var(--font-mono);
+            font-size: 10px;
+            flex-shrink: 0;
+        }
+
+        .pm-board-wrap {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .pm-board-col {
+            border: 1px solid rgba(61, 76, 57, 0.65);
+            border-radius: var(--radius-md);
+            background: rgba(18, 24, 19, 0.82);
+            min-height: 210px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pm-col-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 10px;
+            border-bottom: 1px solid rgba(61, 76, 57, 0.6);
+        }
+
+        .pm-col-title {
+            margin: 0;
+            font-size: 12px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .pm-col-count {
+            color: var(--project-text-muted);
+            font-size: 11px;
+            font-family: var(--font-mono);
+        }
+
+        .pm-col-body {
+            padding: 9px;
+            display: grid;
+            gap: 8px;
+            overflow-y: auto;
+            max-height: 390px;
+        }
+
+        .pm-col-empty {
+            border: 1px dashed rgba(61, 76, 57, 0.68);
+            border-radius: 9px;
+            background: rgba(10, 13, 10, 0.45);
+            color: var(--project-text-muted);
+            font-size: 11px;
+            text-align: center;
+            padding: 12px 8px;
+        }
+
+        .pm-project-card {
+            width: 100%;
+            border: 1px solid rgba(61, 76, 57, 0.72);
+            border-left-width: 3px;
+            border-radius: 11px;
+            background: var(--project-card);
+            color: var(--project-text-main);
+            text-align: left;
+            padding: 9px;
+            display: grid;
+            gap: 8px;
+            cursor: pointer;
+            transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+        }
+
+        .pm-project-card:hover {
+            transform: translateY(-1px);
+            border-color: rgba(121, 170, 247, 0.5);
+            background: #1a231c;
+        }
+
+        .pm-project-card.is-selected {
+            border-color: rgba(236, 180, 140, 0.66);
+            box-shadow: 0 0 0 1px rgba(236, 180, 140, 0.34);
+        }
+
+        .pm-project-card.level-1 {
+            border-left-color: var(--project-blue);
+        }
+
+        .pm-project-card.level-2 {
+            border-left-color: var(--project-sage);
+        }
+
+        .pm-project-card.level-3 {
+            border-left-color: var(--project-mustard);
+        }
+
+        .pm-project-card.level-4 {
+            border-left-color: var(--project-peach);
+        }
+
+        .pm-project-card.level-5 {
+            border-left-color: var(--project-rust);
+            background: radial-gradient(110px 70px at 100% 0%, rgba(201, 106, 82, 0.12), transparent 70%), var(--project-card);
+        }
+
+        .pm-project-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .pm-project-name {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.35;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .pm-project-meta {
+            color: var(--project-text-muted);
+            font-size: 10px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .pm-project-stats {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+            font-size: 10px;
+            color: var(--project-text-muted);
+        }
+
+        .pm-project-stats strong {
+            display: block;
+            color: var(--project-text-main);
+            font-size: 13px;
+        }
+
+        .pm-task-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .pm-task-row {
+            border: 1px solid rgba(61, 76, 57, 0.62);
+            border-radius: 10px;
+            padding: 8px 10px;
+            background: rgba(18, 24, 19, 0.78);
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .pm-task-row.is-done {
+            opacity: 0.68;
+            border-style: dashed;
+        }
+
+        .pm-task-main {
+            min-width: 0;
+        }
+
+        .pm-task-title {
+            margin: 0;
+            font-size: 12px;
+            color: var(--project-text-main);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pm-task-sub {
+            margin-top: 4px;
+            color: var(--project-text-muted);
+            font-size: 10px;
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .pm-task-score {
+            flex-shrink: 0;
+            font-family: var(--font-mono);
+            color: var(--project-text-muted);
+            font-size: 10px;
+            text-align: right;
+        }
+
+        .pm-timeline-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .pm-timeline-row {
+            border: 1px solid rgba(61, 76, 57, 0.62);
+            border-radius: 10px;
+            background: rgba(18, 24, 19, 0.76);
+            padding: 8px 10px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pm-time-badge {
+            border: 1px solid rgba(121, 170, 247, 0.46);
+            border-radius: 999px;
+            color: rgba(121, 170, 247, 0.96);
+            font-family: var(--font-mono);
+            font-size: 10px;
+            padding: 3px 8px;
+            white-space: nowrap;
+            background: rgba(121, 170, 247, 0.11);
+        }
+
+        .pm-time-main {
+            min-width: 0;
+        }
+
+        .pm-time-title {
+            margin: 0;
+            font-size: 12px;
+            color: var(--project-text-main);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pm-time-sub {
+            margin-top: 3px;
+            font-size: 10px;
+            color: var(--project-text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pm-empty-state {
+            border: 1px dashed rgba(61, 76, 57, 0.68);
+            border-radius: 12px;
+            background: rgba(18, 24, 19, 0.72);
+            color: var(--project-text-muted);
+            text-align: center;
+            padding: 18px 14px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        @keyframes reveal {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 1260px) {
+            .pm-main-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .pm-board-wrap {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 900px) {
+            .pm-kpi-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .pm-board-wrap {
+                grid-template-columns: 1fr;
+            }
+
+            .pm-stat-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .pm-controls {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .pm-search {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .pm-shell {
+                padding: 14px 12px 26px;
+            }
+
+            .pm-header {
+                padding: 11px;
+            }
+
+            .pm-kpi-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .pm-task-row,
+            .pm-next-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .pm-task-score,
+            .pm-next-meta {
+                text-align: left;
+            }
+
+            .pm-timeline-row {
+                grid-template-columns: 1fr;
+                gap: 6px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="pm-shell">
+        <header class="pm-header">
+            <div class="pm-brand">
+                <div class="pm-brand-top">
+                    <span class="pm-logo" aria-hidden="true"></span>
+                    <span>Project Manager Dashboard</span>
+                </div>
+                <div class="pm-subtitle">Focused project overview powered by your existing Life Manager data.</div>
+            </div>
+
+            <div class="pm-controls">
+                <label class="pm-search" aria-label="Search projects">
+                    <span aria-hidden="true">Search</span>
+                    <input id="pm-search-input" type="search" placeholder="Project name or description...">
+                </label>
+                <select id="pm-status-filter" class="pm-select" aria-label="Status filter">
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                    <option value="completed">Completed</option>
+                    <option value="archived">Archived</option>
+                </select>
+                <select id="pm-urgency-filter" class="pm-select" aria-label="Urgency filter">
+                    <option value="all">All Urgency</option>
+                    <option value="5">Critical</option>
+                    <option value="4">High</option>
+                    <option value="3">Medium</option>
+                    <option value="2">Normal</option>
+                    <option value="1">Lowest</option>
+                </select>
+                <button id="pm-refresh-btn" type="button" class="pm-btn pm-btn-warm">Refresh</button>
+                <a class="pm-btn pm-btn-primary" href="index.html">Back To Workspace</a>
+            </div>
+
+            <div id="pm-status" class="pm-status">Loading...</div>
+        </header>
+
+        <section id="pm-kpis" class="pm-kpi-grid"></section>
+
+        <div class="pm-main-grid">
+            <section class="pm-card" aria-live="polite">
+                <div class="pm-card-head">
+                    <div>
+                        <h2 class="pm-card-title">Focus Project</h2>
+                        <p class="pm-card-subtitle">Most actionable project based on urgency and active load.</p>
+                    </div>
+                </div>
+                <div id="pm-focus" class="pm-card-body"></div>
+            </section>
+
+            <section class="pm-card">
+                <div class="pm-card-head">
+                    <div>
+                        <h2 class="pm-card-title">Upcoming Deadlines</h2>
+                        <p class="pm-card-subtitle">Earliest due tasks from the filtered project set.</p>
+                    </div>
+                </div>
+                <div id="pm-timeline" class="pm-card-body"></div>
+            </section>
+
+            <section class="pm-card">
+                <div class="pm-card-head">
+                    <div>
+                        <h2 class="pm-card-title">Projects Board</h2>
+                        <p class="pm-card-subtitle">Click any project card to update focus and details.</p>
+                    </div>
+                </div>
+                <div id="pm-board" class="pm-card-body"></div>
+            </section>
+
+            <section class="pm-card">
+                <div class="pm-card-head">
+                    <div>
+                        <h2 id="pm-task-panel-title" class="pm-card-title">Project Tasks</h2>
+                        <p class="pm-card-subtitle">Task-level view for the selected project.</p>
+                    </div>
+                </div>
+                <div id="pm-tasks" class="pm-card-body"></div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_DB_NAME = 'urgencyFlowDB';
+        const STORAGE_DB_VERSION = 1;
+        const STORAGE_STORE_NAME = 'appState';
+        const STORAGE_RECORD_KEY = 'main';
+
+        const STATUS_ORDER = ['active', 'paused', 'completed', 'archived'];
+        const STATUS_LABELS = {
+            active: 'Active',
+            paused: 'Paused',
+            completed: 'Completed',
+            archived: 'Archived'
+        };
+
+        const URGENCY_LABELS = {
+            1: 'Lowest',
+            2: 'Normal',
+            3: 'Medium',
+            4: 'High',
+            5: 'Critical'
+        };
+
+        const URGENCY_TAGS = {
+            1: 'LOWEST',
+            2: 'NORMAL',
+            3: 'MEDIUM',
+            4: 'HIGH',
+            5: 'CRITICAL'
+        };
+
+        const DAY_MS = 24 * 60 * 60 * 1000;
+
+        const state = {
+            data: {
+                projects: [],
+                nodes: [],
+                archivedNodes: []
+            },
+            summaries: [],
+            visibleSummaries: [],
+            selectedProjectId: null,
+            search: '',
+            statusFilter: 'all',
+            urgencyFilter: 'all',
+            requestedProjectId: null,
+            source: 'none',
+            loadedAt: null
+        };
+
+        function safeArray(value) {
+            return Array.isArray(value) ? value : [];
+        }
+
+        function clamp(value, min, max) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return min;
+            if (numeric < min) return min;
+            if (numeric > max) return max;
+            return numeric;
+        }
+
+        function escapeHtml(value) {
+            return String(value || '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[char] || char));
+        }
+
+        function normalizeProjectStatus(status) {
+            const normalized = String(status || '').trim().toLowerCase();
+            return STATUS_ORDER.includes(normalized) ? normalized : 'active';
+        }
+
+        function getStatusRank(status) {
+            const normalized = normalizeProjectStatus(status);
+            const index = STATUS_ORDER.indexOf(normalized);
+            return index >= 0 ? index : STATUS_ORDER.length;
+        }
+
+        function getUrgencyLevelFromScore(score) {
+            const numericScore = clamp(Number(score) || 0, 0, 100);
+            if (numericScore >= 86) return 5;
+            if (numericScore >= 68) return 4;
+            if (numericScore >= 48) return 3;
+            if (numericScore >= 26) return 2;
+            return 1;
+        }
+
+        function parseTaskDueDateTimestamp(dueDate) {
+            const raw = String(dueDate || '').trim();
+            if (!raw) return Number.NaN;
+            const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (match) {
+                const year = Number(match[1]);
+                const month = Number(match[2]) - 1;
+                const day = Number(match[3]);
+                return new Date(year, month, day, 23, 59, 59, 999).getTime();
+            }
+            const parsed = new Date(raw).getTime();
+            return Number.isFinite(parsed) ? parsed : Number.NaN;
+        }
+
+        function getTaskDueDayDelta(dueDate, nowTs = Date.now()) {
+            const dueTs = parseTaskDueDateTimestamp(dueDate);
+            if (!Number.isFinite(dueTs)) return Number.POSITIVE_INFINITY;
+            return Math.ceil((dueTs - nowTs) / DAY_MS);
+        }
+
+        function formatRelativeDue(dueDelta) {
+            if (!Number.isFinite(dueDelta)) return 'No due date';
+            if (dueDelta < 0) return Math.abs(dueDelta) + 'd overdue';
+            if (dueDelta === 0) return 'Due today';
+            if (dueDelta === 1) return 'Due tomorrow';
+            return 'Due in ' + dueDelta + 'd';
+        }
+
+        function formatDate(dateValue) {
+            const ts = Number(dateValue);
+            if (!Number.isFinite(ts) || ts <= 0) return 'n/a';
+            try {
+                return new Date(ts).toLocaleString();
+            } catch (_error) {
+                return 'n/a';
+            }
+        }
+
+        function formatDueDateLabel(rawDueDate) {
+            const ts = parseTaskDueDateTimestamp(rawDueDate);
+            if (!Number.isFinite(ts)) return 'No due date';
+            return new Date(ts).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+        }
+
+        function getStorageFallbackData() {
+            const keys = ['urgencyFlowData_backup', 'urgencyFlowData'];
+            for (const key of keys) {
+                const raw = localStorage.getItem(key);
+                if (!raw) continue;
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === 'object') return parsed;
+                } catch (_error) {
+                }
+            }
+            return null;
+        }
+
+        function readIndexedDbState() {
+            return new Promise((resolve) => {
+                if (!window.indexedDB) {
+                    resolve(null);
+                    return;
+                }
+
+                let request;
+                try {
+                    request = indexedDB.open(STORAGE_DB_NAME, STORAGE_DB_VERSION);
+                } catch (_error) {
+                    resolve(null);
+                    return;
+                }
+
+                request.onupgradeneeded = () => {
+                };
+
+                request.onerror = () => {
+                    resolve(null);
+                };
+
+                request.onsuccess = (event) => {
+                    const db = event.target.result;
+                    const closeAndResolve = (value) => {
+                        try {
+                            db.close();
+                        } catch (_error) {
+                        }
+                        resolve(value);
+                    };
+
+                    let tx;
+                    try {
+                        tx = db.transaction([STORAGE_STORE_NAME], 'readonly');
+                    } catch (_error) {
+                        closeAndResolve(null);
+                        return;
+                    }
+
+                    const store = tx.objectStore(STORAGE_STORE_NAME);
+                    const getReq = store.get(STORAGE_RECORD_KEY);
+
+                    getReq.onerror = () => {
+                        closeAndResolve(null);
+                    };
+
+                    getReq.onsuccess = () => {
+                        const payload = getReq.result && getReq.result.data;
+                        closeAndResolve(payload && typeof payload === 'object' ? payload : null);
+                    };
+                };
+            });
+        }
+
+        function normalizeLoadedData(raw) {
+            const source = raw && typeof raw === 'object' ? raw : {};
+            const projects = safeArray(source.projects)
+                .filter(item => item && String(item.id || '').trim())
+                .map((project, index) => {
+                    const name = String(project.name || project.title || ('Project ' + (index + 1))).trim() || ('Project ' + (index + 1));
+                    return {
+                        id: String(project.id || '').trim(),
+                        name,
+                        description: String(project.description || '').trim(),
+                        status: normalizeProjectStatus(project.status),
+                        createdAt: Number(project.createdAt) || 0,
+                        updatedAt: Number(project.updatedAt) || 0,
+                        origin: String(project.origin || 'manual')
+                    };
+                });
+
+            return {
+                projects,
+                nodes: safeArray(source.nodes),
+                archivedNodes: safeArray(source.archivedNodes)
+            };
+        }
+
+        async function loadStateData() {
+            const fromIndexedDb = await readIndexedDbState();
+            if (fromIndexedDb && typeof fromIndexedDb === 'object') {
+                return {
+                    data: normalizeLoadedData(fromIndexedDb),
+                    source: 'indexeddb'
+                };
+            }
+
+            const fallback = getStorageFallbackData();
+            if (fallback && typeof fallback === 'object') {
+                return {
+                    data: normalizeLoadedData(fallback),
+                    source: 'localStorage'
+                };
+            }
+
+            return {
+                data: normalizeLoadedData({}),
+                source: 'none'
+            };
+        }
+
+        function isTaskBlocked(task, taskLookup) {
+            const dependencies = safeArray(task && task.dependencies);
+            if (dependencies.length === 0) return false;
+
+            for (const dependency of dependencies) {
+                if (!dependency || dependency.type !== 'hard') continue;
+                const parent = taskLookup.get(String(dependency.id || '').trim());
+                if (parent && !parent.completed) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        function scoreTaskForUrgency(task, nowTs, taskLookup) {
+            const blocked = isTaskBlocked(task, taskLookup);
+            const dueDayDelta = getTaskDueDayDelta(task && task.dueDate, nowTs);
+
+            let score = 0;
+            if (task && task.isManualUrgent) score = Math.max(score, 100);
+            if (task && task._isUrgent) score = Math.max(score, 92);
+            else if (task && task._isCritical) score = Math.max(score, 78);
+            else if (blocked) score = Math.max(score, 44);
+
+            if (Number.isFinite(dueDayDelta)) {
+                if (dueDayDelta <= 0) score += 40;
+                else if (dueDayDelta <= 1) score += 34;
+                else if (dueDayDelta <= 3) score += 26;
+                else if (dueDayDelta <= 7) score += 18;
+                else if (dueDayDelta <= 14) score += 10;
+            }
+
+            const downstreamWeight = Math.max(0, Number(task && task._downstreamWeight) || 0);
+            score += Math.min(22, downstreamWeight * 3);
+            if (blocked) score += 14;
+
+            return {
+                score: clamp(Math.round(score), 0, 100),
+                blocked,
+                dueDayDelta,
+                dueTs: parseTaskDueDateTimestamp(task && task.dueDate),
+                isUrgent: !!(task && (task.isManualUrgent || task._isUrgent)),
+                isCritical: !!(task && task._isCritical)
+            };
+        }
+
+        function compareScoredTasks(a, b) {
+            if ((a.completed ? 1 : 0) !== (b.completed ? 1 : 0)) {
+                return (a.completed ? 1 : 0) - (b.completed ? 1 : 0);
+            }
+            if (a.score !== b.score) return b.score - a.score;
+
+            const aDue = Number.isFinite(a.dueTs) ? a.dueTs : Number.POSITIVE_INFINITY;
+            const bDue = Number.isFinite(b.dueTs) ? b.dueTs : Number.POSITIVE_INFINITY;
+            if (aDue !== bDue) return aDue - bDue;
+
+            const titleA = String(a.task && a.task.title || '').toLowerCase();
+            const titleB = String(b.task && b.task.title || '').toLowerCase();
+            return titleA.localeCompare(titleB);
+        }
+
+        function buildProjectSummaries(data) {
+            const projects = safeArray(data.projects);
+            const nodes = safeArray(data.nodes);
+            const archived = safeArray(data.archivedNodes);
+            const nowTs = Date.now();
+
+            const taskLookup = new Map();
+            nodes.forEach(task => {
+                if (!task || !task.id) return;
+                taskLookup.set(String(task.id), task);
+            });
+            archived.forEach(task => {
+                if (!task || !task.id) return;
+                if (!taskLookup.has(String(task.id))) taskLookup.set(String(task.id), task);
+            });
+
+            const buckets = new Map();
+            projects.forEach(project => {
+                buckets.set(project.id, {
+                    project,
+                    active: [],
+                    done: []
+                });
+            });
+
+            nodes.forEach(task => {
+                if (!task) return;
+                const projectId = String(task.projectId || '').trim();
+                if (!projectId || !buckets.has(projectId)) return;
+
+                const bucket = buckets.get(projectId);
+                if (task.completed) {
+                    bucket.done.push(task);
+                } else {
+                    bucket.active.push(task);
+                }
+            });
+
+            archived.forEach(task => {
+                if (!task) return;
+                const projectId = String(task.projectId || '').trim();
+                if (!projectId || !buckets.has(projectId)) return;
+                buckets.get(projectId).done.push(task);
+            });
+
+            const summaries = [];
+            buckets.forEach((bucket) => {
+                const scoredActive = bucket.active.map(task => {
+                    const urgency = scoreTaskForUrgency(task, nowTs, taskLookup);
+                    return {
+                        task,
+                        completed: false,
+                        score: urgency.score,
+                        blocked: urgency.blocked,
+                        dueDayDelta: urgency.dueDayDelta,
+                        dueTs: urgency.dueTs,
+                        isUrgent: urgency.isUrgent,
+                        isCritical: urgency.isCritical
+                    };
+                });
+
+                const scoredDone = bucket.done.map(task => ({
+                    task,
+                    completed: true,
+                    score: 0,
+                    blocked: false,
+                    dueDayDelta: getTaskDueDayDelta(task && task.dueDate, nowTs),
+                    dueTs: parseTaskDueDateTimestamp(task && task.dueDate),
+                    isUrgent: false,
+                    isCritical: false
+                }));
+
+                const allScored = scoredActive.concat(scoredDone).sort(compareScoredTasks);
+
+                const overdueCount = scoredActive.filter(item => Number.isFinite(item.dueDayDelta) && item.dueDayDelta < 0).length;
+                const blockedCount = scoredActive.filter(item => item.blocked).length;
+                const urgentCount = scoredActive.filter(item => item.isUrgent).length;
+                const criticalCount = scoredActive.filter(item => item.isCritical).length;
+
+                const peakScore = scoredActive.reduce((max, item) => Math.max(max, item.score), 0);
+                const totalScore = scoredActive.reduce((sum, item) => sum + item.score, 0);
+                const averageScore = scoredActive.length > 0 ? (totalScore / scoredActive.length) : 0;
+
+                const urgencyScore = scoredActive.length === 0
+                    ? 0
+                    : clamp(
+                        Math.round(
+                            (peakScore * 0.62)
+                            + (averageScore * 0.38)
+                            + Math.min(14, overdueCount * 6)
+                            + Math.min(10, blockedCount * 3)
+                            + Math.min(8, urgentCount * 2)
+                            + Math.min(4, criticalCount)
+                        ),
+                        0,
+                        100
+                    );
+
+                const urgencyLevel = getUrgencyLevelFromScore(urgencyScore);
+                const activeCount = scoredActive.length;
+                const doneCount = scoredDone.length;
+                const totalCount = activeCount + doneCount;
+                const completionPct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+                const dueSoonCount = scoredActive.filter(item => Number.isFinite(item.dueDayDelta) && item.dueDayDelta >= 0 && item.dueDayDelta <= 3).length;
+
+                const nextDueTs = scoredActive
+                    .map(item => item.dueTs)
+                    .filter(ts => Number.isFinite(ts))
+                    .sort((a, b) => a - b)[0] || Number.NaN;
+
+                summaries.push({
+                    project: bucket.project,
+                    status: normalizeProjectStatus(bucket.project.status),
+                    urgency: {
+                        score: urgencyScore,
+                        level: urgencyLevel,
+                        label: URGENCY_LABELS[urgencyLevel] || 'Lowest',
+                        tag: URGENCY_TAGS[urgencyLevel] || 'LOWEST'
+                    },
+                    stats: {
+                        active: activeCount,
+                        done: doneCount,
+                        total: totalCount,
+                        overdue: overdueCount,
+                        blocked: blockedCount,
+                        dueSoon: dueSoonCount,
+                        completionPct
+                    },
+                    nextDueTs,
+                    tasks: allScored,
+                    activeTasks: scoredActive,
+                    updatedAt: Number(bucket.project.updatedAt) || 0
+                });
+            });
+
+            summaries.sort((a, b) => {
+                const rankDiff = getStatusRank(a.status) - getStatusRank(b.status);
+                if (rankDiff !== 0) return rankDiff;
+                if (a.urgency.score !== b.urgency.score) return b.urgency.score - a.urgency.score;
+                if (a.stats.active !== b.stats.active) return b.stats.active - a.stats.active;
+                if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
+                return String(a.project.name || '').localeCompare(String(b.project.name || ''), undefined, {
+                    sensitivity: 'base'
+                });
+            });
+
+            return summaries;
+        }
+
+        function applyFilters(summaries) {
+            const search = String(state.search || '').trim().toLowerCase();
+            const statusFilter = String(state.statusFilter || 'all').toLowerCase();
+            const urgencyFilter = String(state.urgencyFilter || 'all').toLowerCase();
+
+            return safeArray(summaries).filter(summary => {
+                if (!summary || !summary.project) return false;
+                if (statusFilter !== 'all' && normalizeProjectStatus(summary.status) !== statusFilter) return false;
+                if (urgencyFilter !== 'all' && String(summary.urgency.level) !== urgencyFilter) return false;
+
+                if (!search) return true;
+                const hay = [
+                    summary.project.name,
+                    summary.project.description,
+                    summary.status,
+                    summary.urgency.label,
+                    summary.urgency.tag
+                ].join(' ').toLowerCase();
+
+                return hay.includes(search);
+            });
+        }
+
+        function pickDefaultProject(summaries) {
+            if (!summaries.length) return null;
+
+            const requested = String(state.requestedProjectId || '').trim();
+            if (requested) {
+                const preferred = summaries.find(item => String(item.project.id) === requested);
+                if (preferred) return preferred.project.id;
+            }
+
+            const current = String(state.selectedProjectId || '').trim();
+            if (current) {
+                const existing = summaries.find(item => String(item.project.id) === current);
+                if (existing) return existing.project.id;
+            }
+
+            return summaries[0].project.id;
+        }
+
+        function syncQueryParam(projectId) {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                const normalized = String(projectId || '').trim();
+                if (normalized) params.set('projectId', normalized);
+                else params.delete('projectId');
+                const query = params.toString();
+                const nextUrl = window.location.pathname + (query ? '?' + query : '');
+                window.history.replaceState({}, '', nextUrl);
+            } catch (_error) {
+            }
+        }
+
+        function formatLoadStatus() {
+            const sourceLabel = state.source === 'indexeddb'
+                ? 'IndexedDB'
+                : (state.source === 'localStorage' ? 'localStorage fallback' : 'No saved data found');
+            const loadedLabel = state.loadedAt ? formatDate(state.loadedAt) : 'n/a';
+            return 'Source: ' + sourceLabel + ' | Loaded: ' + loadedLabel;
+        }
+
+        function renderStatus() {
+            const statusEl = document.getElementById('pm-status');
+            if (!statusEl) return;
+            statusEl.textContent = formatLoadStatus();
+        }
+
+        function renderKpis(visibleSummaries) {
+            const target = document.getElementById('pm-kpis');
+            if (!target) return;
+
+            const summaries = safeArray(visibleSummaries);
+            const totalProjects = summaries.length;
+            const activeProjects = summaries.filter(item => item.status === 'active').length;
+            const pausedProjects = summaries.filter(item => item.status === 'paused').length;
+            const criticalProjects = summaries.filter(item => item.urgency.level >= 4).length;
+            const activeTasks = summaries.reduce((sum, item) => sum + item.stats.active, 0);
+            const doneTasks = summaries.reduce((sum, item) => sum + item.stats.done, 0);
+            const totalTasks = activeTasks + doneTasks;
+            const overdueTasks = summaries.reduce((sum, item) => sum + item.stats.overdue, 0);
+            const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+
+            const cards = [
+                {
+                    tone: 'tone-blue',
+                    label: 'Projects',
+                    value: totalProjects,
+                    meta: activeProjects + ' active / ' + pausedProjects + ' paused'
+                },
+                {
+                    tone: 'tone-sage',
+                    label: 'Active Tasks',
+                    value: activeTasks,
+                    meta: doneTasks + ' completed overall'
+                },
+                {
+                    tone: 'tone-amber',
+                    label: 'Risk Pressure',
+                    value: criticalProjects,
+                    meta: overdueTasks + ' overdue tasks'
+                },
+                {
+                    tone: 'tone-rust',
+                    label: 'Completion',
+                    value: completionRate + '%',
+                    meta: totalTasks + ' linked tasks across visible projects'
+                }
+            ];
+
+            target.innerHTML = cards.map((card, index) => {
+                const valueText = escapeHtml(String(card.value));
+                return '<article class="pm-kpi ' + card.tone + '" style="--d:' + (index * 45) + 'ms">'
+                    + '<div class="pm-kpi-label">' + escapeHtml(card.label) + '</div>'
+                    + '<div class="pm-kpi-value">' + valueText + '</div>'
+                    + '<div class="pm-kpi-meta">' + escapeHtml(card.meta) + '</div>'
+                    + '</article>';
+            }).join('');
+        }
+
+        function renderFocus(visibleSummaries) {
+            const target = document.getElementById('pm-focus');
+            if (!target) return;
+
+            if (!visibleSummaries.length) {
+                target.innerHTML = '<div class="pm-empty-state">No projects match the current filters. Adjust filters or search.</div>';
+                return;
+            }
+
+            const selected = visibleSummaries.find(item => String(item.project.id) === String(state.selectedProjectId || '')) || null;
+            if (!selected) {
+                target.innerHTML = '<div class="pm-empty-state">Select a project card from the board to view details.</div>';
+                return;
+            }
+
+            const progressPct = clamp(selected.stats.completionPct, 0, 100);
+            const desc = selected.project.description
+                ? escapeHtml(selected.project.description)
+                : 'No project description yet. Add one in the main Projects panel if needed.';
+
+            const nextTasks = selected.activeTasks.slice(0, 5);
+            const nextTaskHtml = nextTasks.length > 0
+                ? '<div class="pm-next-list">' + nextTasks.map((item) => {
+                    const dueLabel = formatRelativeDue(item.dueDayDelta);
+                    return '<div class="pm-next-item">'
+                        + '<div class="pm-next-title" title="' + escapeHtml(item.task.title || 'Untitled Task') + '">' + escapeHtml(item.task.title || 'Untitled Task') + '</div>'
+                        + '<div class="pm-next-meta">'
+                        + '<span>' + escapeHtml(dueLabel) + '</span>'
+                        + '<span>score ' + escapeHtml(String(item.score)) + '</span>'
+                        + '</div>'
+                        + '</div>';
+                }).join('') + '</div>'
+                : '<div class="pm-empty-state" style="padding:12px">No active tasks linked to this project.</div>';
+
+            target.innerHTML = ''
+                + '<div class="pm-focus-grid">'
+                + '<div>'
+                + '<h3 class="pm-focus-name">' + escapeHtml(selected.project.name || 'Untitled Project') + '</h3>'
+                + '<p class="pm-focus-desc">' + desc + '</p>'
+                + '<div class="pm-chip-row">'
+                + '<span class="pm-chip">' + escapeHtml(STATUS_LABELS[selected.status] || 'Active') + '</span>'
+                + '<span class="pm-chip level-' + selected.urgency.level + '">' + escapeHtml(selected.urgency.tag + ' (' + selected.urgency.score + ')') + '</span>'
+                + '</div>'
+                + '</div>'
+                + '<div class="pm-stat-grid">'
+                + '<div class="pm-stat"><div class="pm-stat-value">' + selected.stats.active + '</div><div class="pm-stat-label">Active</div></div>'
+                + '<div class="pm-stat"><div class="pm-stat-value">' + selected.stats.done + '</div><div class="pm-stat-label">Done</div></div>'
+                + '<div class="pm-stat"><div class="pm-stat-value">' + selected.stats.blocked + '</div><div class="pm-stat-label">Blocked</div></div>'
+                + '<div class="pm-stat"><div class="pm-stat-value">' + selected.stats.overdue + '</div><div class="pm-stat-label">Overdue</div></div>'
+                + '</div>'
+                + '<div class="pm-progress" aria-label="Project completion progress"><div style="width:' + progressPct + '%"></div></div>'
+                + '<div class="pm-card-subtitle">Completion: ' + progressPct + '%</div>'
+                + '<div class="pm-card-subtitle" style="margin-top:8px">Next action candidates</div>'
+                + nextTaskHtml
+                + '</div>';
+        }
+
+        function createProjectCard(summary) {
+            const selected = String(summary.project.id) === String(state.selectedProjectId || '');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'pm-project-card level-' + summary.urgency.level + (selected ? ' is-selected' : '');
+            button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+
+            const safeName = escapeHtml(summary.project.name || 'Untitled Project');
+            const statusLabel = STATUS_LABELS[summary.status] || 'Active';
+            const updatedLabel = summary.updatedAt > 0 ? new Date(summary.updatedAt).toLocaleDateString() : 'n/a';
+
+            button.innerHTML = ''
+                + '<div class="pm-project-head">'
+                + '<p class="pm-project-name" title="' + safeName + '">' + safeName + '</p>'
+                + '<span class="pm-project-meta">' + escapeHtml(statusLabel) + '</span>'
+                + '</div>'
+                + '<div class="pm-chip-row" style="margin-top:0">'
+                + '<span class="pm-chip level-' + summary.urgency.level + '">' + escapeHtml(summary.urgency.tag + ' ' + summary.urgency.score) + '</span>'
+                + '</div>'
+                + '<div class="pm-project-stats">'
+                + '<div><strong>' + summary.stats.active + '</strong>active</div>'
+                + '<div><strong>' + summary.stats.done + '</strong>done</div>'
+                + '<div><strong>' + summary.stats.overdue + '</strong>overdue</div>'
+                + '</div>'
+                + '<div class="pm-project-meta">Updated ' + escapeHtml(updatedLabel) + '</div>';
+
+            button.addEventListener('click', () => {
+                state.selectedProjectId = summary.project.id;
+                syncQueryParam(state.selectedProjectId);
+                renderDashboard();
+            });
+
+            return button;
+        }
+
+        function renderBoard(visibleSummaries) {
+            const target = document.getElementById('pm-board');
+            if (!target) return;
+
+            if (!visibleSummaries.length) {
+                target.innerHTML = '<div class="pm-empty-state">No projects to render in the board.</div>';
+                return;
+            }
+
+            const buckets = {
+                active: [],
+                paused: [],
+                completed: [],
+                archived: []
+            };
+
+            visibleSummaries.forEach(summary => {
+                const key = normalizeProjectStatus(summary.status);
+                if (!buckets[key]) buckets[key] = [];
+                buckets[key].push(summary);
+            });
+
+            const html = STATUS_ORDER.map((statusKey) => {
+                const items = buckets[statusKey] || [];
+                const bodyId = 'pm-col-' + statusKey;
+                return '<section class="pm-board-col">'
+                    + '<div class="pm-col-head">'
+                    + '<h3 class="pm-col-title">' + escapeHtml(STATUS_LABELS[statusKey] || statusKey) + '</h3>'
+                    + '<span class="pm-col-count">' + items.length + '</span>'
+                    + '</div>'
+                    + '<div class="pm-col-body" id="' + bodyId + '">'
+                    + (items.length ? '' : '<div class="pm-col-empty">No projects in this lane.</div>')
+                    + '</div>'
+                    + '</section>';
+            }).join('');
+
+            target.innerHTML = '<div class="pm-board-wrap">' + html + '</div>';
+
+            STATUS_ORDER.forEach((statusKey) => {
+                const listEl = document.getElementById('pm-col-' + statusKey);
+                if (!listEl) return;
+                const items = buckets[statusKey] || [];
+                items.forEach(summary => listEl.appendChild(createProjectCard(summary)));
+            });
+        }
+
+        function renderTaskPanel(visibleSummaries) {
+            const titleEl = document.getElementById('pm-task-panel-title');
+            const target = document.getElementById('pm-tasks');
+            if (!titleEl || !target) return;
+
+            if (!visibleSummaries.length) {
+                titleEl.textContent = 'Project Tasks';
+                target.innerHTML = '<div class="pm-empty-state">No project tasks to display.</div>';
+                return;
+            }
+
+            const selected = visibleSummaries.find(item => String(item.project.id) === String(state.selectedProjectId || '')) || null;
+            if (!selected) {
+                titleEl.textContent = 'Project Tasks';
+                target.innerHTML = '<div class="pm-empty-state">Select a project card to inspect linked tasks.</div>';
+                return;
+            }
+
+            titleEl.textContent = 'Project Tasks - ' + (selected.project.name || 'Project');
+
+            if (!selected.tasks.length) {
+                target.innerHTML = '<div class="pm-empty-state">No linked tasks in this project yet.</div>';
+                return;
+            }
+
+            const rows = selected.tasks.slice(0, 40).map((entry) => {
+                const task = entry.task || {};
+                const done = !!entry.completed;
+                const title = escapeHtml(task.title || 'Untitled Task');
+                const dueLabel = formatRelativeDue(entry.dueDayDelta);
+                const dueDateLabel = formatDueDateLabel(task.dueDate);
+                const duration = Number(task.duration);
+                const durationLabel = Number.isFinite(duration) && duration > 0 ? (duration + 'h est') : 'no estimate';
+                const blocked = entry.blocked ? 'blocked' : 'open';
+
+                return '<article class="pm-task-row' + (done ? ' is-done' : '') + '">'
+                    + '<div class="pm-task-main">'
+                    + '<p class="pm-task-title" title="' + title + '">' + title + '</p>'
+                    + '<div class="pm-task-sub">'
+                    + '<span>' + escapeHtml(dueLabel) + '</span>'
+                    + '<span>' + escapeHtml(dueDateLabel) + '</span>'
+                    + '<span>' + escapeHtml(durationLabel) + '</span>'
+                    + '<span>' + escapeHtml(blocked) + '</span>'
+                    + '</div>'
+                    + '</div>'
+                    + '<div class="pm-task-score">' + (done ? 'done' : ('score ' + entry.score)) + '</div>'
+                    + '</article>';
+            });
+
+            target.innerHTML = '<div class="pm-task-list">' + rows.join('') + '</div>';
+        }
+
+        function renderTimeline(visibleSummaries) {
+            const target = document.getElementById('pm-timeline');
+            if (!target) return;
+
+            const timeline = [];
+            visibleSummaries.forEach((summary) => {
+                summary.activeTasks.forEach((entry) => {
+                    if (!Number.isFinite(entry.dueTs)) return;
+                    timeline.push({
+                        projectName: summary.project.name || 'Project',
+                        taskTitle: entry.task && entry.task.title ? entry.task.title : 'Untitled Task',
+                        dueTs: entry.dueTs,
+                        dueDayDelta: entry.dueDayDelta,
+                        urgencyLevel: summary.urgency.level
+                    });
+                });
+            });
+
+            timeline.sort((a, b) => a.dueTs - b.dueTs);
+            const topRows = timeline.slice(0, 10);
+
+            if (!topRows.length) {
+                target.innerHTML = '<div class="pm-empty-state">No due dates found in the filtered project set.</div>';
+                return;
+            }
+
+            target.innerHTML = '<div class="pm-timeline-list">' + topRows.map((item) => {
+                const dueText = formatRelativeDue(item.dueDayDelta);
+                return '<article class="pm-timeline-row">'
+                    + '<span class="pm-time-badge">' + escapeHtml(dueText) + '</span>'
+                    + '<div class="pm-time-main">'
+                    + '<p class="pm-time-title" title="' + escapeHtml(item.taskTitle) + '">' + escapeHtml(item.taskTitle) + '</p>'
+                    + '<p class="pm-time-sub">' + escapeHtml(item.projectName + ' | ' + new Date(item.dueTs).toLocaleDateString()) + '</p>'
+                    + '</div>'
+                    + '<span class="pm-chip level-' + item.urgencyLevel + '">P' + item.urgencyLevel + '</span>'
+                    + '</article>';
+            }).join('') + '</div>';
+        }
+
+        function renderDashboard() {
+            const summaries = state.summaries;
+            state.visibleSummaries = applyFilters(summaries);
+
+            const selectedId = pickDefaultProject(state.visibleSummaries);
+            state.selectedProjectId = selectedId;
+            syncQueryParam(selectedId);
+
+            renderStatus();
+            renderKpis(state.visibleSummaries);
+            renderFocus(state.visibleSummaries);
+            renderBoard(state.visibleSummaries);
+            renderTaskPanel(state.visibleSummaries);
+            renderTimeline(state.visibleSummaries);
+        }
+
+        function readInitialSelectionFromUrl() {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                const projectId = String(params.get('projectId') || '').trim();
+                state.requestedProjectId = projectId || null;
+            } catch (_error) {
+                state.requestedProjectId = null;
+            }
+        }
+
+        async function refreshDashboardData() {
+            const payload = await loadStateData();
+            state.data = payload.data;
+            state.source = payload.source;
+            state.loadedAt = Date.now();
+            state.summaries = buildProjectSummaries(payload.data);
+            renderDashboard();
+        }
+
+        function bindControls() {
+            const searchInput = document.getElementById('pm-search-input');
+            const statusFilter = document.getElementById('pm-status-filter');
+            const urgencyFilter = document.getElementById('pm-urgency-filter');
+            const refreshBtn = document.getElementById('pm-refresh-btn');
+
+            if (searchInput) {
+                searchInput.addEventListener('input', (event) => {
+                    state.search = String(event.target.value || '');
+                    renderDashboard();
+                });
+            }
+
+            if (statusFilter) {
+                statusFilter.addEventListener('change', (event) => {
+                    state.statusFilter = String(event.target.value || 'all');
+                    renderDashboard();
+                });
+            }
+
+            if (urgencyFilter) {
+                urgencyFilter.addEventListener('change', (event) => {
+                    state.urgencyFilter = String(event.target.value || 'all');
+                    renderDashboard();
+                });
+            }
+
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', () => {
+                    refreshDashboardData();
+                });
+            }
+        }
+
+        async function initDashboard() {
+            readInitialSelectionFromUrl();
+            bindControls();
+            await refreshDashboardData();
+        }
+
+        initDashboard();
+    </script>
+</body>
+
+</html>

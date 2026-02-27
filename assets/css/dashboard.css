@@ -1,0 +1,655 @@
+        /* --- HEALTH DASHBOARD --- */
+        #health-dashboard {
+            position: fixed;
+            bottom: 20px;
+            left: 155px;
+            background: rgba(12, 24, 18, 0.9);
+            backdrop-filter: blur(4px);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 10px;
+            color: #888;
+            z-index: 90;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 180px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            /* Let clicks pass through unless we want interactivity */
+            user-select: none;
+        }
+
+        .health-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .health-label {
+            color: #666;
+            font-weight: 600;
+        }
+
+        .health-val {
+            color: #aaa;
+            font-family: monospace;
+        }
+
+        .health-bar-bg {
+            width: 60px;
+            height: 3px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-left: 5px;
+        }
+
+        .health-bar-fill {
+            height: 100%;
+            background: var(--ready-color);
+            width: 0%;
+            transition: width 0.5s;
+        }
+
+        .health-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 4px;
+            background: #333;
+        }
+
+        .health-dot.ok {
+            background: var(--ready-color);
+            box-shadow: 0 0 4px var(--ready-color);
+        }
+
+        .health-dot.warn {
+            background: var(--critical-path);
+        }
+
+        .health-dot.err {
+            background: var(--blocked-color);
+        }
+
+        .health-btn {
+            cursor: pointer !important;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            pointer-events: auto !important;
+        }
+
+        .health-btn:hover {
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        #health-dashboard {
+            pointer-events: auto !important;
+        }
+
+        .editor-toolbar {
+            padding: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #2a2a2a;
+            border-bottom: 1px solid #333;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .editor-tools-group {
+            display: flex;
+            gap: 2px;
+        }
+
+        .tool-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: #aaa;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+
+        .tool-btn:hover {
+            background: #3a3a3a;
+            color: #fff;
+        }
+
+        .tool-btn.active {
+            background: #3a3a3a;
+            color: var(--accent);
+            border-color: #444;
+        }
+
+        #note-title-input {
+            background: transparent;
+            border: none;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            width: 100%;
+            padding: 10px;
+            border-bottom: 1px solid #333;
+        }
+
+        .editor-content-area {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+        }
+
+        /* Shared styles to prevent the "jump" when switching modes */
+        #note-body-input,
+        #note-preview-pane {
+            flex-grow: 1;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            border: none;
+            outline: none;
+            box-sizing: border-box;
+            padding: 30px;
+            /* Uniform padding */
+            font-family: 'Inter', sans-serif;
+            /* Same font for both */
+            font-size: 15px;
+            /* Same size for both */
+            line-height: 1.7;
+            /* Same spacing for both */
+        }
+
+        /* Specific to the Editor */
+        #note-body-input {
+            color: #ddd;
+            resize: none;
+            display: block;
+            /* Default state */
+        }
+
+        /* Specific to the View Mode */
+        #note-preview-pane {
+            color: #d1d5db;
+            overflow-y: auto;
+            /* REMOVED display: none; because HTML has class="hidden" */
+        }
+
+        /* Visibility Toggles */
+        #note-body-input.hidden {
+            display: none;
+        }
+
+        /* ADDED: Ensure preview hides when it has the hidden class */
+        #note-preview-pane.hidden {
+            display: none;
+        }
+
+        #ai-modal {
+            backdrop-filter: blur(2px);
+        }
+
+        #ai-project-planner-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.62);
+            backdrop-filter: blur(2px);
+            z-index: 3090;
+            display: none;
+        }
+
+        #ai-project-planner-modal {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: min(760px, calc(100vw - 24px));
+            max-height: calc(100vh - 24px);
+            display: none;
+            flex-direction: column;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: var(--panel-bg-elevated);
+            box-shadow: var(--shadow-xl);
+            z-index: 3091;
+            overflow: hidden;
+        }
+
+        #ai-project-planner-backdrop.visible,
+        #ai-project-planner-modal.visible {
+            display: block;
+        }
+
+        #ai-project-planner-modal.visible {
+            display: flex;
+        }
+
+        #ai-project-planner-modal .ai-project-planner-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.85);
+        }
+
+        #ai-project-planner-modal .ai-project-planner-title-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        #ai-project-planner-modal .ai-project-planner-icon {
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        #ai-project-planner-modal .ai-project-planner-body {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 14px 16px;
+            overflow-y: auto;
+        }
+
+        #ai-project-planner-modal .ai-project-planner-label {
+            font-size: 11px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        #ai-project-planner-modal .ai-project-planner-input,
+        #ai-project-planner-modal .ai-project-planner-textarea {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.72);
+            color: var(--text-main);
+            padding: 10px 12px;
+            font-size: 13px;
+            outline: none;
+        }
+
+        #ai-project-planner-modal .ai-project-planner-input:focus,
+        #ai-project-planner-modal .ai-project-planner-textarea:focus {
+            border-color: var(--ai-accent);
+            box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.35);
+        }
+
+        #ai-project-planner-modal .ai-project-planner-textarea {
+            resize: vertical;
+            min-height: 64px;
+            line-height: 1.45;
+        }
+
+        #ai-project-planner-modal .ai-project-planner-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        #ai-project-planner-modal .ai-project-planner-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        #ai-project-planner-modal .ai-project-planner-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+            background: rgba(2, 6, 23, 0.58);
+        }
+
+        @media (max-width: 720px) {
+            #ai-project-planner-modal .ai-project-planner-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        #ai-settings-pane,
+        #ai-presets-pane {
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--border);
+            display: none;
+        }
+
+        #ai-settings-pane.visible,
+        #ai-presets-pane.visible {
+            display: block;
+        }
+
+        #sync-panel .gemini-usage-panel {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        #sync-panel .gemini-usage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        #sync-panel .gemini-usage-title {
+            font-size: 11px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+
+        #sync-panel .gemini-usage-model {
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        #sync-panel .gemini-usage-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        #sync-panel .gemini-usage-item {
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 8px;
+            padding: 8px;
+            background: rgba(2, 6, 23, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        #sync-panel .gemini-usage-item span {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+
+        #sync-panel .gemini-usage-item strong {
+            color: #e2e8f0;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        #sync-panel .gemini-usage-footer {
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        #sync-panel #gemini-usage-updated {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @media (max-width: 720px) {
+            #sync-panel .gemini-usage-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        #ai-chat-history {
+            flex: 1 1 auto;
+            min-height: 120px;
+            overflow-y: auto;
+            margin-bottom: 0;
+            scrollbar-gutter: stable;
+        }
+
+        #ai-loading {
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(0, 0, 0, 0.18);
+        }
+
+        #ai-loading.hidden {
+            display: none;
+        }
+
+        #ai-suggestions {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        #ai-suggestions button,
+        .ai-suggestion-btn {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #aaa;
+            white-space: nowrap;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 11px;
+            transition: all 0.2s ease;
+        }
+
+        #ai-suggestions button:hover,
+        .ai-suggestion-btn:hover {
+            background: var(--ai-accent);
+            border-color: var(--ai-accent);
+            color: white;
+        }
+
+        #ai-modal .layout-group-49 {
+            align-items: center;
+            gap: 8px;
+        }
+
+        #ai-modal .ai-top-action {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-muted);
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        #ai-modal .ai-top-action:hover {
+            background: rgba(167, 139, 250, 0.22);
+            border-color: rgba(167, 139, 250, 0.48);
+            color: #fff;
+        }
+
+        #ai-modal #ai-input {
+            min-width: 0;
+        }
+
+        #ai-modal #ai-ask-btn {
+            min-width: 74px;
+            font-weight: 700;
+        }
+
+        #ai-modal #ai-ask-btn:disabled {
+            opacity: 0.75;
+            cursor: wait;
+        }
+
+        #ai-modal .ai-top-action.active {
+            border-color: var(--ai-accent);
+            color: #fff;
+            box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.4);
+        }
+
+        .ai-msg {
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 85%;
+            font-size: 13px;
+            word-break: break-word;
+            line-height: 1.5;
+            margin-bottom: 5px;
+            height: auto !important;
+            overflow-y: visible !important;
+            overflow-x: visible;
+            /* Changed from auto to visible */
+            display: block;
+            /* Ensures it stacks correctly in the flex container */
+        }
+
+        .ai-msg.user {
+            background: var(--ai-accent);
+            color: white;
+            align-self: flex-end;
+            white-space: pre-wrap;
+        }
+
+        .ai-msg.bot {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            color: #eee;
+            align-self: flex-start;
+        }
+
+        .ai-msg pre {
+            background: #111;
+            padding: 8px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 11px;
+        }
+
+        /* PASTE THE NEW TABLE STYLES HERE: */
+        .ai-msg table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+
+        .ai-msg th,
+        .ai-msg td {
+            border: 1px solid #444;
+            padding: 6px;
+            text-align: left;
+        }
+
+        .ai-msg th {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--ai-accent);
+            /* Optional: This highlights the header with your purple AI theme */
+        }
+
+        /* AI Preset Buttons */
+        .ai-preset-btn {
+            background: linear-gradient(135deg, rgba(167, 139, 250, 0.1), rgba(139, 92, 246, 0.15));
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            color: #c4b5fd;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ai-preset-btn:hover {
+            background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(139, 92, 246, 0.25));
+            border-color: rgba(167, 139, 250, 0.5);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .ai-preset-btn:active {
+            transform: translateY(0);
+        }
+
+        /* AI Data Toggle Buttons */
+        .ai-data-toggle {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #888;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .ai-data-toggle:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: #aaa;
+        }
+
+        .ai-data-toggle.active {
+            background: linear-gradient(135deg, var(--ai-accent), #8b5cf6);
+            border-color: var(--ai-accent);
+            color: white;
+            box-shadow: 0 0 10px rgba(167, 139, 250, 0.3);
+        }
+
+        /* SELECTION MENU (Contextual) */
+        #selection-menu {
+            position: fixed;
+            display: none;
+            flex-direction: row;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 4px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+            z-index: 1100;
+            padding: 4px;
+            gap: 4px;
+            margin-top: -10px;
+        }
+
+        .sel-menu-btn {
+            background: transparent;
+            border: none;
+            color: #eee;
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 3px;
+        }
+
+        .sel-menu-btn:hover {
+            background: #444;
+            color: var(--accent);
+        }
+
+        /* --- DRAGGABLE HEALTH DASHBOARD --- */
+        #health-dashboard {
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+            cursor: move;
+            user-select: none;
+            pointer-events: auto !important;
+        }
+
+        #health-dashboard:hover,
+        #health-dashboard:active {
+            opacity: 1;
+        }

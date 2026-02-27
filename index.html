@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Urgency Flow: Project Management Edition - Enhanced UI</title>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/core.css">
+    <link rel="stylesheet" href="assets/css/hud.css">
+    <link rel="stylesheet" href="assets/css/agenda.css">
+    <link rel="stylesheet" href="assets/css/layout.css">
+    <link rel="stylesheet" href="assets/css/grid.css">
+    <link rel="stylesheet" href="assets/css/notes.css">
+    <link rel="stylesheet" href="assets/css/dashboard.css">
+    <link rel="stylesheet" href="assets/css/goals-habits.css">
+    <link rel="stylesheet" href="assets/css/graph.css">
+    <link rel="stylesheet" href="assets/css/panels-modals.css">
+    <link rel="stylesheet" href="assets/css/calendar.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="assets/css/extracted-inline.css">
+</head>
+
+<body>
+    <div id="focus-hud">
+        <div id="hud-doing-row" class="hud-row" style="display: none;">
+            <div class="hud-task-info">
+                <span class="hud-label">CURRENTLY DOING</span>
+                <span class="hud-task-name" id="hud-doing-title" role="button" tabindex="0"
+                    onclick="focusHUDTask('doing')"
+                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusHUDTask('doing');}">---</span>
+            </div>
+            <div class="hud-row-actions">
+                <span class="hud-timer" id="hud-doing-time">00:00</span>
+                <button type="button" class="hud-action hud-action-float" onclick="toggleFloatingWindow()"
+                    title="Float on Screen">🚀</button>
+                <button type="button" class="hud-action hud-action-stop" onclick="toggleFocusTimer('doing')"
+                    title="Stop Timer">🛑</button>
+            </div>
+        </div>
+
+        <video id="pip-stream-source" autoplay muted playsinline
+             class="layout-group-1"></video>
+
+        <div id="hud-should-row" class="hud-row should-be" style="display: none;">
+            <div class="hud-task-info">
+                <span class="hud-label">SHOULD BE DOING</span>
+                <span class="hud-task-name" id="hud-should-title" role="button" tabindex="0"
+                    onclick="focusHUDTask('should')"
+                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusHUDTask('should');}">---</span>
+            </div>
+            <div class="hud-row-actions">
+                <span id="hud-should-interval" class="hud-chip hud-chip-interval">00:00 -
+                    00:00</span>
+                <button type="button" class="hud-action hud-action-start" onclick="toggleFocusTimer('should')"
+                    title="Start Scheduled Task">▶</button>
+            </div>
+        </div>
+
+        <div id="hud-habit-row" class="hud-row habit-row" style="display: none;">
+            <div class="hud-task-info">
+                <span class="hud-label">TRACKING HABIT</span>
+                <span class="hud-task-name" id="hud-habit-title">---</span>
+            </div>
+            <div class="hud-row-actions">
+                <span class="hud-timer" id="hud-habit-time">00:00</span>
+                <button type="button" class="hud-action hud-action-stop" id="hud-habit-stop-btn"
+                    onclick="toggleHabitFocusTimer()" title="Stop Habit Timer">🛑</button>
+            </div>
+        </div>
+
+        <div id="hud-upcoming-row" class="hud-row upcoming" style="display: none;">
+            <div class="hud-task-info">
+                <span class="hud-label">UP NEXT</span>
+                <span class="hud-task-name" id="hud-upcoming-title" role="button" tabindex="0"
+                    onclick="focusHUDTask('upcoming')"
+                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusHUDTask('upcoming');}">---</span>
+            </div>
+            <div class="hud-row-actions">
+                <span id="hud-upcoming-countdown" class="hud-chip hud-chip-countdown">in
+                    30m</span>
+                <span id="hud-upcoming-interval" class="hud-chip hud-chip-interval">00:00 -
+                    00:00</span>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="task-group-focus-controls" class="task-group-focus-controls hidden" aria-hidden="true">
+        <button type="button" class="task-group-focus-btn" onclick="focusPrevTaskGroup()">Prev</button>
+        <div class="task-group-focus-meta">
+            <span id="task-group-focus-label" class="task-group-focus-label">Task Group Focus</span>
+            <span id="task-group-focus-count" class="task-group-focus-count">0 / 0</span>
+        </div>
+        <button type="button" class="task-group-focus-btn" onclick="focusNextTaskGroup()">Next</button>
+        <button type="button" class="task-group-focus-btn exit" onclick="exitTaskGroupFocusMode()">Exit</button>
+    </div>
+
+    <div id="toolbar" class="collapsed">
+        <div class="toolbar-actions">
+            <button id="menu-btn" onclick="toggleMenu()" title="Open Menu (Optn+Q)" aria-label="Open Menu (Optn+Q)"
+                aria-expanded="false">☰</button>
+            <button id="btn-navigator" class="toolbar-icon-btn" title="Navigator (Opt+F)"
+                onclick="toggleNavigatorPanel(null, 'tasks')">🧭</button>
+            <button id="btn-projects" class="toolbar-icon-btn" title="Projects (Opt+P)"
+                onclick="toggleProjectsPanel()">📁</button>
+            <button id="btn-dashboard" class="toolbar-icon-btn" title="Dashboard (Opt+U)"
+                onclick="toggleInsightsDashboard()">🌿</button>
+            <div id="quick-links-container" class="quick-links"></div>
+            <div id="reminder-alert-strip" class="reminder-strip"></div>
+            <button id="btn-add-quick-link" class="toolbar-icon-btn" title="Add Link"
+                onclick="openQuickLinkModal()">+</button>
+            <button id="btn-reminders-modal" class="toolbar-icon-btn" title="All Reminders"
+                onclick="toggleRemindersModal()">🔔</button>
+            <button id="btn-shortcuts" class="toolbar-icon-btn" title="Keyboard Shortcuts (?)"
+                onclick="toggleShortcutsHelp()">⌨️</button>
+        </div>
+        <div id="toolbar-content">
+            <div id="toolbar-quick-actions-grid" class="toolbar-quick-actions-grid">
+                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-primary" onclick="addNode()"
+                    data-tooltip="New Task (Optn+T)" aria-label="New Task (Optn+T)">＋</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="openAIProjectPlannerModal()"
+                    data-tooltip="AI Project Plan (Optn+Shift+T)" aria-label="AI Project Plan (Optn+Shift+T)">🧠</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleInboxModal()"
+                    data-tooltip="Inbox (Optn+B)" aria-label="Inbox (Optn+B)">📥</button>
+                <button id="btn-finance-capture" class="toolbar-icon-btn toolbar-menu-action" onclick="openFinanceCaptureModal()"
+                    data-tooltip="Record Finance Transaction (Optn+C)" aria-label="Record Finance Transaction (Optn+C)">💸</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleGoals()"
+                    data-tooltip="Life Goals (Optn+G)" aria-label="Life Goals (Optn+G)">🎯</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleHabits()"
+                    data-tooltip="Habits (Optn+H)" aria-label="Habits (Optn+H)">✅</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleAgenda()"
+                    data-tooltip="Planner (Optn+A)" aria-label="Planner (Optn+A)">📅</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleNotesPanel()"
+                    data-tooltip="Knowledge Base (Optn+N)" aria-label="Knowledge Base (Optn+N)">📝</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleArchivePanel()"
+                    data-tooltip="Archive (Optn+X)" aria-label="Archive (Optn+X)">🗄️</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleNavigatorPanel(null, 'tasks')"
+                    data-tooltip="Navigator (Optn+F)" aria-label="Navigator (Optn+F)">🧭</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleProjectsPanel()"
+                    data-tooltip="Projects (Optn+P)" aria-label="Projects (Optn+P)">📁</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="fitView()"
+                    data-tooltip="Recenter / Urgent (Optn+R)" aria-label="Recenter / Urgent (Optn+R)">📍</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="autoArrangeGraph()"
+                    data-tooltip="Declutter (Optn+D)" aria-label="Declutter (Optn+D)">🪄</button>
+                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-accent"
+                    onclick="toggleSyncPanel()" data-tooltip="Settings (Optn+S)"
+                    aria-label="Settings (Optn+S)">⚙️</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleRemindersModal()"
+                    data-tooltip="All Reminders (No Shortcut)" aria-label="All Reminders">🔔</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleGlobalSearch()"
+                    data-tooltip="Search (Optn+Space)" aria-label="Search (Optn+Space)">🔍</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="saveData(true)"
+                    data-tooltip="Save (Optn+V)" aria-label="Save (Optn+V)">💾</button>
+                <button class="toolbar-icon-btn toolbar-menu-action"
+                    onclick="document.getElementById('file-input').click()" data-tooltip="Load (Optn+L)"
+                    aria-label="Load (Optn+L)">📂</button>
+                <button class="toolbar-icon-btn toolbar-menu-action toolbar-menu-action-danger" onclick="clearData()"
+                    data-tooltip="Reset (Optn+K)" aria-label="Reset (Optn+K)">🗑️</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="exportNotesAsMarkdown()"
+                    data-tooltip="Export Notes (No Shortcut)" aria-label="Export Notes">📄</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" id="eco-toggle-btn" onclick="cycleEcoMode()"
+                    data-tooltip="Cycle Engine Mode (Optn+E) · Turbo" aria-label="Cycle Engine Mode (Optn+E)">🚀<span
+                        id="eco-status" class="toolbar-menu-action-status">Turbo</span></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="right-rail-tabs" class="right-rail-tabs" aria-label="Right Rail Tabs">
+        <button class="right-rail-tab" data-panel-id="notes-panel" onclick="openRightRailTab('notes')">Notes</button>
+        <button class="right-rail-tab" data-panel-id="goals-panel" onclick="openRightRailTab('goals')">Goals</button>
+        <button class="right-rail-tab" data-panel-id="habits-panel" onclick="openRightRailTab('habits')">Habits</button>
+        <button class="right-rail-tab" data-panel-id="agenda-panel"
+            onclick="openRightRailTab('planner')">Planner</button>
+        <button class="right-rail-tab" data-panel-id="projects-panel" onclick="openRightRailTab('projects')">Projects</button>
+        <button class="right-rail-tab" data-panel-id="archive-panel"
+            onclick="openRightRailTab('archive')">Archive</button>
+        <button class="right-rail-tab" data-panel-id="navigator-panel"
+            onclick="openRightRailTab('navigator')">Navigator</button>
+        <button class="right-rail-tab" data-panel-id="sync-panel"
+            onclick="openRightRailTab('settings')">Settings</button>
+    </div>
+
+    <input type="file" id="file-input" style="display:none" onchange="loadFile(this)">
+
+    <div id="graph-container">
+        <div id="transform-layer"
+             class="layout-group-2">
+            <svg id="connections"></svg>
+            <div id="nodes-layer"></div>
+        </div>
+    </div>
+
+    <div id="selection-rect"></div>
+
+    <div id="selection-menu">
+        <button class="sel-menu-btn" onclick="createTaskFromSelection()">✨ To Task</button>
+        <button class="sel-menu-btn" onclick="createNoteFromSelection()">📝 To Note</button>
+    </div>
+
+    <div id="sync-panel" class="hidden">
+        <div class="sync-header">
+            <div class="sync-header-title-wrap">
+                <span class="sync-header-icon" aria-hidden="true">⚙️</span>
+                <div class="sync-header-title-block">
+                    <span class="sync-header-title">Settings Hub</span>
+                </div>
+            </div>
+            <div class="sync-header-actions">
+                <span id="connection-status" class="sync-status-pill">Checking...</span>
+                <button type="button" class="sync-close-btn" onclick="toggleSyncPanel()" aria-label="Close Settings Hub">✕</button>
+            </div>
+        </div>
+
+        <div class="settings-hub-content">
+            <div class="settings-hub-intro">
+                Centralized controls for sync, AI, backups, and performance.
+            </div>
+
+            <section class="settings-card settings-card-sync">
+                <div class="settings-card-heading">
+                    <span class="settings-card-icon" aria-hidden="true">☁️</span>
+                    <h3>GitHub Gist Sync</h3>
+                </div>
+
+                <div class="form-group">
+                    <label class="settings-field-label" for="github-token">Personal Access Token</label>
+                    <div class="settings-inline-row">
+                        <input type="password" id="github-token" placeholder="ghp_xxxxxxxxxxxx"
+                            onchange="saveGithubToken(this.value)">
+                        <button class="settings-action-btn settings-action-btn-compact" onclick="testGithubConnection()" title="Test Token">🧪 Test</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="settings-field-label" for="gist-id">Gist ID (Auto-filled on Push)</label>
+                    <input type="text" id="gist-id" placeholder="Autogenerated..." readonly>
+                </div>
+
+                <div class="settings-action-grid">
+                    <button class="settings-action-btn" onclick="pullFromGist()">⬇ Pull</button>
+                    <button class="settings-action-btn" onclick="pushToGist()">⬆ Push</button>
+                </div>
+            </section>
+
+            <section class="settings-card settings-card-ai">
+                <div class="settings-card-heading">
+                    <span class="settings-card-icon" aria-hidden="true">✨</span>
+                    <h3>Gemini API Key</h3>
+                </div>
+
+                <div class="form-group">
+                    <label class="settings-field-label" for="settings-gemini-key-input">API Key</label>
+                    <input type="password" id="settings-gemini-key-input" placeholder="Paste API key..."
+                        onchange="saveGeminiKey(this.value)">
+                </div>
+
+                <div class="settings-action-grid">
+                    <button class="settings-action-btn" onclick="toggleAIModal()">Open AI Workspace</button>
+                    <button class="settings-action-btn" onclick="toggleAIPresets()">Quick Presets</button>
+                </div>
+
+                <div class="gemini-usage-panel" id="gemini-usage-panel">
+                    <div class="gemini-usage-header">
+                        <span class="gemini-usage-title">Gemini Usage (Local Estimate)</span>
+                        <span class="gemini-usage-model" id="gemini-usage-model">Model: gemini-2.5-flash</span>
+                    </div>
+                    <div class="gemini-usage-grid">
+                        <div class="gemini-usage-item">
+                            <span>Requests (Last 60s)</span>
+                            <strong id="gemini-usage-minute-requests">0</strong>
+                        </div>
+                        <div class="gemini-usage-item">
+                            <span>Tokens (Last 60s)</span>
+                            <strong id="gemini-usage-minute-tokens">0</strong>
+                        </div>
+                        <div class="gemini-usage-item">
+                            <span>Requests Today (Pacific)</span>
+                            <strong id="gemini-usage-today-requests">0</strong>
+                        </div>
+                        <div class="gemini-usage-item">
+                            <span>Tokens Today (Pacific)</span>
+                            <strong id="gemini-usage-today-tokens">0</strong>
+                        </div>
+                        <div class="gemini-usage-item">
+                            <span>All-Time Requests</span>
+                            <strong id="gemini-usage-all-requests">0</strong>
+                        </div>
+                        <div class="gemini-usage-item">
+                            <span>All-Time Tokens</span>
+                            <strong id="gemini-usage-all-tokens">0</strong>
+                        </div>
+                    </div>
+                    <div class="gemini-usage-footer">
+                        <span id="gemini-usage-updated">Updated: —</span>
+                        <button type="button" class="btn" onclick="resetGeminiUsageStats()">Reset Counters</button>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top:12px;">
+                    <label class="settings-field-label" for="ai-urgency-mode-select">AI Urgency Mode</label>
+                    <div class="settings-inline-row">
+                        <select id="ai-urgency-mode-select" onchange="handleAiUrgencyModeChange(this.value)">
+                            <option value="shadow">Shadow (compute only)</option>
+                            <option value="system">System (current behavior)</option>
+                            <option value="ai">AI (project urgency)</option>
+                            <option value="blended">Blended (system + AI)</option>
+                        </select>
+                        <button class="settings-action-btn settings-action-btn-compact" onclick="recomputeAiUrgencyFromSettings()">↻ Recompute</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="settings-field-label" for="ai-urgency-blend-range">Blend AI Weight</label>
+                    <div class="settings-inline-row">
+                        <input type="range" id="ai-urgency-blend-range" min="0" max="100" step="5"
+                            oninput="updateAiUrgencyBlendPreview(this.value)">
+                        <span id="ai-urgency-blend-value" style="min-width:46px; text-align:right;">30%</span>
+                        <button class="settings-action-btn settings-action-btn-compact" onclick="applyAiUrgencyBlendFromSettings()">Apply</button>
+                    </div>
+                </div>
+
+                <div class="settings-action-grid">
+                    <button class="settings-action-btn" onclick="runSemanticAiUrgencyFromSettings()">Semantic Re-score (Gemini)</button>
+                    <button class="settings-action-btn" onclick="openAiUrgencyScoresModal()">View Urgency Scores</button>
+                </div>
+                <div class="settings-meta">
+                    Heuristic AI = fast local score from due dates, dependencies, and activity. Semantic AI = Gemini text-based score from task/project wording.
+                    Use <strong>AI</strong> for AI-only ranking or <strong>Blended</strong> to mix AI with system scoring.
+                </div>
+                <div class="settings-meta" id="ai-urgency-status">AI urgency ready.</div>
+            </section>
+
+            <section class="settings-card settings-card-system">
+                <div class="settings-card-heading">
+                    <span class="settings-card-icon" aria-hidden="true">🧰</span>
+                    <h3>System Controls</h3>
+                </div>
+
+                <div class="settings-action-grid">
+                    <button class="settings-action-btn" onclick="cycleEcoMode()">Mode: <span id="settings-eco-status">Turbo</span></button>
+                    <button class="settings-action-btn" onclick="cleanAppMemory()">🧹 Clean Memory</button>
+                </div>
+
+                <div class="settings-action-grid">
+                    <button class="settings-action-btn" onclick="saveData(true)">⬇ Backup Now</button>
+                    <button class="settings-action-btn" onclick="updateDataMetrics()">↻ Refresh Metrics</button>
+                </div>
+
+                <div class="settings-meta">
+                    Last auto backup: <span id="backup-timestamp-settings">None</span>
+                </div>
+            </section>
+
+            <section id="data-health-panel" class="settings-card settings-card-metrics">
+                <div class="settings-metrics-header">
+                    <span class="settings-metrics-title">📊 Data Health & Metrics</span>
+                    <span id="total-gist-size" class="settings-metrics-total">0.0 KB</span>
+                </div>
+                <div id="metrics-breakdown" class="metrics-breakdown">
+                    <!-- Filled via JS -->
+                </div>
+            </section>
+
+            <div id="sync-status" class="sync-status"></div>
+        </div>
+    </div>
+
+    <div id="ai-urgency-scores-backdrop" onclick="closeAiUrgencyScoresModal()"></div>
+    <div id="ai-urgency-scores-modal" role="dialog" aria-modal="true" aria-labelledby="ai-urgency-scores-title">
+        <div class="ai-urgency-scores-header">
+            <div class="ai-urgency-scores-title-wrap">
+                <span class="ai-urgency-scores-icon" aria-hidden="true">📊</span>
+                <span id="ai-urgency-scores-title">Urgency Scores</span>
+            </div>
+            <button class="modal-close-btn" onclick="closeAiUrgencyScoresModal()">✕</button>
+        </div>
+
+        <div class="ai-urgency-scores-controls">
+            <label for="ai-urgency-scores-view">Show</label>
+            <select id="ai-urgency-scores-view" onchange="renderAiUrgencyScoresModal()">
+                <option value="system">System</option>
+                <option value="ai">AI</option>
+                <option value="both" selected>Both</option>
+            </select>
+            <button class="settings-action-btn settings-action-btn-compact" onclick="renderAiUrgencyScoresModal()">Refresh</button>
+        </div>
+
+        <div class="ai-urgency-scores-meta" id="ai-urgency-scores-meta">Loading scores...</div>
+
+        <div class="ai-urgency-scores-sections">
+            <section class="ai-urgency-scores-section">
+                <h4>Tasks</h4>
+                <div class="ai-urgency-scores-table-wrap" id="ai-urgency-scores-task-wrap"></div>
+            </section>
+            <section class="ai-urgency-scores-section">
+                <h4>Projects</h4>
+                <div class="ai-urgency-scores-table-wrap" id="ai-urgency-scores-project-wrap"></div>
+            </section>
+        </div>
+    </div>
+
+    <!-- AI Assistant Modal -->
+    <div id="ai-modal-backdrop"></div>
+    <div id="ai-modal" role="dialog" aria-modal="true" aria-labelledby="ai-modal-title">
+        <div class="modal-header-enhanced" id="ai-modal-header">
+            <div class="modal-title-enhanced">
+                <span  class="layout-group-31">✨</span>
+                <span id="ai-modal-title">AI Project Assistant</span>
+            </div>
+            <div  class="layout-group-32">
+                <button id="ai-presets-toggle-btn" class="layout-group-33 ai-top-action" onclick="toggleAIPresets()" title="Quick Tasks" aria-expanded="false"
+                    >✨</button>
+                <button id="ai-settings-toggle-btn" class="layout-group-34 ai-top-action" onclick="toggleAISettings()" title="Settings" aria-expanded="false"
+                    >⚙️</button>
+                <button class="modal-close-btn" onclick="closeAIModal()">✕</button>
+            </div>
+        </div>
+
+        <div id="ai-settings-pane">
+            <label  class="layout-group-35">Gemini API Key</label>
+            <input type="password" id="gemini-api-key-input" placeholder="Paste API Key here..."
+                onchange="saveGeminiKey(this.value)"  class="layout-group-36">
+            <div  class="layout-group-37">Key is saved to your browser's Local Storage.</div>
+        </div>
+
+        <!-- AI Task Presets Panel -->
+        <div id="ai-presets-pane"
+             class="layout-group-38">
+            <div
+                 class="layout-group-39">
+                QUICK TASKS
+            </div>
+            <div  class="layout-group-40">
+                <button class="ai-preset-btn" onclick="selectAIPreset('analyze-risks')">
+                    ⚠️ Analyze Risks
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('goal-alignment')">
+                    🎯 Goal Alignment
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('weekly-summary')">
+                    📊 Weekly Summary
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('schedule-optimization')">
+                    ⏰ Optimize Schedule
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('unblock-tasks')">
+                    🔓 Unblock Tasks
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('habit-insights')">
+                    💪 Habit Insights
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('next-action')">
+                    ➡️ What's Next?
+                </button>
+                <button class="ai-preset-btn" onclick="selectAIPreset('search-notes')">
+                    🔍 Search Notes
+                </button>
+            </div>
+
+            <div
+                 class="layout-group-41">
+                INCLUDE DATA
+            </div>
+            <div  class="layout-group-42">
+                <button class="ai-data-toggle active" data-type="tasks" onclick="toggleAIData('tasks')">
+                    📋 Tasks
+                </button>
+                <button class="ai-data-toggle" data-type="projects" onclick="toggleAIData('projects')">
+                    📁 Projects
+                </button>
+                <button class="ai-data-toggle" data-type="goals" onclick="toggleAIData('goals')">
+                    🎯 Goals
+                </button>
+                <button class="ai-data-toggle" data-type="habits" onclick="toggleAIData('habits')">
+                    ✅ Habits
+                </button>
+                <button class="ai-data-toggle" data-type="schedule" onclick="toggleAIData('schedule')">
+                    📅 Schedule
+                </button>
+                <button class="ai-data-toggle" data-type="notes" onclick="toggleAIData('notes')">
+                    📝 Notes
+                </button>
+                <button class="ai-data-toggle" data-type="archive" onclick="toggleAIData('archive')">
+                    🗄️ Archive
+                </button>
+                <button class="ai-data-toggle" data-type="inbox" onclick="toggleAIData('inbox')">
+                    📥 Inbox
+                </button>
+            </div>
+        </div>
+
+        <div id="ai-chat-history" class=" layout-group-43" aria-live="polite"
+            >
+            <div class="ai-msg bot">Hello! I can analyze your tasks, notes, and life goals to provide strategic
+                insights. <br><br>Please click the ⚙️ icon to set your Google Gemini API Key to get started.</div>
+        </div>
+
+        <div id="ai-loading" class=" layout-group-44 hidden" >
+            Gemini is thinking...</div>
+
+        <div id="ai-suggestions"
+             class="layout-group-45">
+            <button class="layout-group-46 ai-suggestion-btn"
+                onclick="openAIProjectPlannerModal()">🧠 AI Project Planner</button>
+            <button class="layout-group-46 ai-suggestion-btn"
+                onclick="quickPrompt('Analyze my Inbox and my current Life Goals. Which ideas should I promote to tasks immediately to maintain momentum?', ['inbox','goals'])">🎯
+                Goal Alignment</button>
+            <button class="layout-group-47 ai-suggestion-btn"
+                onclick="quickPrompt('Identify the Critical Path tasks that are currently blocked. What is the single most important thing I must finish today to prevent a cascade of delays?', ['tasks'])">⚠️
+                Risk Check</button>
+            <button class="layout-group-48 ai-suggestion-btn"
+                onclick="quickPrompt('Look at my archived and completed tasks plus habit consistency. Write a brief executive summary of what I achieved this week and what my top 3 priorities should be for next week.', ['tasks','archive','habits'])">📝
+                Weekly Recap</button>
+        </div>
+
+        <div  class="layout-group-49">
+            <input type="text" id="ai-input" placeholder="Analyze my current risks..."
+                onkeypress="if(event.key==='Enter') askAI()">
+            <button id="ai-ask-btn" class=" layout-group-50" 
+                onclick="askAI()">Ask</button>
+        </div>
+    </div>
+
+    <div id="ai-project-planner-backdrop" onclick="closeAIProjectPlannerModal()"></div>
+    <div id="ai-project-planner-modal" role="dialog" aria-modal="true" aria-labelledby="ai-project-planner-title">
+        <div class="ai-project-planner-header">
+            <div class="ai-project-planner-title-wrap">
+                <span class="ai-project-planner-icon">🧠</span>
+                <span id="ai-project-planner-title">AI Project Planner</span>
+            </div>
+            <button class="modal-close-btn" onclick="closeAIProjectPlannerModal()">✕</button>
+        </div>
+        <div class="ai-project-planner-body">
+            <label class="ai-project-planner-label" for="ai-project-name-input">Project Name</label>
+            <input id="ai-project-name-input" class="ai-project-planner-input" type="text" maxlength="160" placeholder="e.g., Launch website redesign" />
+
+            <label class="ai-project-planner-label" for="ai-project-outcome-input">Target Outcome</label>
+            <textarea id="ai-project-outcome-input" class="ai-project-planner-textarea" rows="2" maxlength="500" placeholder="What should be true when this project is complete?"></textarea>
+
+            <label class="ai-project-planner-label" for="ai-project-scope-input">Scope / Deliverables</label>
+            <textarea id="ai-project-scope-input" class="ai-project-planner-textarea" rows="3" maxlength="1000" placeholder="List key deliverables, features, or milestones."></textarea>
+
+            <label class="ai-project-planner-label" for="ai-project-constraints-input">Constraints / Risks (Optional)</label>
+            <textarea id="ai-project-constraints-input" class="ai-project-planner-textarea" rows="2" maxlength="1000" placeholder="Timeline, budget, dependencies, blockers, or quality constraints."></textarea>
+
+            <div class="ai-project-planner-grid">
+                <div class="ai-project-planner-field">
+                    <label class="ai-project-planner-label" for="ai-project-timeframe-input">Timeframe (Optional)</label>
+                    <input id="ai-project-timeframe-input" class="ai-project-planner-input" type="text" maxlength="120" placeholder="e.g., 6 weeks" />
+                </div>
+                <div class="ai-project-planner-field">
+                    <label class="ai-project-planner-label" for="ai-project-depth-select">Plan Depth</label>
+                    <select id="ai-project-depth-select" class="ai-project-planner-input">
+                        <option value="lean">Lean (6-10 tasks)</option>
+                        <option value="balanced" selected>Balanced (10-16 tasks)</option>
+                        <option value="deep">Comprehensive (14-24 tasks)</option>
+                    </select>
+                </div>
+            </div>
+
+            <label class="ai-project-planner-label" for="ai-project-goal-select">Link to Goal (Optional)</label>
+            <select id="ai-project-goal-select" class="ai-project-planner-input">
+                <option value="">No linked goal</option>
+            </select>
+        </div>
+        <div class="ai-project-planner-footer">
+            <button class="btn" onclick="closeAIProjectPlannerModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="submitAIProjectPlanner()">Generate AI Plan</button>
+        </div>
+    </div>
+
+    <div id="goals-panel" class="hidden">
+        <div class="panel-header-row">
+            <span>🎯 Life Goals</span>
+            <button class="btn" onclick="toggleGoals()">✕</button>
+        </div>
+
+        <div class="goals-header">
+            <div class="year-nav">
+                <button class="btn" onclick="changeGoalYear(-1)">&lt;</button>
+                <span id="goals-year-display" class="year-title">2024</span>
+                <button class="btn" onclick="changeGoalYear(1)">&gt;</button>
+            </div>
+            <div class="goal-filter-controls">
+                <button class="btn" onclick="showAllTasksFromGoals()">Show All Tasks</button>
+            </div>
+            <div  class="layout-group-51">
+                <input type="text" id="new-goal-input" placeholder="New root goal..."
+                    onkeypress="if(event.key==='Enter') addRootGoal()">
+                <button class="btn btn-primary" onclick="addRootGoal()">Add</button>
+            </div>
+        </div>
+        <div class="goal-tree" id="goal-tree-container">
+        </div>
+    </div>
+
+    <div id="habits-panel" class="hidden">
+        <div class="panel-header-row">
+            <span>✅ Habits</span>
+            <button class="btn" onclick="toggleHabits()">✕</button>
+        </div>
+
+        <div class="habit-composer">
+            <div class="habit-composer-row">
+                <input type="text" id="new-habit-input" placeholder="New habit..."  class="layout-group-52"
+                    onkeypress="if(event.key==='Enter') addHabit()">
+                <button id="habit-submit-btn" class="btn btn-primary" onclick="addHabit()">Add</button>
+                <button id="habit-cancel-edit-btn" class="btn" style="display:none;"
+                    onclick="cancelHabitEdit()">Cancel</button>
+            </div>
+
+            <div class="habit-type-row">
+                <select id="habit-frequency-select">
+                    <option value="daily">📅 Daily</option>
+                    <option value="weekly">🗓️ Weekly</option>
+                    <option value="monthly">🌕 Monthly</option>
+                </select>
+
+                <select id="habit-type-select" onchange="toggleHabitInputs()">
+                    <option value="checkbox">☑ Checkbox</option>
+                    <option value="counter">🔢 Count</option>
+                    <option value="timer">⏱ Minutes</option>
+                </select>
+            </div>
+
+            <div class="habit-type-row">
+                <input type="number" id="habit-target-input" placeholder="Target..." min="1">
+                <span id="habit-unit-label">mins</span>
+            </div>
+
+            <select id="habit-goal-select">
+                <option value="">(Optional) Link to a Life Goal...</option>
+            </select>
+        </div>
+
+        <div class="habit-summary-strip">
+            <div class="habit-summary-top">
+                <span id="habit-summary-period">Today</span>
+                <span id="habit-summary-progress-text">0% complete</span>
+            </div>
+            <div class="habit-summary-bar">
+                <div id="habit-summary-progress-fill"></div>
+            </div>
+            <div class="habit-summary-stats">
+                <div><span id="habit-summary-completed">0</span> completed</div>
+                <div><span id="habit-summary-pending">0</span> needs action</div>
+            </div>
+        </div>
+
+        <div id="habits-filter-row" class="habit-filter-row">
+            <button class="habit-filter-btn active" data-filter="all" onclick="setHabitFilter('all')">All</button>
+            <button class="habit-filter-btn" data-filter="needs-action" onclick="setHabitFilter('needs-action')">Needs
+                Action</button>
+            <button class="habit-filter-btn" data-filter="completed"
+                onclick="setHabitFilter('completed')">Completed</button>
+        </div>
+
+        <div class="panel-list" id="habits-list-container">
+        </div>
+    </div>
+
+    <div id="notes-panel" class="hidden side-panel">
+        <div class="panel-header-row" id="notes-header-drag-handle">
+            <div  class="layout-group-53">
+                <span>📝 Knowledge Base</span>
+                <button class="tool-btn" id="pin-note-btn" onclick="togglePinNotePanel()"
+                    title="Pin/Detach Panel">📌</button>
+            </div>
+            <button class="btn" onclick="toggleNotesPanel()">✕</button>
+        </div>
+
+        <div  class="layout-group-54">
+            <input type="text" id="note-search-input" placeholder="Search notes or tags..." oninput="renderNotesList()">
+            <div id="note-tags-filter"  class="layout-group-55"></div>
+            <div class="ai-note-selection-row">
+                <div id="ai-note-selection-summary">AI context selection: 0 full note(s), 0 block(s)</div>
+                <button class=" layout-group-56" 
+                    onclick="clearAINoteSelection()">Clear</button>
+            </div>
+        </div>
+
+        <div class="panel-list" id="notes-list-container"></div>
+
+        <div  class="layout-group-57">
+            <button class=" layout-group-58"  onclick="createNewNote()">+ New Independent Note</button>
+            <a class=" layout-group-59" href="notes/index.html"
+                >Open
+                Full Notes Page ↗</a>
+        </div>
+    </div>
+
+    <div id="agenda-panel" class="hidden side-panel planner-panel">
+        <div class="panel-header-row planner-header-row">
+            <span>🗓️ Planner</span>
+            <button class="btn planner-close-btn" onclick="toggleAgenda()" aria-label="Close planner">✕</button>
+        </div>
+        <div class="planner-tabs" role="tablist" aria-label="Planner Views">
+            <button class="planner-tab active" data-planner-tab="agenda"
+                onclick="setPlannerTab('agenda')">Agenda</button>
+            <button class="planner-tab" data-planner-tab="calendar"
+                onclick="setPlannerTab('calendar')">Calendar</button>
+            <button class="planner-tab" data-planner-tab="heatmap" onclick="setPlannerTab('heatmap')">Heatmap</button>
+        </div>
+
+        <div id="planner-tab-agenda" class="planner-tab-content">
+            <div class="agenda-composer-toggle-row">
+                <button id="agenda-composer-toggle-btn" class="btn agenda-composer-toggle-btn"
+                    onclick="toggleAgendaComposer()" aria-expanded="true">Hide Composer</button>
+            </div>
+            <div class="agenda-form-wrap">
+                <div class="agenda-meta-row">
+                    <span class="agenda-plan-date">Plan for: <span id="agenda-date-display"></span></span>
+                    <button class="agenda-clear-btn" onclick="clearCompletedAgendaSlots()">Clear Done</button>
+                </div>
+
+                <div id="agenda-selection-info" class="agenda-selection-card">
+                    <div class="agenda-selection-label">Selected Task</div>
+                    <div id="agenda-selected-task-title" class="agenda-selection-title">(Select a task on the graph)
+                    </div>
+                </div>
+
+                <div class="agenda-time-row">
+                    <div class="agenda-time-field">
+                        <label for="agenda-start-time">Start</label>
+                        <input type="time" id="agenda-start-time" class="agenda-time-input">
+                    </div>
+                    <div class="agenda-time-field">
+                        <label for="agenda-end-time">End</label>
+                        <input type="time" id="agenda-end-time" class="agenda-time-input">
+                    </div>
+                </div>
+
+                <button class="btn btn-primary agenda-add-btn" onclick="addToAgenda()">+ Add Selected Task</button>
+
+                <div class="agenda-break-wrap">
+                    <div class="agenda-break-label">Add Break</div>
+                    <div class="agenda-break-row">
+                        <button class="btn agenda-break-btn" onclick="addBreak(15)">☕ 15m</button>
+                        <button class="btn agenda-break-btn" onclick="addBreak(30)">☕ 30m</button>
+                        <button class="btn agenda-break-btn" onclick="addBreak(60)">🍽️ 1h</button>
+                    </div>
+                </div>
+            </div>
+            <div class="panel-list agenda-list" id="agenda-list-container">
+            </div>
+        </div>
+
+        <div id="calendar-panel" class="planner-tab-content hidden">
+            <div class="planner-subheader cal-toolbar">
+                <div class="cal-controls">
+                    <button class="btn planner-icon-btn" onclick="changeCalDate(-1)"
+                        aria-label="Previous period">&lt;</button>
+                    <div class="cal-view-toggle" role="tablist" aria-label="Calendar View Mode">
+                        <button class="planner-subtab active" data-cal-view="day"
+                            onclick="setCalView('day')">Day</button>
+                        <button class="planner-subtab" data-cal-view="week" onclick="setCalView('week')">Week</button>
+                        <button class="planner-subtab" data-cal-view="month"
+                            onclick="setCalView('month')">Month</button>
+                    </div>
+                    <button class="btn planner-icon-btn" onclick="changeCalDate(1)"
+                        aria-label="Next period">&gt;</button>
+                </div>
+                <div id="cal-title" class="cal-title">January 2026</div>
+                <div id="cal-weekday-header" class="cal-weekday-header hidden"></div>
+            </div>
+            <div id="cal-container" class="cal-view-container"></div>
+        </div>
+
+        <div id="heatmap-overlay" class="planner-tab-content hidden">
+            <div class="planner-subheader heatmap-header">
+                <div class="heatmap-top-row">
+                    <h2 id="heatmap-title" class="heatmap-title">2024 Heatmap</h2>
+                    <div class="heatmap-controls">
+                        <button class="btn planner-icon-btn" onclick="changeHeatmapYear(-1)"
+                            aria-label="Previous year">&lt;</button>
+                        <span id="heatmap-year-label" class="heatmap-year-label">2024</span>
+                        <button class="btn planner-icon-btn" onclick="changeHeatmapYear(1)"
+                            aria-label="Next year">&gt;</button>
+                    </div>
+                </div>
+                <div id="heatmap-selected-day" class="heatmap-selected-day">Select a day to view details.</div>
+                <div class="heatmap-legend" aria-label="Heatmap intensity legend">
+                    <span class="heatmap-legend-label">Less</span>
+                    <span class="heatmap-swatch level-0"></span>
+                    <span class="heatmap-swatch level-1"></span>
+                    <span class="heatmap-swatch level-2"></span>
+                    <span class="heatmap-swatch level-3"></span>
+                    <span class="heatmap-swatch level-4"></span>
+                    <span class="heatmap-swatch level-5"></span>
+                    <span class="heatmap-legend-label">More</span>
+                </div>
+            </div>
+            <div id="heatmap-container" class="heatmap-grid">
+            </div>
+        </div>
+    </div>
+
+    <div id="ai-text-toolbar">
+        <button class="ai-btn" onclick="applyAI('grammar')">
+            <span>✨</span> Grammar
+        </button>
+        <button class="ai-btn" onclick="applyAI('clarity')">
+            <span>👓</span> Clarity
+        </button>
+    </div>
+
+    <div id="note-editor" class="hidden">
+        <!-- Header -->
+        <div class="note-modal-header">
+            <input type="text" id="note-title-input" placeholder="Note Title..." oninput="saveCurrentNote()">
+            <div class="note-header-actions">
+                <button class="icon-btn" id="pin-note-btn" onclick="toggleCurrentNotePin()" title="Pin Note">📌</button>
+                <button class="icon-btn" id="note-maximize-btn" onclick="toggleNoteEditorSize()"
+                    title="Maximize (Alt+W)">⛶</button>
+                <button class="icon-btn danger" onclick="deleteCurrentNote()" title="Delete Note">🗑️</button>
+                <button class="icon-btn" onclick="closeNoteEditor()" title="Close">✕</button>
+            </div>
+        </div>
+
+        <!-- Global Toolbar -->
+        <div class="note-global-toolbar">
+            <div class="note-toolbar-group">
+                <button id="toggle-edit-btn" class="note-toolbar-btn active-mode" onclick="setGlobalViewMode(false)">
+                    ✏️ Edit
+                </button>
+                <button id="toggle-view-btn" class="note-toolbar-btn" onclick="setGlobalViewMode(true)">
+                    👁️ View
+                </button>
+            </div>
+
+            <div class="note-toolbar-group note-edit-only-ui">
+                <button class="note-toolbar-btn" onclick="applyBlockFormat('bold')" title="Bold"><b>B</b></button>
+                <button class="note-toolbar-btn" onclick="applyBlockFormat('italic')" title="Italic"><i>I</i></button>
+                <button class="note-toolbar-btn" onclick="applyBlockFormat('checkbox')" title="Add Checkbox">☑</button>
+            </div>
+
+            <div class="note-toolbar-group note-edit-only-ui">
+                <button class=" layout-group-60" onclick="createTaskFromBlockSelection()"
+                    title="Convert Selection to Task" >
+                    ✨ Task
+                </button>
+                <button class=" layout-group-61" onclick="toggleNoteTaskSearch()" title="Link Note to Tasks"
+                    >
+                    🔗 Link Tasks
+                </button>
+                <button class=" layout-group-62" onclick="toggleNoteHabitSearch()" title="Link Note to Habits"
+                    >
+                    ✅ Link Habits
+                </button>
+            </div>
+
+            <div class="note-toolbar-group">
+                <div class="bookmark-dropdown-container">
+                    <button class="note-toolbar-btn" id="bookmark-dropdown-btn" onclick="toggleBookmarkDropdown()">
+                        <i class="fas fa-bookmark"></i> Bookmarks <span id="bookmark-count-badge"
+                            class="bookmark-count-badge">0</span>
+                    </button>
+                    <div id="bookmark-dropdown" class="bookmark-dropdown">
+                        <!-- Bookmarks render here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="note-toolbar-group">
+                <button class="note-toolbar-btn" onclick="copyEntireNote()" title="Copy Entire Note">
+                    <i class="fas fa-copy"></i> Copy All
+                </button>
+            </div>
+        </div>
+
+        <!-- Scrollable Blocks -->
+        <div id="blocks-container">
+            <div id="blocks-list">
+                <!-- Blocks render here dynamically -->
+            </div>
+
+            <div class="note-bottom-actions note-edit-only-ui">
+                <button class="add-block-btn-large" onclick="addNoteBlock()">
+                    + ADD NEW BLOCK
+                </button>
+            </div>
+        </div>
+
+        <!-- Task Search Overlay -->
+        <div id="note-task-search-overlay">
+            <div class="note-search-window">
+                <div  class="layout-group-63">
+                    <h3>Link Note to Task</h3>
+                    <button class=" layout-group-64"  onclick="toggleNoteTaskSearch()">✕</button>
+                </div>
+                <div  class="layout-group-65">
+                    <span  class="layout-group-66">🔍</span>
+                    <input type="text" id="note-task-search-input" class="note-search-input"
+                        placeholder="Search tasks by name..." oninput="filterNoteTaskSearch(this.value)"
+                        onkeydown="if(event.key==='Escape'){ toggleNoteTaskSearch(); event.stopPropagation(); }">
+                </div>
+                <div id="note-search-results-list">
+                    <!-- Search results render here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Habit Search Overlay -->
+        <div id="note-habit-search-overlay"
+             class="layout-group-67">
+            <div class="note-search-window">
+                <div  class="layout-group-68">
+                    <h3>Link Note to Habit</h3>
+                    <button class=" layout-group-69"  onclick="toggleNoteHabitSearch()">✕</button>
+                </div>
+                <div  class="layout-group-70">
+                    <span  class="layout-group-71">🔍</span>
+                    <input type="text" id="note-habit-search-input" class="note-search-input"
+                        placeholder="Search habits by name..." oninput="filterNoteHabitSearch(this.value)"
+                        onkeydown="if(event.key==='Escape'){ toggleNoteHabitSearch(); event.stopPropagation(); }">
+                </div>
+                <div id="note-habit-search-results-list">
+                    <!-- Search results render here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="note-modal-footer">
+            <div class="note-footer-top">
+                <div class="note-linked-tasks-container" id="note-linked-tasks-list">
+                    <span class="note-linked-label">Linked Tasks:</span>
+                    <!-- Linked task tags render here -->
+                </div>
+
+                <div class=" layout-group-72" id="note-linked-habits-list" >
+                    <span class="note-linked-label">Linked Habits:</span>
+                    <!-- Linked habit tags render here -->
+                </div>
+                <div class="note-footer-status-group">
+                    <div class="note-status-indicator">
+                        <div class="note-status-dot"></div>
+                        <span id="note-save-status">All changes synced</span>
+                    </div>
+                    <div  class="layout-group-73">
+                        Last synced: <span id="note-sync-time">Just now</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Rename Modal -->
+    <div id="rename-cat-modal">
+        <div class="rename-window">
+            <h3>Rename Category</h3>
+            <input type="text" id="rename-cat-input" placeholder="Enter new name...">
+            <div class="rename-actions">
+                <button class="cancel-btn" onclick="closeRenameCatModal()">Cancel</button>
+                <button class="save-cat-btn" onclick="saveBlockCategoryRename()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bookmark Naming Modal -->
+    <div id="bookmark-modal">
+        <div class="bookmark-window">
+            <h3>Set Bookmark</h3>
+            <input type="text" id="bookmark-input" placeholder="Bookmark name (e.g. Phase 1)...">
+            <div class="bookmark-actions">
+                <button class="bookmark-cancel-btn" onclick="closeBookmarkModal()">Cancel</button>
+                <button class="bookmark-save-btn" onclick="saveBookmark()">Save Bookmark</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Link Modal -->
+    <div id="quick-link-modal">
+        <div class="quick-link-window">
+            <h3>Add Quick Link</h3>
+            <input type="text" id="quick-link-label" placeholder="Label (optional)">
+            <input type="text" id="quick-link-url" placeholder="URL or path (e.g. https://example.com or finance.html)">
+            <div class="quick-link-actions">
+                <button class="quick-link-cancel-btn" onclick="closeQuickLinkModal()">Cancel</button>
+                <button class="quick-link-save-btn" onclick="saveQuickLink()">Save Link</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Finance Capture Modal -->
+    <div id="finance-capture-modal" class="finance-capture-modal">
+        <div class="finance-capture-window" role="dialog" aria-modal="true" aria-labelledby="finance-capture-title">
+            <div class="finance-capture-header">
+                <h3 id="finance-capture-title">New Transaction</h3>
+                <button class="finance-capture-close" onclick="closeFinanceCaptureModal()" aria-label="Close">✕</button>
+            </div>
+
+            <input type="hidden" id="finance-queue-id">
+            <input type="hidden" id="finance-queue-type" value="expense">
+
+            <div class="finance-type-toggle" id="finance-type-toggle">
+                <button type="button" id="finance-type-expense-btn" class="finance-type-btn"
+                    onclick="setFinanceQueueType('expense')">Expense</button>
+                <button type="button" id="finance-type-income-btn" class="finance-type-btn"
+                    onclick="setFinanceQueueType('income')">Income</button>
+            </div>
+
+            <input type="text" id="finance-queue-desc" placeholder="Description (e.g. Lunch)" class="finance-field">
+
+            <label class="finance-field-label" for="finance-queue-quantity">Quantity</label>
+            <input type="number" id="finance-queue-quantity" class="finance-field" value="1" step="0.01" min="0.01">
+            <p class="finance-field-help">Number of items purchased (for price tracking)</p>
+
+            <label class="finance-field-label" for="finance-queue-amount">Amount</label>
+            <div class="finance-row">
+                <input type="number" id="finance-queue-amount" class="finance-field" placeholder="0.00" step="0.01"
+                    min="0">
+                <select id="finance-queue-currency" class="finance-field finance-currency">
+                    <option value="PHP">PHP</option>
+                    <option value="USD">USD</option>
+                    <option value="JPY">JPY</option>
+                </select>
+            </div>
+
+            <label class="finance-field-label" for="finance-queue-date">Date</label>
+            <input type="date" id="finance-queue-date" class="finance-field">
+
+            <label class="finance-field-label" for="finance-queue-category">Category</label>
+            <input type="text" id="finance-queue-category" class="finance-field" list="finance-queue-category-suggestions"
+                placeholder="Category (e.g. Food)">
+            <datalist id="finance-queue-category-suggestions">
+                <option value="Food"></option>
+                <option value="Transport"></option>
+                <option value="Bills"></option>
+                <option value="Savings"></option>
+                <option value="Entertainment"></option>
+                <option value="Salary"></option>
+                <option value="Others"></option>
+            </datalist>
+
+            <label class="finance-field-label" for="finance-queue-notes">Notes (Optional)</label>
+            <textarea id="finance-queue-notes" class="finance-field finance-notes" rows="3"
+                placeholder="Add any additional notes..."></textarea>
+
+            <div class="finance-pending-header">
+                <span>Queued Transactions</span>
+                <span id="finance-queue-count">0</span>
+            </div>
+            <div id="finance-queue-list" class="finance-queue-list">
+                <div class="finance-queue-empty">No queued transactions yet.</div>
+            </div>
+
+            <div class="finance-capture-actions">
+                <button class="finance-btn finance-btn-muted" onclick="closeFinanceCaptureModal()">Close</button>
+                <button class="finance-btn finance-btn-muted" id="finance-queue-cancel-edit-btn"
+                    onclick="cancelFinanceQueueEdit()" style="display:none;">Cancel Edit</button>
+                <button class="finance-btn finance-btn-muted" onclick="clearFinancePendingQueueFromMain()">Clear Pending</button>
+                <button class="finance-btn finance-btn-primary" id="finance-queue-save-btn"
+                    onclick="queueFinanceTransactionFromMain()">Queue Transaction</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="archive-panel" class="hidden side-panel">
+        <div class="panel-header-row">
+            <span>🗄️ Completed & Archived</span>
+            <button class="btn" onclick="toggleArchivePanel()">✕</button>
+        </div>
+        <div  class="layout-group-74">
+            Tasks are auto-archived here 15 days after completion.
+        </div>
+        <div class="panel-list" id="archive-list-container">
+        </div>
+    </div>
+
+    <!-- Inbox Modal -->
+    <div id="inbox-modal">
+        <div class="modal-header-enhanced" id="inbox-modal-header">
+            <div class="modal-title-enhanced">
+                <span  class="layout-group-75">📥</span>
+                <span>Quick Capture Inbox</span>
+            </div>
+            <button class="modal-close-btn" onclick="closeInboxModal()">✕</button>
+        </div>
+
+        <div class=" layout-group-76" id="inbox-modal-list" >
+            <!-- Inbox items will render here -->
+        </div>
+
+        <div
+             class="layout-group-77">
+            <input type="text" id="inbox-modal-input" placeholder="Quick task or idea..."
+                onkeypress="if(event.key==='Enter') addToInboxModal()"  class="layout-group-78">
+            <button class=" layout-group-79" onclick="addToInboxModal()"
+                >Add</button>
+        </div>
+    </div>
+
+    <!-- Reminders Modal -->
+    <div id="reminders-modal">
+        <div class="modal-header-enhanced" id="reminders-modal-header">
+            <div class="modal-title-enhanced">
+                <span  class="layout-group-80">🔔</span>
+                <span>All Reminders</span>
+            </div>
+            <button class="modal-close-btn" onclick="closeRemindersModal()">✕</button>
+        </div>
+        <div
+             class="layout-group-81">
+            Edit date/time/all-day here. Fired reminders can be kept or discarded.
+        </div>
+        <div id="reminders-modal-list" class=" layout-group-82" >
+            <!-- Reminder cards -->
+        </div>
+    </div>
+
+    <div id="project-bootstrap-preview-backdrop" onclick="closeProjectBootstrapPreviewModal()"></div>
+    <div id="project-bootstrap-preview-modal" role="dialog" aria-modal="true"
+        aria-labelledby="project-bootstrap-preview-title">
+        <div class="project-bootstrap-preview-header">
+            <div class="project-bootstrap-preview-title-wrap">
+                <span>🧩</span>
+                <span id="project-bootstrap-preview-title">Create Projects from Groups (Preview)</span>
+            </div>
+            <button class="modal-close-btn" onclick="closeProjectBootstrapPreviewModal()">✕</button>
+        </div>
+        <div class="project-bootstrap-preview-note">
+            One-time bootstrap only. This will not permanently couple future task-group changes to project assignments.
+        </div>
+        <div class="project-bootstrap-preview-summary" id="project-bootstrap-preview-summary">
+            Create: 0 | Extend: 0 | Skip: 0 | Tasks to assign: 0
+        </div>
+        <div class="project-bootstrap-preview-list" id="project-bootstrap-preview-list">
+            <!-- Preview rows render here -->
+        </div>
+        <div class="project-bootstrap-preview-footer">
+            <button class="btn" onclick="closeProjectBootstrapPreviewModal()">Cancel</button>
+            <button class="btn" id="project-bootstrap-preview-apply-btn" onclick="applyProjectBootstrapPreview()">Apply Bootstrap</button>
+        </div>
+    </div>
+
+    <div id="project-details-backdrop" onclick="closeProjectDetailsModal()"></div>
+    <div id="project-details-modal" role="dialog" aria-modal="true" aria-labelledby="project-details-title">
+        <div class="project-details-header">
+            <div class="project-details-title-wrap">
+                <span class="project-details-title-icon">📁</span>
+                <div class="project-details-heading-text">
+                    <span id="project-details-title">Project Details</span>
+                    <span class="project-details-heading-subtle">Dependency map, linked goals, and bulk task assignment</span>
+                </div>
+                <span id="project-details-status-badge" class="project-details-status-badge">Active</span>
+            </div>
+            <div class="project-details-header-actions">
+                <button id="project-details-prev-btn" class="project-details-nav-btn" type="button" onclick="navigateProjectDetailsByOffset(-1)" aria-label="Previous project">←</button>
+                <span id="project-details-nav-meta" class="project-details-nav-meta">1 / 1</span>
+                <button id="project-details-next-btn" class="project-details-nav-btn" type="button" onclick="navigateProjectDetailsByOffset(1)" aria-label="Next project">→</button>
+                <button class="modal-close-btn project-details-close-btn" onclick="closeProjectDetailsModal()">✕</button>
+            </div>
+        </div>
+
+        <div class="project-details-body">
+            <section class="project-details-section project-details-overview-section">
+                <div class="project-details-section-head">
+                    <span>Overview</span>
+                    <span class="project-details-section-subtle">Project Metadata</span>
+                </div>
+                <div id="project-details-name" class="project-details-name">Untitled Project</div>
+                <div id="project-details-description" class="project-details-description">No description provided.</div>
+                <div id="project-details-meta-grid" class="project-details-meta-grid">
+                    <!-- Metadata rows render here -->
+                </div>
+            </section>
+
+            <section class="project-details-section">
+                <div class="project-details-section-head">
+                    <span>Linked Tasks</span>
+                    <span class="project-details-section-subtle">Scroll horizontally to explore workflow</span>
+                </div>
+                <div class="project-details-workflow-wrap">
+                    <div id="project-details-task-list" class="project-details-task-list">
+                        <!-- Task workflow renders here -->
+                    </div>
+                </div>
+                <div class="project-details-workflow-legend">
+                    Arrows indicate dependency flow. A → B means task B depends on task A.
+                </div>
+            </section>
+
+            <section class="project-details-section">
+                <div class="project-details-section-head">
+                    <span>Linked Goals</span>
+                    <span class="project-details-section-subtle">Project Outcomes</span>
+                </div>
+                <div class="project-details-goal-linker">
+                    <select id="project-details-goal-select" class="project-details-goal-select" aria-label="Select goal to link"></select>
+                    <button id="project-details-link-goal-btn" class="project-details-inline-btn" type="button" onclick="linkSelectedGoalToProjectDetails()">+ Link Goal</button>
+                </div>
+                <div id="project-details-goal-list" class="project-details-goal-list">
+                    <!-- Goal rows render here -->
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div id="navigator-panel" class="hidden side-panel">
+        <div class="panel-header-row">
+            <span>🧭 Navigator</span>
+            <button class="btn" onclick="toggleNavigatorPanel()">✕</button>
+        </div>
+        <div class="navigator-tabs">
+            <button class="navigator-tab active" data-nav-tab="pinned"
+                onclick="setNavigatorTab('pinned')">Pinned</button>
+            <button class="navigator-tab" data-nav-tab="tasks" onclick="setNavigatorTab('tasks')">Tasks</button>
+            <button class="navigator-tab" data-nav-tab="groups" onclick="setNavigatorTab('groups')">Groups</button>
+        </div>
+
+        <div id="navigator-tab-pinned" class="navigator-tab-content">
+            <div class="pinned-content" id="pinned-content">
+                <!-- Pinned items render here -->
+            </div>
+        </div>
+
+        <div id="navigator-tab-tasks" class="navigator-tab-content hidden">
+            <div class="task-list-filters">
+                <button class="filter-btn active" data-filter="all" onclick="setTaskFilter('all')">All</button>
+                <button class="filter-btn" data-filter="urgent" onclick="setTaskFilter('urgent')">Urgent</button>
+                <button class="filter-btn" data-filter="critical" onclick="setTaskFilter('critical')">Critical</button>
+                <button class="filter-btn" data-filter="ready" onclick="setTaskFilter('ready')">Ready</button>
+                <button class="filter-btn" data-filter="blocked" onclick="setTaskFilter('blocked')">Blocked</button>
+                <button class="filter-btn" data-filter="completed"
+                    onclick="setTaskFilter('completed')">Completed</button>
+            </div>
+            <div class="task-list-content" id="task-list-content">
+                <!-- Tasks render here -->
+            </div>
+        </div>
+
+        <div id="navigator-tab-groups" class="navigator-tab-content hidden">
+            <div
+                 class="layout-group-83">
+                Groups include dependency clusters and standalone tasks. Toggle visibility to declutter, or click a card
+                to enter focus mode.
+            </div>
+            <div class=" layout-group-84" id="node-groups-list" >
+                <!-- Groups render here -->
+            </div>
+        </div>
+    </div>
+
+    <div id="projects-panel" class="hidden side-panel">
+        <div class="panel-header-row projects-panel-header">
+            <div class="projects-panel-title-wrap">
+                <span class="projects-panel-title-icon" aria-hidden="true">📁</span>
+                <span>Projects</span>
+            </div>
+            <button type="button" class="projects-panel-close-btn" onclick="toggleProjectsPanel()" aria-label="Close Projects Panel">✕</button>
+        </div>
+        <div class="projects-panel-content">
+            <div id="projects-panel-collapsible-top" class="navigator-projects-collapsible">
+                <div class="navigator-projects-intro">
+                    Projects are explicit containers for related tasks. Use this panel to create projects and assign tasks.
+                </div>
+                <div class="navigator-projects-toolbar">
+                    <input type="text" id="new-project-input" placeholder="New project name..."
+                        onkeypress="if(event.key==='Enter') createProjectFromInput()">
+                    <button type="button" class="project-add-btn" onclick="createProjectFromInput()">Add</button>
+                </div>
+                <div class="navigator-projects-bootstrap-row">
+                    <button type="button" class="project-bootstrap-btn" onclick="createProjectsFromCurrentGroups()">
+                        Create Projects from Current Groups
+                    </button>
+                    <button type="button" class="project-dashboard-btn" onclick="openProjectManagerDashboardSubpage()">
+                        Open Project Manager Dashboard
+                    </button>
+                </div>
+            </div>
+            <div class="navigator-projects-filters-row">
+                <label class="project-filter-control" for="projects-panel-sort">
+                    <span class="project-filter-label">Sort</span>
+                    <select id="projects-panel-sort" onchange="setProjectsPanelSort(this.value)">
+                        <option value="default" selected>Default</option>
+                        <option value="alpha-asc">Alphabetical (A-Z)</option>
+                        <option value="alpha-desc">Alphabetical (Z-A)</option>
+                        <option value="urgency-desc">Urgency (High-Low)</option>
+                        <option value="urgency-asc">Urgency (Low-High)</option>
+                    </select>
+                </label>
+                <label class="project-filter-control" for="projects-panel-urgency-filter">
+                    <span class="project-filter-label">Urgency</span>
+                    <select id="projects-panel-urgency-filter" onchange="setProjectsPanelUrgencyFilter(this.value)">
+                        <option value="all" selected>All Levels</option>
+                        <option value="5">Critical</option>
+                        <option value="4">High</option>
+                        <option value="3">Medium</option>
+                        <option value="2">Normal</option>
+                        <option value="1">Lowest</option>
+                    </select>
+                </label>
+            </div>
+            <div class="navigator-projects-urgency-legend" aria-label="Project urgency color legend">
+                <span class="project-urgency-legend-item level-1">1 Lowest</span>
+                <span class="project-urgency-legend-item level-2">2 Normal</span>
+                <span class="project-urgency-legend-item level-3">3 Medium</span>
+                <span class="project-urgency-legend-item level-4">4 High</span>
+                <span class="project-urgency-legend-item level-5">5 Critical</span>
+            </div>
+            <div class="navigator-projects-selection" id="project-selection-status">
+                No task selected. Select a task on the canvas to assign it to a project.
+            </div>
+            <div class="project-list-content" id="project-list-content">
+                <!-- Projects render here -->
+            </div>
+        </div>
+    </div>
+
+    <div id="inspector" class="hidden">
+        <div id="insp-content"  class="layout-group-85">
+        </div>
+    </div>
+    <div id="inspector-expanded-backdrop"></div>
+    <div id="inspector-expanded-modal" role="dialog" aria-modal="true" aria-label="Expanded Task Inspector">
+        <div id="inspector-expanded-body"></div>
+    </div>
+
+    <div id="insights-dashboard-overlay" class="hidden" onclick="if (event.target === this) closeInsightsDashboard();">
+        <div class="insights-dashboard-shell" role="dialog" aria-modal="true"
+            aria-labelledby="insights-dashboard-title">
+            <header class="insights-header">
+                <div class="insights-title-wrap">
+                    <h1 id="insights-dashboard-title">The Canopy</h1>
+                    <p id="insights-dashboard-date">Seasonal Growth</p>
+                </div>
+                <div class="insights-header-actions">
+                    <div class="insights-completion-chip">
+                        <span id="insights-completion-rate">0%</span> Completion
+                        <span id="insights-completion-delta" class="insights-completion-delta">No baseline</span>
+                    </div>
+                    <label class="insights-startup-toggle" for="insights-dashboard-startup-toggle">
+                        <input id="insights-dashboard-startup-toggle" type="checkbox"
+                            onchange="setDashboardStartupPreference(this.checked)">
+                        <span>Show on app launch</span>
+                    </label>
+                    <button class="insights-close-btn" onclick="closeInsightsDashboard()"
+                        title="Close dashboard">Close</button>
+                </div>
+            </header>
+
+            <main class="insights-grid">
+                <section class="insights-main-col">
+                    <section class="insights-card insights-stats">
+                        <div class="insights-stat critical">
+                            <span class="insights-stat-label">Critical</span>
+                            <span class="insights-stat-value" id="insights-stat-critical">0</span>
+                            <span class="insights-stat-delta" id="insights-stat-critical-delta">No baseline</span>
+                        </div>
+                        <div class="insights-stat urgent">
+                            <span class="insights-stat-label">Urgent</span>
+                            <span class="insights-stat-value" id="insights-stat-urgent">0</span>
+                            <span class="insights-stat-delta" id="insights-stat-urgent-delta">No baseline</span>
+                        </div>
+                        <div class="insights-stat blocked">
+                            <span class="insights-stat-label">Blocked</span>
+                            <span class="insights-stat-value" id="insights-stat-blocked">0</span>
+                            <span class="insights-stat-delta" id="insights-stat-blocked-delta">No baseline</span>
+                        </div>
+                        <div class="insights-stat ready">
+                            <span class="insights-stat-label">Ready</span>
+                            <span class="insights-stat-value" id="insights-stat-ready">0</span>
+                            <span class="insights-stat-delta" id="insights-stat-ready-delta">No baseline</span>
+                        </div>
+                    </section>
+
+                    <section class="insights-card">
+                        <div class="insights-card-head">
+                            <h2>Immediate Focus Path</h2>
+                        </div>
+                        <div class="insights-focus-split">
+                            <div class="insights-focus-col">
+                                <h3 class="insights-focus-subtitle">Do Now</h3>
+                                <div id="insights-do-now-list" class="insights-list"></div>
+                            </div>
+                            <div class="insights-focus-col">
+                                <h3 class="insights-focus-subtitle">Unblock Now</h3>
+                                <div id="insights-unblock-list" class="insights-list"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="insights-card insights-habits-card">
+                        <div class="insights-habits-head">
+                            <div class="insights-habits-head-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" role="presentation">
+                                    <path d="M4 18H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M7 18V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M12 18V5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M17 18V12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h2>Growth Accumulation</h2>
+                                <p>Tracing the volume of effort over time.</p>
+                            </div>
+                        </div>
+                        <div id="insights-habits-list" class="insights-habits-list"></div>
+                    </section>
+                </section>
+
+                <aside class="insights-side-col">
+                    <section class="insights-card insights-health-card">
+                        <div class="insights-health-ring">
+                            <span id="insights-health-score">0%</span>
+                        </div>
+                        <h3>Canopy Health</h3>
+                        <p id="insights-health-text">Waiting for data.</p>
+                    </section>
+
+                    <section class="insights-card">
+                        <div class="insights-card-head">
+                            <h2>Operational Health</h2>
+                        </div>
+                        <div class="metrics-breakdown">
+                            <div class="metric-item">
+                                <div  class="layout-group-86">
+                                    <span class="metric-label">Task Load</span>
+                                    <span class="metric-value" id="review-health-load">0 Act / 0 Arch</span>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <div  class="layout-group-87">
+                                    <span class="metric-label">Storage</span>
+                                    <span class="metric-value" id="review-health-storage">0 KB</span>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <div  class="layout-group-88">
+                                    <span class="metric-label">Render</span>
+                                    <span class="metric-value" id="review-health-render">0ms</span>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <div  class="layout-group-89">
+                                    <span class="metric-label">Sync</span>
+                                    <span class="metric-value" id="review-health-sync">Ready</span>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <div  class="layout-group-90">
+                                    <span class="metric-label">Virtualization</span>
+                                    <span class="metric-value" id="review-health-virt">Off</span>
+                                </div>
+                            </div>
+                            <div class="metric-item">
+                                <div  class="layout-group-91">
+                                    <span class="metric-label">Backup</span>
+                                    <span class="metric-value" id="review-health-backup">None</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="insights-card insights-project-portfolio-card">
+                        <div class="insights-card-head">
+                            <h2>Project Portfolio</h2>
+                        </div>
+                        <div id="insights-project-portfolio" class="insights-project-portfolio"></div>
+                    </section>
+
+                    <section class="insights-card insights-project-risks-card">
+                        <div class="insights-card-head">
+                            <h2>At-Risk Projects</h2>
+                        </div>
+                        <div id="insights-project-risks" class="insights-project-risks-list"></div>
+                    </section>
+
+                    <section class="insights-card">
+                        <div class="insights-card-head">
+                            <h2>Data Footprint</h2>
+                            <span id="total-gist-size-review"
+                                 class="layout-group-92">0.0 KB</span>
+                        </div>
+                        <div id="metrics-breakdown-review" class="metrics-breakdown">
+                            <!-- Filled via JS -->
+                        </div>
+                    </section>
+
+                    <section class="insights-card insights-links-card">
+                        <div class="insights-card-head">
+                            <h2>Outer Branches</h2>
+                        </div>
+                        <div id="insights-quick-links" class="insights-links-list"></div>
+                    </section>
+
+                    <section id="insights-blockers-card" class="insights-card insights-blockers-card hidden">
+                        <div class="insights-card-head">
+                            <h2>Root Blocker Causes</h2>
+                        </div>
+                        <div id="insights-blockers-list" class="insights-blockers-list"></div>
+                    </section>
+                </aside>
+            </main>
+        </div>
+    </div>
+
+    <div id="health-dashboard">
+        <div class="health-row" title="Active vs Archived Nodes">
+            <span class="health-label">Task Load</span>
+            <span class="health-val" id="hd-load">0 / 0</span>
+        </div>
+        <div class="health-row" title="IndexedDB Storage (High Capacity)">
+            <span class="health-label">DB Size</span>
+            <div  class="layout-group-93">
+                <span class="health-val" id="hd-storage-text">0%</span>
+                <div class="health-bar-bg">
+                    <div class="health-bar-fill" id="hd-storage-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="health-row health-btn" title="Click to flush memory & cool down CPU" onclick="cleanAppMemory()">
+            <span class=" layout-group-94" >Engine 🧹</span>
+            <div  class="layout-group-95">
+                <div class="health-dot ok" id="hd-fps-dot"></div>
+                <span class="health-val" id="hd-fps">0ms</span>
+            </div>
+        </div>
+
+        <div class="health-row" title="Viewport Virtualization Status">
+            <span class="health-label">Virtualization</span>
+            <span class="health-val" id="hd-virt-status">OFF</span>
+        </div>
+
+        <div class=" layout-group-96" >
+            <span class="health-label">Sync</span>
+            <span class="health-val" id="hd-sync">Ready</span>
+        </div>
+        <div class="health-row" title="Last automated offline backup (8PM daily)">
+            <span class="health-label">Backup</span>
+            <span class=" layout-group-97" id="backup-timestamp"
+                >None</span>
+        </div>
+    </div>
+
+    <div id="maximized-block-window">
+        <div class="maximized-block-header">
+            <div class="maximized-block-category" id="max-block-category">Category Name</div>
+            <div  class="layout-group-98">
+                <button class="icon-btn" onclick="closeMaximizedBlock()" title="Minimize">🗗</button>
+            </div>
+        </div>
+
+        <div class="maximized-block-toolbar">
+            <div class="note-toolbar-group">
+                <button id="max-toggle-edit-btn" class="note-toolbar-btn active-mode"
+                    onclick="toggleMaxBlockMode(false)">
+                    📝 Edit
+                </button>
+                <button id="max-toggle-view-btn" class="note-toolbar-btn" onclick="toggleMaxBlockMode(true)">
+                    👁️ View
+                </button>
+            </div>
+
+            <div class="note-toolbar-group" id="max-edit-tools">
+                <button class="note-toolbar-btn" onclick="applyMaxBlockFormat('bold')" title="Bold"><b>B</b></button>
+                <button class="note-toolbar-btn" onclick="applyMaxBlockFormat('italic')"
+                    title="Italic"><i>I</i></button>
+                <button class="note-toolbar-btn" onclick="applyMaxBlockFormat('checkbox')"
+                    title="Add Checkbox">☑</button>
+            </div>
+
+            <div class="note-toolbar-group">
+                <button class=" layout-group-99" onclick="convertMaxBlockSelectionToTask()"
+                    title="Convert Selection to Task" >
+                    ✨ Selection → Task
+                </button>
+            </div>
+
+            <div class="note-toolbar-group">
+                <button class="note-toolbar-btn" onclick="copyMaxBlockContent()" title="Copy Block Content">
+                    <i class="fas fa-copy"></i> Copy Block
+                </button>
+            </div>
+
+            <div class="note-toolbar-group">
+                <button class="note-toolbar-btn" onclick="openMaxBlockBookmark()" title="Set Bookmark">
+                    <i class="fas fa-bookmark"></i> <span id="max-bookmark-name"></span>
+                </button>
+            </div>
+
+            <div class="note-toolbar-group">
+                <button class=" layout-group-100"  onclick="applyMaxBlockAI('grammar')"
+                    title="AI Grammar">
+                    ✨ Grammar
+                </button>
+                <button class=" layout-group-101"  onclick="applyMaxBlockAI('clarity')"
+                    title="AI Clarity">
+                    💡 Clarity
+                </button>
+            </div>
+
+            <div class="note-toolbar-group">
+                <button class=" layout-group-102"  onclick="deleteMaxBlock()"
+                    title="Delete Block">
+                    🗑️ Delete
+                </button>
+            </div>
+        </div>
+
+        <div class="maximized-block-content">
+            <textarea id="max-block-textarea" class="maximized-block-textarea"></textarea>
+            <div id="max-block-preview" class="maximized-block-preview" style="display:none;"></div>
+        </div>
+    </div>
+
+    <div id="notification">State Saved</div>
+    <script defer src="assets/js/db.js"></script>
+    <script defer src="assets/js/notesRepository.js"></script>
+    <script defer src="assets/js/notesSync.js"></script>
+    <script defer src="assets/js/utils.js"></script>
+    <script defer src="assets/js/financeBridgeQueue.js"></script>
+    <script defer src="assets/js/financeBridgeMain.js"></script>
+    <script defer src="assets/js/data.js"></script>
+    <script defer src="assets/js/ui.js"></script>
+    <script defer src="assets/js/reminders.js"></script>
+    <script defer src="assets/js/task-layout.js"></script>
+    <script defer src="assets/js/task-groups.js"></script>
+    <script defer src="assets/js/navigator.js"></script>
+    <script defer src="assets/js/integrations.js"></script>
+    <script defer src="assets/js/note-editor.js"></script>
+    <script defer src="assets/js/note-maximize.js"></script>
+    <script defer src="assets/js/notes.js"></script>
+    <script defer src="assets/js/goals-habits.js"></script>
+    <script defer src="assets/js/graph.js"></script>
+    <script defer src="assets/js/ai-urgency.js"></script>
+    <script defer src="assets/js/tasks.js"></script>
+    <script defer src="assets/js/schedule.js"></script>
+    <script defer src="assets/js/dashboard.js"></script>
+    <script defer src="assets/js/init.js"></script>
+</body>
+
+</html>

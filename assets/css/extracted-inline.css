@@ -1,0 +1,104 @@
+/* Extracted inline styles from index.html */
+
+.layout-group-1 { position:fixed; top:0; left:0; width:1px; height:1px; opacity:0; pointer-events:none; }
+.layout-group-2 { transform-origin: 0 0; position: absolute; top:0; left:0; width:100%; height:100%; }
+.layout-group-3 { display: flex; align-items: center; gap: 10px; }
+.layout-group-4 { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #333; }
+.layout-group-5 { cursor:pointer }
+.layout-group-6 { padding: 12px; }
+.layout-group-7 { margin-bottom: 12px; }
+.layout-group-8 { display:flex; gap:5px; margin-top:6px; }
+.layout-group-9 { flex-grow:1; }
+.layout-group-10 { white-space:nowrap; }
+.layout-group-11 { display:flex; gap:10px; margin-bottom: 14px; }
+.layout-group-12 { flex:1 }
+.layout-group-13 { flex:1 }
+.layout-group-14 { border-top: 1px solid #333; padding-top: 12px; }
+.layout-group-15 { margin-top:6px; }
+.layout-group-16 { display:flex; gap:10px; margin-top:8px; }
+.layout-group-17 { flex:1 }
+.layout-group-18 { flex:1 }
+.layout-group-19 { border-top: 1px solid #333; padding-top: 12px; }
+.layout-group-20 { display:flex; gap:10px; margin-top:8px; }
+.layout-group-21 { flex:1 }
+.layout-group-22 { flex:1 }
+.layout-group-23 { display:flex; gap:10px; margin-top:8px; }
+.layout-group-24 { flex:1 }
+.layout-group-25 { flex:1 }
+.layout-group-26 { margin-top:8px; font-size:10px; color:var(--text-muted); }
+.layout-group-27 { margin-top: 12px; padding-top: 12px; border-top: 1px solid #333; }
+.layout-group-28 { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.layout-group-29 { font-size:11px; font-weight:bold; color:#eee; }
+.layout-group-30 { font-size:10px; color:var(--ready-color); font-family:monospace; }
+.layout-group-31 { font-size: 24px; }
+.layout-group-32 { display: flex; gap: 8px; }
+.layout-group-33 { width: auto; padding: 0 12px; font-size: 14px; }
+.layout-group-34 { width: auto; padding: 0 12px; font-size: 14px; }
+.layout-group-35 { margin-bottom:5px; display:block; }
+.layout-group-36 { width:100%; margin-bottom:5px; }
+.layout-group-37 { font-size:10px; color:#888; }
+.layout-group-38 { padding: 12px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border); display: none; }
+.layout-group-39 { margin-bottom: 8px; font-size: 10px; font-weight: 700; color: var(--ai-accent); letter-spacing: 0.5px; }
+.layout-group-40 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+.layout-group-41 { margin-bottom: 8px; font-size: 10px; font-weight: 700; color: var(--ai-accent); letter-spacing: 0.5px; }
+.layout-group-42 { display: flex; flex-wrap: wrap; gap: 6px; }
+.layout-group-43 { padding: 15px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px; }
+.layout-group-44 { padding: 0 15px 10px; color: var(--ai-accent); font-size: 11px; }
+.layout-group-45 { padding: 5px 10px; display: flex; gap: 5px; flex-wrap: wrap; border-top: 1px solid #333; background: rgba(0,0,0,0.1); }
+.layout-group-46 { font-size: 10px; padding: 4px 8px; }
+.layout-group-47 { font-size: 10px; padding: 4px 8px; }
+.layout-group-48 { font-size: 10px; padding: 4px 8px; }
+.layout-group-49 { padding: 10px; border-top: 1px solid #333; display: flex; gap: 5px; }
+.layout-group-50 { background: var(--ai-accent); border-color: var(--ai-accent); }
+.layout-group-51 { display:flex; gap:5px }
+.layout-group-52 { flex-grow:1; }
+.layout-group-53 { display:flex; align-items:center; gap:5px; }
+.layout-group-54 { padding: 10px; border-bottom: 1px solid #333; }
+.layout-group-55 { display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; }
+.layout-group-56 { padding:2px 8px; font-size:10px; }
+.layout-group-57 { padding: 10px; border-top: 1px solid #333; }
+.layout-group-58 { width:100% }
+.layout-group-59 { width:100%; margin-top:8px; display:block; text-align:center; }
+.layout-group-60 { color:var(--critical-path) }
+.layout-group-61 { color:var(--accent) }
+.layout-group-62 { color:#10b981 }
+.layout-group-63 { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem }
+.layout-group-64 { color:white }
+.layout-group-65 { position:relative }
+.layout-group-66 { position:absolute; left:12px; top:10px; color:var(--text-muted) }
+.layout-group-67 { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.95); z-index: 200; padding: 2rem; justify-content: center; align-items: flex-start; }
+.layout-group-68 { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem }
+.layout-group-69 { color:white }
+.layout-group-70 { position:relative }
+.layout-group-71 { position:absolute; left:12px; top:10px; color:var(--text-muted) }
+.layout-group-72 { margin-top: 10px; }
+.layout-group-73 { font-size: 0.75rem; color: var(--text-muted) }
+.layout-group-74 { padding: 10px; font-size: 11px; color: #888; border-bottom: 1px solid #333; }
+.layout-group-75 { font-size: 24px; }
+.layout-group-76 { flex-grow: 1; overflow-y: auto; padding: 10px; }
+.layout-group-77 { padding: 12px; border-top: 1px solid var(--border); display: flex; gap: 8px; background: rgba(0,0,0,0.2); }
+.layout-group-78 { flex: 1; }
+.layout-group-79 { background: var(--ready-color); border-color: var(--ready-color); }
+.layout-group-80 { font-size: 24px; }
+.layout-group-81 { padding: 10px 12px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); font-size: 11px; color: var(--text-muted); }
+.layout-group-82 { flex-grow: 1; overflow-y: auto; padding: 10px; }
+.layout-group-83 { padding: 12px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2); font-size: 11px; color: var(--text-muted); }
+.layout-group-84 { flex-grow: 1; overflow-y: auto; padding: 10px; }
+.layout-group-85 { display:flex; flex-direction:column; height:100%; }
+.layout-group-86 { display:flex; justify-content:space-between; margin-bottom:4px; }
+.layout-group-87 { display:flex; justify-content:space-between; margin-bottom:4px; }
+.layout-group-88 { display:flex; justify-content:space-between; margin-bottom:4px; }
+.layout-group-89 { display:flex; justify-content:space-between; margin-bottom:4px; }
+.layout-group-90 { display:flex; justify-content:space-between; margin-bottom:4px; }
+.layout-group-91 { display:flex; justify-content:space-between; margin-bottom:4px; }
+.layout-group-92 { font-size:10px; color:var(--ready-color); font-family:monospace; }
+.layout-group-93 { display:flex; align-items:center; }
+.layout-group-94 { pointer-events: none; }
+.layout-group-95 { display:flex; align-items:center; pointer-events: none; }
+.layout-group-96 { margin-top:2px; border-top:1px solid #333; padding-top:2px; }
+.layout-group-97 { font-size: 10px; color: var(--ready-color); }
+.layout-group-98 { display:flex; gap:8px; }
+.layout-group-99 { color:var(--critical-path) }
+.layout-group-100 { color:#8b5cf6 }
+.layout-group-101 { color:#8b5cf6 }
+.layout-group-102 { color:var(--blocked-color) }

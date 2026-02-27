@@ -1,0 +1,1626 @@
+        /* --- NOTES STYLES --- */
+        .note-card {
+            background: linear-gradient(165deg, rgba(19, 26, 38, 0.96), rgba(13, 19, 30, 0.95));
+            border: 1px solid #334155;
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            cursor: pointer;
+            transition: all var(--transition-base);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .note-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 3px;
+            background: transparent;
+            pointer-events: none;
+        }
+
+        .note-card:hover {
+            border-color: #475569;
+            background: linear-gradient(165deg, rgba(24, 33, 51, 0.96), rgba(14, 22, 34, 0.95));
+            transform: translateX(3px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .note-card.active {
+            border-color: #5b6f8e;
+            background: linear-gradient(165deg, rgba(27, 37, 56, 0.97), rgba(16, 25, 40, 0.96));
+            box-shadow: 0 0 0 2px rgba(91, 111, 142, 0.32);
+        }
+
+        .note-card.has-task-links {
+            box-shadow: inset 3px 0 0 rgba(59, 130, 246, 0.28);
+        }
+
+        .note-card.has-task-links::before {
+            background: #3b82f6;
+        }
+
+        .note-card.has-habit-links {
+            box-shadow: inset 3px 0 0 rgba(16, 185, 129, 0.28);
+        }
+
+        .note-card.has-habit-links::before {
+            background: #10b981;
+        }
+
+        .note-card.has-mixed-links {
+            box-shadow: inset 3px 0 0 rgba(16, 185, 129, 0.22);
+        }
+
+        .note-card.has-mixed-links::before {
+            background: linear-gradient(180deg, #3b82f6 0%, #3b82f6 50%, #10b981 50%, #10b981 100%);
+        }
+
+        .note-card.has-task-links:hover {
+            box-shadow: var(--shadow-sm), inset 3px 0 0 rgba(59, 130, 246, 0.32);
+        }
+
+        .note-card.has-habit-links:hover {
+            box-shadow: var(--shadow-sm), inset 3px 0 0 rgba(16, 185, 129, 0.32);
+        }
+
+        .note-card.has-mixed-links:hover {
+            box-shadow: var(--shadow-sm), inset 3px 0 0 rgba(16, 185, 129, 0.26);
+        }
+
+        .note-card.active.has-task-links {
+            box-shadow: 0 0 0 2px rgba(91, 111, 142, 0.32), inset 3px 0 0 rgba(59, 130, 246, 0.32);
+        }
+
+        .note-card.active.has-habit-links {
+            box-shadow: 0 0 0 2px rgba(91, 111, 142, 0.32), inset 3px 0 0 rgba(16, 185, 129, 0.32);
+        }
+
+        .note-card.active.has-mixed-links {
+            box-shadow: 0 0 0 2px rgba(91, 111, 142, 0.32), inset 3px 0 0 rgba(16, 185, 129, 0.26);
+        }
+
+        .note-card-title {
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: #e5edf8;
+        }
+
+        .note-card-preview {
+            font-size: 11px;
+            color: #93a6be;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .note-card-meta {
+            font-size: 10px;
+            color: #7f92ab;
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .note-card-title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .note-link-badges {
+            margin-top: 6px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .note-link-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            border: 1px solid rgba(148, 163, 184, 0.38);
+            color: #cbd5e1;
+            background: rgba(15, 23, 42, 0.5);
+            max-width: 100%;
+        }
+
+        .note-link-chip.task {
+            color: #93c5fd;
+            border-color: rgba(59, 130, 246, 0.58);
+            background: rgba(59, 130, 246, 0.16);
+        }
+
+        .note-link-chip.habit {
+            color: #86efac;
+            border-color: rgba(16, 185, 129, 0.58);
+            background: rgba(16, 185, 129, 0.16);
+        }
+
+        .note-link-chip.urgent {
+            color: #fbcfe8;
+            border-color: rgba(199, 112, 136, 0.66);
+            background: rgba(199, 112, 136, 0.2);
+        }
+
+        .note-link-chip.goal {
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 220px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+        }
+
+        .note-link-chip.goal-more {
+            color: #cbd5e1;
+            border-color: rgba(148, 163, 184, 0.44);
+            background: rgba(51, 65, 85, 0.42);
+        }
+
+        .ai-note-select input,
+        .ai-block-select input {
+            cursor: pointer;
+        }
+
+        .ai-selected-note {
+            border-color: var(--ai-accent);
+            box-shadow: 0 0 0 2px var(--ai-accent-light);
+        }
+
+        .ai-note-selection-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 6px;
+            gap: 8px;
+            font-size: 10px;
+            color: #a5b4fc;
+        }
+
+        /* REPLACEMENT CSS FOR NOTE EDITOR (Modal Style) */
+        #note-editor {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85vw;
+            height: 85vh;
+            max-width: 1000px;
+            max-height: 800px;
+            z-index: 2000;
+            background: #222;
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 0 100vmax rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #note-editor.hidden {
+            display: none;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #note-editor.maximized {
+            width: 95vw;
+            height: 95vh;
+            max-width: none;
+            max-height: none;
+        }
+
+        /* --- BLOCK-BASED NOTE EDITOR STYLES --- */
+        .note-modal-header {
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        #note-title-input {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            font-size: 1.4rem;
+            font-weight: 700;
+            width: 60%;
+            outline: none;
+        }
+
+        #note-title-input::placeholder {
+            color: #64748b;
+        }
+
+        .note-header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .note-header-actions .icon-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .note-header-actions .icon-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--accent);
+        }
+
+        .note-header-actions .icon-btn.danger:hover {
+            color: var(--blocked-color);
+        }
+
+        /* Global Floating Toolbar */
+        .note-global-toolbar {
+            padding: 8px 1.5rem;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        .note-toolbar-group {
+            display: flex;
+            gap: 4px;
+            padding-right: 12px;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .note-toolbar-group:last-child {
+            border-right: none;
+        }
+
+        .note-toolbar-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .note-toolbar-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--accent);
+        }
+
+        .note-toolbar-btn.active-mode {
+            background: var(--accent);
+            color: #0f172a;
+        }
+
+        .note-toolbar-btn i {
+            font-size: 0.9rem;
+        }
+
+        /* Blocks Area */
+        #blocks-container {
+            flex: 1;
+            padding: 2.5rem 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #blocks-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2.5rem;
+            overflow: visible;
+        }
+
+        .note-block {
+            background: var(--cat-1);
+            border-radius: 10px;
+            color: #1e293b;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .note-block.active-block {
+            border-color: var(--accent);
+        }
+
+        .note-block.ai-selected-block {
+            box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.5), 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Add Above Trigger */
+        .add-above-btn {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: var(--text-muted);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.8rem;
+            opacity: 0;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .note-block:hover .add-above-btn {
+            opacity: 1;
+        }
+
+        .add-above-btn:hover {
+            color: var(--accent);
+            background: #000;
+            border-color: var(--accent);
+        }
+
+        .block-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 14px;
+            background: rgba(0, 0, 0, 0.06);
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+        }
+
+        .category-trigger {
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.2s;
+        }
+
+        .category-trigger:hover {
+            color: #000;
+        }
+
+        .block-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .ai-block-select {
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            color: #4c1d95;
+        }
+
+        .block-controls .note-toolbar-btn {
+            color: #475569;
+            padding: 4px 6px;
+        }
+
+        .block-controls .note-toolbar-btn:hover {
+            background: rgba(0, 0, 0, 0.1);
+            color: #1e293b;
+        }
+
+        .block-editor-area {
+            width: 100%;
+            min-height: 80px;
+            padding: 16px;
+            box-sizing: border-box;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-size: 1.05rem;
+            resize: none;
+            outline: none;
+            line-height: 1.6;
+            overflow: hidden;
+            display: block;
+            color: #1e293b;
+        }
+
+        .block-preview-area {
+            width: 100%;
+            padding: 16px;
+            min-height: 80px;
+            display: none;
+            box-sizing: border-box;
+            line-height: 1.6;
+            color: #1e293b;
+        }
+
+        .block-preview-area h1,
+        .block-preview-area h2,
+        .block-preview-area h3 {
+            margin-top: 0;
+        }
+
+        .block-preview-area ul,
+        .block-preview-area ol {
+            padding-left: 20px;
+        }
+
+        /* Category Picker List */
+        .category-picker {
+            display: none;
+            position: absolute;
+            top: 35px;
+            left: 0;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            z-index: 100;
+            width: 240px;
+            padding: 5px 0;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .category-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            cursor: pointer;
+            color: #1e293b;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .category-item:hover {
+            background: #f1f5f9;
+        }
+
+        .cat-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .cat-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .rename-cat-btn {
+            color: #94a3b8;
+            font-size: 0.75rem;
+            padding: 4px;
+            border-radius: 4px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: all 0.2s;
+        }
+
+        .rename-cat-btn:hover {
+            color: var(--accent);
+            background: rgba(0, 0, 0, 0.05);
+            opacity: 1;
+        }
+
+        /* Bottom Add Block Button */
+        .note-bottom-actions {
+            padding: 2.5rem 0;
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+
+        .add-block-btn-large {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+            border: 2px dashed var(--accent);
+            padding: 14px 40px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+        }
+
+        .add-block-btn-large:hover {
+            background: rgba(59, 130, 246, 0.2);
+            transform: translateY(-2px);
+        }
+
+        /* --- BOOKMARK SYSTEM STYLES --- */
+        .bookmark-badge {
+            position: absolute;
+            top: 40px;
+            right: 12px;
+            background: var(--accent);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            z-index: 5;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            pointer-events: none;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .bookmark-dropdown-container {
+            position: relative;
+        }
+
+        .bookmark-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            min-width: 240px;
+            max-height: 350px;
+            overflow-y: auto;
+            z-index: 1100;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 6px;
+        }
+
+        .bookmark-dropdown.show {
+            display: block;
+            animation: dropdownFadeIn 0.2s ease-out;
+        }
+
+        @keyframes dropdownFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .bookmark-item {
+            padding: 10px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-main);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 2px;
+        }
+
+        .bookmark-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--accent);
+        }
+
+        .bookmark-item i {
+            font-size: 11px;
+            opacity: 0.7;
+        }
+
+        .bookmark-count-badge {
+            background: var(--accent);
+            color: white;
+            font-size: 9px;
+            padding: 1px 5px;
+            border-radius: 10px;
+            margin-left: 5px;
+            font-weight: 800;
+        }
+
+        /* Arrival Flash Animation */
+        @keyframes flash-arrival {
+            0% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.8);
+                border-color: var(--accent);
+                transform: scale(1);
+            }
+
+            50% {
+                box-shadow: 0 0 30px 15px rgba(59, 130, 246, 0);
+                border-color: var(--accent);
+                transform: scale(1.01);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+                transform: scale(1);
+            }
+        }
+
+        .flash-highlight {
+            animation: flash-arrival 1.2s cubic-bezier(0.23, 1, 0.32, 1);
+            z-index: 100 !important;
+        }
+
+        /* Bookmark Rename Window (Match Rename Category) */
+        .bookmark-window {
+            background: #1e293b;
+            padding: 24px;
+            border-radius: 16px;
+            width: 320px;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .bookmark-window h3 {
+            margin: 0 0 16px 0;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .bookmark-window input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .bookmark-window input:focus {
+            border-color: var(--accent);
+        }
+
+        .bookmark-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .bookmark-actions button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .bookmark-save-btn {
+            background: var(--accent);
+            color: white;
+        }
+
+        .bookmark-save-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .bookmark-cancel-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ccc;
+        }
+
+        .bookmark-cancel-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        #bookmark-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+
+        #quick-link-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+
+        .quick-link-window {
+            background: #1e293b;
+            padding: 24px;
+            border-radius: 16px;
+            width: 320px;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .quick-link-window h3 {
+            margin: 0 0 16px 0;
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .quick-link-window input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .quick-link-window input:focus {
+            border-color: var(--accent);
+        }
+
+        .quick-link-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .quick-link-actions button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .quick-link-save-btn {
+            background: var(--accent);
+            color: white;
+        }
+
+        .quick-link-save-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .quick-link-cancel-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ccc;
+        }
+
+        .quick-link-cancel-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .finance-capture-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 3200;
+            background: rgba(2, 6, 23, 0.78);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .finance-capture-window {
+            width: min(760px, 96vw);
+            max-height: 92vh;
+            overflow: auto;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 24px;
+            box-shadow: 0 22px 50px rgba(15, 23, 42, 0.42);
+            padding: 24px;
+            box-sizing: border-box;
+            color: #0f172a;
+        }
+
+        .finance-capture-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .finance-capture-header h3 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #1e293b;
+        }
+
+        .finance-capture-close {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #475569;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .finance-capture-close:hover {
+            background: #f1f5f9;
+        }
+
+        .finance-type-toggle {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            padding: 6px;
+            border: 1px solid #cbd5e1;
+            border-radius: 20px;
+            background: #e2e8f0;
+            margin-bottom: 14px;
+        }
+
+        .finance-type-btn {
+            border: none;
+            border-radius: 16px;
+            padding: 12px 16px;
+            background: transparent;
+            color: #64748b;
+            font-size: 1.05rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .finance-type-btn.is-active-expense,
+        .finance-type-btn.is-active-income {
+            background: #ffffff;
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+        }
+
+        .finance-type-btn.is-active-expense {
+            color: #e11d48;
+        }
+
+        .finance-type-btn.is-active-income {
+            color: #059669;
+        }
+
+        .finance-field-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 700;
+            color: #64748b;
+            margin: 10px 0 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .finance-field {
+            width: 100%;
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #0f172a;
+            padding: 14px 16px;
+            border-radius: 14px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        .finance-field::placeholder {
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .finance-field:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .finance-field-help {
+            margin: 6px 0 2px;
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .finance-row {
+            display: grid;
+            grid-template-columns: 1fr 140px;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .finance-currency {
+            text-align: center;
+        }
+
+        .finance-notes {
+            min-height: 96px;
+            resize: vertical;
+        }
+
+        .finance-pending-header {
+            margin-top: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            color: #334155;
+            font-weight: 700;
+        }
+
+        .finance-queue-list {
+            margin-top: 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            background: #ffffff;
+            max-height: 190px;
+            overflow: auto;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .finance-queue-empty {
+            font-size: 12px;
+            color: #64748b;
+            text-align: center;
+            padding: 16px 10px;
+        }
+
+        .finance-queue-item {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 8px 10px;
+            background: #f8fafc;
+        }
+
+        .finance-queue-item-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .finance-queue-item-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0;
+        }
+
+        .finance-queue-item-meta {
+            margin-top: 3px;
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .finance-queue-item-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .finance-queue-action-btn {
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            color: #334155;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 5px 8px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .finance-queue-action-btn.danger {
+            color: #dc2626;
+            border-color: #fca5a5;
+            background: #fef2f2;
+        }
+
+        .finance-capture-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .finance-btn {
+            border: none;
+            border-radius: 14px;
+            padding: 12px 16px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .finance-btn.finance-btn-muted {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+        .finance-btn.finance-btn-primary {
+            background: linear-gradient(135deg, #4f46e5, #4338ca);
+            color: #ffffff;
+            box-shadow: 0 10px 22px rgba(79, 70, 229, 0.35);
+        }
+
+        @media (max-width: 768px) {
+            .finance-capture-window {
+                width: 100%;
+                max-height: 95vh;
+                border-radius: 18px;
+                padding: 16px;
+            }
+
+            .finance-capture-header h3 {
+                font-size: 1.6rem;
+            }
+
+            .finance-row {
+                grid-template-columns: 1fr 110px;
+            }
+        }
+
+        /* --- END BOOKMARK SYSTEM STYLES --- */
+
+        /* --- MAXIMIZED BLOCK WINDOW --- */
+        #maximized-block-window {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85vw;
+            height: 85vh;
+            z-index: 2500;
+            background: #1e293b;
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 0 100vmax rgba(0, 0, 0, 0.7);
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #maximized-block-window.visible {
+            display: flex;
+        }
+
+        .maximized-block-header {
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .maximized-block-category {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        .maximized-block-toolbar {
+            padding: 8px 1.5rem;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .maximized-block-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .maximized-block-textarea {
+            width: 100%;
+            height: 100%;
+            min-height: 100%;
+            background: transparent;
+            border: none;
+            color: #e2e8f0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-size: 1.1rem;
+            resize: none;
+            outline: none;
+            line-height: 1.7;
+            overflow-y: hidden;
+        }
+
+        .maximized-block-preview {
+            width: 100%;
+            min-height: 100%;
+            color: #e2e8f0;
+            font-size: 1.1rem;
+            line-height: 1.7;
+        }
+
+
+        /* Task Search Overlay */
+        #note-task-search-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 200;
+            padding: 2rem;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .note-search-window {
+            background: #1e293b;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .note-search-window h3 {
+            margin: 0 0 1rem 0;
+            color: white;
+            font-size: 1.1rem;
+        }
+
+        .note-search-input {
+            width: 100%;
+            padding: 10px 10px 10px 35px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: white;
+            outline: none;
+            box-sizing: border-box;
+            font-size: 0.95rem;
+        }
+
+        .note-search-input:focus {
+            border-color: var(--accent);
+        }
+
+        #note-search-results-list {
+            margin-top: 1rem;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .note-search-result-item {
+            padding: 12px;
+            cursor: pointer;
+            color: white;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background 0.2s;
+            border-radius: 6px;
+        }
+
+        .note-search-result-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .note-search-result-item strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .note-search-result-item small {
+            color: var(--text-muted);
+        }
+
+        /* Footer Layout */
+        .note-modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .note-footer-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .note-linked-tasks-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .note-linked-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-right: 4px;
+        }
+
+        .note-task-tag {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+            padding: 4px 10px;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .note-task-tag:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .note-task-tag:active {
+            transform: scale(0.95);
+        }
+
+        .note-task-tag .unlink-btn {
+            color: #64748b;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .note-task-tag .unlink-btn:hover {
+            color: var(--blocked-color);
+        }
+
+        .note-footer-status-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .note-status-indicator {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .note-status-dot {
+            width: 7px;
+            height: 7px;
+            background: var(--ready-color);
+            border-radius: 50%;
+        }
+
+        /* Rename Category Modal */
+        #rename-cat-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .rename-window {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            width: 300px;
+            color: #1e293b;
+        }
+
+        .rename-window h3 {
+            margin-top: 0;
+            font-size: 1.1rem;
+        }
+
+        .rename-window input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 0.95rem;
+        }
+
+        .rename-window input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .rename-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .rename-actions button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .rename-actions .cancel-btn {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .rename-actions .cancel-btn:hover {
+            background: #cbd5e1;
+        }
+
+        .rename-actions .save-cat-btn {
+            background: var(--accent);
+            color: white;
+        }
+
+        .rename-actions .save-cat-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        /* View mode hide utility */
+        .note-view-mode-hide {
+            display: none !important;
+        }
+
+        /* --- END BLOCK-BASED NOTE EDITOR STYLES --- */
+
+
+        /* Ensure the notes list in the side panel takes full height */
+        #notes-list-container {
+            flex-grow: 1;
+            height: 100%;
+            overflow-y: auto;
+            padding-bottom: 60px;
+            /* Space for the create button */
+        }
+
+        /* --- ENHANCED MARKDOWN ELEMENT STYLING --- */
+
+        /* This styles the Headers created by # ## ### */
+        #note-preview-pane h1,
+        #note-preview-pane h2,
+        #note-preview-pane h3 {
+            color: #fff;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            border-bottom: 1px solid #333;
+            padding-bottom: 0.2em;
+        }
+
+        /* This fixes the indentation of bullet and numbered lists */
+        #note-preview-pane ul,
+        #note-preview-pane ol {
+            padding-left: 1.5em;
+            margin-bottom: 1em;
+        }
+
+        #note-preview-pane li {
+            margin-bottom: 0.4em;
+        }
+
+        /* This styles checkboxes from [ ] or [x] */
+        #note-preview-pane input[type="checkbox"] {
+            margin-right: 8px;
+            accent-color: var(--ready-color);
+        }
+
+        /* This styles the > Quote blocks */
+        #note-preview-pane blockquote {
+            margin: 1em 0;
+            padding: 0.5em 1em;
+            color: #9ca3af;
+            border-left: 4px solid var(--accent);
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        /* This styles code blocks (using triple backticks) */
+        #note-preview-pane pre {
+            background: #000;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #333;
+            overflow-x: auto;
+        }
+
+        /* This styles inline code (using single backticks) */
+        #note-preview-pane code {
+            font-family: 'Monaco', 'Consolas', monospace;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+
+        /* This styles the [[WikiLinks]] */
+        .wiki-link {
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+
+        .wiki-link:hover {
+            opacity: 0.8;
+        }
+
+        /* Note Search Bar */
+        #note-search-input {
+            background: #111;
+            border: 1px solid #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+
+        #note-tags-filter .note-filter-select {
+            background: #111;
+            border: 1px solid #333;
+            color: #dbe7ff;
+            border-radius: 12px;
+            padding: 6px 9px;
+            font-size: 11px;
+            flex: 1 1 160px;
+            min-width: 0;
+        }
+
+        #note-tags-filter .note-filter-select:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        /* Tag Styles */
+        .note-tag {
+            color: var(--ai-accent);
+            background: rgba(139, 92, 246, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            margin-right: 4px;
+            cursor: pointer;
+        }
+
+        .note-tag:hover {
+            background: var(--ai-accent);
+            color: white;
+        }
+
+        /* Pinning Styles */
+        .note-card.pinned-note {
+            border-color: #64748b;
+            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.16);
+        }
+
+        .pin-icon {
+            font-size: 10px;
+            color: #cbd5e1;
+            margin-left: 5px;
+        }
+
+        /* AI Toolbar Styles */
+        #ai-text-toolbar {
+            position: fixed;
+            z-index: 2100;
+            background: #111;
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 4px;
+            display: flex;
+            gap: 4px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
+            transition: opacity 0.2s, transform 0.2s;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(10px);
+        }
+
+        #ai-text-toolbar.visible {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        .ai-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: #eee;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .ai-btn:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.4);
+            color: white;
+        }

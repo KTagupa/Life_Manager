@@ -1,0 +1,565 @@
+:root {
+            /* Enhanced Modern Dark Theme with Better Contrast */
+            --bg-color: #0a0f0c;
+            --dots-color: #1a2520;
+            --panel-bg: #141b18;
+            --panel-bg-elevated: #1a2520;
+            --panel-bg-hover: #1f2a25;
+
+            /* Improved Text Colors */
+            --text-main: #f0f4f2;
+            --text-secondary: #c8d4d0;
+            --text-muted: #8a9a94;
+            --text-disabled: #5a6a64;
+
+            /* Enhanced Accent Colors */
+            --accent: #4f9cf9;
+            --accent-hover: #3b82f6;
+            --accent-light: rgba(79, 156, 249, 0.1);
+            --accent-border: rgba(79, 156, 249, 0.3);
+
+            /* Improved Borders */
+            --border: #2a3530;
+            --border-light: #1f2a25;
+            --border-hover: #3a4540;
+
+            /* Enhanced Node Colors */
+            --node-bg: #1e2724;
+            --node-bg-hover: #25302c;
+            --node-border: #2f3a35;
+            --node-selected: #4f9cf9;
+            --node-shadow: rgba(0, 0, 0, 0.4);
+
+            /* Logic Colors - Enhanced */
+            --critical-path: #ffd700;
+            --critical-path-light: rgba(255, 215, 0, 0.15);
+            --ready-color: #22c55e;
+            --ready-color-light: rgba(34, 197, 94, 0.15);
+            --blocked-color: #ef4444;
+            --blocked-color-light: rgba(239, 68, 68, 0.15);
+            --soft-dep-color: #64748b;
+
+            /* AI Colors - Enhanced */
+            --ai-accent: #a78bfa;
+            --ai-accent-light: rgba(167, 139, 250, 0.15);
+
+            /* Upcoming Colors */
+            --upcoming-color: #fbbf24;
+            --upcoming-color-light: rgba(251, 191, 36, 0.15);
+
+            /* Block Note Category Colors - Refined */
+            --cat-1: #f1f5f9;
+            --cat-2: #ffedd5;
+            --cat-3: #fef9c3;
+            --cat-4: #dcfce7;
+            --cat-5: #d1fae5;
+            --cat-6: #e0f2fe;
+            --cat-7: #e0e7ff;
+            --cat-8: #fae8ff;
+            --cat-9: #ffe4e6;
+            --cat-10: #fee2e2;
+
+            /* Spacing System */
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+
+            /* Border Radius */
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+
+            /* Shadows */
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+            --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+            /* Transitions */
+            --transition-fast: 0.15s ease;
+            --transition-base: 0.2s ease;
+            --transition-slow: 0.3s ease;
+            --right-rail-reserved-top: 0px;
+            --right-rail-open-offset: 430px;
+        }
+
+        .pinned-header {
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pinned-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .pinned-node {
+            position: relative;
+            background: var(--node-bg);
+            border: 1px solid var(--node-border);
+            border-radius: 6px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pinned-node:hover {
+            border-color: var(--accent);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .pinned-node.critical {
+            border-color: var(--critical-path);
+            background: linear-gradient(145deg, #2d2d2d, #3d3410);
+        }
+
+        .pinned-node.critical-urgent {
+            border-color: #ff4d4d;
+            background: linear-gradient(145deg, #2d2d2d, #4d1515);
+        }
+
+        .pinned-node.completed {
+            background: #1e3a2f;
+            border-color: #10b981;
+            opacity: 0.7;
+        }
+
+        .pinned-unpin {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(0, 0, 0, 0.6);
+            border: none;
+            color: #999;
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .pinned-node:hover .pinned-unpin {
+            opacity: 1;
+        }
+
+        .pinned-unpin:hover {
+            background: var(--blocked-color);
+            color: white;
+        }
+
+        /* Data Health Metrics */
+        .metrics-breakdown {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .metric-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .metric-label {
+            font-size: 9px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .metric-value {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .bookmark-link {
+            color: var(--accent);
+            cursor: pointer;
+            text-decoration: underline;
+            font-weight: 500;
+        }
+
+        .bookmark-link:hover {
+            color: #fff;
+            background: var(--accent);
+            text-decoration: none;
+            border-radius: 3px;
+            padding: 0 2px;
+        }
+
+        .pinned-habit {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid transparent;
+            border-radius: 6px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .pinned-habit:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: #333;
+        }
+
+        .pinned-habit.done-today {
+            border-color: var(--ready-color);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .pinned-note {
+            background: linear-gradient(165deg, rgba(19, 26, 38, 0.96), rgba(13, 19, 30, 0.95));
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 12px 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            overflow: visible;
+            min-height: 58px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .pinned-note::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 3px;
+            background: transparent;
+            pointer-events: none;
+        }
+
+        .pinned-note:hover {
+            border-color: #475569;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+        }
+
+        .pinned-note.has-task-links {
+            box-shadow: inset 3px 0 0 rgba(59, 130, 246, 0.28);
+        }
+
+        .pinned-note.has-task-links::before {
+            background: #3b82f6;
+        }
+
+        .pinned-note.has-habit-links {
+            box-shadow: inset 3px 0 0 rgba(16, 185, 129, 0.28);
+        }
+
+        .pinned-note.has-habit-links::before {
+            background: #10b981;
+        }
+
+        .pinned-note.has-mixed-links {
+            box-shadow: inset 3px 0 0 rgba(16, 185, 129, 0.22);
+        }
+
+        .pinned-note.has-mixed-links::before {
+            background: linear-gradient(180deg, #3b82f6 0%, #3b82f6 50%, #10b981 50%, #10b981 100%);
+        }
+
+        .pinned-note.has-task-links:hover {
+            box-shadow: inset 3px 0 0 rgba(59, 130, 246, 0.32), 0 6px 16px rgba(0, 0, 0, 0.28);
+        }
+
+        .pinned-note.has-habit-links:hover {
+            box-shadow: inset 3px 0 0 rgba(16, 185, 129, 0.32), 0 6px 16px rgba(0, 0, 0, 0.28);
+        }
+
+        .pinned-note.has-mixed-links:hover {
+            box-shadow: inset 3px 0 0 rgba(16, 185, 129, 0.26), 0 6px 16px rgba(0, 0, 0, 0.28);
+        }
+
+        .pinned-note-link-chips {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            min-height: 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .pinned-note-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #e2e8f0;
+            line-height: 1.5;
+            padding-right: 24px;
+            display: block;
+            white-space: normal;
+            word-break: break-word;
+            text-wrap: pretty;
+            position: relative;
+            z-index: 1;
+        }
+
+        .pinned-note .note-link-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 9px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            border: 1px solid rgba(148, 163, 184, 0.38);
+            color: #cbd5e1;
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        .pinned-note .note-link-chip.task {
+            color: #93c5fd;
+            border-color: rgba(59, 130, 246, 0.58);
+            background: rgba(59, 130, 246, 0.16);
+        }
+
+        .pinned-note .note-link-chip.habit {
+            color: #86efac;
+            border-color: rgba(16, 185, 129, 0.58);
+            background: rgba(16, 185, 129, 0.16);
+        }
+
+        .pinned-note .note-link-chip.urgent {
+            color: #fbcfe8;
+            border-color: rgba(199, 112, 136, 0.66);
+            background: rgba(199, 112, 136, 0.2);
+        }
+
+        .pinned-native-task {
+            border-radius: 10px;
+            padding: 10px;
+            overflow: visible;
+        }
+
+        .pinned-native-task-title {
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.35;
+            margin-bottom: 6px;
+            padding-right: 22px;
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .pinned-native-task-badges {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            align-items: center;
+            min-height: 18px;
+        }
+
+        .pinned-native-task-meta {
+            font-size: 10px;
+        }
+
+        .pinned-habit-compact {
+            --habit-rgb: 74, 141, 235;
+            border-radius: 10px;
+            padding: 0;
+            overflow: visible;
+            background: linear-gradient(160deg, rgba(8, 21, 40, 0.96), rgba(4, 12, 24, 0.95));
+            border: 1px solid rgba(var(--habit-rgb), 0.8);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(var(--habit-rgb), 0.14);
+            cursor: pointer;
+        }
+
+        .pinned-habit-compact.done-today {
+            border-color: rgba(var(--habit-rgb), 0.95);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4), 0 0 14px rgba(var(--habit-rgb), 0.28), inset 0 0 0 1px rgba(var(--habit-rgb), 0.22);
+        }
+
+        .pinned-habit-cad-header {
+            padding: 10px 10px 8px;
+            border-bottom: 1px dashed rgba(var(--habit-rgb), 0.62);
+            background: linear-gradient(90deg, rgba(var(--habit-rgb), 0.18), rgba(var(--habit-rgb), 0.06) 50%, rgba(7, 18, 35, 0.44) 100%);
+        }
+
+        .pinned-habit-cad-body {
+            padding: 8px 10px 10px;
+            background-image:
+                linear-gradient(rgba(var(--habit-rgb), 0.12) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(var(--habit-rgb), 0.12) 1px, transparent 1px);
+            background-size: 16px 16px;
+            background-position: -1px -1px;
+        }
+
+        .pinned-habit-compact-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+            min-height: 22px;
+        }
+
+        .pinned-habit-compact-title {
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.25;
+            min-width: 0;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            word-break: break-word;
+            color: #f8fafc;
+        }
+
+        .pinned-habit-compact-pill {
+            flex-shrink: 0;
+            font-size: 11px;
+            font-weight: 700;
+            color: #f8fafc;
+            border: 1px solid rgba(var(--habit-rgb), 0.74);
+            background: rgba(var(--habit-rgb), 0.2);
+            border-radius: 6px;
+            padding: 2px 8px;
+            min-width: 44px;
+            text-align: center;
+        }
+
+        .pinned-habit-compact-pill.done {
+            color: #031227;
+            background: rgba(var(--habit-rgb), 0.92);
+            border-color: rgba(var(--habit-rgb), 0.95);
+        }
+
+        .pinned-habit-compact-meta {
+            font-size: 10px;
+            color: rgba(226, 232, 240, 0.82);
+            margin-bottom: 5px;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            word-break: break-word;
+        }
+
+        .pinned-habit-compact-progress-track {
+            height: 10px;
+            border-radius: 0;
+            border: 1px solid rgba(var(--habit-rgb), 0.74);
+            background: rgba(var(--habit-rgb), 0.12);
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .pinned-habit-compact-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: rgb(var(--habit-rgb));
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 255, 255, 0.24) 4px, rgba(255, 255, 255, 0.24) 8px);
+            transition: width 0.25s ease;
+        }
+
+        .pinned-habit-compact-progress-fill.done {
+            background-color: rgb(var(--habit-rgb));
+        }
+
+        .pinned-habit-compact-footer {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            min-height: 20px;
+        }
+
+        .pinned-habit-compact-goal {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .pinned-habit-link-box {
+            border: 1px solid rgba(var(--habit-rgb), 0.4);
+            background: rgba(9, 24, 45, 0.82);
+            padding: 2px 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            max-width: 100%;
+            flex-wrap: wrap;
+        }
+
+        .pinned-habit-link-label {
+            opacity: 0.64;
+            letter-spacing: 0.06em;
+            flex-shrink: 0;
+            font-size: 10px;
+            color: #87b9ff;
+        }
+
+        .pinned-habit-compact-goal .habit-goal-link {
+            max-width: none;
+            display: inline-block;
+            font-size: 10px;
+            padding: 1px 6px;
+            line-height: 1.4;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            word-break: break-word;
+        }
+
+        .pinned-habit-compact-notes {
+            font-size: 10px;
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.45);
+            border-radius: 999px;
+            padding: 1px 6px;
+            flex-shrink: 0;
+            cursor: pointer;
+            background: rgba(30, 64, 175, 0.14);
+        }
+
+        .pinned-habit-compact-notes:hover {
+            background: rgba(59, 130, 246, 0.28);
+            color: #eff6ff;
+        }
+
+        .pinned-habit-compact .pinned-unpin {
+            z-index: 5;
+            top: 6px;
+            right: 6px;
+        }
+
+        .pinned-note,
+        .pinned-native-task,
+        .pinned-habit-compact {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+
+        .pinned-content > *:hover .pinned-unpin {
+            opacity: 1;
+        }

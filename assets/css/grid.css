@@ -1,0 +1,362 @@
+        /* --- CHECK-IN GRID --- */
+        .checkin-grid-container {
+            margin-top: 12px;
+            overflow-x: auto;
+            display: flex;
+            gap: 6px;
+            padding: 4px 0 12px 0;
+            scrollbar-width: thin;
+            scrollbar-color: #334155 transparent;
+        }
+
+        .checkin-grid-container::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .checkin-grid-container::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+
+        .checkin-box {
+            min-width: 32px;
+            height: 38px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .checkin-box.checked {
+            background: #059669;
+            border-color: #10b981;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+        }
+
+        .checkin-box .day-num {
+            font-size: 11px;
+            font-weight: 700;
+            color: #94a3b8;
+        }
+
+        .checkin-box.checked .day-num {
+            color: white;
+        }
+
+        .checkin-box .day-indicator {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: #475569;
+            margin-top: 2px;
+        }
+
+        .checkin-box.checked .day-indicator {
+            background: white;
+            box-shadow: 0 0 5px white;
+        }
+
+        .today-checkins-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .today-checkin-tag {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #10b981;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            font-family: monospace;
+        }
+
+        .subtask-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px;
+            background: #1e293b;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .subtask-row:hover {
+            background: #334155;
+        }
+
+        .subtask-check {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #475569;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-size: 12px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .subtask-check.checked {
+            background: #94a3b8;
+            border-color: #94a3b8;
+        }
+
+        .st-input {
+            background: transparent;
+            border: none;
+            color: #cbd5e1;
+            font-size: 13px;
+            flex-grow: 1;
+            outline: none;
+            font-family: inherit;
+            width: 100%;
+            min-height: 18px;
+            line-height: 1.35;
+            resize: none;
+            overflow: hidden;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin-top: 1px;
+        }
+
+        .st-input.done {
+            text-decoration: line-through;
+            color: #64748b;
+            opacity: 0.7;
+        }
+
+        .subtask-row>button {
+            align-self: flex-start;
+            margin-top: 2px;
+        }
+
+        .add-subtask-btn {
+            font-size: 11px;
+            color: #f43f5e;
+            font-weight: 700;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            text-align: right;
+            padding: 4px;
+            transition: opacity 0.2s;
+        }
+
+        .add-subtask-btn:hover {
+            opacity: 0.8;
+        }
+
+        .linked-note-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .linked-note-item:hover {
+            border-color: #475569;
+        }
+
+        .footer-icon-btn {
+            background: transparent;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .footer-icon-btn:hover {
+            background: #1e293b;
+            border-color: #475569;
+        }
+
+        .session-btn {
+            background: #e11d48;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .session-btn:hover {
+            background: #be123c;
+        }
+
+        .session-btn.standard {
+            background: #059669;
+        }
+
+        .session-btn.standard:hover {
+            background: #047857;
+        }
+
+        .side-panel {
+            width: 400px;
+            background: var(--panel-bg-elevated);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 55;
+            position: absolute;
+            right: 0;
+            top: var(--right-rail-reserved-top);
+            bottom: 0;
+            transition: transform var(--transition-slow);
+            box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Update this block in your <style> section */
+        .side-panel.hidden {
+            transform: translateX(100%);
+            /* This makes it invisible to the Tab key: */
+            visibility: hidden;
+            /* This ensures the animation finishes before it disappears: */
+            transition: transform 0.3s ease, visibility 0s linear 0.3s;
+        }
+
+        /* Also update the base .side-panel to ensure it reappears instantly */
+        .side-panel {
+            width: 380px;
+            background: #1a1a1a;
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 55;
+            position: absolute;
+            right: 0;
+            top: var(--right-rail-reserved-top);
+            bottom: 0;
+            box-shadow: -4px 0 10px rgba(0, 0, 0, 0.3);
+
+            /* MODIFIED TRANSITION HERE: */
+            transition: transform 0.3s ease, visibility 0s linear 0s;
+        }
+
+        .side-panel.pinned {
+            box-shadow: -4px 0 15px rgba(59, 130, 246, 0.2);
+        }
+
+        .side-panel.floating {
+            position: fixed;
+            right: auto;
+            bottom: auto;
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            transition: none;
+            z-index: 200;
+            resize: both;
+            overflow: hidden;
+        }
+
+        .side-panel.floating .panel-header-row {
+            cursor: move;
+            background: #2a2a2a;
+        }
+
+        #right-rail-tabs {
+            position: absolute;
+            top: 74px;
+            right: 12px;
+            z-index: 120;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 120px;
+            justify-content: flex-start;
+            align-items: stretch;
+            padding: 6px;
+            border-radius: 10px;
+            background: rgba(7, 11, 16, 0.72);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(8px);
+            visibility: hidden;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-6px);
+            transition: opacity var(--transition-base), transform var(--transition-base), visibility 0s linear var(--transition-base);
+        }
+
+        body.right-rail-open #right-rail-tabs {
+            right: var(--right-rail-open-offset);
+            visibility: visible;
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateY(0);
+            transition: opacity var(--transition-base), transform var(--transition-base), visibility 0s linear 0s;
+        }
+
+        .right-rail-tab {
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-muted);
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 6px 9px;
+            cursor: pointer;
+            transition: all var(--transition-base);
+            white-space: normal;
+            text-align: center;
+        }
+
+        .right-rail-tab:hover {
+            border-color: var(--border-hover);
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .right-rail-tab.active {
+            border-color: var(--accent);
+            color: #0b1220;
+            background: var(--accent);
+            box-shadow: 0 6px 18px rgba(59, 130, 246, 0.25);
+        }
+
+        .panel-header-row {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--panel-bg);
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-main);
+        }
+
+        .panel-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
