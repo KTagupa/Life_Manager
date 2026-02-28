@@ -196,6 +196,12 @@
         const level = Number.isFinite(Number(source.level))
             ? clamp(Math.round(Number(source.level)), 1, 5)
             : (score === null ? null : toLevel(score));
+        const previousScore = Number.isFinite(Number(source.previousScore))
+            ? clamp(Math.round(Number(source.previousScore)), 0, 100)
+            : null;
+        const previousLevel = Number.isFinite(Number(source.previousLevel))
+            ? clamp(Math.round(Number(source.previousLevel)), 1, 5)
+            : (previousScore === null ? null : toLevel(previousScore));
         return {
             score,
             level,
@@ -207,9 +213,36 @@
             source: source.source ? String(source.source) : 'local-heuristic',
             model: source.model ? String(source.model) : (kind === 'project' ? 'ai-urgency-v1-project' : 'ai-urgency-v1-task'),
             computedAt: Number.isFinite(Number(source.computedAt)) ? Number(source.computedAt) : null,
+            previousScore,
+            previousLevel,
+            previousComputedAt: Number.isFinite(Number(source.previousComputedAt)) ? Number(source.previousComputedAt) : null,
             expiresAt: Number.isFinite(Number(source.expiresAt)) ? Number(source.expiresAt) : null,
-            stale: source.stale !== undefined ? !!source.stale : true
+            stale: source.stale !== undefined ? !!source.stale : true,
+            semanticInputHash: typeof source.semanticInputHash === 'string'
+                ? String(source.semanticInputHash || '').trim().slice(0, 128)
+                : null
         };
+    }
+
+    function attachPreviousAiMeta(previousRaw, nextRaw, kind) {
+        const next = normalizeAiMeta(nextRaw, kind);
+        const previous = normalizeAiMeta(previousRaw, kind);
+        const previousScore = Number.isFinite(Number(previous && previous.score))
+            ? clamp(Math.round(Number(previous.score)), 0, 100)
+            : null;
+        const previousLevel = Number.isFinite(Number(previous && previous.level))
+            ? clamp(Math.round(Number(previous.level)), 1, 5)
+            : (previousScore === null ? null : toLevel(previousScore));
+        const previousComputedAt = Number.isFinite(Number(previous && previous.computedAt))
+            ? Number(previous.computedAt)
+            : null;
+
+        if (previousScore !== null || previousComputedAt !== null) {
+            next.previousScore = previousScore;
+            next.previousLevel = previousLevel;
+            next.previousComputedAt = previousComputedAt;
+        }
+        return next;
     }
 
     function normalizeSystemMeta(score, source, reason, confidence) {
@@ -614,7 +647,7 @@
 
     function markCompletedTaskAiUrgency(task, nowTs, staleAfterMs) {
         if (!task || typeof task !== 'object') return;
-        task.aiUrgency = normalizeAiMeta({
+        task.aiUrgency = attachPreviousAiMeta(task.aiUrgency, {
             score: 0,
             level: 1,
             tag: getLevelTag(1),
@@ -681,7 +714,7 @@
         taskList.forEach(task => {
             if (!task || !task.id) return;
             if (isTaskActive(task)) {
-                task.aiUrgency = normalizeAiMeta(finalTaskMetaMap[task.id], 'task');
+                task.aiUrgency = attachPreviousAiMeta(task.aiUrgency, finalTaskMetaMap[task.id], 'task');
                 tasksUpdated += 1;
             } else {
                 markCompletedTaskAiUrgency(task, nowTs, staleAfterMs);
@@ -695,7 +728,7 @@
                 source: 'local-heuristic',
                 model: 'ai-urgency-v1-project'
             });
-            project.aiUrgency = normalizeAiMeta(meta, 'project');
+            project.aiUrgency = attachPreviousAiMeta(project.aiUrgency, meta, 'project');
             projectsUpdated += 1;
         });
 
@@ -708,6 +741,8 @@
     }
 
     const SEMANTIC_RUBRIC_VERSION = 'ai-urgency-semantic-v1';
+    const SEMANTIC_BATCH_DEFAULT_SIZE = 8;
+    const SEMANTIC_BATCH_MAX_SIZE = 20;
     const SEMANTIC_SYSTEM_PROMPT = [
         'You are a strict urgency scoring engine. Score task urgency from semantics only using the provided rubric.',
         '',
@@ -720,29 +755,54 @@
         '6) If evidence is weak or ambiguous, lower confidence and set needs_human_review true.'
     ].join('\n');
 
+    function clipSemanticText(value, maxLen) {
+        const text = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!text) return '';
+        const limit = Math.max(1, Number(maxLen) || 1);
+        return text.length > limit ? `${text.slice(0, limit - 1)}...` : text;
+    }
+
     function createSemanticTaskPayload(task, project) {
         return {
             task_id: String(task && task.id || ''),
-            title: String(task && task.title || ''),
-            description: String(task && task.description || ''),
+            title: clipSemanticText(task && task.title, 180),
+            description: clipSemanticText(task && task.description, 700),
             notes_excerpt: '',
-            project_name: String(project && project.name || ''),
-            project_description: String(project && project.description || ''),
+            project_name: clipSemanticText(project && project.name, 120),
+            project_description: clipSemanticText(project && project.description, 320),
             context_tags: [],
             created_at: Number(task && task.createdAt) || null,
             updated_at: Number(task && task.updatedAt) || null
         };
     }
 
-    function buildSemanticUserPrompt(task, project) {
-        const taskJson = JSON.stringify(createSemanticTaskPayload(task, project), null, 2);
+    function computeSimpleSemanticHash(value) {
+        const text = String(value || '');
+        let hash = 2166136261;
+        for (let i = 0; i < text.length; i += 1) {
+            hash ^= text.charCodeAt(i);
+            hash = Math.imul(hash, 16777619);
+        }
+        return `h${(hash >>> 0).toString(16)}`;
+    }
+
+    function computeSemanticInputHash(payload) {
+        const normalized = payload && typeof payload === 'object'
+            ? payload
+            : {};
+        return computeSimpleSemanticHash(JSON.stringify(normalized));
+    }
+
+    function buildSemanticBatchUserPrompt(taskPayloads) {
+        const payloadArray = Array.isArray(taskPayloads) ? taskPayloads : [];
+        const taskJson = JSON.stringify(payloadArray, null, 2);
         return [
-            `Score this task using rubric version ${SEMANTIC_RUBRIC_VERSION}.`,
+            `Score ${payloadArray.length} task(s) using rubric version ${SEMANTIC_RUBRIC_VERSION}.`,
             '',
-            'Task JSON:',
+            'Tasks JSON Array:',
             taskJson,
             '',
-            'Scoring instructions:',
+            'Scoring instructions for EACH task:',
             '- Compute factor scores with exact ranges:',
             '  consequence_severity (0-30),',
             '  time_sensitivity_text (0-25),',
@@ -765,9 +825,27 @@
             '  specificityEvidence {0.10,0.05,0.00}',
             '  ambiguityPenalty {0.20,0.10,0.00}',
             '',
-            'Output JSON with keys:',
-            'task_id, score, level, confidence, summary, reason, factor_scores, penalties, assumptions, needs_human_review, model_rubric_version'
+            'Return compact JSON only. Keep each "reason" under 160 characters.',
+            'Return one JSON object only with this exact shape:',
+            '{',
+            '  "results": [',
+            '    {',
+            '      "task_id": "string",',
+            '      "score": 0,',
+            '      "level": 1,',
+            '      "confidence": 0.0,',
+            '      "reason": "string",',
+            '      "model_rubric_version": "ai-urgency-semantic-v1"',
+            '    }',
+            '  ]',
+            '}',
+            '',
+            'Include exactly one result per input task_id. Return valid JSON only.'
         ].join('\n');
+    }
+
+    function buildSemanticUserPrompt(task, project) {
+        return buildSemanticBatchUserPrompt([createSemanticTaskPayload(task, project)]);
     }
 
     function extractTextFromGeminiResponse(data) {
@@ -791,21 +869,30 @@
         try {
             return JSON.parse(text);
         } catch (error) {
+            const candidates = [];
+            const firstBracket = text.indexOf('[');
+            const lastBracket = text.lastIndexOf(']');
+            if (firstBracket >= 0 && lastBracket > firstBracket) {
+                candidates.push(text.slice(firstBracket, lastBracket + 1));
+            }
             const firstBrace = text.indexOf('{');
             const lastBrace = text.lastIndexOf('}');
             if (firstBrace >= 0 && lastBrace > firstBrace) {
-                const maybeJson = text.slice(firstBrace, lastBrace + 1);
+                candidates.push(text.slice(firstBrace, lastBrace + 1));
+            }
+            while (candidates.length > 0) {
+                const maybeJson = candidates.shift();
                 try {
                     return JSON.parse(maybeJson);
                 } catch (nestedError) {
-                    return null;
+                    // Try next candidate.
                 }
             }
             return null;
         }
     }
 
-    function normalizeSemanticGeminiResult(taskId, parsed, nowTs, staleAfterMs) {
+    function normalizeSemanticGeminiResult(taskId, parsed, nowTs, staleAfterMs, semanticInputHash) {
         const source = parsed && typeof parsed === 'object' ? parsed : {};
         const score = clamp(Math.round(Number(source.score) || 0), 0, 100);
         const level = clamp(Math.round(Number(source.level) || toLevel(score)), 1, 5);
@@ -829,11 +916,90 @@
             computedAt: nowTs,
             expiresAt: nowTs + staleAfterMs,
             stale: false,
-            task_id: String(taskId || '')
+            task_id: String(taskId || ''),
+            semanticInputHash: String(semanticInputHash || '') || null
         }, 'task');
     }
 
-    async function scoreTaskSemanticUrgencyWithGemini(task, project, options) {
+    function createSemanticFailureMeta(taskId, nowTs, staleAfterMs, reason, semanticInputHash) {
+        return normalizeAiMeta({
+            score: 0,
+            level: 1,
+            tag: getLevelTag(1),
+            label: getLevelLabel(1),
+            confidence: 0.2,
+            reason: String(reason || 'Gemini semantic scoring failed.'),
+            factors: [],
+            source: 'gemini-semantic',
+            model: SEMANTIC_RUBRIC_VERSION,
+            computedAt: nowTs,
+            expiresAt: nowTs + staleAfterMs,
+            stale: true,
+            semanticInputHash: String(semanticInputHash || '') || null
+        }, 'task');
+    }
+
+    function normalizeSemanticBatchResults(rawParsed) {
+        if (Array.isArray(rawParsed)) return rawParsed;
+        if (!rawParsed || typeof rawParsed !== 'object') return [];
+        if (Array.isArray(rawParsed.results)) return rawParsed.results;
+        if (Array.isArray(rawParsed.tasks)) return rawParsed.tasks;
+        if (Array.isArray(rawParsed.items)) return rawParsed.items;
+        if (Array.isArray(rawParsed.scores)) return rawParsed.scores;
+        if (Array.isArray(rawParsed.task_scores)) return rawParsed.task_scores;
+        if (Array.isArray(rawParsed.urgency_scores)) return rawParsed.urgency_scores;
+        if (rawParsed.task_id) return [rawParsed];
+        if (rawParsed.id && Number.isFinite(Number(rawParsed.score))) return [rawParsed];
+
+        const keyEntries = Object.entries(rawParsed);
+        if (keyEntries.length > 0) {
+            const mapped = keyEntries
+                .filter(([, value]) => value && typeof value === 'object')
+                .map(([key, value]) => {
+                    if (value.task_id || value.id || !Number.isFinite(Number(value.score))) return null;
+                    return {
+                        task_id: key,
+                        score: value.score,
+                        level: value.level,
+                        confidence: value.confidence,
+                        reason: value.reason,
+                        model_rubric_version: value.model_rubric_version
+                    };
+                })
+                .filter(Boolean);
+            if (mapped.length > 0) return mapped;
+        }
+
+        const stack = [rawParsed];
+        while (stack.length > 0) {
+            const current = stack.pop();
+            if (!current || typeof current !== 'object') continue;
+            if (Array.isArray(current)) {
+                const withIds = current.filter(item => item && typeof item === 'object' && (item.task_id || item.id));
+                if (withIds.length > 0) return withIds;
+                current.forEach(item => stack.push(item));
+                continue;
+            }
+            Object.values(current).forEach(value => {
+                if (value && typeof value === 'object') stack.push(value);
+            });
+        }
+        return [];
+    }
+
+    function isTaskSemanticInputFresh(task, semanticInputHash, nowTs) {
+        if (!task || typeof task !== 'object') return false;
+        const existingMeta = normalizeAiMeta(task.aiUrgency, 'task');
+        if (!existingMeta || existingMeta.source !== 'gemini-semantic') return false;
+        if (existingMeta.stale) return false;
+        if (Number.isFinite(Number(existingMeta.expiresAt)) && Number(existingMeta.expiresAt) <= nowTs) return false;
+        return String(existingMeta.semanticInputHash || '') === String(semanticInputHash || '');
+    }
+
+    async function scoreTaskSemanticUrgencyBatchWithGemini(entries, options) {
+        const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
+        if (safeEntries.length === 0) return new Map();
+
         const geminiFetch = (typeof fetchGemini === 'function')
             ? fetchGemini
             : global.fetchGemini;
@@ -845,20 +1011,27 @@
             throw new Error('Gemini API key is not set.');
         }
 
+        const taskPayloads = safeEntries.map(entry => entry.payload);
+        const safeOptions = options && typeof options === 'object' ? options : {};
+        const maxOutputTokens = clamp(
+            Number(safeOptions.maxOutputTokens) || (900 + (safeEntries.length * 280)),
+            800,
+            4096
+        );
         const payload = {
             contents: [
                 {
                     role: 'user',
                     parts: [
                         { text: SEMANTIC_SYSTEM_PROMPT },
-                        { text: buildSemanticUserPrompt(task, project) }
+                        { text: buildSemanticBatchUserPrompt(taskPayloads) }
                     ]
                 }
             ],
             generationConfig: {
                 temperature: 0,
                 topP: 1,
-                maxOutputTokens: 700,
+                maxOutputTokens: Math.round(maxOutputTokens),
                 responseMimeType: 'application/json'
             }
         };
@@ -870,7 +1043,38 @@
         const nowTs = Date.now();
         const cfg = readAiUrgencyConfig();
         const staleAfterMs = Math.max(1, Number(cfg.staleAfterHours) || 24) * 60 * 60 * 1000;
-        return normalizeSemanticGeminiResult(task && task.id, parsed, nowTs, staleAfterMs);
+        const rawResults = normalizeSemanticBatchResults(parsed);
+        const resultByTaskId = new Map();
+        rawResults.forEach((item) => {
+            const taskId = String((item && (item.task_id || item.id)) || '').trim();
+            if (!taskId) return;
+            resultByTaskId.set(taskId, item);
+        });
+
+        const normalizedMetaByTaskId = new Map();
+        safeEntries.forEach((entry) => {
+            const taskId = String(entry && entry.taskId || '').trim();
+            if (!taskId) return;
+            const parsedResult = resultByTaskId.get(taskId);
+            if (!parsedResult) {
+                normalizedMetaByTaskId.set(taskId, createSemanticFailureMeta(
+                    taskId,
+                    nowTs,
+                    staleAfterMs,
+                    'Gemini batch output omitted this task.',
+                    entry.semanticInputHash
+                ));
+                return;
+            }
+            normalizedMetaByTaskId.set(taskId, normalizeSemanticGeminiResult(
+                taskId,
+                parsedResult,
+                nowTs,
+                staleAfterMs,
+                entry.semanticInputHash
+            ));
+        });
+        return normalizedMetaByTaskId;
     }
 
     async function recomputeAiUrgencyWithGemini(options) {
@@ -888,31 +1092,67 @@
             : activeTasks;
 
         const maxTasks = Math.max(1, Math.min(50, Number(safeOptions.maxTasks) || 10));
-        const selected = candidateTasks.slice(0, maxTasks);
-        let tasksUpdated = 0;
-
-        for (const task of selected) {
+        const batchSize = Math.max(
+            1,
+            Math.min(
+                SEMANTIC_BATCH_MAX_SIZE,
+                Number(safeOptions.batchSize) || SEMANTIC_BATCH_DEFAULT_SIZE
+            )
+        );
+        const skipUnchanged = safeOptions.skipUnchanged !== false;
+        const force = safeOptions.force === true;
+        const scoringCandidates = [];
+        let tasksSkippedUnchanged = 0;
+        candidateTasks.forEach((task) => {
+            const taskId = String(task && task.id || '').trim();
+            if (!taskId) return;
             const project = getProjectById(task.projectId);
+            const semanticPayload = createSemanticTaskPayload(task, project);
+            const semanticInputHash = computeSemanticInputHash(semanticPayload);
+            if (!force && skipUnchanged && isTaskSemanticInputFresh(task, semanticInputHash, nowTs)) {
+                tasksSkippedUnchanged += 1;
+                return;
+            }
+            scoringCandidates.push({
+                taskId,
+                task,
+                project,
+                payload: semanticPayload,
+                semanticInputHash
+            });
+        });
+        const selected = scoringCandidates.slice(0, maxTasks);
+        let tasksUpdated = 0;
+        let tasksFailed = 0;
+        let batchesSent = 0;
+        let batchesAttempted = 0;
+        let firstBatchError = '';
+
+        for (let i = 0; i < selected.length; i += batchSize) {
+            const batchEntries = selected.slice(i, i + batchSize);
+            if (batchEntries.length === 0) continue;
+            batchesAttempted += 1;
             try {
-                const aiMeta = await scoreTaskSemanticUrgencyWithGemini(task, project, safeOptions);
-                task.aiUrgency = normalizeAiMeta(aiMeta, 'task');
-                tasksUpdated += 1;
+                const batchResult = await scoreTaskSemanticUrgencyBatchWithGemini(batchEntries, safeOptions);
+                batchesSent += 1;
+                batchEntries.forEach((entry) => {
+                    const aiMeta = normalizeAiMeta(batchResult.get(entry.taskId), 'task');
+                    entry.task.aiUrgency = attachPreviousAiMeta(entry.task.aiUrgency, aiMeta, 'task');
+                    if (aiMeta && aiMeta.stale) tasksFailed += 1;
+                    else tasksUpdated += 1;
+                });
             } catch (error) {
-                const fallback = normalizeAiMeta({
-                    score: 0,
-                    level: 1,
-                    tag: getLevelTag(1),
-                    label: getLevelLabel(1),
-                    confidence: 0.2,
-                    reason: `Gemini semantic scoring failed: ${error.message}`,
-                    factors: [],
-                    source: 'gemini-semantic',
-                    model: SEMANTIC_RUBRIC_VERSION,
-                    computedAt: nowTs,
-                    expiresAt: nowTs + staleAfterMs,
-                    stale: true
-                }, 'task');
-                task.aiUrgency = fallback;
+                if (!firstBatchError && error && error.message) firstBatchError = String(error.message);
+                batchEntries.forEach((entry) => {
+                    entry.task.aiUrgency = attachPreviousAiMeta(entry.task.aiUrgency, createSemanticFailureMeta(
+                        entry.taskId,
+                        nowTs,
+                        staleAfterMs,
+                        `Gemini semantic scoring failed: ${error.message}`,
+                        entry.semanticInputHash
+                    ), 'task');
+                });
+                tasksFailed += batchEntries.length;
             }
         }
 
@@ -925,7 +1165,7 @@
                 source: 'gemini-semantic',
                 model: 'ai-urgency-v1-project'
             });
-            project.aiUrgency = normalizeAiMeta(meta, 'project');
+            project.aiUrgency = attachPreviousAiMeta(project.aiUrgency, meta, 'project');
         });
 
         const persistFn = (typeof saveToStorage === 'function') ? saveToStorage : global.saveToStorage;
@@ -934,6 +1174,13 @@
         }
         return {
             tasksUpdated,
+            tasksFailed,
+            tasksSkippedUnchanged,
+            tasksRequested: selected.length,
+            remainingCandidates: Math.max(0, scoringCandidates.length - selected.length),
+            batchesSent,
+            batchesAttempted,
+            firstBatchError,
             projectsUpdated: safeProjectList().length,
             computedAt: nowTs,
             source: 'gemini-semantic'

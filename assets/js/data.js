@@ -100,8 +100,12 @@ function createDefaultAiUrgency(kind = 'task') {
         source: 'local-heuristic',
         model: safeKind === 'project' ? 'ai-urgency-v1-project' : 'ai-urgency-v1-task',
         computedAt: null,
+        previousScore: null,
+        previousLevel: null,
+        previousComputedAt: null,
         expiresAt: null,
-        stale: true
+        stale: true,
+        semanticInputHash: null
     };
 }
 
@@ -125,8 +129,23 @@ function normalizeAiUrgencyRecord(raw, kind = 'task') {
     normalized.source = source.source ? String(source.source) : normalized.source;
     normalized.model = source.model ? String(source.model) : normalized.model;
     normalized.computedAt = Number.isFinite(Number(source.computedAt)) ? Number(source.computedAt) : null;
+    if (Number.isFinite(Number(source.previousScore))) {
+        normalized.previousScore = Math.max(0, Math.min(100, Math.round(Number(source.previousScore))));
+    }
+    if (Number.isFinite(Number(source.previousLevel))) {
+        normalized.previousLevel = Math.max(1, Math.min(5, Math.round(Number(source.previousLevel))));
+    } else if (Number.isFinite(Number(normalized.previousScore))) {
+        normalized.previousLevel = getUrgencyLevelFromNumericScore(normalized.previousScore);
+    }
+    normalized.previousComputedAt = Number.isFinite(Number(source.previousComputedAt))
+        ? Number(source.previousComputedAt)
+        : null;
     normalized.expiresAt = Number.isFinite(Number(source.expiresAt)) ? Number(source.expiresAt) : null;
     normalized.stale = source.stale !== undefined ? !!source.stale : true;
+    if (typeof source.semanticInputHash === 'string') {
+        const hash = source.semanticInputHash.trim();
+        normalized.semanticInputHash = hash ? hash.slice(0, 128) : null;
+    }
     return normalized;
 }
 

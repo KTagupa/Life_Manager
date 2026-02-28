@@ -323,12 +323,13 @@
                 </div>
 
                 <div class="settings-action-grid">
-                    <button class="settings-action-btn" onclick="runSemanticAiUrgencyFromSettings()">Semantic Re-score (Gemini)</button>
+                    <button id="semantic-ai-urgency-btn" class="settings-action-btn" onclick="runSemanticAiUrgencyFromSettings()">Semantic Re-score Batch (Gemini)</button>
                     <button class="settings-action-btn" onclick="openAiUrgencyScoresModal()">View Urgency Scores</button>
                 </div>
                 <div class="settings-meta">
                     Heuristic AI = fast local score from due dates, dependencies, and activity. Semantic AI = Gemini text-based score from task/project wording.
                     Use <strong>AI</strong> for AI-only ranking or <strong>Blended</strong> to mix AI with system scoring.
+                    Semantic Gemini calls are manual batches. Send one batch, then send the next after the 65s cooldown.
                 </div>
                 <div class="settings-meta" id="ai-urgency-status">AI urgency ready.</div>
             </section>
@@ -387,6 +388,17 @@
             </select>
             <button class="settings-action-btn settings-action-btn-compact" onclick="renderAiUrgencyScoresModal()">Refresh</button>
         </div>
+        <div class="ai-urgency-scores-controls ai-urgency-scores-queue-controls">
+            <button id="ai-urgency-select-visible-btn" class="settings-action-btn settings-action-btn-compact"
+                onclick="selectAllVisibleAiUrgencyTasks()">Select Visible</button>
+            <button id="ai-urgency-clear-selection-btn" class="settings-action-btn settings-action-btn-compact"
+                onclick="clearAiUrgencyTaskSelection()">Clear</button>
+            <button id="ai-urgency-queue-selected-btn" class="settings-action-btn"
+                onclick="runSelectedAiUrgencyQueue()">Send Batch (8 Tasks)</button>
+            <button id="ai-urgency-stop-queue-btn" class="settings-action-btn settings-action-btn-compact"
+                onclick="stopAiUrgencySemanticQueue()">Clear Queue</button>
+        </div>
+        <div class="ai-urgency-scores-meta" id="ai-urgency-queue-status">Selected tasks: 0 • Batch size: 8 • Cooldown: 65s</div>
 
         <div class="ai-urgency-scores-meta" id="ai-urgency-scores-meta">Loading scores...</div>
 

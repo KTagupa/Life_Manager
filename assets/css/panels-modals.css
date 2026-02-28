@@ -4009,6 +4009,11 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .ai-urgency-scores-queue-controls {
+            margin-top: 4px;
         }
 
         .ai-urgency-scores-controls label {
@@ -4050,6 +4055,11 @@
             color: #fff;
         }
 
+        #ai-urgency-scores-modal .settings-action-btn:disabled {
+            opacity: 0.52;
+            cursor: not-allowed;
+        }
+
         #ai-urgency-scores-modal .settings-action-btn-compact {
             min-width: 90px;
         }
@@ -4061,10 +4071,12 @@
         }
 
         .ai-urgency-scores-sections {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            display: flex;
+            flex-direction: column;
             gap: 12px;
             min-height: 0;
+            overflow-y: auto;
+            padding-right: 2px;
         }
 
         .ai-urgency-scores-section {
@@ -4089,8 +4101,8 @@
 
         .ai-urgency-scores-table-wrap {
             overflow: auto;
-            min-height: 240px;
-            max-height: min(56vh, 560px);
+            min-height: 190px;
+            max-height: min(28vh, 320px);
         }
 
         .ai-urgency-scores-table {
@@ -4126,10 +4138,28 @@
             color: #e2e8f0;
         }
 
+        .ai-urgency-scores-table td.ai-urgency-task-select-cell {
+            text-align: center;
+            width: 40px;
+            min-width: 40px;
+        }
+
+        .ai-urgency-task-select-input {
+            width: 14px;
+            height: 14px;
+            accent-color: #38bdf8;
+            cursor: pointer;
+        }
+
         .ai-urgency-scores-table td.ai-urgency-score-cell {
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
             color: #dbeafe;
             font-weight: 600;
+        }
+
+        .ai-urgency-scores-table td.ai-urgency-date-cell {
+            color: #cbd5e1;
+            font-size: 11px;
         }
 
         .ai-urgency-scores-table td.ai-urgency-delta-pos {
@@ -4325,12 +4355,13 @@
             }
 
             .ai-urgency-scores-sections {
-                grid-template-columns: 1fr;
+                display: flex;
+                flex-direction: column;
                 gap: 10px;
             }
 
             .ai-urgency-scores-table-wrap {
-                max-height: min(34vh, 340px);
+                max-height: min(30vh, 300px);
             }
 
             #projects-panel .navigator-projects-toolbar {
