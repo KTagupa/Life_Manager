@@ -677,6 +677,21 @@
         return context;
     }
 
+    function hasStableMetaScore(meta) {
+        if (!meta || typeof meta !== 'object') return false;
+        return Number.isFinite(Number(meta.score));
+    }
+
+    function areMetaScoresEquivalent(leftMeta, rightMeta) {
+        if (!hasStableMetaScore(leftMeta) || !hasStableMetaScore(rightMeta)) return false;
+        const leftScore = clamp(Math.round(Number(leftMeta.score)), 0, 100);
+        const rightScore = clamp(Math.round(Number(rightMeta.score)), 0, 100);
+        if (leftScore !== rightScore) return false;
+        const leftLevel = clamp(Math.round(Number(leftMeta.level) || toLevel(leftScore)), 1, 5);
+        const rightLevel = clamp(Math.round(Number(rightMeta.level) || toLevel(rightScore)), 1, 5);
+        return leftLevel === rightLevel;
+    }
+
     function recomputeAiUrgency(options) {
         const safeOptions = options && typeof options === 'object' ? options : {};
         const config = readAiUrgencyConfig();
@@ -711,10 +726,26 @@
         });
 
         let tasksUpdated = 0;
+        let tasksSkippedUnchanged = 0;
+        let tasksPreservedExternal = 0;
         taskList.forEach(task => {
             if (!task || !task.id) return;
             if (isTaskActive(task)) {
-                task.aiUrgency = attachPreviousAiMeta(task.aiUrgency, finalTaskMetaMap[task.id], 'task');
+                const existingMeta = normalizeAiMeta(task.aiUrgency, 'task');
+                const nextMeta = normalizeAiMeta(finalTaskMetaMap[task.id], 'task');
+                const existingSource = String(existingMeta && existingMeta.source || '').trim().toLowerCase();
+                const isExternalSource = !!existingSource && existingSource !== 'local-heuristic';
+                if (safeOptions.force !== true && isExternalSource) {
+                    finalTaskMetaMap[task.id] = existingMeta;
+                    tasksPreservedExternal += 1;
+                    return;
+                }
+                if (areMetaScoresEquivalent(existingMeta, nextMeta) && Number.isFinite(Number(existingMeta.computedAt))) {
+                    finalTaskMetaMap[task.id] = existingMeta;
+                    tasksSkippedUnchanged += 1;
+                    return;
+                }
+                task.aiUrgency = attachPreviousAiMeta(task.aiUrgency, nextMeta, 'task');
                 tasksUpdated += 1;
             } else {
                 markCompletedTaskAiUrgency(task, nowTs, staleAfterMs);
@@ -722,20 +753,38 @@
         });
 
         let projectsUpdated = 0;
+        let projectsSkippedUnchanged = 0;
+        let projectsPreservedExternal = 0;
         projectList.forEach(project => {
             if (!project || !project.id) return;
             const meta = buildProjectAiMeta(project.id, taskList, finalTaskMetaMap, nowTs, staleAfterMs, {
                 source: 'local-heuristic',
                 model: 'ai-urgency-v1-project'
             });
-            project.aiUrgency = attachPreviousAiMeta(project.aiUrgency, meta, 'project');
+            const existingMeta = normalizeAiMeta(project.aiUrgency, 'project');
+            const nextMeta = normalizeAiMeta(meta, 'project');
+            const existingSource = String(existingMeta && existingMeta.source || '').trim().toLowerCase();
+            const isExternalSource = !!existingSource && existingSource !== 'local-heuristic';
+            if (safeOptions.force !== true && isExternalSource) {
+                projectsPreservedExternal += 1;
+                return;
+            }
+            if (areMetaScoresEquivalent(existingMeta, nextMeta) && Number.isFinite(Number(existingMeta.computedAt))) {
+                projectsSkippedUnchanged += 1;
+                return;
+            }
+            project.aiUrgency = attachPreviousAiMeta(project.aiUrgency, nextMeta, 'project');
             projectsUpdated += 1;
         });
 
         return {
             skipped: false,
             tasksUpdated,
+            tasksSkippedUnchanged,
+            tasksPreservedExternal,
             projectsUpdated,
+            projectsSkippedUnchanged,
+            projectsPreservedExternal,
             computedAt: nowTs
         };
     }
@@ -892,6 +941,444 @@
         }
     }
 
+    const MANUAL_URGENCY_VERSION = 'urgency-manual-v1';
+    const MANUAL_URGENCY_DEFAULT_MAX_TASKS = 120;
+    const MANUAL_URGENCY_MAX_TASKS = 500;
+    const MANUAL_TASK_BASE_WEIGHT = 0.85;
+    const MANUAL_GOAL_SIGNAL_WEIGHT = 0.15;
+    const MANUAL_IMPORT_STATUS_LABELS = Object.freeze({
+        APPLIED: 'Applied',
+        SKIPPED_UNCHANGED: 'Skipped: unchanged',
+        SKIPPED_NOT_RETURNED: 'Skipped: not returned',
+        SKIPPED_INVALID_SCORE: 'Skipped: invalid score',
+        SKIPPED_DUPLICATE_ID: 'Skipped: duplicate ID',
+        SKIPPED_UNKNOWN_ID: 'Skipped: unknown ID',
+        SKIPPED_ROW_NOT_OBJECT: 'Skipped: invalid row',
+        SKIPPED_MISSING_ID: 'Skipped: missing ID',
+        SKIPPED_NOT_ARRAY: 'Skipped: invalid format',
+        SKIPPED_TASK_NOT_ACTIVE: 'Skipped: task not active'
+    });
+
+    function clipManualText(value, maxLen) {
+        const text = String(value || '').replace(/\s+/g, ' ').trim();
+        if (!text) return '';
+        const limit = Math.max(1, Number(maxLen) || 1);
+        return text.length > limit ? `${text.slice(0, limit - 1)}...` : text;
+    }
+
+    function getManualGoalEntries() {
+        if (typeof getAllGoalsFlat === 'function') {
+            const source = getAllGoalsFlat({ includeSubgoals: true });
+            return Array.isArray(source) ? source : [];
+        }
+        if (typeof global.getAllGoalsFlat === 'function') {
+            const source = global.getAllGoalsFlat({ includeSubgoals: true });
+            return Array.isArray(source) ? source : [];
+        }
+
+        const output = [];
+        const goalsSource = (typeof lifeGoals !== 'undefined' && lifeGoals && typeof lifeGoals === 'object')
+            ? lifeGoals
+            : (global.lifeGoals && typeof global.lifeGoals === 'object' ? global.lifeGoals : {});
+
+        const years = Object.keys(goalsSource)
+            .map(year => String(year || '').trim())
+            .filter(Boolean)
+            .sort((a, b) => Number(a) - Number(b));
+
+        years.forEach((year) => {
+            const walk = (list, depth = 0) => {
+                (Array.isArray(list) ? list : []).forEach((goal) => {
+                    if (!goal || typeof goal !== 'object') return;
+                    output.push({ year, goal, depth });
+                    walk(goal.children, depth + 1);
+                });
+            };
+            walk(goalsSource[year], 0);
+        });
+        return output;
+    }
+
+    function getManualGoalPath(goalId, fallbackTitle = '') {
+        const normalizedGoalId = String(goalId || '').trim();
+        if (!normalizedGoalId) return clipManualText(fallbackTitle, 260);
+        if (typeof getGoalPath === 'function') {
+            return clipManualText(getGoalPath(normalizedGoalId) || fallbackTitle, 260);
+        }
+        if (typeof global.getGoalPath === 'function') {
+            return clipManualText(global.getGoalPath(normalizedGoalId) || fallbackTitle, 260);
+        }
+        return clipManualText(fallbackTitle, 260);
+    }
+
+    function buildManualUrgencyPacket(options) {
+        const safeOptions = options && typeof options === 'object' ? options : {};
+        const requestedTaskIds = Array.isArray(safeOptions.taskIds)
+            ? safeOptions.taskIds.map(id => String(id || '').trim()).filter(Boolean)
+            : [];
+        const requestedTaskIdSet = requestedTaskIds.length > 0 ? new Set(requestedTaskIds) : null;
+        const fallbackMaxTasks = requestedTaskIdSet ? requestedTaskIds.length : MANUAL_URGENCY_DEFAULT_MAX_TASKS;
+        const maxTasks = clamp(
+            Math.round(Number(safeOptions.maxTasks) || fallbackMaxTasks),
+            1,
+            MANUAL_URGENCY_MAX_TASKS
+        );
+        const includeDescription = safeOptions.includeDescription !== false;
+
+        const goalRows = getManualGoalEntries();
+        const goalsById = new Map();
+        goalRows.forEach((item) => {
+            const goal = item && item.goal ? item.goal : {};
+            const goalId = String(goal.id || '').trim();
+            const title = clipManualText(goal.text, 200);
+            if (!goalId || !title || goalsById.has(goalId)) return;
+            goalsById.set(goalId, {
+                id: goalId,
+                title,
+                year: String(item.year || ''),
+                depth: Number.isFinite(Number(item.depth)) ? Number(item.depth) : 0,
+                path: getManualGoalPath(goalId, title)
+            });
+        });
+        const goals = Array.from(goalsById.values());
+        const goalIdSet = new Set(goals.map(goal => goal.id));
+
+        const projectById = new Map(
+            safeProjectList()
+                .filter(project => project && project.id)
+                .map(project => [String(project.id), project])
+        );
+
+        const activeTaskSource = safeTaskList()
+            .filter(task => isTaskActive(task))
+            .filter((task) => {
+                if (!requestedTaskIdSet) return true;
+                return requestedTaskIdSet.has(String(task && task.id || '').trim());
+            })
+            .slice(0, maxTasks);
+
+        const tasks = activeTaskSource
+            .map((task) => {
+                const taskId = String(task && task.id || '').trim();
+                if (!taskId) return null;
+                const projectId = String(task && task.projectId || '').trim();
+                const project = projectById.get(projectId) || null;
+                const linkedGoalIds = Array.from(new Set(
+                    (Array.isArray(task && task.goalIds) ? task.goalIds : [])
+                        .map(goalId => String(goalId || '').trim())
+                        .filter(goalId => goalIdSet.has(goalId))
+                ));
+                return {
+                    id: taskId,
+                    title: clipManualText(task && task.title, 180),
+                    description: includeDescription ? clipManualText(task && task.description, 500) : '',
+                    due_date: clipManualText(task && task.dueDate, 40) || null,
+                    created_at: Number(task && task.createdAt) || null,
+                    updated_at: Number(task && task.updatedAt) || null,
+                    project_name: clipManualText(project && project.name, 120),
+                    linked_goal_ids: linkedGoalIds
+                };
+            })
+            .filter(Boolean);
+
+        let timezone = 'UTC';
+        try {
+            timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        } catch (error) {
+            timezone = 'UTC';
+        }
+
+        return {
+            version: MANUAL_URGENCY_VERSION,
+            generated_at: new Date().toISOString(),
+            timezone,
+            scoring: {
+                min: 1,
+                max: 100,
+                integer_only: true
+            },
+            goals,
+            tasks
+        };
+    }
+
+    function buildGeminiManualUrgencyPrompt(packet) {
+        const safePacket = packet && typeof packet === 'object' ? packet : {};
+        const packetJson = JSON.stringify(safePacket, null, 2);
+        const taskCount = Array.isArray(safePacket.tasks) ? safePacket.tasks.length : 0;
+        const goalCount = Array.isArray(safePacket.goals) ? safePacket.goals.length : 0;
+        return [
+            'You are a strict urgency scoring engine.',
+            'Use only the provided JSON packet. No outside knowledge.',
+            'Return JSON only. No markdown. No extra keys.',
+            '',
+            `Input includes ${taskCount} task(s) and ${goalCount} goal(s).`,
+            '',
+            'Scoring rules:',
+            '- All scores must be integers from 1 to 100.',
+            '- STEP 1: Score each goal in goal_scores.',
+            '- STEP 2: Score each task BASE urgency in task_base_scores (task-specific urgency before goal influence).',
+            '- Use due_date, title, description, and project_name for task base urgency.',
+            '- Return exactly one row per input ID in each bucket.',
+            '',
+            'Output schema (exact):',
+            '{',
+            `  "version": "${MANUAL_URGENCY_VERSION}",`,
+            '  "goal_scores": [{ "id": "goal_x", "score": 1 }],',
+            '  "task_base_scores": [{ "id": "task_x", "score": 1 }]',
+            '}',
+            '',
+            'Input packet:',
+            packetJson
+        ].join('\n');
+    }
+
+    function getManualUrgencyImportStatusLabel(statusCode) {
+        const key = String(statusCode || '').trim().toUpperCase();
+        return MANUAL_IMPORT_STATUS_LABELS[key] || '—';
+    }
+
+    function parseManualScore(value) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric) || !Number.isInteger(numeric)) return null;
+        if (numeric < 1 || numeric > 100) return null;
+        return numeric;
+    }
+
+    function resolveManualScoreRowId(rawRow) {
+        const row = rawRow && typeof rawRow === 'object' ? rawRow : {};
+        const candidates = [row.id, row.task_id, row.taskId, row.goal_id, row.goalId];
+        for (let i = 0; i < candidates.length; i += 1) {
+            const value = candidates[i];
+            if (value === null || value === undefined) continue;
+            const id = String(value).trim();
+            if (id) return id;
+        }
+        return '';
+    }
+
+    function validateManualScoreRows(rows, allowedIds, bucket, issues, issueById) {
+        const safeIssues = Array.isArray(issues) ? issues : [];
+        const safeIssueById = issueById instanceof Map ? issueById : new Map();
+        const allowedSet = allowedIds instanceof Set ? allowedIds : new Set();
+        const scoreById = new Map();
+        if (!Array.isArray(rows)) {
+            safeIssues.push({ bucket, id: null, reason: 'SKIPPED_NOT_ARRAY' });
+            return scoreById;
+        }
+
+        rows.forEach((row, index) => {
+            if (!row || typeof row !== 'object') {
+                safeIssues.push({ bucket, id: null, reason: 'SKIPPED_ROW_NOT_OBJECT', row_index: index });
+                return;
+            }
+            const id = resolveManualScoreRowId(row);
+            if (!id) {
+                safeIssues.push({ bucket, id: null, reason: 'SKIPPED_MISSING_ID', row_index: index });
+                return;
+            }
+            if (!allowedSet.has(id)) {
+                safeIssues.push({ bucket, id, reason: 'SKIPPED_UNKNOWN_ID' });
+                safeIssueById.set(id, 'SKIPPED_UNKNOWN_ID');
+                return;
+            }
+            if (scoreById.has(id)) {
+                safeIssues.push({ bucket, id, reason: 'SKIPPED_DUPLICATE_ID' });
+                safeIssueById.set(id, 'SKIPPED_DUPLICATE_ID');
+                return;
+            }
+
+            const score = parseManualScore(row.score);
+            if (score === null) {
+                safeIssues.push({ bucket, id, reason: 'SKIPPED_INVALID_SCORE' });
+                safeIssueById.set(id, 'SKIPPED_INVALID_SCORE');
+                return;
+            }
+            scoreById.set(id, score);
+        });
+        return scoreById;
+    }
+
+    function applyManualUrgencyImport(rawText, packet, options) {
+        const safeOptions = options && typeof options === 'object' ? options : {};
+        const parsed = parseJsonObjectFromText(rawText);
+        if (!parsed || typeof parsed !== 'object') {
+            return { ok: false, error: 'Invalid JSON response.', applied: 0, skippedCount: 0, issues: [] };
+        }
+
+        const safePacket = packet && typeof packet === 'object' ? packet : {};
+        const packetTasks = Array.isArray(safePacket.tasks) ? safePacket.tasks : [];
+        const packetGoals = Array.isArray(safePacket.goals) ? safePacket.goals : [];
+        const taskIds = new Set(packetTasks.map(row => String(row && row.id || '').trim()).filter(Boolean));
+        const goalIds = new Set(packetGoals.map(row => String(row && row.id || '').trim()).filter(Boolean));
+        if (taskIds.size === 0) {
+            return { ok: false, error: 'Packet does not contain tasks.', applied: 0, skippedCount: 0, issues: [] };
+        }
+
+        const version = String(parsed.version || '').trim();
+        if (version !== MANUAL_URGENCY_VERSION) {
+            return {
+                ok: false,
+                error: `Unsupported version "${version || 'missing'}". Expected "${MANUAL_URGENCY_VERSION}".`,
+                applied: 0,
+                skippedCount: taskIds.size,
+                issues: []
+            };
+        }
+
+        const issues = [];
+        const taskIssueById = new Map();
+        const goalScoreById = validateManualScoreRows(parsed.goal_scores, goalIds, 'goal_scores', issues, new Map());
+        const taskBaseScoreById = validateManualScoreRows(parsed.task_base_scores, taskIds, 'task_base_scores', issues, taskIssueById);
+        const activeTasksById = new Map(
+            safeTaskList()
+                .filter(task => isTaskActive(task))
+                .map(task => [String(task.id || '').trim(), task])
+        );
+
+        packetTasks.forEach((row) => {
+            const taskId = String(row && row.id || '').trim();
+            const task = activeTasksById.get(taskId);
+            if (!task) return;
+            task.aiUrgencyImportStatus = Array.isArray(parsed.task_base_scores)
+                ? 'SKIPPED_NOT_RETURNED'
+                : 'SKIPPED_NOT_ARRAY';
+        });
+
+        taskIssueById.forEach((reason, taskId) => {
+            const task = activeTasksById.get(String(taskId || '').trim());
+            if (!task) return;
+            task.aiUrgencyImportStatus = reason;
+        });
+
+        const nowTs = Date.now();
+        const cfg = readAiUrgencyConfig();
+        const staleAfterMs = Math.max(1, Number(cfg.staleAfterHours) || 24) * 60 * 60 * 1000;
+        let applied = 0;
+        let skippedNotActive = 0;
+
+        packetTasks.forEach((taskPayload) => {
+            const taskId = String(taskPayload && taskPayload.id || '').trim();
+            if (!taskId) return;
+            const baseScore = taskBaseScoreById.get(taskId);
+            if (!Number.isFinite(baseScore)) return;
+
+            const task = activeTasksById.get(taskId);
+            if (!task) {
+                issues.push({ bucket: 'task_base_scores', id: taskId, reason: 'SKIPPED_TASK_NOT_ACTIVE' });
+                skippedNotActive += 1;
+                return;
+            }
+
+            const linkedGoalIds = Array.from(new Set(
+                (Array.isArray(taskPayload && taskPayload.linked_goal_ids) ? taskPayload.linked_goal_ids : [])
+                    .map(goalId => String(goalId || '').trim())
+                    .filter(Boolean)
+            ));
+            const goalSignals = linkedGoalIds
+                .map(goalId => goalScoreById.get(goalId))
+                .filter(value => Number.isFinite(value));
+            const goalSignal = goalSignals.length > 0 ? Math.max(...goalSignals) : null;
+            const finalScore = Number.isFinite(goalSignal)
+                ? clamp(Math.round(
+                    (Number(baseScore) * MANUAL_TASK_BASE_WEIGHT)
+                    + (Number(goalSignal) * MANUAL_GOAL_SIGNAL_WEIGHT)
+                ), 1, 100)
+                : clamp(Math.round(Number(baseScore)), 1, 100);
+            const currentMeta = normalizeAiMeta(task.aiUrgency, 'task');
+            const currentScore = Number(currentMeta && currentMeta.score);
+            if (Number.isFinite(currentScore) && Math.round(currentScore) === finalScore) {
+                task.aiUrgencyImportStatus = 'SKIPPED_UNCHANGED';
+                return;
+            }
+            const level = toLevel(finalScore);
+
+            const nextMeta = normalizeAiMeta({
+                score: finalScore,
+                level,
+                tag: getLevelTag(level),
+                label: getLevelLabel(level),
+                confidence: null,
+                reason: Number.isFinite(goalSignal)
+                    ? `Manual import: base ${baseScore} blended with goal signal ${goalSignal}.`
+                    : `Manual import: task base score ${baseScore}.`,
+                factors: [],
+                source: 'manual-gemini-import',
+                model: 'gemini-manual-v1',
+                computedAt: nowTs,
+                expiresAt: nowTs + staleAfterMs,
+                stale: false,
+                semanticInputHash: null
+            }, 'task');
+            task.aiUrgency = attachPreviousAiMeta(task.aiUrgency, nextMeta, 'task');
+            task.aiUrgencyImportStatus = 'APPLIED';
+            applied += 1;
+        });
+
+        const taskMetaMap = {};
+        safeTaskList()
+            .filter(task => isTaskActive(task))
+            .forEach((task) => {
+                const taskId = String(task && task.id || '').trim();
+                if (!taskId) return;
+                taskMetaMap[taskId] = normalizeAiMeta(task.aiUrgency, 'task');
+            });
+
+        let projectsUpdated = 0;
+        safeProjectList().forEach((project) => {
+            if (!project || !project.id) return;
+            const meta = buildProjectAiMeta(project.id, safeTaskList(), taskMetaMap, nowTs, staleAfterMs, {
+                source: 'manual-gemini-import',
+                model: 'ai-urgency-v1-project'
+            });
+            project.aiUrgency = attachPreviousAiMeta(project.aiUrgency, meta, 'project');
+            projectsUpdated += 1;
+        });
+
+        const persistFn = (typeof saveToStorage === 'function') ? saveToStorage : global.saveToStorage;
+        if (safeOptions.persist !== false && typeof persistFn === 'function') persistFn();
+
+        if (safeOptions.reRender !== false) {
+            const renderFn = (typeof render === 'function') ? render : global.render;
+            const renderProjectsFn = (typeof renderProjectsList === 'function') ? renderProjectsList : global.renderProjectsList;
+            const renderInsightsFn = (typeof renderInsightsDashboard === 'function') ? renderInsightsDashboard : global.renderInsightsDashboard;
+            if (typeof renderFn === 'function') renderFn();
+            if (typeof renderProjectsFn === 'function') renderProjectsFn();
+            if (typeof renderInsightsFn === 'function') renderInsightsFn();
+        }
+
+        const statusCounts = {
+            APPLIED: 0,
+            SKIPPED_UNCHANGED: 0,
+            SKIPPED_NOT_RETURNED: 0,
+            SKIPPED_INVALID_SCORE: 0,
+            SKIPPED_DUPLICATE_ID: 0,
+            SKIPPED_UNKNOWN_ID: 0,
+            SKIPPED_ROW_NOT_OBJECT: 0,
+            SKIPPED_MISSING_ID: 0,
+            SKIPPED_NOT_ARRAY: 0,
+            SKIPPED_TASK_NOT_ACTIVE: skippedNotActive
+        };
+        packetTasks.forEach((row) => {
+            const taskId = String(row && row.id || '').trim();
+            const task = activeTasksById.get(taskId);
+            const code = task ? String(task.aiUrgencyImportStatus || '').trim().toUpperCase() : 'SKIPPED_TASK_NOT_ACTIVE';
+            if (!statusCounts[code] && statusCounts[code] !== 0) statusCounts[code] = 0;
+            statusCounts[code] += 1;
+        });
+
+        return {
+            ok: true,
+            applied,
+            skippedCount: Math.max(0, taskIds.size - applied),
+            issues,
+            statusCounts,
+            projectsUpdated,
+            computedAt: nowTs,
+            source: 'manual-gemini-import'
+        };
+    }
+
     function normalizeSemanticGeminiResult(taskId, parsed, nowTs, staleAfterMs, semanticInputHash) {
         const source = parsed && typeof parsed === 'object' ? parsed : {};
         const score = clamp(Math.round(Number(source.score) || 0), 0, 100);
@@ -939,6 +1426,30 @@
         }, 'task');
     }
 
+    function resolveSemanticResultTaskId(rawItem) {
+        const item = rawItem && typeof rawItem === 'object' ? rawItem : {};
+        const directCandidates = [
+            item.task_id,
+            item.taskId,
+            item.taskID,
+            item.id,
+            item.task
+        ];
+        for (let i = 0; i < directCandidates.length; i += 1) {
+            const value = directCandidates[i];
+            if (value === null || value === undefined) continue;
+            const id = String(value).trim();
+            if (id) return id;
+        }
+
+        const nestedTask = item.task && typeof item.task === 'object' ? item.task : null;
+        if (nestedTask) {
+            const nestedId = String(nestedTask.task_id || nestedTask.taskId || nestedTask.id || '').trim();
+            if (nestedId) return nestedId;
+        }
+        return '';
+    }
+
     function normalizeSemanticBatchResults(rawParsed) {
         if (Array.isArray(rawParsed)) return rawParsed;
         if (!rawParsed || typeof rawParsed !== 'object') return [];
@@ -948,15 +1459,14 @@
         if (Array.isArray(rawParsed.scores)) return rawParsed.scores;
         if (Array.isArray(rawParsed.task_scores)) return rawParsed.task_scores;
         if (Array.isArray(rawParsed.urgency_scores)) return rawParsed.urgency_scores;
-        if (rawParsed.task_id) return [rawParsed];
-        if (rawParsed.id && Number.isFinite(Number(rawParsed.score))) return [rawParsed];
+        if (resolveSemanticResultTaskId(rawParsed) && Number.isFinite(Number(rawParsed.score))) return [rawParsed];
 
         const keyEntries = Object.entries(rawParsed);
         if (keyEntries.length > 0) {
             const mapped = keyEntries
                 .filter(([, value]) => value && typeof value === 'object')
                 .map(([key, value]) => {
-                    if (value.task_id || value.id || !Number.isFinite(Number(value.score))) return null;
+                    if (resolveSemanticResultTaskId(value) || !Number.isFinite(Number(value.score))) return null;
                     return {
                         task_id: key,
                         score: value.score,
@@ -975,7 +1485,7 @@
             const current = stack.pop();
             if (!current || typeof current !== 'object') continue;
             if (Array.isArray(current)) {
-                const withIds = current.filter(item => item && typeof item === 'object' && (item.task_id || item.id));
+                const withIds = current.filter(item => item && typeof item === 'object' && resolveSemanticResultTaskId(item));
                 if (withIds.length > 0) return withIds;
                 current.forEach(item => stack.push(item));
                 continue;
@@ -1045,11 +1555,31 @@
         const staleAfterMs = Math.max(1, Number(cfg.staleAfterHours) || 24) * 60 * 60 * 1000;
         const rawResults = normalizeSemanticBatchResults(parsed);
         const resultByTaskId = new Map();
+        const indexFallbackCandidates = [];
         rawResults.forEach((item) => {
-            const taskId = String((item && (item.task_id || item.id)) || '').trim();
+            const taskId = resolveSemanticResultTaskId(item);
             if (!taskId) return;
             resultByTaskId.set(taskId, item);
         });
+
+        rawResults.forEach((item) => {
+            if (!item || typeof item !== 'object') return;
+            if (resolveSemanticResultTaskId(item)) return;
+            if (!Number.isFinite(Number(item.score))) return;
+            indexFallbackCandidates.push(item);
+        });
+
+        const missingEntries = safeEntries.filter((entry) => {
+            const taskId = String(entry && entry.taskId || '').trim();
+            return !!taskId && !resultByTaskId.has(taskId);
+        });
+        if (missingEntries.length > 0 && missingEntries.length === indexFallbackCandidates.length) {
+            missingEntries.forEach((entry, index) => {
+                const taskId = String(entry && entry.taskId || '').trim();
+                if (!taskId || resultByTaskId.has(taskId)) return;
+                resultByTaskId.set(taskId, indexFallbackCandidates[index]);
+            });
+        }
 
         const normalizedMetaByTaskId = new Map();
         safeEntries.forEach((entry) => {
@@ -1194,6 +1724,10 @@
     global.resolveProjectUrgencyMeta = resolveProjectUrgencyMeta;
     global.recomputeAiUrgency = recomputeAiUrgency;
     global.recomputeAiUrgencyWithGemini = recomputeAiUrgencyWithGemini;
+    global.buildManualUrgencyPacket = buildManualUrgencyPacket;
+    global.buildGeminiManualUrgencyPrompt = buildGeminiManualUrgencyPrompt;
+    global.applyManualUrgencyImport = applyManualUrgencyImport;
+    global.getManualUrgencyImportStatusLabel = getManualUrgencyImportStatusLabel;
     global.updateAiUrgencyConfig = updateAiUrgencyConfig;
     global.setAiUrgencyMode = setAiUrgencyMode;
 })(window);

@@ -1101,8 +1101,12 @@ function openProjectManagerDashboardSubpage() {
 
     const query = new URLSearchParams();
     if (selectedProjectId) query.set('projectId', selectedProjectId);
-    const targetUrl = 'project-manager-dashboard.html' + (query.toString() ? ('?' + query.toString()) : '');
+    const targetUrl = 'project-dashboard/project-manager-dashboard.html' + (query.toString() ? ('?' + query.toString()) : '');
     window.location.href = targetUrl;
+}
+
+function openFinanceSubpage() {
+    window.location.href = 'Finance/index.html';
 }
 
 function isProjectDetailsModalOpen() {

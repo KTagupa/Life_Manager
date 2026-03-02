@@ -2,6 +2,60 @@
 
 
 // --- TOOLBAR LOGIC ---
+function ensureToolbarSubpageButtons() {
+    const toolbarActions = document.querySelector('#toolbar .toolbar-actions');
+    if (!toolbarActions) return;
+
+    const dashboardBtn = document.getElementById('btn-dashboard');
+
+    const upsertToolbarButton = ({ id, title, label, handler }) => {
+        let btn = document.getElementById(id);
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.type = 'button';
+            btn.id = id;
+            btn.className = 'toolbar-icon-btn';
+        }
+
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.textContent = label;
+        btn.onclick = handler;
+        return btn;
+    };
+
+    const projectSubpageBtn = upsertToolbarButton({
+        id: 'btn-project-dashboard-subpage',
+        title: 'Open Project Dashboard Subpage',
+        label: '📊',
+        handler: () => {
+            if (typeof openProjectManagerDashboardSubpage === 'function') {
+                openProjectManagerDashboardSubpage();
+            }
+        }
+    });
+
+    const financeSubpageBtn = upsertToolbarButton({
+        id: 'btn-finance-subpage',
+        title: 'Open Finance Subpage',
+        label: '💹',
+        handler: () => {
+            if (typeof openFinanceSubpage === 'function') {
+                openFinanceSubpage();
+            }
+        }
+    });
+
+    if (dashboardBtn && dashboardBtn.parentElement === toolbarActions) {
+        toolbarActions.insertBefore(projectSubpageBtn, dashboardBtn.nextSibling);
+        toolbarActions.insertBefore(financeSubpageBtn, projectSubpageBtn.nextSibling);
+        return;
+    }
+
+    toolbarActions.appendChild(projectSubpageBtn);
+    toolbarActions.appendChild(financeSubpageBtn);
+}
+
 function toggleMenu() {
     const tb = document.getElementById('toolbar');
     const btn = document.getElementById('menu-btn');

@@ -108,6 +108,10 @@
                 onclick="toggleProjectsPanel()">📁</button>
             <button id="btn-dashboard" class="toolbar-icon-btn" title="Dashboard (Opt+U)"
                 onclick="toggleInsightsDashboard()">🌿</button>
+            <button id="btn-project-dashboard-subpage" class="toolbar-icon-btn" title="Open Project Dashboard Subpage"
+                onclick="openProjectManagerDashboardSubpage()">📊</button>
+            <button id="btn-finance-subpage" class="toolbar-icon-btn" title="Open Finance Subpage"
+                onclick="openFinanceSubpage()">💹</button>
             <div id="quick-links-container" class="quick-links"></div>
             <div id="reminder-alert-strip" class="reminder-strip"></div>
             <button id="btn-add-quick-link" class="toolbar-icon-btn" title="Add Link"
@@ -398,7 +402,20 @@
             <button id="ai-urgency-stop-queue-btn" class="settings-action-btn settings-action-btn-compact"
                 onclick="stopAiUrgencySemanticQueue()">Clear Queue</button>
         </div>
+        <div class="ai-urgency-scores-controls ai-urgency-scores-manual-controls">
+            <button id="ai-urgency-copy-packet-btn" class="settings-action-btn"
+                onclick="copyAiUrgencyManualPacket()">Copy AI Packet</button>
+            <button id="ai-urgency-toggle-import-btn" class="settings-action-btn settings-action-btn-compact"
+                onclick="toggleAiUrgencyManualImportBox()">Paste AI Result</button>
+            <button id="ai-urgency-apply-import-btn" class="settings-action-btn settings-action-btn-compact"
+                onclick="applyAiUrgencyManualImportFromInput()">Apply Import</button>
+        </div>
         <div class="ai-urgency-scores-meta" id="ai-urgency-queue-status">Selected tasks: 0 • Batch size: 8 • Cooldown: 65s</div>
+        <div id="ai-urgency-manual-import-wrap" class="ai-urgency-manual-import-wrap hidden">
+            <textarea id="ai-urgency-manual-import-input" class="ai-urgency-manual-import-input" rows="6"
+                placeholder="Paste Gemini JSON response here..." oninput="syncAiUrgencyQueueControlsUI()"></textarea>
+        </div>
+        <div class="ai-urgency-scores-meta" id="ai-urgency-manual-status">Manual import idle.</div>
 
         <div class="ai-urgency-scores-meta" id="ai-urgency-scores-meta">Loading scores...</div>
 
@@ -1281,6 +1298,9 @@
                     </button>
                     <button type="button" class="project-dashboard-btn" onclick="openProjectManagerDashboardSubpage()">
                         Open Project Manager Dashboard
+                    </button>
+                    <button type="button" class="project-dashboard-btn" onclick="openFinanceSubpage()">
+                        Open Finance Subpage
                     </button>
                 </div>
             </div>

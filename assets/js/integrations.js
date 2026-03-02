@@ -226,8 +226,186 @@ const aiUrgencySemanticQueueState = {
     total: 0,
     processed: 0,
     failed: 0,
-    skipped: 0
+    skipped: 0,
+    lastError: ''
 };
+let aiUrgencyManualLastPacket = null;
+const AI_URGENCY_MANUAL_IMPORT_MAX_CHARS = 160000;
+const AI_URGENCY_MANUAL_FALLBACK_STATUS_LABELS = Object.freeze({
+    APPLIED: 'Applied',
+    SKIPPED_UNCHANGED: 'Skipped: unchanged',
+    SKIPPED_NOT_RETURNED: 'Skipped: not returned',
+    SKIPPED_INVALID_SCORE: 'Skipped: invalid score',
+    SKIPPED_DUPLICATE_ID: 'Skipped: duplicate ID',
+    SKIPPED_UNKNOWN_ID: 'Skipped: unknown ID',
+    SKIPPED_ROW_NOT_OBJECT: 'Skipped: invalid row',
+    SKIPPED_MISSING_ID: 'Skipped: missing ID',
+    SKIPPED_NOT_ARRAY: 'Skipped: invalid format',
+    SKIPPED_TASK_NOT_ACTIVE: 'Skipped: task not active'
+});
+
+function normalizeAiUrgencyImportStatusCode(value) {
+    return String(value || '').trim().toUpperCase();
+}
+
+function getAiUrgencyImportStatusLabel(statusCode) {
+    const code = normalizeAiUrgencyImportStatusCode(statusCode);
+    if (typeof getManualUrgencyImportStatusLabel === 'function') {
+        return getManualUrgencyImportStatusLabel(code);
+    }
+    return AI_URGENCY_MANUAL_FALLBACK_STATUS_LABELS[code] || '—';
+}
+
+function getAiUrgencyImportStatusTone(statusCode) {
+    const code = normalizeAiUrgencyImportStatusCode(statusCode);
+    if (!code || code === '—') return 'neutral';
+    if (code === 'APPLIED') return 'applied';
+    if (code.startsWith('SKIPPED_')) return 'skipped';
+    return 'neutral';
+}
+
+function setAiUrgencyManualStatus(text) {
+    const statusEl = document.getElementById('ai-urgency-manual-status');
+    if (statusEl) statusEl.innerText = String(text || 'Manual import idle.');
+}
+
+async function copyTextToClipboard(text) {
+    const payload = String(text || '');
+    if (!payload) return false;
+    try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            await navigator.clipboard.writeText(payload);
+            return true;
+        }
+    } catch (error) {
+        // Fallback below.
+    }
+
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = payload;
+        textarea.setAttribute('readonly', 'readonly');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        textarea.setSelectionRange(0, payload.length);
+        const success = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return !!success;
+    } catch (error) {
+        return false;
+    }
+}
+
+function buildAiUrgencyManualPacketFromSelection() {
+    if (typeof buildManualUrgencyPacket !== 'function') return null;
+    const selectedTaskIds = getSelectedAiUrgencyTaskIds();
+    const hasSelection = selectedTaskIds.length > 0;
+    return buildManualUrgencyPacket({
+        taskIds: hasSelection ? selectedTaskIds : null,
+        maxTasks: hasSelection ? selectedTaskIds.length : 120,
+        includeDescription: true
+    });
+}
+
+async function copyAiUrgencyManualPacket() {
+    if (aiUrgencySemanticQueueState.inFlight || aiUrgencySemanticRunInProgress) {
+        showNotification('Wait for the current semantic run to finish.');
+        return;
+    }
+    if (typeof buildManualUrgencyPacket !== 'function' || typeof buildGeminiManualUrgencyPrompt !== 'function') {
+        showNotification('Manual AI packet tools are not available.');
+        return;
+    }
+
+    const packet = buildAiUrgencyManualPacketFromSelection();
+    const taskCount = Array.isArray(packet && packet.tasks) ? packet.tasks.length : 0;
+    const goalCount = Array.isArray(packet && packet.goals) ? packet.goals.length : 0;
+    if (taskCount === 0) {
+        showNotification('No active tasks available for manual import packet.');
+        setAiUrgencyManualStatus('Manual import blocked: no active tasks found in current selection.');
+        return;
+    }
+
+    const promptText = buildGeminiManualUrgencyPrompt(packet);
+    const copied = await copyTextToClipboard(promptText);
+    if (!copied) {
+        showNotification('Failed to copy packet to clipboard.');
+        setAiUrgencyManualStatus('Manual import blocked: clipboard copy failed.');
+        return;
+    }
+
+    aiUrgencyManualLastPacket = packet;
+    setAiUrgencyManualStatus(`Packet copied: ${taskCount} tasks • ${goalCount} goals. Paste model JSON below, then apply import.`);
+    toggleAiUrgencyManualImportBox(true);
+    syncAiUrgencyQueueControlsUI();
+    showNotification(`Manual AI packet copied (${taskCount} tasks, ${goalCount} goals).`);
+}
+
+function toggleAiUrgencyManualImportBox(forceOpen = null) {
+    const wrap = document.getElementById('ai-urgency-manual-import-wrap');
+    if (!wrap) return;
+    const shouldOpen = forceOpen === true || (forceOpen === null && wrap.classList.contains('hidden'));
+    wrap.classList.toggle('hidden', !shouldOpen);
+    if (shouldOpen) {
+        const inputEl = document.getElementById('ai-urgency-manual-import-input');
+        if (inputEl && typeof inputEl.focus === 'function') inputEl.focus();
+    }
+    syncAiUrgencyQueueControlsUI();
+}
+
+function applyAiUrgencyManualImportFromInput() {
+    if (aiUrgencySemanticQueueState.inFlight || aiUrgencySemanticRunInProgress) {
+        showNotification('Wait for the current semantic run to finish.');
+        return;
+    }
+    if (!aiUrgencyManualLastPacket || !Array.isArray(aiUrgencyManualLastPacket.tasks)) {
+        showNotification('Copy AI packet first.');
+        setAiUrgencyManualStatus('Manual import blocked: copy an AI packet first.');
+        return;
+    }
+    if (typeof applyManualUrgencyImport !== 'function') {
+        showNotification('Manual AI import engine is not available.');
+        setAiUrgencyManualStatus('Manual import blocked: import engine unavailable.');
+        return;
+    }
+
+    const inputEl = document.getElementById('ai-urgency-manual-import-input');
+    const rawInput = String(inputEl && inputEl.value || '').trim();
+    if (!rawInput) {
+        showNotification('Paste Gemini JSON result first.');
+        setAiUrgencyManualStatus('Manual import blocked: paste model output JSON first.');
+        return;
+    }
+    if (rawInput.length > AI_URGENCY_MANUAL_IMPORT_MAX_CHARS) {
+        showNotification('Pasted JSON is too large for manual import.');
+        setAiUrgencyManualStatus('Manual import blocked: payload too large. Reduce task count and retry.');
+        return;
+    }
+
+    const result = applyManualUrgencyImport(rawInput, aiUrgencyManualLastPacket, {
+        persist: true,
+        reRender: true
+    }) || {};
+    if (!result.ok) {
+        const errorText = String(result.error || 'Manual AI import failed.');
+        showNotification(errorText);
+        setAiUrgencyManualStatus(`Import failed: ${errorText}`);
+        syncAiUrgencyQueueControlsUI();
+        return;
+    }
+
+    const applied = Math.max(0, Number(result.applied) || 0);
+    const skipped = Math.max(0, Number(result.skippedCount) || 0);
+    const issueCount = Array.isArray(result.issues) ? result.issues.length : 0;
+    const issueSuffix = issueCount > 0 ? ` • ${issueCount} issue(s)` : '';
+    setAiUrgencyManualStatus(`Import applied: ${applied} updated • ${skipped} skipped${issueSuffix}.`);
+    if (isAiUrgencyScoresModalOpen()) renderAiUrgencyScoresModal();
+    syncAiUrgencyQueueControlsUI();
+    showNotification(`Manual import complete: ${applied} updated, ${skipped} skipped.`);
+}
 
 function getAiUrgencySemanticCooldownRemainingMs(nowTs = Date.now()) {
     const lastTs = Number(aiUrgencySemanticLastRequestTs);
@@ -283,6 +461,14 @@ function getSelectedAiUrgencyTaskIds() {
     return Array.from(aiUrgencySelectedTaskIds);
 }
 
+function summarizeAiUrgencySemanticError(errorText, maxLen = 120) {
+    const text = String(errorText || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    const limit = Math.max(20, Number(maxLen) || 120);
+    if (text.length <= limit) return text;
+    return `${text.slice(0, limit - 3)}...`;
+}
+
 function getAiUrgencySemanticQueueStatusText() {
     const selectedCount = getSelectedAiUrgencyTaskIds().length;
     const pending = aiUrgencySemanticQueueState.pendingTaskIds.length;
@@ -293,7 +479,9 @@ function getAiUrgencySemanticQueueStatusText() {
         return `Sending semantic batch: ${done}/${Math.max(0, aiUrgencySemanticQueueState.total)} complete • ${pending} pending • batch ${AI_URGENCY_SEMANTIC_BATCH_SIZE} tasks/request`;
     }
     if (pending > 0 || aiUrgencySemanticQueueState.total > 0) {
-        return `Manual semantic batching: ${done}/${Math.max(0, aiUrgencySemanticQueueState.total)} complete • ${pending} pending • ${aiUrgencySemanticQueueState.failed} failed • ${aiUrgencySemanticQueueState.skipped} unchanged skipped`;
+        const lastIssue = summarizeAiUrgencySemanticError(aiUrgencySemanticQueueState.lastError);
+        const issueLabel = lastIssue ? ` • Last issue: ${lastIssue}` : '';
+        return `Manual semantic batching: ${done}/${Math.max(0, aiUrgencySemanticQueueState.total)} complete • ${pending} pending • ${aiUrgencySemanticQueueState.failed} failed • ${aiUrgencySemanticQueueState.skipped} unchanged skipped${issueLabel}`;
     }
     return `Selected tasks: ${selectedCount} • Batch size: ${AI_URGENCY_SEMANTIC_BATCH_SIZE} • Cooldown: 65s`;
 }
@@ -303,15 +491,25 @@ function syncAiUrgencyQueueControlsUI() {
     const clearSelectionBtn = document.getElementById('ai-urgency-clear-selection-btn');
     const queueSelectedBtn = document.getElementById('ai-urgency-queue-selected-btn');
     const stopQueueBtn = document.getElementById('ai-urgency-stop-queue-btn');
+    const copyPacketBtn = document.getElementById('ai-urgency-copy-packet-btn');
+    const toggleImportBtn = document.getElementById('ai-urgency-toggle-import-btn');
+    const applyImportBtn = document.getElementById('ai-urgency-apply-import-btn');
+    const manualInputEl = document.getElementById('ai-urgency-manual-import-input');
     const statusEl = document.getElementById('ai-urgency-queue-status');
 
     const selectedCount = getSelectedAiUrgencyTaskIds().length;
     const pendingCount = aiUrgencySemanticQueueState.pendingTaskIds.length;
-    const queueBusy = aiUrgencySemanticQueueState.inFlight;
+    const queueBusy = aiUrgencySemanticQueueState.inFlight || aiUrgencySemanticRunInProgress;
     const hasGemini = !!geminiApiKey;
     const cooldownRemainingMs = getAiUrgencySemanticCooldownRemainingMs();
     const cooldownSeconds = Math.max(0, Math.ceil(cooldownRemainingMs / 1000));
     const canStartOrContinue = (pendingCount > 0 || selectedCount > 0);
+    const hasManualPacket = !!(
+        aiUrgencyManualLastPacket
+        && Array.isArray(aiUrgencyManualLastPacket.tasks)
+        && aiUrgencyManualLastPacket.tasks.length > 0
+    );
+    const hasManualInput = !!String(manualInputEl && manualInputEl.value || '').trim();
 
     if (selectVisibleBtn) selectVisibleBtn.disabled = queueBusy;
     if (clearSelectionBtn) clearSelectionBtn.disabled = queueBusy || selectedCount === 0;
@@ -326,6 +524,9 @@ function syncAiUrgencyQueueControlsUI() {
         else queueSelectedBtn.innerText = queueSelectedBtn.dataset.defaultLabel;
     }
     if (stopQueueBtn) stopQueueBtn.disabled = queueBusy || pendingCount === 0;
+    if (copyPacketBtn) copyPacketBtn.disabled = queueBusy;
+    if (toggleImportBtn) toggleImportBtn.disabled = queueBusy;
+    if (applyImportBtn) applyImportBtn.disabled = queueBusy || !hasManualPacket || !hasManualInput;
     if (statusEl) statusEl.innerText = getAiUrgencySemanticQueueStatusText();
 }
 
@@ -362,6 +563,7 @@ function clearAiUrgencyTaskSelection() {
     aiUrgencySemanticQueueState.processed = 0;
     aiUrgencySemanticQueueState.failed = 0;
     aiUrgencySemanticQueueState.skipped = 0;
+    aiUrgencySemanticQueueState.lastError = '';
     const wrap = document.getElementById('ai-urgency-scores-task-wrap');
     if (wrap) {
         const checkboxes = wrap.querySelectorAll('input.ai-urgency-task-select-input[data-task-id]');
@@ -378,6 +580,7 @@ function initializeAiUrgencySemanticQueue(selectedTaskIds) {
     aiUrgencySemanticQueueState.processed = 0;
     aiUrgencySemanticQueueState.failed = 0;
     aiUrgencySemanticQueueState.skipped = 0;
+    aiUrgencySemanticQueueState.lastError = '';
 }
 
 async function runSelectedAiUrgencyQueue() {
@@ -443,6 +646,17 @@ async function runSelectedAiUrgencyQueue() {
         aiUrgencySemanticQueueState.processed += tasksUpdated;
         aiUrgencySemanticQueueState.failed += tasksFailed;
         aiUrgencySemanticQueueState.skipped += tasksSkipped;
+        if (tasksFailed > 0) {
+            if (firstBatchError) {
+                aiUrgencySemanticQueueState.lastError = firstBatchError;
+            } else if (tasksUpdated === 0) {
+                aiUrgencySemanticQueueState.lastError = 'Gemini returned results that could not be mapped to the selected task IDs.';
+            } else {
+                aiUrgencySemanticQueueState.lastError = 'Some task results were missing or invalid.';
+            }
+        } else if (tasksUpdated > 0) {
+            aiUrgencySemanticQueueState.lastError = '';
+        }
 
         batchTaskIds.forEach(taskId => aiUrgencySelectedTaskIds.delete(taskId));
         if (typeof saveToStorage === 'function') saveToStorage();
@@ -461,6 +675,7 @@ async function runSelectedAiUrgencyQueue() {
     } catch (error) {
         console.error('[ai-urgency] Semantic batch failed:', error);
         aiUrgencySemanticQueueState.failed += batchTaskIds.length;
+        aiUrgencySemanticQueueState.lastError = String(error && error.message || 'Unknown semantic batch error.');
         showNotification(`Semantic batch failed: ${error.message}`);
     } finally {
         aiUrgencySemanticQueueState.inFlight = false;
@@ -481,6 +696,7 @@ function stopAiUrgencySemanticQueue(notify = true) {
     aiUrgencySemanticQueueState.processed = 0;
     aiUrgencySemanticQueueState.failed = 0;
     aiUrgencySemanticQueueState.skipped = 0;
+    aiUrgencySemanticQueueState.lastError = '';
     syncAiUrgencySettingsUI();
     syncAiUrgencyQueueControlsUI();
     if (isAiUrgencyScoresModalOpen()) renderAiUrgencyScoresModal();
@@ -595,14 +811,37 @@ function parseAiUrgencyTimestamp(value) {
     return ts;
 }
 
+function sanitizeAiMetaHistoryForTable(meta) {
+    const source = meta && typeof meta === 'object' ? meta : {};
+    const normalized = {
+        score: parseAiUrgencyScoreValue(source.score),
+        level: Number(source.level) || null,
+        previousScore: parseAiUrgencyScoreValue(source.previousScore),
+        previousLevel: Number(source.previousLevel) || null,
+        computedAt: parseAiUrgencyTimestamp(source.computedAt),
+        previousComputedAt: parseAiUrgencyTimestamp(source.previousComputedAt)
+    };
+    const hasCurrentTs = Number.isFinite(Number(normalized.computedAt));
+    const hasPreviousTs = Number.isFinite(Number(normalized.previousComputedAt));
+    if (hasCurrentTs && hasPreviousTs && Number(normalized.computedAt) === Number(normalized.previousComputedAt)) {
+        normalized.previousScore = null;
+        normalized.previousLevel = null;
+        normalized.previousComputedAt = null;
+    }
+    return normalized;
+}
+
 function formatAiUrgencyDateForTable(value) {
     const ts = parseAiUrgencyTimestamp(value);
     if (!ts) return '—';
     try {
-        return new Date(ts).toLocaleDateString(undefined, {
+        return new Date(ts).toLocaleString(undefined, {
             year: 'numeric',
             month: 'short',
-            day: 'numeric'
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
         });
     } catch (_error) {
         return '—';
@@ -626,24 +865,10 @@ function readTaskSystemMetaForScores(task) {
 function readTaskAiMetaForScores(task) {
     if (typeof getTaskAiUrgencyMeta === 'function') {
         const meta = getTaskAiUrgencyMeta(task);
-        return {
-            score: parseAiUrgencyScoreValue(meta && meta.score),
-            level: Number(meta && meta.level) || null,
-            previousScore: parseAiUrgencyScoreValue(meta && meta.previousScore),
-            previousLevel: Number(meta && meta.previousLevel) || null,
-            computedAt: parseAiUrgencyTimestamp(meta && meta.computedAt),
-            previousComputedAt: parseAiUrgencyTimestamp(meta && meta.previousComputedAt)
-        };
+        return sanitizeAiMetaHistoryForTable(meta);
     }
     const fallback = task && task.aiUrgency;
-    return {
-        score: parseAiUrgencyScoreValue(fallback && fallback.score),
-        level: Number(fallback && fallback.level) || null,
-        previousScore: parseAiUrgencyScoreValue(fallback && fallback.previousScore),
-        previousLevel: Number(fallback && fallback.previousLevel) || null,
-        computedAt: parseAiUrgencyTimestamp(fallback && fallback.computedAt),
-        previousComputedAt: parseAiUrgencyTimestamp(fallback && fallback.previousComputedAt)
-    };
+    return sanitizeAiMetaHistoryForTable(fallback);
 }
 
 function readProjectSystemMetaForScores(projectId) {
@@ -660,24 +885,10 @@ function readProjectSystemMetaForScores(projectId) {
 function readProjectAiMetaForScores(projectId, project) {
     if (typeof getProjectAiUrgencyMeta === 'function') {
         const meta = getProjectAiUrgencyMeta(projectId);
-        return {
-            score: parseAiUrgencyScoreValue(meta && meta.score),
-            level: Number(meta && meta.level) || null,
-            previousScore: parseAiUrgencyScoreValue(meta && meta.previousScore),
-            previousLevel: Number(meta && meta.previousLevel) || null,
-            computedAt: parseAiUrgencyTimestamp(meta && meta.computedAt),
-            previousComputedAt: parseAiUrgencyTimestamp(meta && meta.previousComputedAt)
-        };
+        return sanitizeAiMetaHistoryForTable(meta);
     }
     const fallback = project && project.aiUrgency;
-    return {
-        score: parseAiUrgencyScoreValue(fallback && fallback.score),
-        level: Number(fallback && fallback.level) || null,
-        previousScore: parseAiUrgencyScoreValue(fallback && fallback.previousScore),
-        previousLevel: Number(fallback && fallback.previousLevel) || null,
-        computedAt: parseAiUrgencyTimestamp(fallback && fallback.computedAt),
-        previousComputedAt: parseAiUrgencyTimestamp(fallback && fallback.previousComputedAt)
-    };
+    return sanitizeAiMetaHistoryForTable(fallback);
 }
 
 function scoreLabelForTable(meta) {
@@ -723,11 +934,16 @@ function renderAiUrgencyScoresTaskTable(view, projectNameById) {
         const dueRaw = String(task.dueDate || '').trim();
         const dueLabel = dueRaw || '—';
         const projectName = projectNameById[String(task.projectId || '').trim()] || '—';
+        const importStatusCode = normalizeAiUrgencyImportStatusCode(task.aiUrgencyImportStatus);
+        const importStatusLabel = getAiUrgencyImportStatusLabel(importStatusCode);
+        const importStatusTone = getAiUrgencyImportStatusTone(importStatusCode);
         return {
             taskId,
             title: String(task.title || 'Untitled Task'),
             projectName,
             dueLabel,
+            importStatusLabel,
+            importStatusTone,
             systemMeta,
             aiMeta,
             delta,
@@ -745,6 +961,7 @@ function renderAiUrgencyScoresTaskTable(view, projectNameById) {
         '<th>Task</th>',
         '<th>Project</th>',
         '<th>Due</th>',
+        '<th>Import</th>',
         '<th>Prev AI</th>',
         '<th>Prev Date</th>',
         '<th>New AI</th>',
@@ -790,6 +1007,9 @@ function renderAiUrgencyScoresTaskTable(view, projectNameById) {
                     <td class="ai-urgency-score-cell ${deltaClass}">${escapeAiUrgencyScoresHtml(formatAiUrgencyDelta(entry.delta))}</td>
                 `
                 : '';
+        const importStatusClass = entry.importStatusTone === 'applied'
+            ? 'ai-urgency-import-status-applied'
+            : (entry.importStatusTone === 'skipped' ? 'ai-urgency-import-status-skipped' : '');
 
         return `
             <tr>
@@ -798,6 +1018,7 @@ function renderAiUrgencyScoresTaskTable(view, projectNameById) {
                 <td class="ai-urgency-title-cell">${escapeAiUrgencyScoresHtml(entry.title)}</td>
                 <td>${escapeAiUrgencyScoresHtml(entry.projectName)}</td>
                 <td>${escapeAiUrgencyScoresHtml(entry.dueLabel)}</td>
+                <td class="ai-urgency-import-status-cell ${importStatusClass}">${escapeAiUrgencyScoresHtml(entry.importStatusLabel)}</td>
                 ${aiHistoryCells}
                 ${scoreCells}
             </tr>

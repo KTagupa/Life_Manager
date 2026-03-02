@@ -99,6 +99,7 @@
             render();
             renderInbox();
             renderGoals();
+            if (typeof ensureToolbarSubpageButtons === 'function') ensureToolbarSubpageButtons();
             setupInteractions();
             setupPanelDrag();
             setupContextualMenu();

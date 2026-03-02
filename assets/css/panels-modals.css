@@ -4016,6 +4016,10 @@
             margin-top: 4px;
         }
 
+        .ai-urgency-scores-manual-controls {
+            margin-top: 2px;
+        }
+
         .ai-urgency-scores-controls label {
             font-size: 11px;
             letter-spacing: 0.03em;
@@ -4068,6 +4072,42 @@
             font-size: 12px;
             color: #94a3b8;
             margin-top: -2px;
+        }
+
+        .ai-urgency-manual-import-wrap {
+            margin-top: 4px;
+        }
+
+        .ai-urgency-manual-import-wrap.hidden {
+            display: none;
+        }
+
+        .ai-urgency-manual-import-input {
+            width: 100%;
+            min-height: 120px;
+            resize: vertical;
+            border-radius: 10px;
+            border: 1px solid rgba(100, 116, 139, 0.56);
+            background: rgba(11, 17, 26, 0.86);
+            color: #dbe5f3;
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.45;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        .ai-urgency-scores-table td.ai-urgency-import-status-cell {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .ai-urgency-scores-table td.ai-urgency-import-status-applied {
+            color: #86efac;
+        }
+
+        .ai-urgency-scores-table td.ai-urgency-import-status-skipped {
+            color: #fca5a5;
         }
 
         .ai-urgency-scores-sections {
