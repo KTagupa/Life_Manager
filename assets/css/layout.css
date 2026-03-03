@@ -795,38 +795,41 @@
         #inspector-expanded-modal .inspector-section-subtasks {
             grid-column: 1 / -1;
             margin-bottom: 0 !important;
-            border-radius: 12px;
-            border: 1px solid rgba(71, 85, 105, 0.35);
-            background: linear-gradient(160deg, rgba(15, 23, 42, 0.42), rgba(2, 6, 23, 0.2));
+            border: 3px solid #000;
+            background: #ffde59;
+            box-shadow: 6px 6px 0 0 #000;
             padding: 12px;
         }
 
         #inspector-expanded-modal .inspector-section-subtasks .subtask-list {
             display: flex;
             flex-direction: row;
-            gap: 12px;
+            gap: 14px;
             overflow-x: auto;
             overflow-y: hidden;
             scroll-snap-type: x mandatory;
-            border-radius: 10px;
-            padding: 10px;
-            border: 1px solid rgba(51, 65, 85, 0.65);
-            background: rgba(2, 6, 23, 0.4);
+            padding: 8px 4px 10px;
+            border: none;
+            background: transparent;
+        }
+
+        #inspector-expanded-modal .inspector-section-subtasks .field-label {
+            color: #111827;
         }
 
         #inspector-expanded-modal .inspector-section-subtasks .subtask-row {
             flex: 0 0 360px;
             width: 360px;
             min-height: 94px;
-            display: grid;
-            grid-template-columns: 18px minmax(0, 1fr) auto auto;
-            align-items: start;
-            gap: 8px;
-            padding: 11px;
-            border: 1px solid rgba(71, 85, 105, 0.45);
-            border-radius: 10px;
-            background: linear-gradient(180deg, rgba(30, 41, 59, 0.56), rgba(15, 23, 42, 0.42));
+            padding: 12px;
+            border: 3px solid #000;
+            background: #fff8d4;
+            box-shadow: 4px 4px 0 0 #000;
             scroll-snap-align: start;
+        }
+
+        #inspector-expanded-modal .inspector-section-subtasks .subtask-row:hover {
+            background: #fff2a7;
         }
 
         #inspector-expanded-modal .inspector-section-subtasks .st-input {
@@ -836,10 +839,9 @@
 
         #inspector-expanded-modal .inspector-section-subtasks .subtask-empty-msg {
             width: 100%;
-            border: 1px dashed rgba(71, 85, 105, 0.72);
-            border-radius: 8px;
-            background: rgba(2, 6, 23, 0.32);
-            color: #64748b !important;
+            border: 3px dashed #000;
+            background: #fff8cc;
+            color: #334155 !important;
             padding: 18px 12px !important;
         }
 
@@ -1166,10 +1168,9 @@
         .subtask-list {
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            background: rgba(15, 23, 42, 0.3);
-            border-radius: 8px;
-            padding: 8px;
+            gap: 12px;
+            background: transparent;
+            padding: 4px;
         }
 
         /* --- MAIN LAYOUT --- */

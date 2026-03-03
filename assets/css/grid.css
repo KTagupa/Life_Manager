@@ -81,66 +81,118 @@
         }
 
         .subtask-row {
-            display: flex;
-            align-items: flex-start;
+            display: grid;
+            grid-template-columns: 20px minmax(0, 1fr) auto auto;
+            align-items: start;
             gap: 10px;
-            padding: 8px;
-            background: #1e293b;
-            border-radius: 6px;
-            transition: background 0.2s;
+            padding: 10px 12px;
+            background: #ffde59;
+            border: 3px solid #000;
+            box-shadow: 4px 4px 0 0 #000;
+            transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
         }
 
         .subtask-row:hover {
-            background: #334155;
+            background: #ffe887;
+            transform: translate(-2px, -2px);
+            box-shadow: 6px 6px 0 0 #000;
         }
 
         .subtask-check {
-            width: 18px;
-            height: 18px;
-            border: 2px solid #475569;
-            border-radius: 5px;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #000;
+            background: #fff;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s;
+            transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
             font-size: 12px;
-            color: white;
+            font-weight: 900;
+            color: #000;
             flex-shrink: 0;
+            line-height: 1;
+            margin-top: 1px;
         }
 
         .subtask-check.checked {
-            background: #94a3b8;
-            border-color: #94a3b8;
+            background: #ff3131;
+            border-color: #000;
+            color: #fff;
+            box-shadow: 2px 2px 0 0 #000;
         }
 
         .st-input {
             background: transparent;
             border: none;
-            color: #cbd5e1;
+            color: #111827;
             font-size: 13px;
+            font-weight: 700;
             flex-grow: 1;
             outline: none;
             font-family: inherit;
             width: 100%;
-            min-height: 18px;
+            min-height: 20px;
             line-height: 1.35;
             resize: none;
             overflow: hidden;
             white-space: pre-wrap;
             word-break: break-word;
-            margin-top: 1px;
+            margin-top: 0;
         }
 
         .st-input.done {
             text-decoration: line-through;
-            color: #64748b;
-            opacity: 0.7;
+            color: #334155;
+            opacity: 0.78;
         }
 
-        .subtask-row>button {
-            align-self: flex-start;
-            margin-top: 2px;
+        .subtask-row > .subtask-action-btn {
+            align-self: start;
+        }
+
+        .subtask-action-btn {
+            width: 26px;
+            height: 26px;
+            border: 2px solid #000;
+            background: #fff;
+            box-shadow: 2px 2px 0 0 #000;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 900;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+        }
+
+        .subtask-action-btn:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 3px 3px 0 0 #000;
+        }
+
+        .subtask-action-promote {
+            background: #ddfbd6;
+            color: #0d5e3a;
+        }
+
+        .subtask-action-remove {
+            background: #ffe1de;
+            color: #8c1f1f;
+        }
+
+        .subtask-empty-msg {
+            border: 3px dashed #000;
+            background: #fff8cc;
+            color: #334155;
+            font-size: 11px;
+            font-weight: 800;
+            text-align: center;
+            padding: 12px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
         }
 
         .add-subtask-btn {
