@@ -1145,6 +1145,24 @@
             background: rgba(5, 150, 105, 0.1);
         }
 
+        .inspector-section-calibration .field-label {
+            color: #f6c285;
+        }
+
+        .inspector-section-calibration .field-box {
+            border-color: rgba(245, 158, 11, 0.45);
+            background: rgba(120, 66, 20, 0.2);
+        }
+
+        .inspector-section-calibration .field-box:hover {
+            border-color: rgba(245, 158, 11, 0.65);
+            background: rgba(148, 84, 24, 0.24);
+        }
+
+        .inspector-section-calibration input[type="range"] {
+            accent-color: #f59e0b;
+        }
+
         .subtask-list {
             display: flex;
             flex-direction: column;

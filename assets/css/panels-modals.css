@@ -382,6 +382,26 @@
             color: #1f3b30;
         }
 
+        .metric-row-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .metric-bar-track {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .metric-bar-track > div {
+            height: 100%;
+            border-radius: inherit;
+        }
+
         .insights-stats {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -838,6 +858,193 @@
             font-weight: 600;
         }
 
+        .insights-calibration-card {
+            background: linear-gradient(180deg, #fff7ec 0%, #fff0dc 100%);
+            border-color: #e7bf8a;
+        }
+
+        .insights-calibration-summary {
+            margin-top: 10px;
+        }
+
+        .insights-calibration-score-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .insights-calibration-score {
+            font-size: 34px;
+            line-height: 1;
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            color: #6f471e;
+        }
+
+        .insights-calibration-score.strength-high {
+            color: #9a5a0f;
+        }
+
+        .insights-calibration-score.strength-mid {
+            color: #bb6a12;
+        }
+
+        .insights-calibration-score.strength-low {
+            color: #b44a21;
+        }
+
+        .insights-calibration-bias {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border: 1px solid #e4be89;
+            background: #fff8ef;
+            color: #7a4f1f;
+            border-radius: 999px;
+            padding: 3px 8px;
+        }
+
+        .insights-calibration-bias.bias-over {
+            border-color: rgba(234, 88, 12, 0.48);
+            background: rgba(234, 88, 12, 0.14);
+            color: #8c360f;
+        }
+
+        .insights-calibration-bias.bias-under {
+            border-color: rgba(249, 115, 22, 0.44);
+            background: rgba(249, 115, 22, 0.12);
+            color: #8f4a13;
+        }
+
+        .insights-calibration-bias.bias-balanced {
+            border-color: rgba(245, 158, 11, 0.46);
+            background: rgba(245, 158, 11, 0.14);
+            color: #8a5510;
+        }
+
+        #insights-calibration-text {
+            margin: 8px 0 0;
+            font-size: 12px;
+            line-height: 1.45;
+            color: #8a6033;
+            font-weight: 600;
+        }
+
+        .insights-calibration-metrics {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .insights-calibration-metric {
+            border: 1px solid rgba(207, 138, 51, 0.34);
+            border-radius: 10px;
+            background: rgba(255, 251, 246, 0.9);
+            padding: 8px 9px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .insights-calibration-metric span {
+            font-size: 10px;
+            color: #9d6d3a;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .insights-calibration-metric strong {
+            font-size: 14px;
+            color: #5b3516;
+            font-weight: 900;
+            line-height: 1.1;
+        }
+
+        .insights-operational-card {
+            background: linear-gradient(180deg, #ffffff 0%, #f3f8ef 100%);
+            border-color: #cfdac7;
+        }
+
+        .insights-operational-card .metrics-breakdown {
+            margin-top: 12px;
+            gap: 10px;
+        }
+
+        .insights-operational-card .metric-item {
+            background: #ffffff;
+            border: 1px solid #ccd8ca;
+            border-radius: 14px;
+            padding: 12px 14px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+        }
+
+        .insights-operational-card .metric-label {
+            color: #556a5e;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+        }
+
+        .insights-operational-card .metric-value {
+            color: #1f392f;
+            font-size: 17px;
+            font-weight: 900;
+        }
+
+        .insights-data-footprint-card {
+            background: linear-gradient(180deg, #ffffff 0%, #f4f8ef 100%);
+            border-color: #cfdac7;
+        }
+
+        .insights-data-footprint-card #total-gist-size-review {
+            color: #1f9d54;
+            font-size: 15px;
+            font-weight: 800;
+            border: 1px solid rgba(38, 145, 82, 0.25);
+            background: rgba(53, 171, 100, 0.12);
+            border-radius: 10px;
+            padding: 3px 8px;
+        }
+
+        .insights-data-footprint-card .metrics-breakdown {
+            margin-top: 12px;
+            gap: 10px;
+        }
+
+        .insights-data-footprint-card .metric-item {
+            background: #fcfef9;
+            border: 1px solid #ccd8ca;
+            border-radius: 14px;
+            padding: 12px 14px;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+        }
+
+        .insights-data-footprint-card .metric-label {
+            color: #50655a;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+        }
+
+        .insights-data-footprint-card .metric-value {
+            color: #20392f;
+            font-size: 17px;
+            font-weight: 900;
+        }
+
+        .insights-data-footprint-card .metric-bar-track {
+            height: 5px;
+            background: rgba(34, 59, 49, 0.15);
+        }
+
+        .insights-data-footprint-card .metric-bar-track > div {
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.24) inset;
+        }
+
         .insights-project-portfolio,
         .insights-project-risks-list,
         .insights-links-list,
@@ -892,15 +1099,20 @@
         }
 
         .insights-project-risks-card {
-            background: #3e2218;
-            border-color: #6d3f2f;
+            background: linear-gradient(180deg, #4f281b 0%, #3d2118 100%);
+            border-color: #8a523d;
             color: #ffe8dc;
         }
 
+        .insights-project-risks-card .insights-card-head h2 {
+            color: #ffe2d2;
+            text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+        }
+
         .insights-project-risk-item {
-            border: 1px solid rgba(255, 214, 191, 0.24);
+            border: 1px solid rgba(255, 214, 191, 0.34);
             border-radius: 12px;
-            background: rgba(0, 0, 0, 0.16);
+            background: rgba(19, 7, 4, 0.3);
             padding: 10px 12px;
             font-size: 13px;
             font-weight: 700;
@@ -915,8 +1127,8 @@
 
         .insights-project-risk-item:hover,
         .insights-project-risk-item:focus-visible {
-            border-color: rgba(255, 226, 206, 0.48);
-            background: rgba(0, 0, 0, 0.24);
+            border-color: rgba(255, 226, 206, 0.6);
+            background: rgba(0, 0, 0, 0.28);
             outline: none;
             transform: translateY(-1px);
         }
@@ -1045,15 +1257,15 @@
         }
 
         .insights-project-risks-card .insights-project-action-btn {
-            border-color: rgba(255, 208, 176, 0.34);
-            color: #ffd8c1;
-            background: rgba(0, 0, 0, 0.18);
+            border-color: rgba(255, 208, 176, 0.48);
+            color: #ffe7d6;
+            background: rgba(18, 6, 3, 0.38);
         }
 
         .insights-project-risks-card .insights-project-action-btn:hover,
         .insights-project-risks-card .insights-project-action-btn:focus-visible {
-            border-color: rgba(255, 224, 205, 0.56);
-            background: rgba(0, 0, 0, 0.28);
+            border-color: rgba(255, 224, 205, 0.72);
+            background: rgba(0, 0, 0, 0.34);
             transform: translateY(-1px);
             outline: none;
         }
@@ -1254,6 +1466,10 @@
 
             #insights-health-score {
                 font-size: 30px;
+            }
+
+            .insights-calibration-metrics {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -1634,6 +1850,35 @@
             font-size: 13px;
         }
 
+        .projects-panel-dashboard-icon-btn {
+            border: 1px solid rgba(121, 170, 247, 0.58);
+            background: rgba(121, 170, 247, 0.14);
+            color: var(--project-blue);
+            width: 24px;
+            height: 24px;
+            border-radius: 7px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1;
+            transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+        }
+
+        .projects-panel-dashboard-icon-btn:hover {
+            border-color: rgba(121, 170, 247, 0.84);
+            background: rgba(121, 170, 247, 0.24);
+            color: #dce9ff;
+            transform: translateY(-1px);
+        }
+
+        .projects-panel-dashboard-icon-btn:focus-visible {
+            outline: none;
+            border-color: rgba(121, 170, 247, 0.88);
+            box-shadow: 0 0 0 2px rgba(121, 170, 247, 0.28);
+        }
+
         .projects-panel-close-btn {
             border: 1px solid rgba(61, 76, 57, 0.6);
             background: rgba(24, 32, 26, 0.84);
@@ -1747,26 +1992,6 @@
             border-color: rgba(182, 212, 181, 0.65);
             background: rgba(45, 83, 53, 0.42);
             color: #f4f8f5;
-        }
-
-        #projects-panel .project-dashboard-btn {
-            width: 100%;
-            border: 1px solid rgba(121, 170, 247, 0.62);
-            background: rgba(121, 170, 247, 0.13);
-            color: var(--project-blue);
-            border-radius: 9px;
-            padding: 9px 11px;
-            font-size: 12px;
-            font-weight: 600;
-            letter-spacing: 0.01em;
-            cursor: pointer;
-            transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
-        }
-
-        #projects-panel .project-dashboard-btn:hover {
-            border-color: rgba(121, 170, 247, 0.82);
-            background: rgba(121, 170, 247, 0.22);
-            color: #dce9ff;
         }
 
         #projects-panel .navigator-projects-filters-row {
@@ -3878,6 +4103,43 @@
             white-space: nowrap;
         }
 
+        #sync-panel .settings-metrics-compact-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        #sync-panel .settings-metrics-compact-item {
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            background: rgba(15, 23, 42, 0.55);
+            border-radius: 10px;
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        #sync-panel .settings-metrics-compact-item span {
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        #sync-panel .settings-metrics-compact-item strong {
+            font-size: 15px;
+            color: #e2e8f0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-weight: 600;
+        }
+
+        #sync-panel .settings-metrics-compact-actions {
+            margin-top: 8px;
+            grid-template-columns: 1fr;
+        }
+
         #sync-panel .metrics-breakdown {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -4373,6 +4635,7 @@
             }
 
             #sync-panel .settings-action-grid,
+            #sync-panel .settings-metrics-compact-grid,
             #sync-panel .metrics-breakdown,
             #sync-panel .gemini-usage-grid {
                 grid-template-columns: 1fr;

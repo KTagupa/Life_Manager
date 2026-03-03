@@ -208,6 +208,225 @@
             return gridHtml;
         }
 
+        const TASK_REFLECTION_META = {
+            on_target: { label: 'On Target', emoji: '✅', color: '#f59e0b' },
+            harder: { label: 'Harder', emoji: '⚠️', color: '#ea580c' },
+            easier: { label: 'Easier', emoji: '🌱', color: '#fbbf24' }
+        };
+
+        function ensureTaskSelfAssessment(task) {
+            if (!task || typeof task !== 'object') {
+                if (typeof createDefaultTaskSelfAssessment === 'function') return createDefaultTaskSelfAssessment();
+                return {
+                    confidence: null,
+                    estimatedMinutes: null,
+                    lastPredictedAt: null,
+                    lastUpdatedAt: null,
+                    lastReflection: null,
+                    reflectionHistory: []
+                };
+            }
+
+            if (typeof normalizeTaskSelfAssessment === 'function') {
+                task.selfAssessment = normalizeTaskSelfAssessment(task.selfAssessment);
+                return task.selfAssessment;
+            }
+
+            if (!task.selfAssessment || typeof task.selfAssessment !== 'object') {
+                task.selfAssessment = {
+                    confidence: null,
+                    estimatedMinutes: null,
+                    lastPredictedAt: null,
+                    lastUpdatedAt: null,
+                    lastReflection: null,
+                    reflectionHistory: []
+                };
+            }
+            if (!Array.isArray(task.selfAssessment.reflectionHistory)) task.selfAssessment.reflectionHistory = [];
+            return task.selfAssessment;
+        }
+
+        function getTaskReflectionLabel(outcome) {
+            const key = String(outcome || '').trim().toLowerCase();
+            return (TASK_REFLECTION_META[key] && TASK_REFLECTION_META[key].label) || 'On Target';
+        }
+
+        function getTaskReflectionMeta(outcome) {
+            const key = String(outcome || '').trim().toLowerCase();
+            return TASK_REFLECTION_META[key] || TASK_REFLECTION_META.on_target;
+        }
+
+        function formatTaskMinutes(value) {
+            const minutes = Number(value);
+            if (!Number.isFinite(minutes) || minutes < 0) return 'n/a';
+            return `${Math.round(minutes)}m`;
+        }
+
+        function getTaskActualMinutes(task) {
+            if (!task || !Array.isArray(task.timeLogs) || task.timeLogs.length === 0) return null;
+            let totalMs = 0;
+
+            task.timeLogs.forEach(log => {
+                if (!log || typeof log !== 'object') return;
+                const duration = Number(log.duration);
+                if (Number.isFinite(duration) && duration > 0) {
+                    totalMs += duration;
+                    return;
+                }
+                const start = Number(log.start);
+                const end = Number(log.end);
+                if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+                    totalMs += (end - start);
+                }
+            });
+
+            if (totalMs <= 0) return null;
+            return Math.max(0, Math.round(totalMs / 60000));
+        }
+
+        function findTaskReflectionForCompletion(task, completionTs) {
+            if (!task || !completionTs) return null;
+            const assessment = ensureTaskSelfAssessment(task);
+            const history = Array.isArray(assessment.reflectionHistory) ? assessment.reflectionHistory : [];
+            const match = history.find(entry => Number(entry && entry.completionTs) === Number(completionTs));
+            if (match) return match;
+
+            const fallback = assessment.lastReflection;
+            if (fallback && Number(fallback.completionTs) === Number(completionTs)) return fallback;
+            return null;
+        }
+
+        function previewTaskConfidence(value) {
+            const output = document.getElementById('task-self-confidence-value');
+            if (!output) return;
+            const confidence = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+            output.textContent = `${confidence}%`;
+        }
+
+        function updateTaskCalibrationField(field, value) {
+            const task = getSelectedNode();
+            if (!task) return;
+
+            const assessment = ensureTaskSelfAssessment(task);
+            const now = Date.now();
+            const normalizedField = String(field || '').trim();
+
+            if (normalizedField === 'confidence') {
+                const parsed = Number(value);
+                if (!Number.isFinite(parsed)) return;
+                assessment.confidence = Math.max(0, Math.min(100, Math.round(parsed)));
+            } else if (normalizedField === 'estimatedMinutes') {
+                const parsed = Number(value);
+                assessment.estimatedMinutes = (Number.isFinite(parsed) && parsed > 0)
+                    ? Math.min(10080, Math.round(parsed))
+                    : null;
+            } else {
+                return;
+            }
+
+            assessment.lastPredictedAt = now;
+            assessment.lastUpdatedAt = now;
+            task.selfAssessment = (typeof normalizeTaskSelfAssessment === 'function')
+                ? normalizeTaskSelfAssessment(assessment)
+                : assessment;
+
+            if (typeof touchTask === 'function') touchTask(task);
+            updateCalculations();
+            render();
+            updateInspector();
+            saveToStorage();
+        }
+
+        function setTaskCalibrationEstimatePreset(minutes) {
+            const preset = Number(minutes);
+            if (!Number.isFinite(preset) || preset <= 0) return;
+            updateTaskCalibrationField('estimatedMinutes', preset);
+        }
+
+        function clearTaskCalibrationEstimate() {
+            const task = getSelectedNode();
+            if (!task) return;
+
+            const assessment = ensureTaskSelfAssessment(task);
+            assessment.confidence = null;
+            assessment.estimatedMinutes = null;
+            assessment.lastPredictedAt = null;
+            assessment.lastUpdatedAt = Date.now();
+            task.selfAssessment = (typeof normalizeTaskSelfAssessment === 'function')
+                ? normalizeTaskSelfAssessment(assessment)
+                : assessment;
+
+            if (typeof touchTask === 'function') touchTask(task);
+            updateCalculations();
+            render();
+            updateInspector();
+            saveToStorage();
+            showNotification('Calibration estimate cleared');
+        }
+
+        function recordTaskReflection(outcome) {
+            const task = getSelectedNode();
+            if (!task) return;
+            if (!task.completed) {
+                showNotification('Mark task complete before reflecting');
+                return;
+            }
+
+            const normalizedOutcome = String(outcome || '').trim().toLowerCase();
+            if (!Object.prototype.hasOwnProperty.call(TASK_REFLECTION_META, normalizedOutcome)) return;
+
+            const assessment = ensureTaskSelfAssessment(task);
+            const completionTs = Number(task.completedDate) || Date.now();
+            const recordedAt = Date.now();
+            const actualMinutes = getTaskActualMinutes(task);
+            const estimatedMinutes = Number.isFinite(Number(assessment.estimatedMinutes))
+                ? Math.max(1, Math.round(Number(assessment.estimatedMinutes)))
+                : null;
+            const confidence = Number.isFinite(Number(assessment.confidence))
+                ? Math.max(0, Math.min(100, Math.round(Number(assessment.confidence))))
+                : null;
+
+            const reflectionEntry = {
+                completionTs: completionTs,
+                recordedAt: recordedAt,
+                outcome: normalizedOutcome,
+                note: '',
+                confidence: confidence,
+                estimatedMinutes: estimatedMinutes,
+                actualMinutes: Number.isFinite(Number(actualMinutes)) ? Math.max(0, Math.round(Number(actualMinutes))) : null,
+                deltaMinutes: (Number.isFinite(Number(actualMinutes)) && Number.isFinite(Number(estimatedMinutes)))
+                    ? Math.round(Number(actualMinutes) - Number(estimatedMinutes))
+                    : null
+            };
+
+            const normalizedEntry = (typeof normalizeTaskReflectionRecord === 'function')
+                ? normalizeTaskReflectionRecord(reflectionEntry)
+                : reflectionEntry;
+            if (!normalizedEntry) return;
+
+            const history = Array.isArray(assessment.reflectionHistory) ? assessment.reflectionHistory.slice() : [];
+            const existingIndex = history.findIndex(entry => Number(entry && entry.completionTs) === completionTs);
+            if (existingIndex >= 0) history.splice(existingIndex, 1, normalizedEntry);
+            else history.push(normalizedEntry);
+
+            history.sort((a, b) => (Number(a.completionTs || a.recordedAt) || 0) - (Number(b.completionTs || b.recordedAt) || 0));
+            assessment.reflectionHistory = history.slice(-120);
+            assessment.lastReflection = normalizedEntry;
+            assessment.lastUpdatedAt = recordedAt;
+            task.selfAssessment = (typeof normalizeTaskSelfAssessment === 'function')
+                ? normalizeTaskSelfAssessment(assessment)
+                : assessment;
+
+            if (typeof touchTask === 'function') touchTask(task);
+            updateCalculations();
+            render();
+            updateInspector();
+            saveToStorage();
+
+            const reflectionMeta = getTaskReflectionMeta(normalizedOutcome);
+            showNotification(`Reflection saved: ${reflectionMeta.label}`);
+        }
+
         // --- INSPECTOR Logic ---
         let inspectorExpandedModalOpen = false;
 
@@ -283,6 +502,22 @@
 
             const isRunning = !!node.activeTimerStart;
             const linkedNotes = notes.filter(n => n.taskIds && n.taskIds.includes(node.id));
+            const selfAssessment = ensureTaskSelfAssessment(node);
+            const confidenceValue = Number.isFinite(Number(selfAssessment.confidence))
+                ? Math.max(0, Math.min(100, Math.round(Number(selfAssessment.confidence))))
+                : null;
+            const confidenceSliderValue = Number.isFinite(confidenceValue) ? confidenceValue : 50;
+            const estimatedMinutesValue = Number.isFinite(Number(selfAssessment.estimatedMinutes))
+                ? Math.max(1, Math.round(Number(selfAssessment.estimatedMinutes)))
+                : null;
+            const predictionTimestamp = Number(selfAssessment.lastPredictedAt) || 0;
+            const predictionLabel = predictionTimestamp
+                ? `Updated ${new Date(predictionTimestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                : 'No estimate yet';
+            const completionTs = Number(node.completedDate) || null;
+            const completionReflection = completionTs ? findTaskReflectionForCompletion(node, completionTs) : null;
+            const reflectionMeta = getTaskReflectionMeta(completionReflection && completionReflection.outcome);
+            const actualMinutesLogged = getTaskActualMinutes(node);
             const urgencyMode = node.isManualUrgent ? 'urgent' : (node.isManualNotUrgent ? 'not-urgent' : 'standard');
             const isUrgent = urgencyMode === 'urgent';
             const sortedProjects = (Array.isArray(projects) ? [...projects] : [])
@@ -356,6 +591,64 @@
                             <span style="font-size:18px;">${node.completed ? '✓' : '○'}</span>
                         </div>
                     </div>
+                </div>`;
+
+            const reflectionDeltaLabel = completionReflection && Number.isFinite(Number(completionReflection.deltaMinutes))
+                ? `${Number(completionReflection.deltaMinutes) >= 0 ? '+' : ''}${Math.round(Number(completionReflection.deltaMinutes))}m vs est`
+                : '';
+            const calibrationHtml = `
+                <div class="inspector-section inspector-section-calibration inspector-meta-card" style="margin-bottom:16px; border-color:rgba(245,158,11,0.42); background:linear-gradient(160deg, rgba(120,66,20,0.26), rgba(46,24,8,0.2));">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <label class="field-label" style="margin:0;">🧭 CALIBRATION</label>
+                        <button class="add-subtask-btn" style="color:#f4ba72; border-color:rgba(245,158,11,0.5); background:rgba(120,66,20,0.2);" onclick="clearTaskCalibrationEstimate()">CLEAR</button>
+                    </div>
+
+                    <div style="margin-bottom:10px;">
+                        <div style="font-size:11px; color:#f4ba72; margin-bottom:6px;">Before Starting: confidence you can finish as planned</div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <input type="range" min="0" max="100" step="5" value="${confidenceSliderValue}" 
+                                style="flex:1;" oninput="previewTaskConfidence(this.value)" onchange="updateTaskCalibrationField('confidence', this.value)">
+                            <span id="task-self-confidence-value" style="font-size:12px; font-weight:700; color:#ffd9a8; min-width:44px; text-align:right;">${Number.isFinite(confidenceValue) ? `${confidenceValue}%` : 'Unset'}</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom:8px;">
+                        <div style="font-size:11px; color:#f4ba72; margin-bottom:6px;">Estimated effort (minutes)</div>
+                        <div class="field-box" style="padding:8px 12px;">
+                            <input type="number" min="1" step="5" value="${Number.isFinite(estimatedMinutesValue) ? estimatedMinutesValue : ''}" placeholder="e.g. 45"
+                                style="background:transparent; border:none; color:white; width:100%; font-family:inherit; font-size:13px; outline:none;"
+                                onchange="updateTaskCalibrationField('estimatedMinutes', this.value)">
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+                        <button class="add-subtask-btn" style="color:#f9c27e; border-color:rgba(245,158,11,0.48); background:rgba(120,66,20,0.18);" onclick="setTaskCalibrationEstimatePreset(25)">25m</button>
+                        <button class="add-subtask-btn" style="color:#f9c27e; border-color:rgba(245,158,11,0.48); background:rgba(120,66,20,0.18);" onclick="setTaskCalibrationEstimatePreset(45)">45m</button>
+                        <button class="add-subtask-btn" style="color:#f9c27e; border-color:rgba(245,158,11,0.48); background:rgba(120,66,20,0.18);" onclick="setTaskCalibrationEstimatePreset(60)">60m</button>
+                        <button class="add-subtask-btn" style="color:#f9c27e; border-color:rgba(245,158,11,0.48); background:rgba(120,66,20,0.18);" onclick="setTaskCalibrationEstimatePreset(90)">90m</button>
+                    </div>
+
+                    <div style="font-size:10px; color:#cb8f4f; margin-bottom:${node.completed ? '10px' : '0'};">${escapeHtml(predictionLabel)}</div>
+
+                    ${node.completed ? `
+                    <div style="border-top:1px dashed rgba(245,158,11,0.35); padding-top:10px;">
+                        <div style="font-size:11px; color:#f8c890; margin-bottom:8px;">One-click completion reflection</div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+                            ${Object.entries(TASK_REFLECTION_META).map(([key, meta]) => `
+                                <button class="add-subtask-btn"
+                                    style="color:${completionReflection && completionReflection.outcome === key ? '#0f172a' : meta.color}; background:${completionReflection && completionReflection.outcome === key ? meta.color : 'transparent'}; border-color:${meta.color};"
+                                    onclick="recordTaskReflection('${key}')">${meta.emoji} ${meta.label}</button>
+                            `).join('')}
+                        </div>
+                        <div style="font-size:11px; color:${completionReflection ? reflectionMeta.color : '#d09a64'}; line-height:1.35;">
+                            ${completionReflection
+                    ? `${reflectionMeta.emoji} ${reflectionMeta.label} • Est ${formatTaskMinutes(completionReflection.estimatedMinutes)} • Actual ${formatTaskMinutes(completionReflection.actualMinutes)}${reflectionDeltaLabel ? ` • ${reflectionDeltaLabel}` : ''}`
+                    : 'No reflection recorded for this completion yet.'}
+                        </div>
+                        ${Number.isFinite(Number(actualMinutesLogged))
+                    ? `<div style="font-size:10px; color:#cb8f4f; margin-top:4px;">Based on logged sessions: ${formatTaskMinutes(actualMinutesLogged)}</div>`
+                    : ''}
+                    </div>` : ''}
                 </div>`;
 
             // 2. Due Date
@@ -711,6 +1004,7 @@
             const metadataClusterHtml = `
                 <div class="inspector-section-metadata-cluster">
                     ${durationStatusHtml}
+                    ${calibrationHtml}
                     ${dueDateHtml}
                     ${reminderHtml}
                     ${linkedNotesHtml}
@@ -839,6 +1133,12 @@
                 render();
                 updateInspector();
                 saveToStorage();
+                if (node.completed) {
+                    const completionReflection = findTaskReflectionForCompletion(node, node.completedDate);
+                    if (!completionReflection) {
+                        showNotification('Task completed. Add one-click reflection in Calibration.');
+                    }
+                }
             }
         }
 

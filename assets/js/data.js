@@ -21,6 +21,7 @@ let aiUrgencyConfig = {
 const DATA_MODEL_VERSION = 2;
 const PROJECT_STATUS_VALUES = ['active', 'paused', 'completed', 'archived'];
 const PROJECT_ORIGIN_VALUES = ['manual', 'ai', 'migrated'];
+const TASK_REFLECTION_OUTCOME_VALUES = ['on_target', 'harder', 'easier'];
 const AI_URGENCY_CONFIG_DEFAULTS = Object.freeze({
     mode: 'shadow',
     enabled: true,
@@ -76,6 +77,126 @@ function normalizeAiUrgencyConfig(raw) {
         blendWeightAi: clampToRange(source.blendWeightAi, 0, 1),
         semanticProvider: ['heuristic', 'gemini'].includes(semanticProvider) ? semanticProvider : defaults.semanticProvider
     };
+}
+
+function normalizeOptionalInteger(value, min = 0, max = Number.MAX_SAFE_INTEGER) {
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+function normalizeTimestamp(value) {
+    const ts = Number(value);
+    if (!Number.isFinite(ts) || ts <= 0) return null;
+    return ts;
+}
+
+function createDefaultTaskReflectionRecord() {
+    return {
+        completionTs: null,
+        recordedAt: null,
+        outcome: 'on_target',
+        note: '',
+        confidence: null,
+        estimatedMinutes: null,
+        actualMinutes: null,
+        deltaMinutes: null
+    };
+}
+
+function normalizeTaskReflectionRecord(raw) {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const normalized = createDefaultTaskReflectionRecord();
+
+    const completionTs = normalizeTimestamp(source.completionTs || source.completedAt || source.completionAt);
+    const recordedAt = normalizeTimestamp(source.recordedAt || source.timestamp || source.updatedAt);
+    if (!completionTs && !recordedAt) return null;
+
+    normalized.completionTs = completionTs || recordedAt;
+    normalized.recordedAt = recordedAt || completionTs;
+
+    const outcome = String(source.outcome || '').trim().toLowerCase();
+    normalized.outcome = TASK_REFLECTION_OUTCOME_VALUES.includes(outcome) ? outcome : 'on_target';
+
+    if (typeof source.note === 'string') normalized.note = source.note.trim().slice(0, 500);
+
+    const confidence = normalizeOptionalInteger(source.confidence, 0, 100);
+    if (Number.isFinite(confidence)) normalized.confidence = confidence;
+
+    const estimatedMinutes = normalizeOptionalInteger(source.estimatedMinutes, 1, 10080);
+    if (Number.isFinite(estimatedMinutes)) normalized.estimatedMinutes = estimatedMinutes;
+
+    const actualMinutes = normalizeOptionalInteger(source.actualMinutes, 0, 10080);
+    if (Number.isFinite(actualMinutes)) normalized.actualMinutes = actualMinutes;
+
+    const deltaMinutes = Number(source.deltaMinutes);
+    if (Number.isFinite(deltaMinutes)) {
+        normalized.deltaMinutes = Math.max(-10080, Math.min(10080, Math.round(deltaMinutes)));
+    } else if (Number.isFinite(normalized.estimatedMinutes) && Number.isFinite(normalized.actualMinutes)) {
+        normalized.deltaMinutes = normalized.actualMinutes - normalized.estimatedMinutes;
+    }
+
+    return normalized;
+}
+
+function createDefaultTaskSelfAssessment() {
+    return {
+        confidence: null,
+        estimatedMinutes: null,
+        lastPredictedAt: null,
+        lastUpdatedAt: null,
+        lastReflection: null,
+        reflectionHistory: []
+    };
+}
+
+function normalizeTaskSelfAssessment(raw) {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const normalized = createDefaultTaskSelfAssessment();
+
+    const confidence = normalizeOptionalInteger(source.confidence, 0, 100);
+    if (Number.isFinite(confidence)) normalized.confidence = confidence;
+
+    const estimatedMinutes = normalizeOptionalInteger(source.estimatedMinutes, 1, 10080);
+    if (Number.isFinite(estimatedMinutes)) normalized.estimatedMinutes = estimatedMinutes;
+
+    normalized.lastPredictedAt = normalizeTimestamp(source.lastPredictedAt || source.predictedAt);
+    normalized.lastUpdatedAt = normalizeTimestamp(source.lastUpdatedAt || source.updatedAt);
+
+    const historySource = Array.isArray(source.reflectionHistory)
+        ? source.reflectionHistory
+        : (Array.isArray(source.reflections) ? source.reflections : []);
+
+    const deduped = new Map();
+    historySource.forEach((entry) => {
+        const normalizedEntry = normalizeTaskReflectionRecord(entry);
+        if (!normalizedEntry) return;
+        const key = String(normalizedEntry.completionTs || normalizedEntry.recordedAt || '');
+        if (!key) return;
+        const existing = deduped.get(key);
+        if (!existing || (Number(normalizedEntry.recordedAt) || 0) >= (Number(existing.recordedAt) || 0)) {
+            deduped.set(key, normalizedEntry);
+        }
+    });
+
+    normalized.reflectionHistory = Array.from(deduped.values())
+        .sort((a, b) => (Number(a.completionTs || a.recordedAt) || 0) - (Number(b.completionTs || b.recordedAt) || 0))
+        .slice(-120);
+
+    const lastReflection = normalizeTaskReflectionRecord(source.lastReflection);
+    if (lastReflection) normalized.lastReflection = lastReflection;
+    else if (normalized.reflectionHistory.length > 0) {
+        normalized.lastReflection = normalized.reflectionHistory[normalized.reflectionHistory.length - 1];
+    }
+
+    if (!normalized.lastUpdatedAt) {
+        normalized.lastUpdatedAt = (normalized.lastReflection && normalized.lastReflection.recordedAt)
+            || normalized.lastPredictedAt
+            || null;
+    }
+
+    return normalized;
 }
 
 function getUrgencyLevelFromNumericScore(score) {
@@ -155,6 +276,8 @@ function touchTask(task, timestamp = Date.now()) {
     task.updatedAt = Number(timestamp) || Date.now();
     task.aiUrgency = normalizeAiUrgencyRecord(task.aiUrgency, 'task');
     task.aiUrgency.stale = true;
+    task.selfAssessment = normalizeTaskSelfAssessment(task.selfAssessment);
+    task.selfAssessment.lastUpdatedAt = Number(timestamp) || Date.now();
 }
 
 function touchProject(project, timestamp = Date.now()) {
@@ -359,7 +482,8 @@ function createNode(x, y, title = 'New Task') {
         projectId: null,
         createdAt: now,
         updatedAt: now,
-        aiUrgency: createDefaultAiUrgency('task')
+        aiUrgency: createDefaultAiUrgency('task'),
+        selfAssessment: createDefaultTaskSelfAssessment()
     };
 }
 
@@ -469,6 +593,7 @@ function migrateStateData(rawState) {
         task.createdAt = Number.isFinite(Number(task.createdAt)) ? Number(task.createdAt) : fallbackCreatedAt;
         task.updatedAt = Number.isFinite(Number(task.updatedAt)) ? Number(task.updatedAt) : task.createdAt;
         task.aiUrgency = normalizeAiUrgencyRecord(task.aiUrgency, 'task');
+        task.selfAssessment = normalizeTaskSelfAssessment(task.selfAssessment);
     };
 
     if (Array.isArray(state.nodes)) state.nodes.forEach(normalizeTaskRecord);
@@ -495,7 +620,8 @@ function initDemoData() {
             dependencies: [], subtasks: [{ text: 'Brainstorm', done: true }],
             activeTimerStart: null, timeLogs: [], projectId: null,
             createdAt: now, updatedAt: now,
-            aiUrgency: createDefaultAiUrgency('task')
+            aiUrgency: createDefaultAiUrgency('task'),
+            selfAssessment: createDefaultTaskSelfAssessment()
         }
     ];
     archivedNodes = [];
@@ -843,6 +969,7 @@ function sanitizeLoadedData() {
         n.createdAt = Number.isFinite(Number(n.createdAt)) ? Number(n.createdAt) : fallbackCreatedAt;
         n.updatedAt = Number.isFinite(Number(n.updatedAt)) ? Number(n.updatedAt) : n.createdAt;
         n.aiUrgency = normalizeAiUrgencyRecord(n.aiUrgency, 'task');
+        n.selfAssessment = normalizeTaskSelfAssessment(n.selfAssessment);
         const normalizedProjectId = String(n.projectId || '').trim();
         n.projectId = normalizedProjectId || null;
 
@@ -1057,28 +1184,31 @@ function updateDataMetrics() {
         'Goals': lifeGoals
     };
 
-    const targets = [
-        {
-            breakdown: document.getElementById('metrics-breakdown'),
-            total: document.getElementById('total-gist-size')
-        },
-        {
-            breakdown: document.getElementById('metrics-breakdown-review'),
-            total: document.getElementById('total-gist-size-review')
-        }
-    ].filter(t => t.breakdown && t.total);
-    if (targets.length === 0) return;
+    const settingsTotal = document.getElementById('total-gist-size');
+    const reviewBreakdown = document.getElementById('metrics-breakdown-review');
+    const reviewTotal = document.getElementById('total-gist-size-review');
+    const summaryTargets = {
+        tasks: document.getElementById('metrics-summary-tasks'),
+        notes: document.getElementById('metrics-summary-notes'),
+        projects: document.getElementById('metrics-summary-projects'),
+        collections: document.getElementById('metrics-summary-collections'),
+        updated: document.getElementById('metrics-summary-updated')
+    };
 
-    targets.forEach(t => {
-        t.breakdown.innerHTML = '';
-    });
+    const hasReviewTarget = !!(reviewBreakdown && reviewTotal);
+    const hasSettingsTarget = !!(settingsTotal || summaryTargets.tasks || summaryTargets.notes || summaryTargets.projects || summaryTargets.collections || summaryTargets.updated);
+    if (!hasReviewTarget && !hasSettingsTarget) return;
+
+    if (reviewBreakdown) reviewBreakdown.innerHTML = '';
     let totalBytes = 0;
     const rows = [];
+    const sizesByCollection = {};
 
     for (const [name, data] of Object.entries(collections)) {
         if (!data) continue;
         const size = new Blob([JSON.stringify(data)]).size;
         totalBytes += size;
+        sizesByCollection[name] = size;
 
         const item = document.createElement('div');
         item.className = 'metric-item';
@@ -1088,22 +1218,31 @@ function updateDataMetrics() {
         const visualPct = Math.min(100, (size / softLimit) * 100);
 
         item.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <div class="metric-row-head">
                         <span class="metric-label">${name}</span>
                         <span class="metric-value">${(size / 1024).toFixed(1)} KB</span>
                     </div>
-                    <div style="height:3px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden;">
+                    <div class="metric-bar-track">
                         <div style="height:100%; width:${visualPct}%; background:${visualPct > 80 ? 'var(--blocked-color)' : 'var(--accent)'};"></div>
                     </div>
                 `;
         rows.push(item.outerHTML);
     }
 
-    const totalText = (totalBytes / 1024).toFixed(1) + ' KB';
-    targets.forEach(t => {
-        t.breakdown.innerHTML = rows.join('');
-        t.total.innerText = totalText;
-    });
+    const toKb = (bytes) => `${(Math.max(0, Number(bytes) || 0) / 1024).toFixed(1)} KB`;
+    const totalText = toKb(totalBytes);
+
+    if (settingsTotal) settingsTotal.innerText = totalText;
+    if (reviewTotal) reviewTotal.innerText = totalText;
+    if (reviewBreakdown) reviewBreakdown.innerHTML = rows.join('');
+
+    if (summaryTargets.tasks) summaryTargets.tasks.innerText = toKb(sizesByCollection.Tasks);
+    if (summaryTargets.notes) summaryTargets.notes.innerText = toKb(sizesByCollection.Notes);
+    if (summaryTargets.projects) summaryTargets.projects.innerText = toKb(sizesByCollection.Projects);
+    if (summaryTargets.collections) summaryTargets.collections.innerText = `${Object.keys(sizesByCollection).length} collections`;
+    if (summaryTargets.updated) {
+        summaryTargets.updated.innerText = `Updated: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
 }
 
 

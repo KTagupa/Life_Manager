@@ -334,6 +334,10 @@
             display: block;
         }
 
+        #ai-settings-pane .ai-settings-shortcut-btn {
+            margin-top: 8px;
+        }
+
         #sync-panel .gemini-usage-panel {
             margin-top: 10px;
             padding: 10px;

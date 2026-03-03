@@ -7,22 +7,22 @@
     <title>Project Manager Dashboard | Urgency Flow</title>
     <style>
         :root {
-            --project-canvas: #0a0d0a;
-            --project-panel: #121813;
-            --project-card: #18201a;
-            --project-olive: #3d4c39;
-            --project-peach: #ecb48c;
-            --project-sage: #b6d4b5;
-            --project-mustard: #b1ad41;
-            --project-blue: #79aaf7;
-            --project-forest: #2d5335;
-            --project-rust: #c96a52;
-            --project-text-main: #e8ece9;
-            --project-text-muted: #8ba38d;
-            --project-border: rgba(61, 76, 57, 0.62);
-            --project-shadow: 0 18px 32px rgba(3, 7, 4, 0.55);
-            --radius-lg: 16px;
-            --radius-md: 12px;
+            --pm-bg: #eef3f7;
+            --pm-bg-soft: #f7fafc;
+            --pm-surface: #ffffff;
+            --pm-surface-muted: #f3f7fb;
+            --pm-border: #d5e0e9;
+            --pm-text-main: #172736;
+            --pm-text-muted: #5f7383;
+            --pm-blue: #1d63d2;
+            --pm-teal: #0f766e;
+            --pm-amber: #c77a15;
+            --pm-rust: #c94a34;
+            --pm-slate: #718597;
+            --pm-shadow: 0 16px 34px rgba(22, 44, 64, 0.12);
+            --radius-xl: 18px;
+            --radius-lg: 14px;
+            --radius-md: 11px;
             --radius-sm: 9px;
             --font-main: "Avenir Next", "Segoe UI Variable", "Trebuchet MS", sans-serif;
             --font-mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
@@ -39,66 +39,69 @@
 
         body {
             margin: 0;
-            color: var(--project-text-main);
+            color: var(--pm-text-main);
             font-family: var(--font-main);
             background:
-                radial-gradient(900px 460px at 8% -10%, rgba(121, 170, 247, 0.2), transparent 55%),
-                radial-gradient(760px 440px at 92% -10%, rgba(177, 173, 65, 0.18), transparent 55%),
-                radial-gradient(880px 540px at 50% 115%, rgba(45, 83, 53, 0.25), transparent 62%),
-                linear-gradient(180deg, #0e130f 0%, var(--project-canvas) 100%);
+                radial-gradient(760px 420px at -10% -10%, rgba(29, 99, 210, 0.12), transparent 62%),
+                radial-gradient(720px 420px at 110% -12%, rgba(199, 122, 21, 0.14), transparent 60%),
+                radial-gradient(860px 500px at 50% 120%, rgba(15, 118, 110, 0.12), transparent 70%),
+                linear-gradient(180deg, #f5f9fc 0%, var(--pm-bg) 100%);
         }
 
         .pm-shell {
-            max-width: 1440px;
+            max-width: 1480px;
             margin: 0 auto;
-            padding: 20px 18px 36px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
+            padding: 18px 18px 34px;
+            display: grid;
+            gap: 16px;
         }
 
         .pm-header {
-            border: 1px solid var(--project-border);
-            border-radius: var(--radius-lg);
-            background: linear-gradient(180deg, rgba(18, 24, 19, 0.94), rgba(10, 13, 10, 0.94));
-            box-shadow: var(--project-shadow);
+            position: sticky;
+            top: 10px;
+            z-index: 20;
+            border: 1px solid var(--pm-border);
+            border-radius: var(--radius-xl);
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: var(--pm-shadow);
+            backdrop-filter: blur(9px);
             padding: 14px;
-            display: flex;
-            gap: 12px;
+            display: grid;
+            grid-template-columns: minmax(200px, 1fr) minmax(420px, 2fr) auto;
             align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
+            gap: 12px;
             animation: reveal 0.35s ease both;
         }
 
         .pm-brand {
-            min-width: 220px;
-            display: flex;
-            flex-direction: column;
+            min-width: 200px;
+            display: grid;
             gap: 4px;
         }
 
         .pm-brand-top {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            font-size: 16px;
+            gap: 9px;
+            font-size: 18px;
             font-weight: 700;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.01em;
+            color: #15273a;
         }
 
         .pm-logo {
-            width: 26px;
-            height: 26px;
-            border-radius: 8px;
-            border: 1px solid rgba(121, 170, 247, 0.5);
+            width: 30px;
+            height: 30px;
+            border-radius: 10px;
+            border: 1px solid rgba(29, 99, 210, 0.35);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
             background:
-                radial-gradient(circle at 25% 30%, rgba(121, 170, 247, 0.9), transparent 55%),
-                linear-gradient(145deg, rgba(61, 76, 57, 0.88), rgba(24, 32, 26, 0.95));
+                radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.9), transparent 40%),
+                linear-gradient(140deg, #2f80ed, #0f766e 60%, #e2b55b);
         }
 
         .pm-subtitle {
-            color: var(--project-text-muted);
+            color: var(--pm-text-muted);
             font-size: 12px;
             line-height: 1.35;
         }
@@ -114,21 +117,22 @@
         .pm-search,
         .pm-select,
         .pm-btn {
-            border: 1px solid var(--project-border);
+            border: 1px solid var(--pm-border);
             border-radius: var(--radius-sm);
-            color: var(--project-text-main);
-            background: rgba(10, 13, 10, 0.82);
-            min-height: 36px;
+            background: var(--pm-surface);
+            color: var(--pm-text-main);
+            min-height: 38px;
             font-size: 12px;
             font-family: inherit;
         }
 
         .pm-search {
-            width: min(360px, 62vw);
+            width: min(420px, 66vw);
             display: flex;
             align-items: center;
-            padding: 0 10px;
             gap: 8px;
+            padding: 0 11px;
+            background: var(--pm-surface-muted);
         }
 
         .pm-search input {
@@ -142,98 +146,129 @@
         }
 
         .pm-search input::placeholder {
-            color: rgba(139, 163, 141, 0.85);
+            color: #7d8f9f;
         }
 
         .pm-select {
+            min-width: 126px;
             padding: 0 10px;
             cursor: pointer;
-            min-width: 118px;
             outline: none;
+            background: var(--pm-surface-muted);
         }
 
         .pm-select:focus,
         .pm-btn:focus,
         .pm-search:focus-within {
-            border-color: rgba(236, 180, 140, 0.86);
-            box-shadow: 0 0 0 2px rgba(236, 180, 140, 0.18);
+            border-color: rgba(29, 99, 210, 0.6);
+            box-shadow: 0 0 0 3px rgba(29, 99, 210, 0.14);
         }
 
         .pm-btn {
-            padding: 0 12px;
+            padding: 0 13px;
             font-weight: 700;
             cursor: pointer;
-            transition: filter 0.2s ease, transform 0.2s ease;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             white-space: nowrap;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .pm-btn:hover {
-            filter: brightness(1.04);
             transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(22, 44, 64, 0.16);
         }
 
         .pm-btn-primary {
-            background: rgba(121, 170, 247, 0.14);
-            border-color: rgba(121, 170, 247, 0.5);
-            color: #dce9ff;
+            background: linear-gradient(120deg, #1d63d2, #2f80ed);
+            color: #ffffff;
+            border-color: rgba(29, 99, 210, 0.72);
         }
 
         .pm-btn-warm {
-            background: rgba(236, 180, 140, 0.14);
-            border-color: rgba(236, 180, 140, 0.62);
-            color: #f8e7d8;
+            background: linear-gradient(120deg, #cf8a2f, #e6a954);
+            color: #ffffff;
+            border-color: rgba(199, 122, 21, 0.66);
         }
 
         .pm-status {
-            border: 1px solid rgba(61, 76, 57, 0.68);
+            border: 1px solid var(--pm-border);
             border-radius: var(--radius-sm);
-            background: rgba(18, 24, 19, 0.76);
-            color: var(--project-text-muted);
+            background: var(--pm-surface-muted);
+            color: var(--pm-text-muted);
             font-size: 11px;
-            padding: 9px 11px;
+            padding: 10px 11px;
             font-family: var(--font-mono);
+            text-wrap: nowrap;
         }
 
         .pm-kpi-grid {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 10px;
+            gap: 12px;
         }
 
         .pm-kpi {
-            border: 1px solid var(--project-border);
-            border-left-width: 3px;
-            border-radius: var(--radius-md);
-            background: linear-gradient(175deg, rgba(24, 32, 26, 0.94), rgba(14, 20, 15, 0.9));
-            padding: 12px;
-            box-shadow: 0 12px 24px rgba(3, 7, 4, 0.45);
-            min-height: 94px;
+            --pm-tone: var(--pm-blue);
+            position: relative;
+            border: 1px solid var(--pm-border);
+            border-radius: var(--radius-lg);
+            background: var(--pm-surface);
+            box-shadow: 0 9px 22px rgba(22, 44, 64, 0.08);
+            min-height: 112px;
+            padding: 14px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 12px;
+            overflow: hidden;
             animation: reveal 0.4s ease both;
             animation-delay: var(--d, 0ms);
         }
 
+        .pm-kpi::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--pm-tone), rgba(255, 255, 255, 0.25));
+        }
+
         .pm-kpi.tone-blue {
-            border-left-color: var(--project-blue);
+            --pm-tone: var(--pm-blue);
         }
 
         .pm-kpi.tone-sage {
-            border-left-color: var(--project-sage);
+            --pm-tone: var(--pm-teal);
         }
 
         .pm-kpi.tone-amber {
-            border-left-color: var(--project-mustard);
+            --pm-tone: var(--pm-amber);
         }
 
         .pm-kpi.tone-rust {
-            border-left-color: var(--project-rust);
+            --pm-tone: var(--pm-rust);
+        }
+
+        .pm-kpi-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            letter-spacing: 0.09em;
+            font-weight: 800;
+            color: var(--pm-tone);
+            background: #edf3fa;
+            border: 1px solid #d3e1ed;
         }
 
         .pm-kpi-label {
-            color: var(--project-text-muted);
+            color: var(--pm-text-muted);
             font-size: 10px;
             letter-spacing: 0.09em;
             text-transform: uppercase;
@@ -241,57 +276,148 @@
         }
 
         .pm-kpi-value {
-            margin-top: 7px;
-            font-size: 26px;
+            margin-top: 6px;
+            font-size: 30px;
             font-weight: 800;
             line-height: 1;
+            color: #142535;
         }
 
         .pm-kpi-meta {
-            margin-top: 6px;
+            margin-top: 5px;
             font-size: 11px;
-            color: rgba(232, 236, 233, 0.82);
+            color: #738898;
+        }
+
+        .pm-kpi-trend {
+            border-radius: 999px;
+            padding: 5px 10px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .pm-kpi-trend.is-up {
+            color: #0f766e;
+            border-color: rgba(15, 118, 110, 0.28);
+            background: rgba(15, 118, 110, 0.1);
+        }
+
+        .pm-kpi-trend.is-down {
+            color: #c94a34;
+            border-color: rgba(201, 74, 52, 0.24);
+            background: rgba(201, 74, 52, 0.1);
         }
 
         .pm-main-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
-            gap: 12px;
+            grid-template-columns: minmax(0, 1.32fr) minmax(0, 1fr);
+            gap: 14px;
+        }
+
+        .pm-primary-col,
+        .pm-secondary-col {
+            display: grid;
+            gap: 14px;
+            align-content: start;
         }
 
         .pm-card {
-            border: 1px solid var(--project-border);
-            border-radius: var(--radius-lg);
-            background: linear-gradient(180deg, rgba(24, 32, 26, 0.93), rgba(10, 13, 10, 0.93));
-            box-shadow: var(--project-shadow);
+            border: 1px solid var(--pm-border);
+            border-radius: var(--radius-xl);
+            background: var(--pm-surface);
+            box-shadow: var(--pm-shadow);
             min-height: 130px;
             animation: reveal 0.45s ease both;
         }
 
         .pm-card-head {
-            border-bottom: 1px solid rgba(61, 76, 57, 0.62);
-            padding: 12px 14px 10px;
+            border-bottom: 1px solid var(--pm-border);
+            padding: 15px 16px 12px;
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
+            flex-wrap: wrap;
         }
 
         .pm-card-title {
             margin: 0;
-            font-size: 13px;
-            letter-spacing: 0.03em;
+            font-size: 14px;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
+            color: #162839;
         }
 
         .pm-card-subtitle {
             margin: 4px 0 0;
-            color: var(--project-text-muted);
+            color: var(--pm-text-muted);
             font-size: 12px;
         }
 
+        .pm-card-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
         .pm-card-body {
-            padding: 12px 14px 14px;
+            padding: 14px 16px 16px;
+        }
+
+        .pm-status-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .pm-tab {
+            border: 1px solid #cad7e3;
+            border-radius: 999px;
+            background: var(--pm-surface-muted);
+            color: #31485b;
+            font-size: 11px;
+            font-weight: 700;
+            min-height: 30px;
+            padding: 0 11px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+
+        .pm-tab:hover {
+            background: #eaf1f8;
+            border-color: #b2c5d5;
+        }
+
+        .pm-tab.is-active {
+            color: #ffffff;
+            background: #1f6fdd;
+            border-color: #1f6fdd;
+            box-shadow: 0 8px 16px rgba(29, 99, 210, 0.22);
+        }
+
+        .pm-tab-count {
+            min-width: 22px;
+            height: 20px;
+            border-radius: 999px;
+            padding: 0 7px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            background: rgba(9, 36, 58, 0.08);
+            color: inherit;
+        }
+
+        .pm-tab.is-active .pm-tab-count {
+            background: rgba(255, 255, 255, 0.25);
         }
 
         .pm-focus-grid {
@@ -301,90 +427,92 @@
 
         .pm-focus-name {
             margin: 0;
-            font-size: 20px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 800;
+            color: #132536;
         }
 
         .pm-focus-desc {
             margin: 8px 0 0;
-            color: rgba(232, 236, 233, 0.86);
-            font-size: 13px;
+            color: #425d6f;
+            font-size: 14px;
             line-height: 1.45;
         }
 
         .pm-chip-row {
             display: flex;
             flex-wrap: wrap;
-            gap: 7px;
-            margin-top: 10px;
+            gap: 8px;
+            margin-top: 11px;
         }
 
         .pm-chip {
-            border: 1px solid rgba(61, 76, 57, 0.8);
+            border: 1px solid #c9d9e6;
             border-radius: 999px;
-            padding: 3px 9px;
+            padding: 4px 10px;
             font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.06em;
-            color: var(--project-text-main);
-            background: rgba(18, 24, 19, 0.86);
+            color: #2f4557;
+            background: #f2f7fb;
             font-weight: 700;
             white-space: nowrap;
         }
 
         .pm-chip.level-1 {
-            border-color: rgba(121, 170, 247, 0.55);
-            background: rgba(121, 170, 247, 0.12);
-            color: rgba(121, 170, 247, 0.98);
+            border-color: rgba(29, 99, 210, 0.3);
+            background: rgba(29, 99, 210, 0.11);
+            color: #1f63d0;
         }
 
         .pm-chip.level-2 {
-            border-color: rgba(182, 212, 181, 0.52);
-            background: rgba(182, 212, 181, 0.12);
-            color: rgba(182, 212, 181, 0.96);
+            border-color: rgba(15, 118, 110, 0.28);
+            background: rgba(15, 118, 110, 0.11);
+            color: #0f766e;
         }
 
         .pm-chip.level-3 {
-            border-color: rgba(177, 173, 65, 0.58);
-            background: rgba(177, 173, 65, 0.14);
-            color: rgba(224, 220, 107, 0.97);
+            border-color: rgba(199, 122, 21, 0.34);
+            background: rgba(199, 122, 21, 0.11);
+            color: #a66311;
         }
 
         .pm-chip.level-4 {
-            border-color: rgba(236, 180, 140, 0.58);
-            background: rgba(236, 180, 140, 0.15);
-            color: rgba(247, 209, 177, 0.98);
+            border-color: rgba(201, 74, 52, 0.34);
+            background: rgba(201, 74, 52, 0.11);
+            color: #b73f2a;
         }
 
         .pm-chip.level-5 {
-            border-color: rgba(201, 106, 82, 0.7);
-            background: rgba(201, 106, 82, 0.18);
-            color: rgba(248, 183, 168, 0.99);
+            border-color: rgba(172, 46, 28, 0.42);
+            background: rgba(172, 46, 28, 0.16);
+            color: #a52d1b;
         }
 
         .pm-stat-grid {
-            margin-top: 12px;
+            margin-top: 13px;
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 8px;
         }
 
         .pm-stat {
-            border: 1px solid rgba(61, 76, 57, 0.6);
+            border: 1px solid var(--pm-border);
             border-radius: var(--radius-sm);
-            background: rgba(18, 24, 19, 0.84);
-            padding: 8px;
+            background: var(--pm-surface-muted);
+            padding: 9px;
         }
 
         .pm-stat-value {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 700;
             line-height: 1;
+            color: #163146;
         }
 
         .pm-stat-label {
             margin-top: 5px;
-            color: var(--project-text-muted);
+            color: #678091;
             font-size: 10px;
             letter-spacing: 0.06em;
             text-transform: uppercase;
@@ -392,156 +520,109 @@
 
         .pm-progress {
             margin-top: 12px;
-            border: 1px solid rgba(61, 76, 57, 0.8);
             border-radius: 999px;
-            height: 10px;
+            height: 11px;
             overflow: hidden;
-            background: rgba(10, 13, 10, 0.8);
+            background: #e5edf4;
+            border: 1px solid #d3e0ea;
         }
 
         .pm-progress > div {
             height: 100%;
             width: 0%;
             transition: width 0.3s ease;
-            background: linear-gradient(90deg, rgba(121, 170, 247, 0.86), rgba(182, 212, 181, 0.86));
+            background: linear-gradient(90deg, #1f6fdd, #0f766e);
         }
 
-        .pm-next-list {
-            margin-top: 12px;
+        .pm-next-list,
+        .pm-task-list,
+        .pm-timeline-list {
             display: grid;
-            gap: 7px;
+            gap: 8px;
+        }
+
+        .pm-next-item,
+        .pm-task-row,
+        .pm-timeline-row {
+            border: 1px solid var(--pm-border);
+            border-radius: var(--radius-md);
+            background: var(--pm-surface-muted);
+            padding: 9px 10px;
         }
 
         .pm-next-item {
-            border: 1px solid rgba(61, 76, 57, 0.62);
-            border-radius: 10px;
-            background: rgba(18, 24, 19, 0.78);
-            padding: 8px 10px;
             display: flex;
             justify-content: space-between;
-            gap: 10px;
             align-items: center;
+            gap: 10px;
         }
 
         .pm-next-title {
+            min-width: 0;
+            flex: 1;
             font-size: 12px;
-            color: var(--project-text-main);
+            color: #182b3c;
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
-            flex: 1;
         }
 
         .pm-next-meta {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            color: var(--project-text-muted);
+            color: var(--pm-text-muted);
             font-family: var(--font-mono);
             font-size: 10px;
             flex-shrink: 0;
         }
 
-        .pm-board-wrap {
+        .pm-project-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
         }
 
-        .pm-board-col {
-            border: 1px solid rgba(61, 76, 57, 0.65);
-            border-radius: var(--radius-md);
-            background: rgba(18, 24, 19, 0.82);
-            min-height: 210px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .pm-col-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 8px;
-            padding: 9px 10px;
-            border-bottom: 1px solid rgba(61, 76, 57, 0.6);
-        }
-
-        .pm-col-title {
-            margin: 0;
-            font-size: 12px;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-        }
-
-        .pm-col-count {
-            color: var(--project-text-muted);
-            font-size: 11px;
-            font-family: var(--font-mono);
-        }
-
-        .pm-col-body {
-            padding: 9px;
-            display: grid;
-            gap: 8px;
-            overflow-y: auto;
-            max-height: 390px;
-        }
-
-        .pm-col-empty {
-            border: 1px dashed rgba(61, 76, 57, 0.68);
-            border-radius: 9px;
-            background: rgba(10, 13, 10, 0.45);
-            color: var(--project-text-muted);
-            font-size: 11px;
-            text-align: center;
-            padding: 12px 8px;
-        }
-
         .pm-project-card {
             width: 100%;
-            border: 1px solid rgba(61, 76, 57, 0.72);
-            border-left-width: 3px;
-            border-radius: 11px;
-            background: var(--project-card);
-            color: var(--project-text-main);
+            border: 1px solid var(--pm-border);
+            border-left-width: 4px;
+            border-radius: 12px;
+            background: #ffffff;
+            color: var(--pm-text-main);
             text-align: left;
-            padding: 9px;
+            padding: 10px;
             display: grid;
             gap: 8px;
             cursor: pointer;
-            transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
         }
 
         .pm-project-card:hover {
-            transform: translateY(-1px);
-            border-color: rgba(121, 170, 247, 0.5);
-            background: #1a231c;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(22, 44, 64, 0.13);
         }
 
         .pm-project-card.is-selected {
-            border-color: rgba(236, 180, 140, 0.66);
-            box-shadow: 0 0 0 1px rgba(236, 180, 140, 0.34);
+            box-shadow: 0 0 0 2px rgba(31, 111, 221, 0.2);
+            border-color: rgba(31, 111, 221, 0.45);
         }
 
         .pm-project-card.level-1 {
-            border-left-color: var(--project-blue);
+            border-left-color: var(--pm-blue);
         }
 
         .pm-project-card.level-2 {
-            border-left-color: var(--project-sage);
+            border-left-color: var(--pm-teal);
         }
 
         .pm-project-card.level-3 {
-            border-left-color: var(--project-mustard);
+            border-left-color: var(--pm-amber);
         }
 
-        .pm-project-card.level-4 {
-            border-left-color: var(--project-peach);
-        }
-
+        .pm-project-card.level-4,
         .pm-project-card.level-5 {
-            border-left-color: var(--project-rust);
-            background: radial-gradient(110px 70px at 100% 0%, rgba(201, 106, 82, 0.12), transparent 70%), var(--project-card);
+            border-left-color: var(--pm-rust);
         }
 
         .pm-project-head {
@@ -551,10 +632,15 @@
             gap: 8px;
         }
 
+        .pm-project-title-wrap {
+            min-width: 0;
+        }
+
         .pm-project-name {
             margin: 0;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 700;
+            color: #182d3f;
             line-height: 1.35;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -563,12 +649,57 @@
             -webkit-box-orient: vertical;
         }
 
+        .pm-project-meta-row {
+            margin-top: 4px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
         .pm-project-meta {
-            color: var(--project-text-muted);
+            color: var(--pm-text-muted);
             font-size: 10px;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
             white-space: nowrap;
+        }
+
+        .pm-project-score {
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            border: 1px solid transparent;
+            background: #e9f0f8;
+            color: #21405b;
+        }
+
+        .pm-project-score.level-1 {
+            border-color: rgba(29, 99, 210, 0.3);
+            background: rgba(29, 99, 210, 0.11);
+            color: #1d63d2;
+        }
+
+        .pm-project-score.level-2 {
+            border-color: rgba(15, 118, 110, 0.3);
+            background: rgba(15, 118, 110, 0.1);
+            color: #0f766e;
+        }
+
+        .pm-project-score.level-3 {
+            border-color: rgba(199, 122, 21, 0.3);
+            background: rgba(199, 122, 21, 0.1);
+            color: #aa6514;
+        }
+
+        .pm-project-score.level-4,
+        .pm-project-score.level-5 {
+            border-color: rgba(201, 74, 52, 0.3);
+            background: rgba(201, 74, 52, 0.11);
+            color: #b33b27;
         }
 
         .pm-project-stats {
@@ -576,44 +707,58 @@
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 6px;
             font-size: 10px;
-            color: var(--project-text-muted);
+            color: #6a8192;
         }
 
         .pm-project-stats strong {
             display: block;
-            color: var(--project-text-main);
+            color: #183045;
             font-size: 13px;
         }
 
-        .pm-task-list {
-            display: grid;
-            gap: 8px;
+        .pm-project-progress {
+            height: 7px;
+            border-radius: 999px;
+            background: #e5edf4;
+            overflow: hidden;
+        }
+
+        .pm-project-progress > div {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #1f6fdd, #0f766e);
+        }
+
+        .pm-project-progress-meta {
+            font-size: 10px;
+            color: #6a8192;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .pm-task-row {
-            border: 1px solid rgba(61, 76, 57, 0.62);
-            border-radius: 10px;
-            padding: 8px 10px;
-            background: rgba(18, 24, 19, 0.78);
             display: flex;
             justify-content: space-between;
-            gap: 10px;
             align-items: center;
+            gap: 10px;
         }
 
         .pm-task-row.is-done {
-            opacity: 0.68;
+            opacity: 0.7;
             border-style: dashed;
         }
 
-        .pm-task-main {
+        .pm-task-main,
+        .pm-time-main {
             min-width: 0;
         }
 
-        .pm-task-title {
+        .pm-task-title,
+        .pm-time-title {
             margin: 0;
             font-size: 12px;
-            color: var(--project-text-main);
+            color: #182d3e;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -621,7 +766,7 @@
 
         .pm-task-sub {
             margin-top: 4px;
-            color: var(--project-text-muted);
+            color: #6a8191;
             font-size: 10px;
             display: inline-flex;
             flex-wrap: wrap;
@@ -631,21 +776,12 @@
         .pm-task-score {
             flex-shrink: 0;
             font-family: var(--font-mono);
-            color: var(--project-text-muted);
+            color: #5f7383;
             font-size: 10px;
-            text-align: right;
-        }
-
-        .pm-timeline-list {
-            display: grid;
-            gap: 8px;
+            text-transform: uppercase;
         }
 
         .pm-timeline-row {
-            border: 1px solid rgba(61, 76, 57, 0.62);
-            border-radius: 10px;
-            background: rgba(18, 24, 19, 0.76);
-            padding: 8px 10px;
             display: grid;
             grid-template-columns: auto 1fr auto;
             align-items: center;
@@ -653,47 +789,61 @@
         }
 
         .pm-time-badge {
-            border: 1px solid rgba(121, 170, 247, 0.46);
+            border: 1px solid rgba(29, 99, 210, 0.24);
             border-radius: 999px;
-            color: rgba(121, 170, 247, 0.96);
+            color: #1f63d0;
             font-family: var(--font-mono);
             font-size: 10px;
             padding: 3px 8px;
             white-space: nowrap;
-            background: rgba(121, 170, 247, 0.11);
-        }
-
-        .pm-time-main {
-            min-width: 0;
-        }
-
-        .pm-time-title {
-            margin: 0;
-            font-size: 12px;
-            color: var(--project-text-main);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            background: rgba(29, 99, 210, 0.09);
         }
 
         .pm-time-sub {
             margin-top: 3px;
             font-size: 10px;
-            color: var(--project-text-muted);
+            color: #6a8191;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
+        .pm-legend {
+            display: grid;
+            gap: 8px;
+        }
+
+        .pm-legend-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 12px;
+            color: #2e475a;
+            border: 1px solid var(--pm-border);
+            border-radius: 10px;
+            background: var(--pm-surface-muted);
+            padding: 8px 10px;
+        }
+
+        .pm-legend-dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-right: 8px;
+            vertical-align: -1px;
+        }
+
         .pm-empty-state {
-            border: 1px dashed rgba(61, 76, 57, 0.68);
+            border: 1px dashed #bfd0dd;
             border-radius: 12px;
-            background: rgba(18, 24, 19, 0.72);
-            color: var(--project-text-muted);
+            background: #f4f8fb;
+            color: #688093;
             text-align: center;
             padding: 18px 14px;
             font-size: 12px;
-            line-height: 1.5;
+            line-height: 1.45;
         }
 
         @keyframes reveal {
@@ -708,22 +858,31 @@
             }
         }
 
-        @media (max-width: 1260px) {
+        @media (max-width: 1340px) {
+            .pm-header {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .pm-controls {
+                justify-content: flex-start;
+            }
+
+            .pm-status {
+                justify-self: start;
+            }
+
             .pm-main-grid {
                 grid-template-columns: 1fr;
             }
-
-            .pm-board-wrap {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 980px) {
             .pm-kpi-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
-            .pm-board-wrap {
+            .pm-project-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -731,38 +890,33 @@
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
-            .pm-controls {
-                width: 100%;
-                justify-content: flex-start;
-            }
-
             .pm-search {
                 width: 100%;
             }
         }
 
-        @media (max-width: 640px) {
+        @media (max-width: 680px) {
             .pm-shell {
-                padding: 14px 12px 26px;
-            }
-
-            .pm-header {
-                padding: 11px;
+                padding: 12px 10px 24px;
             }
 
             .pm-kpi-grid {
                 grid-template-columns: 1fr;
             }
 
+            .pm-kpi {
+                grid-template-columns: auto 1fr;
+            }
+
+            .pm-kpi-trend {
+                grid-column: 1 / -1;
+                justify-self: start;
+            }
+
             .pm-task-row,
             .pm-next-item {
                 flex-direction: column;
                 align-items: flex-start;
-            }
-
-            .pm-task-score,
-            .pm-next-meta {
-                text-align: left;
             }
 
             .pm-timeline-row {
@@ -814,45 +968,74 @@
         <section id="pm-kpis" class="pm-kpi-grid"></section>
 
         <div class="pm-main-grid">
-            <section class="pm-card" aria-live="polite">
-                <div class="pm-card-head">
-                    <div>
-                        <h2 class="pm-card-title">Focus Project</h2>
-                        <p class="pm-card-subtitle">Most actionable project based on urgency and active load.</p>
+            <div class="pm-primary-col">
+                <section class="pm-card" aria-live="polite">
+                    <div class="pm-card-head">
+                        <div>
+                            <h2 class="pm-card-title">Strategic Focus</h2>
+                            <p class="pm-card-subtitle">Most actionable project based on urgency and active load.</p>
+                        </div>
                     </div>
-                </div>
-                <div id="pm-focus" class="pm-card-body"></div>
-            </section>
+                    <div id="pm-focus" class="pm-card-body"></div>
+                </section>
 
-            <section class="pm-card">
-                <div class="pm-card-head">
-                    <div>
-                        <h2 class="pm-card-title">Upcoming Deadlines</h2>
-                        <p class="pm-card-subtitle">Earliest due tasks from the filtered project set.</p>
+                <section class="pm-card">
+                    <div class="pm-card-head">
+                        <div>
+                            <h2 class="pm-card-title">Projects Board</h2>
+                            <p class="pm-card-subtitle">Use tabs or filters, then click any project card for details.</p>
+                        </div>
+                        <div id="pm-status-tabs" class="pm-card-actions pm-status-tabs" aria-label="Project status tabs">
+                            <button type="button" class="pm-tab is-active" data-status="all" aria-pressed="true">All <span class="pm-tab-count">0</span></button>
+                            <button type="button" class="pm-tab" data-status="active" aria-pressed="false">Active <span class="pm-tab-count">0</span></button>
+                            <button type="button" class="pm-tab" data-status="paused" aria-pressed="false">Paused <span class="pm-tab-count">0</span></button>
+                            <button type="button" class="pm-tab" data-status="completed" aria-pressed="false">Completed <span class="pm-tab-count">0</span></button>
+                            <button type="button" class="pm-tab" data-status="archived" aria-pressed="false">Archived <span class="pm-tab-count">0</span></button>
+                        </div>
                     </div>
-                </div>
-                <div id="pm-timeline" class="pm-card-body"></div>
-            </section>
+                    <div id="pm-board" class="pm-card-body"></div>
+                </section>
+            </div>
 
-            <section class="pm-card">
-                <div class="pm-card-head">
-                    <div>
-                        <h2 class="pm-card-title">Projects Board</h2>
-                        <p class="pm-card-subtitle">Click any project card to update focus and details.</p>
+            <div class="pm-secondary-col">
+                <section class="pm-card">
+                    <div class="pm-card-head">
+                        <div>
+                            <h2 class="pm-card-title">Next Action Candidates</h2>
+                            <p class="pm-card-subtitle">Earliest due tasks from the filtered project set.</p>
+                        </div>
                     </div>
-                </div>
-                <div id="pm-board" class="pm-card-body"></div>
-            </section>
+                    <div id="pm-timeline" class="pm-card-body"></div>
+                </section>
 
-            <section class="pm-card">
-                <div class="pm-card-head">
-                    <div>
-                        <h2 id="pm-task-panel-title" class="pm-card-title">Project Tasks</h2>
-                        <p class="pm-card-subtitle">Task-level view for the selected project.</p>
+                <section class="pm-card">
+                    <div class="pm-card-head">
+                        <div>
+                            <h2 id="pm-task-panel-title" class="pm-card-title">Project Tasks</h2>
+                            <p class="pm-card-subtitle">Task-level view for the selected project.</p>
+                        </div>
                     </div>
-                </div>
-                <div id="pm-tasks" class="pm-card-body"></div>
-            </section>
+                    <div id="pm-tasks" class="pm-card-body"></div>
+                </section>
+
+                <section class="pm-card">
+                    <div class="pm-card-head">
+                        <div>
+                            <h2 class="pm-card-title">Status Color Guide</h2>
+                            <p class="pm-card-subtitle">Visual cues used across priorities and workflow states.</p>
+                        </div>
+                    </div>
+                    <div class="pm-card-body">
+                        <div class="pm-legend">
+                            <div class="pm-legend-row"><span><span class="pm-legend-dot" style="background:#1d63d2;"></span>Lowest to normal urgency</span><span>P1-P2</span></div>
+                            <div class="pm-legend-row"><span><span class="pm-legend-dot" style="background:#0f766e;"></span>On-track active work</span><span>Active</span></div>
+                            <div class="pm-legend-row"><span><span class="pm-legend-dot" style="background:#c77a15;"></span>Needs attention soon</span><span>Medium</span></div>
+                            <div class="pm-legend-row"><span><span class="pm-legend-dot" style="background:#c94a34;"></span>Critical pressure / blocked</span><span>High risk</span></div>
+                            <div class="pm-legend-row"><span><span class="pm-legend-dot" style="background:#718597;"></span>Archived or low momentum</span><span>Parked</span></div>
+                        </div>
+                    </div>
+                </section>
+            </div>
         </div>
     </div>
 
@@ -1322,6 +1505,19 @@
             return summaries;
         }
 
+        function matchesSearch(summary, search) {
+            const normalizedSearch = String(search || '').trim().toLowerCase();
+            if (!normalizedSearch) return true;
+            const hay = [
+                summary.project.name,
+                summary.project.description,
+                summary.status,
+                summary.urgency.label,
+                summary.urgency.tag
+            ].join(' ').toLowerCase();
+            return hay.includes(normalizedSearch);
+        }
+
         function applyFilters(summaries) {
             const search = String(state.search || '').trim().toLowerCase();
             const statusFilter = String(state.statusFilter || 'all').toLowerCase();
@@ -1331,18 +1527,57 @@
                 if (!summary || !summary.project) return false;
                 if (statusFilter !== 'all' && normalizeProjectStatus(summary.status) !== statusFilter) return false;
                 if (urgencyFilter !== 'all' && String(summary.urgency.level) !== urgencyFilter) return false;
-
-                if (!search) return true;
-                const hay = [
-                    summary.project.name,
-                    summary.project.description,
-                    summary.status,
-                    summary.urgency.label,
-                    summary.urgency.tag
-                ].join(' ').toLowerCase();
-
-                return hay.includes(search);
+                return matchesSearch(summary, search);
             });
+        }
+
+        function getStatusTabCounts() {
+            const search = String(state.search || '').trim().toLowerCase();
+            const urgencyFilter = String(state.urgencyFilter || 'all').toLowerCase();
+            const counts = {
+                all: 0,
+                active: 0,
+                paused: 0,
+                completed: 0,
+                archived: 0
+            };
+
+            safeArray(state.summaries).forEach(summary => {
+                if (!summary || !summary.project) return;
+                if (urgencyFilter !== 'all' && String(summary.urgency.level) !== urgencyFilter) return;
+                if (!matchesSearch(summary, search)) return;
+
+                const status = normalizeProjectStatus(summary.status);
+                counts.all += 1;
+                if (Object.prototype.hasOwnProperty.call(counts, status)) {
+                    counts[status] += 1;
+                }
+            });
+
+            return counts;
+        }
+
+        function renderStatusTabs() {
+            const tabs = document.querySelectorAll('#pm-status-tabs .pm-tab');
+            if (!tabs.length) return;
+
+            const current = String(state.statusFilter || 'all').toLowerCase();
+            const counts = getStatusTabCounts();
+
+            tabs.forEach((tab) => {
+                const value = String(tab.getAttribute('data-status') || 'all').toLowerCase();
+                const isActive = value === current;
+                tab.classList.toggle('is-active', isActive);
+                tab.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+
+                const countEl = tab.querySelector('.pm-tab-count');
+                if (countEl) countEl.textContent = String(counts[value] || 0);
+            });
+
+            const statusFilter = document.getElementById('pm-status-filter');
+            if (statusFilter && statusFilter.value !== current) {
+                statusFilter.value = current;
+            }
         }
 
         function pickDefaultProject(summaries) {
@@ -1404,40 +1639,59 @@
             const totalTasks = activeTasks + doneTasks;
             const overdueTasks = summaries.reduce((sum, item) => sum + item.stats.overdue, 0);
             const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+            const projectActivity = totalProjects > 0 ? Math.round((activeProjects / totalProjects) * 100) : 0;
+            const doneShare = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+            const riskSignals = criticalProjects + overdueTasks;
 
             const cards = [
                 {
                     tone: 'tone-blue',
+                    icon: 'PRJ',
                     label: 'Projects',
                     value: totalProjects,
-                    meta: activeProjects + ' active / ' + pausedProjects + ' paused'
+                    meta: activeProjects + ' active / ' + pausedProjects + ' paused',
+                    trend: projectActivity + '% active',
+                    trendDir: projectActivity >= 60 ? 'up' : 'down'
                 },
                 {
                     tone: 'tone-sage',
+                    icon: 'TSK',
                     label: 'Active Tasks',
                     value: activeTasks,
-                    meta: doneTasks + ' completed overall'
+                    meta: doneTasks + ' completed overall',
+                    trend: doneShare + '% done share',
+                    trendDir: doneShare >= 55 ? 'up' : 'down'
                 },
                 {
                     tone: 'tone-amber',
+                    icon: 'RSK',
                     label: 'Risk Pressure',
                     value: criticalProjects,
-                    meta: overdueTasks + ' overdue tasks'
+                    meta: overdueTasks + ' overdue tasks',
+                    trend: riskSignals === 0 ? 'Clear' : (riskSignals + ' flagged'),
+                    trendDir: riskSignals === 0 ? 'up' : 'down'
                 },
                 {
                     tone: 'tone-rust',
+                    icon: 'CMP',
                     label: 'Completion',
                     value: completionRate + '%',
-                    meta: totalTasks + ' linked tasks across visible projects'
+                    meta: totalTasks + ' linked tasks across visible projects',
+                    trend: completionRate + '% done',
+                    trendDir: completionRate >= 60 ? 'up' : 'down'
                 }
             ];
 
             target.innerHTML = cards.map((card, index) => {
                 const valueText = escapeHtml(String(card.value));
                 return '<article class="pm-kpi ' + card.tone + '" style="--d:' + (index * 45) + 'ms">'
+                    + '<span class="pm-kpi-icon" aria-hidden="true">' + escapeHtml(card.icon || '') + '</span>'
+                    + '<div>'
                     + '<div class="pm-kpi-label">' + escapeHtml(card.label) + '</div>'
                     + '<div class="pm-kpi-value">' + valueText + '</div>'
                     + '<div class="pm-kpi-meta">' + escapeHtml(card.meta) + '</div>'
+                    + '</div>'
+                    + '<span class="pm-kpi-trend ' + (card.trendDir === 'down' ? 'is-down' : 'is-up') + '">' + escapeHtml(card.trend || '') + '</span>'
                     + '</article>';
             }).join('');
         }
@@ -1509,21 +1763,26 @@
             const safeName = escapeHtml(summary.project.name || 'Untitled Project');
             const statusLabel = STATUS_LABELS[summary.status] || 'Active';
             const updatedLabel = summary.updatedAt > 0 ? new Date(summary.updatedAt).toLocaleDateString() : 'n/a';
+            const completionPct = clamp(summary.stats.completionPct, 0, 100);
 
             button.innerHTML = ''
                 + '<div class="pm-project-head">'
+                + '<div class="pm-project-title-wrap">'
                 + '<p class="pm-project-name" title="' + safeName + '">' + safeName + '</p>'
+                + '<div class="pm-project-meta-row">'
                 + '<span class="pm-project-meta">' + escapeHtml(statusLabel) + '</span>'
+                + '<span class="pm-project-meta">Updated ' + escapeHtml(updatedLabel) + '</span>'
                 + '</div>'
-                + '<div class="pm-chip-row" style="margin-top:0">'
-                + '<span class="pm-chip level-' + summary.urgency.level + '">' + escapeHtml(summary.urgency.tag + ' ' + summary.urgency.score) + '</span>'
+                + '</div>'
+                + '<span class="pm-project-score level-' + summary.urgency.level + '">' + escapeHtml(summary.urgency.tag + ' ' + summary.urgency.score) + '</span>'
                 + '</div>'
                 + '<div class="pm-project-stats">'
                 + '<div><strong>' + summary.stats.active + '</strong>active</div>'
                 + '<div><strong>' + summary.stats.done + '</strong>done</div>'
                 + '<div><strong>' + summary.stats.overdue + '</strong>overdue</div>'
                 + '</div>'
-                + '<div class="pm-project-meta">Updated ' + escapeHtml(updatedLabel) + '</div>';
+                + '<div class="pm-project-progress"><div style="width:' + completionPct + '%"></div></div>'
+                + '<div class="pm-project-progress-meta">Completion ' + completionPct + '% | Due soon ' + summary.stats.dueSoon + '</div>';
 
             button.addEventListener('click', () => {
                 state.selectedProjectId = summary.project.id;
@@ -1543,41 +1802,11 @@
                 return;
             }
 
-            const buckets = {
-                active: [],
-                paused: [],
-                completed: [],
-                archived: []
-            };
-
-            visibleSummaries.forEach(summary => {
-                const key = normalizeProjectStatus(summary.status);
-                if (!buckets[key]) buckets[key] = [];
-                buckets[key].push(summary);
-            });
-
-            const html = STATUS_ORDER.map((statusKey) => {
-                const items = buckets[statusKey] || [];
-                const bodyId = 'pm-col-' + statusKey;
-                return '<section class="pm-board-col">'
-                    + '<div class="pm-col-head">'
-                    + '<h3 class="pm-col-title">' + escapeHtml(STATUS_LABELS[statusKey] || statusKey) + '</h3>'
-                    + '<span class="pm-col-count">' + items.length + '</span>'
-                    + '</div>'
-                    + '<div class="pm-col-body" id="' + bodyId + '">'
-                    + (items.length ? '' : '<div class="pm-col-empty">No projects in this lane.</div>')
-                    + '</div>'
-                    + '</section>';
-            }).join('');
-
-            target.innerHTML = '<div class="pm-board-wrap">' + html + '</div>';
-
-            STATUS_ORDER.forEach((statusKey) => {
-                const listEl = document.getElementById('pm-col-' + statusKey);
-                if (!listEl) return;
-                const items = buckets[statusKey] || [];
-                items.forEach(summary => listEl.appendChild(createProjectCard(summary)));
-            });
+            target.innerHTML = '';
+            const grid = document.createElement('div');
+            grid.className = 'pm-project-grid';
+            visibleSummaries.forEach(summary => grid.appendChild(createProjectCard(summary)));
+            target.appendChild(grid);
         }
 
         function renderTaskPanel(visibleSummaries) {
@@ -1681,6 +1910,7 @@
 
             renderStatus();
             renderKpis(state.visibleSummaries);
+            renderStatusTabs();
             renderFocus(state.visibleSummaries);
             renderBoard(state.visibleSummaries);
             renderTaskPanel(state.visibleSummaries);
@@ -1711,6 +1941,7 @@
             const statusFilter = document.getElementById('pm-status-filter');
             const urgencyFilter = document.getElementById('pm-urgency-filter');
             const refreshBtn = document.getElementById('pm-refresh-btn');
+            const statusTabs = document.querySelectorAll('#pm-status-tabs .pm-tab');
 
             if (searchInput) {
                 searchInput.addEventListener('input', (event) => {
@@ -1723,6 +1954,17 @@
                 statusFilter.addEventListener('change', (event) => {
                     state.statusFilter = String(event.target.value || 'all');
                     renderDashboard();
+                });
+            }
+
+            if (statusTabs.length) {
+                statusTabs.forEach((tab) => {
+                    tab.addEventListener('click', () => {
+                        const nextStatus = String(tab.getAttribute('data-status') || 'all').toLowerCase();
+                        state.statusFilter = nextStatus;
+                        if (statusFilter) statusFilter.value = nextStatus;
+                        renderDashboard();
+                    });
                 });
             }
 

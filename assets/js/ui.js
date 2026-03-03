@@ -7,6 +7,8 @@ function ensureToolbarSubpageButtons() {
     if (!toolbarActions) return;
 
     const dashboardBtn = document.getElementById('btn-dashboard');
+    const legacyProjectBtn = document.getElementById('btn-project-dashboard-subpage');
+    if (legacyProjectBtn) legacyProjectBtn.remove();
 
     const upsertToolbarButton = ({ id, title, label, handler }) => {
         let btn = document.getElementById(id);
@@ -24,17 +26,6 @@ function ensureToolbarSubpageButtons() {
         return btn;
     };
 
-    const projectSubpageBtn = upsertToolbarButton({
-        id: 'btn-project-dashboard-subpage',
-        title: 'Open Project Dashboard Subpage',
-        label: '📊',
-        handler: () => {
-            if (typeof openProjectManagerDashboardSubpage === 'function') {
-                openProjectManagerDashboardSubpage();
-            }
-        }
-    });
-
     const financeSubpageBtn = upsertToolbarButton({
         id: 'btn-finance-subpage',
         title: 'Open Finance Subpage',
@@ -47,12 +38,10 @@ function ensureToolbarSubpageButtons() {
     });
 
     if (dashboardBtn && dashboardBtn.parentElement === toolbarActions) {
-        toolbarActions.insertBefore(projectSubpageBtn, dashboardBtn.nextSibling);
-        toolbarActions.insertBefore(financeSubpageBtn, projectSubpageBtn.nextSibling);
+        toolbarActions.insertBefore(financeSubpageBtn, dashboardBtn.nextSibling);
         return;
     }
 
-    toolbarActions.appendChild(projectSubpageBtn);
     toolbarActions.appendChild(financeSubpageBtn);
 }
 

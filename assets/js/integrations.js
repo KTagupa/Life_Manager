@@ -175,6 +175,14 @@ function updateGeminiUsageUI() {
     }
 }
 
+function updateAiGeminiKeyStatusLabel() {
+    const statusEl = document.getElementById('ai-gemini-key-status');
+    if (!statusEl) return;
+    statusEl.innerText = geminiApiKey
+        ? 'Key status: saved in Settings Hub'
+        : 'Key status: not set';
+}
+
 function trackGeminiUsage(usageMetadata = null, requestTimestamp = Date.now()) {
     const usage = usageMetadata && typeof usageMetadata === 'object' ? usageMetadata : {};
     const promptTokens = Math.max(0, Number(usage.promptTokenCount) || 0);
@@ -1304,9 +1312,7 @@ async function runSemanticAiUrgencyFromSettings() {
 function updateSettingsHubUI() {
     const settingsGeminiInput = document.getElementById('settings-gemini-key-input');
     if (settingsGeminiInput) settingsGeminiInput.value = geminiApiKey || '';
-
-    const aiGeminiInput = document.getElementById('gemini-api-key-input');
-    if (aiGeminiInput && geminiApiKey) aiGeminiInput.value = geminiApiKey;
+    updateAiGeminiKeyStatusLabel();
 
     const ecoStatus = document.getElementById('eco-status');
     const settingsEcoStatus = document.getElementById('settings-eco-status');
@@ -1316,6 +1322,29 @@ function updateSettingsHubUI() {
     if (typeof updateDataMetrics === 'function') updateDataMetrics();
     updateGeminiUsageUI();
     syncAiUrgencySettingsUI();
+}
+
+function openSettingsHubToGeminiKey() {
+    if (typeof closeAIModal === 'function') closeAIModal();
+    if (typeof toggleSyncPanel === 'function') toggleSyncPanel(true);
+    window.setTimeout(() => {
+        const input = document.getElementById('settings-gemini-key-input');
+        if (input) {
+            input.focus();
+            if (typeof input.select === 'function') input.select();
+        }
+    }, 120);
+}
+
+function openInsightsDataFootprintFromSettings() {
+    if (typeof toggleSyncPanel === 'function') toggleSyncPanel(false);
+    if (typeof openInsightsDashboard === 'function') openInsightsDashboard();
+    window.setTimeout(() => {
+        const target = document.getElementById('metrics-breakdown-review');
+        if (target && typeof target.scrollIntoView === 'function') {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, 120);
 }
 
 // --- GITHUB SYNC LOGIC ---
@@ -1591,6 +1620,64 @@ function mergeStates(local, remote) {
         return remoteCfg && typeof remoteCfg === 'object' ? remoteCfg : (localCfg || {});
     };
 
+    const mergeTaskSelfAssessment = (first, second) => {
+        const normalize = (candidate) => {
+            if (typeof normalizeTaskSelfAssessment === 'function') return normalizeTaskSelfAssessment(candidate);
+            return candidate && typeof candidate === 'object'
+                ? {
+                    confidence: Number.isFinite(Number(candidate.confidence)) ? Math.max(0, Math.min(100, Math.round(Number(candidate.confidence)))) : null,
+                    estimatedMinutes: Number.isFinite(Number(candidate.estimatedMinutes)) ? Math.max(1, Math.round(Number(candidate.estimatedMinutes))) : null,
+                    lastPredictedAt: Number(candidate.lastPredictedAt) || null,
+                    lastUpdatedAt: Number(candidate.lastUpdatedAt) || null,
+                    lastReflection: candidate.lastReflection || null,
+                    reflectionHistory: Array.isArray(candidate.reflectionHistory) ? candidate.reflectionHistory : []
+                }
+                : null;
+        };
+
+        const a = normalize(first);
+        const b = normalize(second);
+        if (!a && !b) return null;
+        if (!a) return b;
+        if (!b) return a;
+
+        const byCompletion = new Map();
+        [...(a.reflectionHistory || []), ...(b.reflectionHistory || [])].forEach((entry) => {
+            const normalizedEntry = (typeof normalizeTaskReflectionRecord === 'function')
+                ? normalizeTaskReflectionRecord(entry)
+                : (entry && typeof entry === 'object' ? entry : null);
+            if (!normalizedEntry) return;
+            const key = String(Number(normalizedEntry.completionTs || normalizedEntry.recordedAt || 0));
+            if (!key || key === '0') return;
+            const existing = byCompletion.get(key);
+            if (!existing || (Number(normalizedEntry.recordedAt || 0) >= Number(existing.recordedAt || 0))) {
+                byCompletion.set(key, normalizedEntry);
+            }
+        });
+
+        const mergedHistory = Array.from(byCompletion.values())
+            .sort((left, right) => Number(left.completionTs || left.recordedAt || 0) - Number(right.completionTs || right.recordedAt || 0))
+            .slice(-120);
+
+        const pickNewer = (x, y) => {
+            const xTs = Number(x && (x.lastUpdatedAt || x.lastPredictedAt || 0)) || 0;
+            const yTs = Number(y && (y.lastUpdatedAt || y.lastPredictedAt || 0)) || 0;
+            return yTs >= xTs ? y : x;
+        };
+        const preferred = pickNewer(a, b);
+
+        const merged = {
+            ...preferred,
+            reflectionHistory: mergedHistory,
+            lastReflection: mergedHistory.length > 0 ? mergedHistory[mergedHistory.length - 1] : (preferred.lastReflection || null),
+            lastUpdatedAt: Math.max(Number(a.lastUpdatedAt || 0), Number(b.lastUpdatedAt || 0)) || null,
+            lastPredictedAt: Math.max(Number(a.lastPredictedAt || 0), Number(b.lastPredictedAt || 0)) || null
+        };
+
+        if (typeof normalizeTaskSelfAssessment === 'function') return normalizeTaskSelfAssessment(merged);
+        return merged;
+    };
+
     const mergeProjectCollections = (localProjects, remoteProjects) => {
         const byId = new Map();
         const all = [
@@ -1660,13 +1747,15 @@ function mergeStates(local, remote) {
         if (!localTask) {
             const nextTask = {
                 ...remoteTask,
-                aiUrgency: pickNewerAiUrgency(null, remoteTask && remoteTask.aiUrgency, 'task')
+                aiUrgency: pickNewerAiUrgency(null, remoteTask && remoteTask.aiUrgency, 'task'),
+                selfAssessment: mergeTaskSelfAssessment(null, remoteTask && remoteTask.selfAssessment)
             };
             merged.nodes.push(nextTask);
         } else if (!remoteTask) {
             const nextTask = {
                 ...localTask,
-                aiUrgency: pickNewerAiUrgency(localTask && localTask.aiUrgency, null, 'task')
+                aiUrgency: pickNewerAiUrgency(localTask && localTask.aiUrgency, null, 'task'),
+                selfAssessment: mergeTaskSelfAssessment(localTask && localTask.selfAssessment, null)
             };
             merged.nodes.push(nextTask);
         } else {
@@ -1687,6 +1776,7 @@ function mergeStates(local, remote) {
             }
 
             chosen.aiUrgency = pickNewerAiUrgency(localTask.aiUrgency, remoteTask.aiUrgency, 'task');
+            chosen.selfAssessment = mergeTaskSelfAssessment(localTask.selfAssessment, remoteTask.selfAssessment);
 
             merged.nodes.push(chosen);
         }
@@ -1887,7 +1977,10 @@ function setAISettingsVisibility(visible) {
     const pane = document.getElementById('ai-settings-pane');
     if (!pane) return;
     pane.classList.toggle('visible', !!visible);
-    if (visible) updateGeminiUsageUI();
+    if (visible) {
+        updateGeminiUsageUI();
+        updateAiGeminiKeyStatusLabel();
+    }
     syncAIHeaderButtonState();
 }
 
@@ -2363,10 +2456,9 @@ function selectAIPreset(presetKey) {
 function saveGeminiKey(val) {
     geminiApiKey = val.trim();
     localStorage.setItem('urgency_flow_gemini_key', geminiApiKey);
-    const aiInput = document.getElementById('gemini-api-key-input');
-    if (aiInput && aiInput.value !== geminiApiKey) aiInput.value = geminiApiKey;
     const settingsInput = document.getElementById('settings-gemini-key-input');
     if (settingsInput && settingsInput.value !== geminiApiKey) settingsInput.value = geminiApiKey;
+    updateAiGeminiKeyStatusLabel();
     showNotification("API Key Saved");
 }
 

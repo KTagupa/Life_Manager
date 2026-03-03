@@ -7,6 +7,7 @@
     const BLOCKER_LIMIT = 6;
     const OUTER_BRANCH_LIMIT = 12;
     const PROJECT_RISK_LIMIT = 6;
+    const CALIBRATION_WINDOW_DAYS = 7;
     const DAY_MS = 24 * 60 * 60 * 1000;
     const DASHBOARD_PROJECT_STATUS_LABELS = {
         active: 'Active',
@@ -27,6 +28,11 @@
         3: 'MEDIUM',
         4: 'HIGH',
         5: 'CRITICAL'
+    };
+    const CALIBRATION_OUTCOME_LABELS = {
+        on_target: 'On Target',
+        harder: 'Harder',
+        easier: 'Easier'
     };
 
     let lastSignalRefreshDayKey = '';
@@ -471,6 +477,233 @@
         });
 
         return list;
+    }
+
+    function normalizeCalibrationAssessment(raw) {
+        if (typeof normalizeTaskSelfAssessment === 'function') {
+            try {
+                return normalizeTaskSelfAssessment(raw);
+            } catch (error) { }
+        }
+
+        const source = raw && typeof raw === 'object' ? raw : {};
+        return {
+            confidence: Number.isFinite(Number(source.confidence)) ? Math.max(0, Math.min(100, Math.round(Number(source.confidence)))) : null,
+            estimatedMinutes: Number.isFinite(Number(source.estimatedMinutes)) ? Math.max(1, Math.round(Number(source.estimatedMinutes))) : null,
+            reflectionHistory: Array.isArray(source.reflectionHistory) ? source.reflectionHistory : [],
+            lastReflection: source.lastReflection && typeof source.lastReflection === 'object' ? source.lastReflection : null
+        };
+    }
+
+    function normalizeCalibrationReflection(raw) {
+        if (typeof normalizeTaskReflectionRecord === 'function') {
+            try {
+                return normalizeTaskReflectionRecord(raw);
+            } catch (error) { }
+        }
+
+        const source = raw && typeof raw === 'object' ? raw : {};
+        const completionTs = Number(source.completionTs || source.completedAt || source.recordedAt || 0);
+        if (!Number.isFinite(completionTs) || completionTs <= 0) return null;
+        const recordedAt = Number(source.recordedAt || completionTs);
+        const outcomeRaw = String(source.outcome || '').trim().toLowerCase();
+        const outcome = ['on_target', 'harder', 'easier'].includes(outcomeRaw) ? outcomeRaw : 'on_target';
+        const confidence = Number.isFinite(Number(source.confidence))
+            ? Math.max(0, Math.min(100, Math.round(Number(source.confidence))))
+            : null;
+        const estimatedMinutes = Number.isFinite(Number(source.estimatedMinutes))
+            ? Math.max(1, Math.round(Number(source.estimatedMinutes)))
+            : null;
+        const actualMinutes = Number.isFinite(Number(source.actualMinutes))
+            ? Math.max(0, Math.round(Number(source.actualMinutes)))
+            : null;
+        const deltaMinutes = Number.isFinite(Number(source.deltaMinutes))
+            ? Math.round(Number(source.deltaMinutes))
+            : ((Number.isFinite(estimatedMinutes) && Number.isFinite(actualMinutes)) ? (actualMinutes - estimatedMinutes) : null);
+
+        return {
+            completionTs: completionTs,
+            recordedAt: Number.isFinite(recordedAt) && recordedAt > 0 ? recordedAt : completionTs,
+            outcome: outcome,
+            confidence: confidence,
+            estimatedMinutes: estimatedMinutes,
+            actualMinutes: actualMinutes,
+            deltaMinutes: deltaMinutes
+        };
+    }
+
+    function getCalibrationOutcomeLabel(outcome) {
+        const key = String(outcome || '').trim().toLowerCase();
+        return CALIBRATION_OUTCOME_LABELS[key] || CALIBRATION_OUTCOME_LABELS.on_target;
+    }
+
+    function buildCalibrationSummary(allNodes, archivedNodes, nowTs) {
+        const allTasks = safeArray(allNodes).concat(safeArray(archivedNodes));
+        const dedupedByTask = new Map();
+        allTasks.forEach(task => {
+            if (!task || typeof task !== 'object') return;
+            const taskId = String(task.id || '').trim();
+            if (!taskId) return;
+            const current = dedupedByTask.get(taskId);
+            if (!current) {
+                dedupedByTask.set(taskId, task);
+                return;
+            }
+
+            const currentUpdated = Number(current.updatedAt || current.completedDate || 0);
+            const candidateUpdated = Number(task.updatedAt || task.completedDate || 0);
+            if (candidateUpdated >= currentUpdated) dedupedByTask.set(taskId, task);
+        });
+
+        const windowStart = Number(nowTs) - (CALIBRATION_WINDOW_DAYS * DAY_MS);
+        const reflections = [];
+
+        dedupedByTask.forEach(task => {
+            const assessment = normalizeCalibrationAssessment(task && task.selfAssessment);
+            const history = Array.isArray(assessment.reflectionHistory) ? assessment.reflectionHistory : [];
+            const dedupedByCompletion = new Map();
+
+            history.forEach(entry => {
+                const normalized = normalizeCalibrationReflection(entry);
+                if (!normalized) return;
+                const completionTs = Number(normalized.completionTs || 0);
+                if (!Number.isFinite(completionTs) || completionTs < windowStart || completionTs > nowTs) return;
+                const key = String(completionTs);
+                const existing = dedupedByCompletion.get(key);
+                if (!existing || (Number(normalized.recordedAt) || 0) >= (Number(existing.recordedAt) || 0)) {
+                    dedupedByCompletion.set(key, normalized);
+                }
+            });
+
+            const lastReflection = normalizeCalibrationReflection(assessment.lastReflection);
+            if (lastReflection) {
+                const completionTs = Number(lastReflection.completionTs || 0);
+                if (Number.isFinite(completionTs) && completionTs >= windowStart && completionTs <= nowTs) {
+                    const key = String(completionTs);
+                    const existing = dedupedByCompletion.get(key);
+                    if (!existing || (Number(lastReflection.recordedAt) || 0) >= (Number(existing.recordedAt) || 0)) {
+                        dedupedByCompletion.set(key, lastReflection);
+                    }
+                }
+            }
+
+            dedupedByCompletion.forEach(reflection => reflections.push(reflection));
+        });
+
+        reflections.sort((a, b) => (Number(a.completionTs) || 0) - (Number(b.completionTs) || 0));
+
+        if (reflections.length === 0) {
+            return {
+                hasData: false,
+                score: null,
+                biasKey: 'none',
+                biasLabel: 'No Signal',
+                summaryText: 'No completion reflections in the last 7 days. Add one-click reflections on completed tasks.',
+                reflections: 0,
+                counts: { on_target: 0, harder: 0, easier: 0 },
+                onTargetRate: null,
+                avgConfidence: null,
+                avgAbsTimeErrorPct: null,
+                avgSignedTimeErrorPct: null,
+                windowDays: CALIBRATION_WINDOW_DAYS
+            };
+        }
+
+        const counts = { on_target: 0, harder: 0, easier: 0 };
+        let confidenceSum = 0;
+        let confidenceCount = 0;
+        let brierSum = 0;
+        let brierCount = 0;
+        let absTimeErrorSum = 0;
+        let absTimeErrorCount = 0;
+        let signedTimeErrorSum = 0;
+        let signedTimeErrorCount = 0;
+
+        reflections.forEach(entry => {
+            const outcome = ['on_target', 'harder', 'easier'].includes(String(entry.outcome))
+                ? String(entry.outcome)
+                : 'on_target';
+            counts[outcome] += 1;
+
+            const confidence = Number(entry.confidence);
+            if (Number.isFinite(confidence)) {
+                const p = clamp(confidence / 100, 0, 1);
+                const y = outcome === 'harder' ? 0 : 1;
+                confidenceSum += p;
+                confidenceCount += 1;
+                brierSum += Math.pow(p - y, 2);
+                brierCount += 1;
+            }
+
+            const estimated = Number(entry.estimatedMinutes);
+            const actual = Number(entry.actualMinutes);
+            if (Number.isFinite(estimated) && estimated > 0 && Number.isFinite(actual) && actual >= 0) {
+                const ratio = (actual - estimated) / Math.max(1, estimated);
+                absTimeErrorSum += Math.abs(ratio);
+                absTimeErrorCount += 1;
+                signedTimeErrorSum += ratio;
+                signedTimeErrorCount += 1;
+            }
+        });
+
+        const total = reflections.length;
+        const successRate = (counts.on_target + counts.easier) / Math.max(1, total);
+        const onTargetRate = counts.on_target / Math.max(1, total);
+        const avgConfidence = confidenceCount > 0 ? (confidenceSum / confidenceCount) : null;
+        const avgAbsTimeError = absTimeErrorCount > 0 ? (absTimeErrorSum / absTimeErrorCount) : null;
+        const avgSignedTimeError = signedTimeErrorCount > 0 ? (signedTimeErrorSum / signedTimeErrorCount) : null;
+        const brier = brierCount > 0 ? (brierSum / brierCount) : null;
+
+        let biasKey = 'balanced';
+        let biasLabel = 'Well Calibrated';
+        const confidenceDrift = Number.isFinite(avgConfidence) ? (avgConfidence - successRate) : null;
+        if (Number.isFinite(confidenceDrift)) {
+            if (confidenceDrift >= 0.12) {
+                biasKey = 'over';
+                biasLabel = 'Overconfident';
+            } else if (confidenceDrift <= -0.12) {
+                biasKey = 'under';
+                biasLabel = 'Underconfident';
+            }
+        } else {
+            if (counts.harder >= counts.easier + 2) {
+                biasKey = 'over';
+                biasLabel = 'Overconfident';
+            } else if (counts.easier >= counts.harder + 2) {
+                biasKey = 'under';
+                biasLabel = 'Underconfident';
+            }
+        }
+
+        let score = 100;
+        if (Number.isFinite(brier)) score -= Math.min(45, brier * 100 * 0.45);
+        if (Number.isFinite(avgAbsTimeError)) score -= Math.min(35, avgAbsTimeError * 40);
+        score -= Math.min(20, (counts.harder / Math.max(1, total)) * 20);
+        score = clamp(Math.round(score), 0, 100);
+
+        let summaryText = 'Calibration looks steady. Keep estimating before starting tasks.';
+        if (score >= 80) {
+            summaryText = 'Calibration is strong. Keep this predict-then-reflect loop.';
+        } else if (score >= 60) {
+            summaryText = 'Calibration is decent. Tighten estimates on repeated task types.';
+        } else {
+            summaryText = 'Calibration drift detected. Add estimates before starting and reflect at completion.';
+        }
+
+        return {
+            hasData: true,
+            score: score,
+            biasKey: biasKey,
+            biasLabel: biasLabel,
+            summaryText: summaryText,
+            reflections: total,
+            counts: counts,
+            onTargetRate: Math.round(onTargetRate * 100),
+            avgConfidence: Number.isFinite(avgConfidence) ? Math.round(avgConfidence * 100) : null,
+            avgAbsTimeErrorPct: Number.isFinite(avgAbsTimeError) ? Math.round(avgAbsTimeError * 100) : null,
+            avgSignedTimeErrorPct: Number.isFinite(avgSignedTimeError) ? Math.round(avgSignedTimeError * 100) : null,
+            windowDays: CALIBRATION_WINDOW_DAYS
+        };
     }
 
     function buildOuterBranches(allNodes, archivedNodes) {
@@ -937,6 +1170,7 @@
 
         const habits = buildHabitSummary();
         const projectRisks = buildProjectRisks(allNodes, archived, analyzedTasks);
+        const calibration = buildCalibrationSummary(allNodes, archived, nowTs);
         const health = calculateCanopyHealth({
             activeCount: activeNodes.length,
             blocked: blocked,
@@ -961,6 +1195,7 @@
             unblockTasks: unblockTasks,
             blockerCauses: blockerCauses,
             habits: habits,
+            calibration: calibration,
             projectPortfolio: projectPortfolio,
             projectRisks: projectRisks,
             outerBranches: buildOuterBranches(allNodes, archived),
@@ -1083,6 +1318,83 @@
             `;
             list.appendChild(row);
         });
+    }
+
+    function renderCalibrationSummary(calibration) {
+        const scoreEl = document.getElementById('insights-calibration-score');
+        const biasEl = document.getElementById('insights-calibration-bias');
+        const textEl = document.getElementById('insights-calibration-text');
+        const metricsEl = document.getElementById('insights-calibration-metrics');
+        if (!scoreEl || !biasEl || !textEl || !metricsEl) return;
+
+        const model = calibration && typeof calibration === 'object' ? calibration : {};
+        const hasData = !!model.hasData;
+
+        scoreEl.classList.remove('strength-high', 'strength-mid', 'strength-low');
+        biasEl.classList.remove('bias-over', 'bias-under', 'bias-balanced');
+
+        if (!hasData) {
+            scoreEl.textContent = '--';
+            biasEl.textContent = 'No Signal';
+            textEl.textContent = String(model.summaryText || 'No reflections available yet.');
+            metricsEl.innerHTML = `
+                <div class="insights-calibration-metric">
+                    <span>Reflections (7d)</span>
+                    <strong>0</strong>
+                </div>
+                <div class="insights-calibration-metric">
+                    <span>On Target</span>
+                    <strong>n/a</strong>
+                </div>
+                <div class="insights-calibration-metric">
+                    <span>Avg Confidence</span>
+                    <strong>n/a</strong>
+                </div>
+                <div class="insights-calibration-metric">
+                    <span>Avg Time Error</span>
+                    <strong>n/a</strong>
+                </div>
+            `;
+            return;
+        }
+
+        const score = clamp(Math.round(Number(model.score) || 0), 0, 100);
+        scoreEl.textContent = `${score}%`;
+        if (score >= 80) scoreEl.classList.add('strength-high');
+        else if (score >= 60) scoreEl.classList.add('strength-mid');
+        else scoreEl.classList.add('strength-low');
+
+        const biasKey = String(model.biasKey || 'balanced');
+        const biasLabel = String(model.biasLabel || 'Well Calibrated');
+        biasEl.textContent = biasLabel;
+        if (biasKey === 'over') biasEl.classList.add('bias-over');
+        else if (biasKey === 'under') biasEl.classList.add('bias-under');
+        else biasEl.classList.add('bias-balanced');
+
+        textEl.textContent = String(model.summaryText || 'Calibration summary unavailable.');
+
+        const metrics = [
+            { label: `Reflections (${model.windowDays || CALIBRATION_WINDOW_DAYS}d)`, value: String(Math.max(0, Number(model.reflections) || 0)) },
+            { label: 'On Target', value: Number.isFinite(Number(model.onTargetRate)) ? `${Math.round(Number(model.onTargetRate))}%` : 'n/a' },
+            { label: 'Avg Confidence', value: Number.isFinite(Number(model.avgConfidence)) ? `${Math.round(Number(model.avgConfidence))}%` : 'n/a' },
+            { label: 'Avg Time Error', value: Number.isFinite(Number(model.avgAbsTimeErrorPct)) ? `${Math.round(Number(model.avgAbsTimeErrorPct))}%` : 'n/a' },
+            { label: getCalibrationOutcomeLabel('harder'), value: String(Math.max(0, Number(model.counts && model.counts.harder) || 0)) }
+        ];
+
+        if (Number.isFinite(Number(model.avgSignedTimeErrorPct))) {
+            const signed = Math.round(Number(model.avgSignedTimeErrorPct));
+            metrics.push({
+                label: 'Time Bias',
+                value: `${signed > 0 ? '+' : ''}${signed}%`
+            });
+        }
+
+        metricsEl.innerHTML = metrics.map(metric => `
+            <div class="insights-calibration-metric">
+                <span>${escapeHtml(metric.label)}</span>
+                <strong>${escapeHtml(metric.value)}</strong>
+            </div>
+        `).join('');
     }
 
     function renderQuickLinks(links) {
@@ -1496,6 +1808,7 @@
         renderHeader(model);
         renderFocusSplit(model);
         renderHabitSummary(model.habits);
+        renderCalibrationSummary(model.calibration);
         renderProjectPortfolio(model.projectPortfolio);
         renderProjectRisks(model.projectRisks);
         renderQuickLinks(model.outerBranches);

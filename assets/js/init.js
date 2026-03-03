@@ -54,9 +54,7 @@
                 }
             }
 
-            // Load API Key into input if exists
-            const geminiKeyInput = document.getElementById('gemini-api-key-input');
-            if (geminiKeyInput && geminiApiKey) geminiKeyInput.value = geminiApiKey;
+            // Load API Key into settings input if exists
             const settingsGeminiKeyInput = document.getElementById('settings-gemini-key-input');
             if (settingsGeminiKeyInput && geminiApiKey) settingsGeminiKeyInput.value = geminiApiKey;
 
