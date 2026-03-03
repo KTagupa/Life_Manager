@@ -102,6 +102,89 @@ function pruneGeminiUsageEvents(now = Date.now()) {
     });
 }
 
+function normalizeGeminiUsageSnapshotForSync(rawStats) {
+    const stats = normalizeGeminiUsageStats(rawStats);
+    const now = Date.now();
+    const cutoff = now - GEMINI_USAGE_EVENTS_RETENTION_MS;
+    stats.recentEvents = (Array.isArray(stats.recentEvents) ? stats.recentEvents : [])
+        .filter(event => Number(event.timestamp) >= cutoff);
+    return stats;
+}
+
+function mergeGeminiUsageStats(localStats, remoteStats) {
+    const localNorm = normalizeGeminiUsageSnapshotForSync(localStats);
+    const remoteNorm = normalizeGeminiUsageSnapshotForSync(remoteStats);
+
+    const mergedByPacificDay = {};
+    const dayKeys = new Set([
+        ...Object.keys(localNorm.byPacificDay || {}),
+        ...Object.keys(remoteNorm.byPacificDay || {})
+    ]);
+    dayKeys.forEach((dayKey) => {
+        const localBucket = normalizeGeminiUsageBucket(localNorm.byPacificDay[dayKey]);
+        const remoteBucket = normalizeGeminiUsageBucket(remoteNorm.byPacificDay[dayKey]);
+        mergedByPacificDay[dayKey] = {
+            requests: Math.max(localBucket.requests, remoteBucket.requests),
+            promptTokens: Math.max(localBucket.promptTokens, remoteBucket.promptTokens),
+            outputTokens: Math.max(localBucket.outputTokens, remoteBucket.outputTokens),
+            totalTokens: Math.max(localBucket.totalTokens, remoteBucket.totalTokens)
+        };
+    });
+
+    const eventMap = new Map();
+    [...localNorm.recentEvents, ...remoteNorm.recentEvents].forEach((event) => {
+        if (!event || typeof event !== 'object') return;
+        const timestamp = Number(event.timestamp);
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return;
+        const entry = {
+            timestamp: Math.round(timestamp),
+            requests: Math.max(0, Number(event.requests) || 0),
+            promptTokens: Math.max(0, Number(event.promptTokens) || 0),
+            outputTokens: Math.max(0, Number(event.outputTokens) || 0),
+            totalTokens: Math.max(0, Number(event.totalTokens) || 0)
+        };
+        const key = `${entry.timestamp}|${entry.totalTokens}|${entry.promptTokens}|${entry.outputTokens}`;
+        eventMap.set(key, entry);
+    });
+    const mergedEvents = Array.from(eventMap.values())
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .slice(-5000);
+
+    const localAllTime = normalizeGeminiUsageBucket(localNorm.allTime);
+    const remoteAllTime = normalizeGeminiUsageBucket(remoteNorm.allTime);
+    const mergedAllTimeFromDays = Object.values(mergedByPacificDay).reduce((acc, bucket) => {
+        acc.requests += Math.max(0, Number(bucket.requests) || 0);
+        acc.promptTokens += Math.max(0, Number(bucket.promptTokens) || 0);
+        acc.outputTokens += Math.max(0, Number(bucket.outputTokens) || 0);
+        acc.totalTokens += Math.max(0, Number(bucket.totalTokens) || 0);
+        return acc;
+    }, createGeminiUsageBucket());
+    const mergedAllTime = {
+        requests: Math.max(localAllTime.requests, remoteAllTime.requests, mergedAllTimeFromDays.requests),
+        promptTokens: Math.max(localAllTime.promptTokens, remoteAllTime.promptTokens, mergedAllTimeFromDays.promptTokens),
+        outputTokens: Math.max(localAllTime.outputTokens, remoteAllTime.outputTokens, mergedAllTimeFromDays.outputTokens),
+        totalTokens: Math.max(localAllTime.totalTokens, remoteAllTime.totalTokens, mergedAllTimeFromDays.totalTokens)
+    };
+
+    return {
+        allTime: mergedAllTime,
+        byPacificDay: mergedByPacificDay,
+        recentEvents: mergedEvents,
+        updatedAt: Math.max(Number(localNorm.updatedAt) || 0, Number(remoteNorm.updatedAt) || 0) || null
+    };
+}
+
+function applyGeminiUsageStatsFromMergedState(rawStats) {
+    geminiUsageStats = normalizeGeminiUsageSnapshotForSync(rawStats);
+    saveGeminiUsageStats();
+    updateGeminiUsageUI();
+}
+
+window.refreshGeminiUsageStatsFromStorage = function refreshGeminiUsageStatsFromStorage() {
+    geminiUsageStats = loadGeminiUsageStats();
+    updateGeminiUsageUI();
+};
+
 function getPacificDateKey(timestamp = Date.now()) {
     const date = new Date(timestamp);
     try {
@@ -1511,6 +1594,7 @@ async function pushToGist() {
             agenda: agenda || [],
             reminders: reminders || [],
             noteSettings: noteSettings || { categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`) },
+            geminiUsageStats: normalizeGeminiUsageSnapshotForSync(geminiUsageStats),
             timestamp: Date.now()
         };
         content = JSON.stringify(appState, null, 2);
@@ -2100,7 +2184,8 @@ function mergeStates(local, remote) {
         notes: [],
         agenda: mergeAgendaCollections(local && local.agenda, remote && remote.agenda),
         reminders: [],
-        noteSettings: mergeNoteSettings(local && local.noteSettings, remote && remote.noteSettings)
+        noteSettings: mergeNoteSettings(local && local.noteSettings, remote && remote.noteSettings),
+        geminiUsageStats: mergeGeminiUsageStats(local && local.geminiUsageStats, remote && remote.geminiUsageStats)
     };
 
     const getTaskUpdatedTs = (task) => Math.max(
@@ -2273,7 +2358,8 @@ async function pullFromGist() {
                 ? normalizeAiUrgencyConfig(aiUrgencyConfig)
                 : (aiUrgencyConfig || {}),
             projects,
-            nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda, reminders, noteSettings
+            nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda, reminders, noteSettings,
+            geminiUsageStats: normalizeGeminiUsageSnapshotForSync(geminiUsageStats)
         };
 
         // Check timestamps
@@ -2321,6 +2407,9 @@ async function pullFromGist() {
         reminders = mergedState.reminders || [];
         if (mergedState.noteSettings && typeof mergedState.noteSettings === 'object') {
             noteSettings = mergedState.noteSettings;
+        }
+        if (mergedState.geminiUsageStats && typeof mergedState.geminiUsageStats === 'object') {
+            applyGeminiUsageStatsFromMergedState(mergedState.geminiUsageStats);
         }
 
         // Save merge timestamp

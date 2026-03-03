@@ -1261,6 +1261,17 @@ function saveData(download = false) {
         quickLinks,
         reminders
     };
+    try {
+        const rawGeminiUsage = localStorage.getItem('urgency_flow_gemini_usage_v1');
+        if (rawGeminiUsage) {
+            const parsedGeminiUsage = JSON.parse(rawGeminiUsage);
+            if (parsedGeminiUsage && typeof parsedGeminiUsage === 'object') {
+                payload.geminiUsageStats = parsedGeminiUsage;
+            }
+        }
+    } catch (error) {
+        console.warn('[backup] Failed to include Gemini usage stats in export:', error);
+    }
     const data = JSON.stringify(payload, null, 2);
     if (download) {
         const blob = new Blob([data], { type: 'application/json' });
@@ -1309,6 +1320,16 @@ function loadFile(input) {
                 agenda = parsed.agenda || [];
                 quickLinks = parsed.quickLinks || [];
                 reminders = parsed.reminders || [];
+                if (parsed.geminiUsageStats && typeof parsed.geminiUsageStats === 'object') {
+                    try {
+                        localStorage.setItem('urgency_flow_gemini_usage_v1', JSON.stringify(parsed.geminiUsageStats));
+                        if (typeof window.refreshGeminiUsageStatsFromStorage === 'function') {
+                            window.refreshGeminiUsageStatsFromStorage();
+                        }
+                    } catch (error) {
+                        console.warn('[backup] Failed to restore Gemini usage stats from file:', error);
+                    }
+                }
                 // Do NOT load tokens from file for security, unless specifically desired
             }
             taskGroupFocusState = {
@@ -1403,7 +1424,8 @@ async function clearData() {
         'urgencyFlow_dashboard_open_on_startup',
         'urgencyFlow_workspace_section',
         'urgencyFlow_navigator_tab',
-        'urgencyFlow_planner_tab'
+        'urgencyFlow_planner_tab',
+        'urgency_flow_gemini_usage_v1'
     ].forEach(key => localStorage.removeItem(key));
 
     await wipeIndexedDB();
