@@ -749,11 +749,11 @@
                             <textarea class="st-input ${st.done ? 'done' : ''}" rows="1"
                                 oninput="resizeSubtaskTextarea(this)"
                                 onchange="updateSubtaskText(${idx}, this.value)">${escapeHtml(st.text || '')}</textarea>
-                            <button onclick="promoteSubtaskToNode(${idx})" style="background:transparent; border:none; color:#10b981; cursor:pointer; font-size:14px;" title="Promote to Subsequent Task">⬆</button>
-                            <button onclick="removeSubtask(${idx})" style="background:transparent; border:none; color:#475569; cursor:pointer; font-size:14px;" title="Remove Subtask">✕</button>
+                            <button class="subtask-action-btn subtask-action-promote" onclick="promoteSubtaskToNode(${idx})" title="Promote to Subsequent Task">⬆</button>
+                            <button class="subtask-action-btn subtask-action-remove" onclick="removeSubtask(${idx})" title="Remove Subtask">✕</button>
                         </div>
                         `).join('')}
-                        ${node.subtasks.length === 0 ? '<div class="subtask-empty-msg" style="font-size:11px; color:#475569; padding:12px; text-align:center;">No subtasks</div>' : ''}
+                        ${node.subtasks.length === 0 ? '<div class="subtask-empty-msg">No subtasks</div>' : ''}
                     </div>
                 </div>`;
 
