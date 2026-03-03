@@ -1716,6 +1716,84 @@ function mergeStates(local, remote) {
         return Array.from(byId.values());
     };
 
+    const mergeHabitHistory = (firstHistory, secondHistory, type = 'checkbox') => {
+        const a = (firstHistory && typeof firstHistory === 'object') ? firstHistory : {};
+        const b = (secondHistory && typeof secondHistory === 'object') ? secondHistory : {};
+        const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+        const mergedHistory = {};
+
+        const toCount = (raw) => {
+            if (raw === true) return 1;
+            if (raw === false || raw === null || raw === undefined) return 0;
+            const parsed = Number(raw);
+            return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+        };
+
+        keys.forEach((key) => {
+            const left = toCount(a[key]);
+            const right = toCount(b[key]);
+            if (type === 'checkbox') {
+                mergedHistory[key] = (left > 0 || right > 0) ? 1 : 0;
+                return;
+            }
+            mergedHistory[key] = Math.max(left, right);
+        });
+
+        return mergedHistory;
+    };
+
+    const mergeHabitCollections = (localHabits, remoteHabits) => {
+        const byId = new Map();
+        const withoutId = [];
+        const all = [
+            ...(Array.isArray(localHabits) ? localHabits : []),
+            ...(Array.isArray(remoteHabits) ? remoteHabits : [])
+        ];
+
+        const getHabitUpdatedTs = (habit) => Math.max(
+            Number(habit && habit.updated) || 0,
+            Number(habit && habit.updatedAt) || 0,
+            Number(habit && habit.created) || 0,
+            Number(habit && habit.createdAt) || 0,
+            Number(habit && habit.archivedAt) || 0
+        );
+
+        all.forEach((rawHabit) => {
+            if (!rawHabit || typeof rawHabit !== 'object') return;
+            const habitId = String(rawHabit.id || '').trim();
+            if (!habitId) {
+                withoutId.push(rawHabit);
+                return;
+            }
+
+            const existing = byId.get(habitId);
+            if (!existing) {
+                byId.set(habitId, rawHabit);
+                return;
+            }
+
+            const existingUpdatedAt = getHabitUpdatedTs(existing);
+            const candidateUpdatedAt = getHabitUpdatedTs(rawHabit);
+            const preferred = candidateUpdatedAt >= existingUpdatedAt ? rawHabit : existing;
+            const other = preferred === rawHabit ? existing : rawHabit;
+            const mergedType = preferred.type || other.type || 'checkbox';
+            const mergedHistory = mergeHabitHistory(existing.history, rawHabit.history, mergedType);
+            const mergedNoteIds = Array.from(new Set([
+                ...(Array.isArray(existing.noteIds) ? existing.noteIds : []),
+                ...(Array.isArray(rawHabit.noteIds) ? rawHabit.noteIds : [])
+            ]));
+
+            byId.set(habitId, {
+                ...other,
+                ...preferred,
+                history: mergedHistory,
+                noteIds: mergedNoteIds
+            });
+        });
+
+        return [...Array.from(byId.values()), ...withoutId];
+    };
+
     const merged = {
         dataModelVersion: Math.max(
             Number(local && local.dataModelVersion) || 1,
@@ -1728,7 +1806,7 @@ function mergeStates(local, remote) {
         archivedNodes: [...(local.archivedNodes || [])],
         inbox: [...(local.inbox || [])],
         lifeGoals: local.lifeGoals || {},
-        habits: local.habits || [],
+        habits: mergeHabitCollections(local && local.habits, remote && remote.habits),
         notes: [],
         agenda: local.agenda || [],
         reminders: []
