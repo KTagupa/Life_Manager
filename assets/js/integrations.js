@@ -1716,6 +1716,86 @@ function mergeStates(local, remote) {
         return Array.from(byId.values());
     };
 
+    const mergeLifeGoalsCollections = (localGoals, remoteGoals) => {
+        const safeLocalGoals = (localGoals && typeof localGoals === 'object') ? localGoals : {};
+        const safeRemoteGoals = (remoteGoals && typeof remoteGoals === 'object') ? remoteGoals : {};
+
+        const getGoalUpdatedTs = (goal) => Math.max(
+            Number(goal && goal.updatedAt) || 0,
+            Number(goal && goal.createdAt) || 0
+        );
+
+        const mergeGoalLists = (localList, remoteList) => {
+            const byId = new Map();
+            const withoutId = [];
+            const all = [
+                ...(Array.isArray(localList) ? localList : []),
+                ...(Array.isArray(remoteList) ? remoteList : [])
+            ];
+
+            all.forEach((rawGoal) => {
+                if (!rawGoal || typeof rawGoal !== 'object') return;
+                const goalId = String(rawGoal.id || '').trim();
+                if (!goalId) {
+                    withoutId.push(rawGoal);
+                    return;
+                }
+
+                const existing = byId.get(goalId);
+                if (!existing) {
+                    byId.set(goalId, rawGoal);
+                    return;
+                }
+
+                const existingUpdatedAt = getGoalUpdatedTs(existing);
+                const candidateUpdatedAt = getGoalUpdatedTs(rawGoal);
+                const preferred = candidateUpdatedAt >= existingUpdatedAt ? rawGoal : existing;
+                const other = preferred === rawGoal ? existing : rawGoal;
+                const mergedChildren = mergeGoalLists(existing.children, rawGoal.children);
+                const preferredText = String(preferred.text || '').trim();
+                const otherText = String(other.text || '').trim();
+
+                byId.set(goalId, {
+                    ...other,
+                    ...preferred,
+                    text: preferredText || otherText || 'New Goal',
+                    collapsed: !!(preferred.collapsed ?? other.collapsed),
+                    children: mergedChildren
+                });
+            });
+
+            return [
+                ...Array.from(byId.values()).map((goal) => ({
+                    ...goal,
+                    text: String(goal.text || '').trim() || 'New Goal',
+                    collapsed: !!goal.collapsed,
+                    children: mergeGoalLists(goal.children, [])
+                })),
+                ...withoutId.map((goal) => ({
+                    ...goal,
+                    text: String(goal.text || '').trim() || 'New Goal',
+                    collapsed: !!goal.collapsed,
+                    children: mergeGoalLists(goal.children, [])
+                }))
+            ];
+        };
+
+        const years = new Set([
+            ...Object.keys(safeLocalGoals),
+            ...Object.keys(safeRemoteGoals)
+        ]);
+        const mergedGoals = {};
+
+        years.forEach((yearKey) => {
+            mergedGoals[yearKey] = mergeGoalLists(
+                safeLocalGoals[yearKey],
+                safeRemoteGoals[yearKey]
+            );
+        });
+
+        return mergedGoals;
+    };
+
     const mergeHabitHistory = (firstHistory, secondHistory, type = 'checkbox') => {
         const a = (firstHistory && typeof firstHistory === 'object') ? firstHistory : {};
         const b = (secondHistory && typeof secondHistory === 'object') ? secondHistory : {};
@@ -1794,6 +1874,216 @@ function mergeStates(local, remote) {
         return [...Array.from(byId.values()), ...withoutId];
     };
 
+    const mergeNoteSettings = (localSettings, remoteSettings) => {
+        const localObj = (localSettings && typeof localSettings === 'object') ? localSettings : {};
+        const remoteObj = (remoteSettings && typeof remoteSettings === 'object') ? remoteSettings : {};
+        const localNames = Array.isArray(localObj.categoryNames) ? localObj.categoryNames : [];
+        const remoteNames = Array.isArray(remoteObj.categoryNames) ? remoteObj.categoryNames : [];
+        const maxLen = Math.max(10, localNames.length, remoteNames.length);
+        const mergedNames = Array.from({ length: maxLen }, (_, index) => {
+            const remoteName = (typeof remoteNames[index] === 'string') ? remoteNames[index].trim() : '';
+            const localName = (typeof localNames[index] === 'string') ? localNames[index].trim() : '';
+            return remoteName || localName || `Category ${index + 1}`;
+        });
+        return {
+            ...localObj,
+            ...remoteObj,
+            categoryNames: mergedNames
+        };
+    };
+
+    const mergeTaskTimeLogs = (firstLogs, secondLogs) => {
+        const seen = new Set();
+        const mergedLogs = [];
+
+        [...(Array.isArray(firstLogs) ? firstLogs : []), ...(Array.isArray(secondLogs) ? secondLogs : [])].forEach((log) => {
+            if (!log || typeof log !== 'object') return;
+            const start = Number(log.start);
+            if (!Number.isFinite(start) || start <= 0) return;
+            const rawDuration = Number(log.duration);
+            const rawEnd = Number(log.end);
+            const duration = Number.isFinite(rawDuration) && rawDuration >= 0
+                ? Math.round(rawDuration)
+                : (Number.isFinite(rawEnd) && rawEnd >= start ? Math.round(rawEnd - start) : 0);
+            const end = Number.isFinite(rawEnd) && rawEnd >= start
+                ? Math.round(rawEnd)
+                : Math.round(start + duration);
+            const key = `${Math.round(start)}|${end}|${duration}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            mergedLogs.push({
+                ...log,
+                start: Math.round(start),
+                end,
+                duration
+            });
+        });
+
+        mergedLogs.sort((a, b) => Number(a.start || 0) - Number(b.start || 0));
+        return mergedLogs;
+    };
+
+    const mergeTaskCheckIns = (firstCheckIns, secondCheckIns) => {
+        const seen = new Set();
+        const mergedCheckIns = [];
+
+        [...(Array.isArray(firstCheckIns) ? firstCheckIns : []), ...(Array.isArray(secondCheckIns) ? secondCheckIns : [])].forEach((value) => {
+            const ts = Number(value);
+            if (!Number.isFinite(ts) || ts <= 0) return;
+            const roundedTs = Math.round(ts);
+            if (seen.has(roundedTs)) return;
+            seen.add(roundedTs);
+            mergedCheckIns.push(roundedTs);
+        });
+
+        mergedCheckIns.sort((a, b) => a - b);
+        return mergedCheckIns;
+    };
+
+    const mergeArchivedTaskCollections = (localArchived, remoteArchived) => {
+        const byId = new Map();
+        const withoutId = [];
+        const all = [
+            ...(Array.isArray(localArchived) ? localArchived : []),
+            ...(Array.isArray(remoteArchived) ? remoteArchived : [])
+        ];
+
+        const getTaskUpdatedTs = (task) => Math.max(
+            Number(task && task.updatedAt) || 0,
+            Number(task && task.completedDate) || 0,
+            Number(task && task.createdAt) || 0
+        );
+
+        all.forEach((rawTask) => {
+            if (!rawTask || typeof rawTask !== 'object') return;
+            const taskId = String(rawTask.id || '').trim();
+            if (!taskId) {
+                withoutId.push(rawTask);
+                return;
+            }
+
+            const existing = byId.get(taskId);
+            if (!existing) {
+                byId.set(taskId, rawTask);
+                return;
+            }
+
+            const existingUpdatedAt = getTaskUpdatedTs(existing);
+            const candidateUpdatedAt = getTaskUpdatedTs(rawTask);
+            const existingCompleted = !!existing.completed;
+            const candidateCompleted = !!rawTask.completed;
+            const preferred = candidateCompleted !== existingCompleted
+                ? (candidateCompleted ? rawTask : existing)
+                : (candidateUpdatedAt >= existingUpdatedAt ? rawTask : existing);
+            const other = preferred === rawTask ? existing : rawTask;
+            const mergedCompletedDate = Math.max(Number(existing.completedDate) || 0, Number(rawTask.completedDate) || 0) || null;
+
+            byId.set(taskId, {
+                ...other,
+                ...preferred,
+                completed: !!(preferred.completed || other.completed),
+                completedDate: mergedCompletedDate || preferred.completedDate || other.completedDate || null,
+                activeTimerStart: null,
+                timeLogs: mergeTaskTimeLogs(existing.timeLogs, rawTask.timeLogs),
+                checkIns: mergeTaskCheckIns(existing.checkIns, rawTask.checkIns),
+                aiUrgency: pickNewerAiUrgency(existing.aiUrgency, rawTask.aiUrgency, 'task'),
+                selfAssessment: mergeTaskSelfAssessment(existing.selfAssessment, rawTask.selfAssessment)
+            });
+        });
+
+        return [...Array.from(byId.values()), ...withoutId];
+    };
+
+    const mergeInboxCollections = (localInbox, remoteInbox) => {
+        const byId = new Map();
+        const seenTitleNoId = new Set();
+        const all = [
+            ...(Array.isArray(localInbox) ? localInbox : []),
+            ...(Array.isArray(remoteInbox) ? remoteInbox : [])
+        ];
+
+        all.forEach((rawItem, index) => {
+            const rawObj = (rawItem && typeof rawItem === 'object') ? rawItem : {};
+            const title = String(
+                typeof rawItem === 'string'
+                    ? rawItem
+                    : (rawObj.title || '')
+            ).trim();
+            if (!title) return;
+
+            const explicitId = String(rawObj.id || '').trim();
+            if (!explicitId) {
+                const titleKey = title.toLowerCase();
+                if (seenTitleNoId.has(titleKey)) return;
+                seenTitleNoId.add(titleKey);
+            }
+            const fallbackSlug = title
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/^_+|_+$/g, '')
+                .slice(0, 40) || `item_${index}`;
+            const id = explicitId || `inbox_legacy_${fallbackSlug}`;
+
+            const existing = byId.get(id);
+            if (!existing) {
+                byId.set(id, {
+                    ...rawObj,
+                    id,
+                    title
+                });
+                return;
+            }
+
+            const preferredTitle = title.length >= String(existing.title || '').trim().length
+                ? title
+                : String(existing.title || '').trim();
+            byId.set(id, {
+                ...existing,
+                ...rawObj,
+                id,
+                title: preferredTitle || title || String(existing.title || '').trim()
+            });
+        });
+
+        return Array.from(byId.values());
+    };
+
+    const mergeAgendaCollections = (localAgenda, remoteAgenda) => {
+        const seen = new Set();
+        const mergedSlots = [];
+        const all = [
+            ...(Array.isArray(localAgenda) ? localAgenda : []),
+            ...(Array.isArray(remoteAgenda) ? remoteAgenda : [])
+        ];
+
+        all.forEach((rawSlot, index) => {
+            if (!rawSlot || typeof rawSlot !== 'object') return;
+            const startMs = new Date(rawSlot.start).getTime();
+            const endMs = new Date(rawSlot.end).getTime();
+            if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
+
+            const title = (typeof rawSlot.title === 'string') ? rawSlot.title.trim() : '';
+            const fallbackPrefix = /\bbreak\b/i.test(title) ? 'break_sync_' : 'sync_slot_';
+            const taskId = String(rawSlot.taskId || '').trim() || `${fallbackPrefix}${startMs}_${index}`;
+            const normalized = {
+                ...rawSlot,
+                taskId,
+                start: new Date(startMs).toISOString(),
+                end: new Date(endMs).toISOString()
+            };
+            if (title) normalized.title = title;
+            else if ('title' in normalized) delete normalized.title;
+
+            const key = `${normalized.taskId}|${normalized.start}|${normalized.end}|${normalized.title || ''}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            mergedSlots.push(normalized);
+        });
+
+        mergedSlots.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+        return mergedSlots;
+    };
+
     const merged = {
         dataModelVersion: Math.max(
             Number(local && local.dataModelVersion) || 1,
@@ -1803,16 +2093,23 @@ function mergeStates(local, remote) {
         aiUrgencyConfig: mergeAiUrgencyConfig(local && local.aiUrgencyConfig, remote && remote.aiUrgencyConfig),
         projects: mergeProjectCollections(local && local.projects, remote && remote.projects),
         nodes: [],
-        archivedNodes: [...(local.archivedNodes || [])],
-        inbox: [...(local.inbox || [])],
-        lifeGoals: local.lifeGoals || {},
+        archivedNodes: mergeArchivedTaskCollections(local && local.archivedNodes, remote && remote.archivedNodes),
+        inbox: mergeInboxCollections(local && local.inbox, remote && remote.inbox),
+        lifeGoals: mergeLifeGoalsCollections(local && local.lifeGoals, remote && remote.lifeGoals),
         habits: mergeHabitCollections(local && local.habits, remote && remote.habits),
         notes: [],
-        agenda: local.agenda || [],
-        reminders: []
+        agenda: mergeAgendaCollections(local && local.agenda, remote && remote.agenda),
+        reminders: [],
+        noteSettings: mergeNoteSettings(local && local.noteSettings, remote && remote.noteSettings)
     };
 
-    // Merge tasks: prefer completed status if either is done, use latest modification
+    const getTaskUpdatedTs = (task) => Math.max(
+        Number(task && task.updatedAt) || 0,
+        Number(task && task.completedDate) || 0,
+        Number(task && task.createdAt) || 0
+    );
+
+    // Merge tasks: prefer completion, then latest update timestamp; merge logs/check-ins deterministically.
     const allTaskIds = new Set([
         ...(local.nodes || []).map(n => n.id),
         ...(remote.nodes || []).map(n => n.id)
@@ -1825,6 +2122,8 @@ function mergeStates(local, remote) {
         if (!localTask) {
             const nextTask = {
                 ...remoteTask,
+                timeLogs: mergeTaskTimeLogs(null, remoteTask && remoteTask.timeLogs),
+                checkIns: mergeTaskCheckIns(null, remoteTask && remoteTask.checkIns),
                 aiUrgency: pickNewerAiUrgency(null, remoteTask && remoteTask.aiUrgency, 'task'),
                 selfAssessment: mergeTaskSelfAssessment(null, remoteTask && remoteTask.selfAssessment)
             };
@@ -1832,31 +2131,51 @@ function mergeStates(local, remote) {
         } else if (!remoteTask) {
             const nextTask = {
                 ...localTask,
+                timeLogs: mergeTaskTimeLogs(localTask && localTask.timeLogs, null),
+                checkIns: mergeTaskCheckIns(localTask && localTask.checkIns, null),
                 aiUrgency: pickNewerAiUrgency(localTask && localTask.aiUrgency, null, 'task'),
                 selfAssessment: mergeTaskSelfAssessment(localTask && localTask.selfAssessment, null)
             };
             merged.nodes.push(nextTask);
         } else {
-            // Both exist - pick the one with more recent activity or completed status
-            const pickLocal =
-                localTask.completed && !remoteTask.completed ||
-                (localTask.timeLogs || []).length > (remoteTask.timeLogs || []).length ||
-                (localTask.checkIns || []).length > (remoteTask.checkIns || []).length;
+            const localCompleted = !!localTask.completed;
+            const remoteCompleted = !!remoteTask.completed;
+            const localUpdatedAt = getTaskUpdatedTs(localTask);
+            const remoteUpdatedAt = getTaskUpdatedTs(remoteTask);
+            const localLogCount = (localTask.timeLogs || []).length;
+            const remoteLogCount = (remoteTask.timeLogs || []).length;
+            const localCheckInCount = (localTask.checkIns || []).length;
+            const remoteCheckInCount = (remoteTask.checkIns || []).length;
 
-            const chosen = pickLocal ? localTask : remoteTask;
-
-            // But merge time logs from both!
-            if (localTask !== chosen && localTask.timeLogs) {
-                chosen.timeLogs = [...(chosen.timeLogs || []), ...localTask.timeLogs];
+            let preferred = remoteTask;
+            if (localCompleted !== remoteCompleted) {
+                preferred = localCompleted ? localTask : remoteTask;
+            } else if (localUpdatedAt !== remoteUpdatedAt) {
+                preferred = localUpdatedAt > remoteUpdatedAt ? localTask : remoteTask;
+            } else if (localLogCount !== remoteLogCount) {
+                preferred = localLogCount > remoteLogCount ? localTask : remoteTask;
+            } else if (localCheckInCount !== remoteCheckInCount) {
+                preferred = localCheckInCount > remoteCheckInCount ? localTask : remoteTask;
             }
-            if (remoteTask !== chosen && remoteTask.timeLogs) {
-                chosen.timeLogs = [...(chosen.timeLogs || []), ...remoteTask.timeLogs];
-            }
+            const other = preferred === localTask ? remoteTask : localTask;
+            const hasCompletion = localCompleted || remoteCompleted;
+            const mergedCompletedDate = hasCompletion
+                ? (Math.max(Number(localTask.completedDate) || 0, Number(remoteTask.completedDate) || 0) || Number(preferred.completedDate || other.completedDate) || null)
+                : null;
 
-            chosen.aiUrgency = pickNewerAiUrgency(localTask.aiUrgency, remoteTask.aiUrgency, 'task');
-            chosen.selfAssessment = mergeTaskSelfAssessment(localTask.selfAssessment, remoteTask.selfAssessment);
+            const mergedTask = {
+                ...other,
+                ...preferred,
+                completed: hasCompletion,
+                completedDate: mergedCompletedDate,
+                timeLogs: mergeTaskTimeLogs(localTask.timeLogs, remoteTask.timeLogs),
+                checkIns: mergeTaskCheckIns(localTask.checkIns, remoteTask.checkIns),
+                aiUrgency: pickNewerAiUrgency(localTask.aiUrgency, remoteTask.aiUrgency, 'task'),
+                selfAssessment: mergeTaskSelfAssessment(localTask.selfAssessment, remoteTask.selfAssessment)
+            };
+            if (mergedTask.completed) mergedTask.activeTimerStart = null;
 
-            merged.nodes.push(chosen);
+            merged.nodes.push(mergedTask);
         }
     });
 
@@ -1954,7 +2273,7 @@ async function pullFromGist() {
                 ? normalizeAiUrgencyConfig(aiUrgencyConfig)
                 : (aiUrgencyConfig || {}),
             projects,
-            nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda, reminders
+            nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda, reminders, noteSettings
         };
 
         // Check timestamps
@@ -2000,6 +2319,9 @@ async function pullFromGist() {
         habits = mergedState.habits || [];
         agenda = mergedState.agenda || [];
         reminders = mergedState.reminders || [];
+        if (mergedState.noteSettings && typeof mergedState.noteSettings === 'object') {
+            noteSettings = mergedState.noteSettings;
+        }
 
         // Save merge timestamp
         localStorage.setItem('urgencyFlow_lastSave', Date.now());
