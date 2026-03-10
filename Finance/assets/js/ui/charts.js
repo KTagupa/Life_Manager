@@ -119,7 +119,12 @@
             const decrypted = (await Promise.all(rawTransactions.map(async i => {
                 const d = await decryptData(i.data);
                 if (!d) return null;
-                const hydrated = { ...d, id: i.id };
+                const hydrated = {
+                    ...d,
+                    id: i.id,
+                    createdAt: i.createdAt || null,
+                    lastModified: i.lastModified || 0
+                };
                 hydrateTransactionCache(hydrated);
                 return hydrated;
             }))).filter(x => x).sort((a, b) => getTxTimestamp(b) - getTxTimestamp(a));
@@ -147,7 +152,7 @@
             const y = document.getElementById('filter-year').value;
             const searchQuery = document.getElementById('search-transactions')?.value.toLowerCase() || '';
 
-            let filtered = window.allDecryptedTransactions || [];
+            let filtered = [...(window.allDecryptedTransactions || [])];
 
             if (y !== 'all') {
                 filtered = filtered.filter(t => getTxYear(t) == y);
@@ -161,11 +166,13 @@
                 );
             }
 
-            window.filteredTransactions = filtered;
-            filteredTransactions = filtered;
+            const sortedForDisplay = sortRecentMovementTransactions(filtered);
 
-            const scopedTransactions = getTransactionsForScope(metricScope, window.allDecryptedTransactions, filtered);
-            renderTransactions(filtered);
+            window.filteredTransactions = sortedForDisplay;
+            filteredTransactions = sortedForDisplay;
+
+            const scopedTransactions = getTransactionsForScope(metricScope, window.allDecryptedTransactions, sortedForDisplay);
+            renderTransactions(sortedForDisplay);
             updateChart(scopedTransactions);
             renderBudgets(scopedTransactions);
 

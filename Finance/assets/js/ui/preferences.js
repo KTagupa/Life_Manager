@@ -8,10 +8,29 @@
             lucide.createIcons();
         }
 
+        function isFinanceShortcutBlocked() {
+            const authOverlay = document.getElementById('auth-overlay');
+            return authOverlay && !authOverlay.classList.contains('hidden');
+        }
+
+        function focusTransactionSearch() {
+            const searchInput = document.getElementById('search-transactions');
+            if (!searchInput) return;
+
+            searchInput.focus();
+            searchInput.select();
+        }
+
         document.addEventListener('keydown', (e) => {
+            if (isFinanceShortcutBlocked()) return;
+
+            if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.altKey && e.code === 'Space') {
+                e.preventDefault();
+                focusTransactionSearch();
+                return;
+            }
+
             if (e.altKey && e.key.toLowerCase() === 'w') {
-                const authOverlay = document.getElementById('auth-overlay');
-                if (authOverlay && !authOverlay.classList.contains('hidden')) return;
                 e.preventDefault();
                 openWishlistModal();
             }

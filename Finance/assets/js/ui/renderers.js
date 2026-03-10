@@ -9,6 +9,7 @@
             items.forEach(i => {
                 const isInc = i.type === 'income';
                 const isDebtInc = i.type === 'debt_increase';
+                const isToday = isTxAssignedToToday(i);
                 const encodedTxId = encodeInlineArg(i.id);
                 const safeDesc = escapeHTML(i.desc || 'Untitled');
                 const safeCategory = escapeHTML(i.category || 'Uncategorized');
@@ -16,7 +17,7 @@
                 const displayDate = new Date(i.date).toLocaleDateString();
 
                 const div = document.createElement('div');
-                div.className = "p-4 flex items-center justify-between group hover:bg-slate-50 transition-colors cursor-pointer";
+                div.className = `recent-movement-item p-4 flex items-center justify-between group transition-colors cursor-pointer ${isToday ? 'recent-movement-item--today' : 'hover:bg-slate-50'}`;
                 div.onclick = (e) => {
                     if (e.target.closest('button')) return;
                     openTransactionModal(i.id);
@@ -41,12 +42,12 @@
 
                 div.innerHTML = `
                     <div class="flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${iconBg} ${iconText}">
+                        <div class="recent-movement-badge w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${iconBg} ${iconText}">
                             ${initials}
                         </div>
                         <div>
                             <p class="font-bold text-slate-800">${safeDesc} ${currencyBadge}</p>
-                            <p class="text-[10px] uppercase font-bold text-slate-400 tracking-widest">${displayDate} • ${safeCategory}</p>
+                            <p class="recent-movement-meta text-[10px] uppercase font-bold text-slate-400 tracking-widest">${displayDate} • ${safeCategory}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-4">

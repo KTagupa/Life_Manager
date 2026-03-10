@@ -64,6 +64,84 @@
             return cached && typeof cached._searchText === 'string' ? cached._searchText : '';
         }
 
+        function toTxMetaTimestamp(value) {
+            const numeric = Number(value);
+            if (Number.isFinite(numeric) && numeric > 0) return numeric;
+
+            if (typeof value === 'string' && value.trim()) {
+                const parsed = Date.parse(value);
+                if (Number.isFinite(parsed)) return parsed;
+            }
+
+            return 0;
+        }
+
+        function getLocalDateKey(date = new Date()) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function getTxAssignedDateKey(tx) {
+            const cached = hydrateTransactionCache(tx);
+            if (cached && typeof cached._dateKey === 'string' && cached._dateKey) {
+                return cached._dateKey;
+            }
+
+            const rawDate = String(tx?.date || '').trim();
+            const matchedDate = rawDate.match(/^\d{4}-\d{2}-\d{2}/);
+            const dateKey = matchedDate
+                ? matchedDate[0]
+                : getLocalDateKey(new Date(getTxTimestamp(tx)));
+
+            if (cached) {
+                cached._dateKey = dateKey;
+            }
+
+            return dateKey;
+        }
+
+        function getTxActivityTimestamp(tx) {
+            const cached = hydrateTransactionCache(tx);
+            if (cached && Number.isFinite(cached._activityTs)) {
+                return cached._activityTs;
+            }
+
+            const activityTs = Math.max(
+                toTxMetaTimestamp(tx?.createdAt),
+                toTxMetaTimestamp(tx?.lastModified),
+                getTxTimestamp(tx)
+            );
+
+            if (cached) {
+                cached._activityTs = activityTs;
+            }
+
+            return activityTs;
+        }
+
+        function compareRecentMovementTransactions(a, b) {
+            const dateKeyDiff = getTxAssignedDateKey(b).localeCompare(getTxAssignedDateKey(a));
+            if (dateKeyDiff !== 0) return dateKeyDiff;
+
+            const activityDiff = getTxActivityTimestamp(b) - getTxActivityTimestamp(a);
+            if (activityDiff !== 0) return activityDiff;
+
+            const txDiff = getTxTimestamp(b) - getTxTimestamp(a);
+            if (txDiff !== 0) return txDiff;
+
+            return String(b?.id || '').localeCompare(String(a?.id || ''));
+        }
+
+        function sortRecentMovementTransactions(transactions) {
+            return [...(transactions || [])].sort(compareRecentMovementTransactions);
+        }
+
+        function isTxAssignedToToday(tx, referenceDate = new Date()) {
+            return getTxAssignedDateKey(tx) === getLocalDateKey(referenceDate);
+        }
+
         function getCurrentMonthTransactions(transactions, referenceDate = new Date()) {
             const refMonth = referenceDate.getMonth() + 1;
             const refYear = referenceDate.getFullYear();
