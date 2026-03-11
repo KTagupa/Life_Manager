@@ -950,6 +950,49 @@
             margin-bottom: 12px;
         }
 
+        .inspector-detail-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .inspector-detail-switch {
+            width: 100%;
+            border-radius: 9px;
+        }
+
+        .inspector-detail-option {
+            flex: 1 1 0;
+            text-align: center;
+            font-size: 10px;
+            line-height: 1.2;
+            padding: 5px 8px;
+            white-space: nowrap;
+        }
+
+        .inspector-detail-option.active.plan-active {
+            background: #d97706;
+            box-shadow: 0 0 10px rgba(217, 119, 6, 0.35);
+        }
+
+        .inspector-detail-option.active.work-active {
+            background: #059669;
+            box-shadow: 0 0 10px rgba(5, 150, 105, 0.35);
+        }
+
+        .inspector-detail-option.active.context-active {
+            background: #2563eb;
+            box-shadow: 0 0 10px rgba(37, 99, 235, 0.35);
+        }
+
+        .inspector-detail-caption {
+            margin: 0;
+            color: #64748b;
+            font-size: 11px;
+            line-height: 1.45;
+        }
+
         .urgency-switch-panel {
             width: 100%;
             padding: 1px;
@@ -1147,22 +1190,522 @@
             background: rgba(5, 150, 105, 0.1);
         }
 
-        .inspector-section-calibration .field-label {
-            color: #f6c285;
+        #inspector-expanded-modal .inspector-section-plan-cluster .inspector-section-calibration {
+            grid-column: 2 / span 2;
+            padding: 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
         }
 
-        .inspector-section-calibration .field-box {
-            border-color: rgba(245, 158, 11, 0.45);
-            background: rgba(120, 66, 20, 0.2);
+        #inspector-expanded-modal .inspector-section-plan-cluster .inspector-section-due {
+            grid-column: 4;
         }
 
-        .inspector-section-calibration .field-box:hover {
-            border-color: rgba(245, 158, 11, 0.65);
-            background: rgba(148, 84, 24, 0.24);
+        #inspector-expanded-modal .inspector-section-plan-cluster .inspector-section-reminder {
+            grid-column: 1 / span 2;
         }
 
-        .inspector-section-calibration input[type="range"] {
-            accent-color: #f59e0b;
+        #inspector-expanded-modal .inspector-section-context-cluster .inspector-section-projects {
+            grid-column: 1 / span 2;
+        }
+
+        #inspector-expanded-modal .inspector-section-context-cluster .inspector-section-notes {
+            grid-column: 3 / span 2;
+        }
+
+        .inspector-detail-group-work {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .inspector-section-work-cluster {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .task-calibration-card {
+            --task-calibration-glow-x: 44%;
+            --task-calibration-glow-opacity: 0.14;
+            position: relative;
+            overflow: hidden;
+            border-radius: 28px;
+            border: 1px solid rgba(251, 191, 36, 0.16);
+            background:
+                radial-gradient(circle at 12% 0%, rgba(251, 191, 36, 0.08), transparent 38%),
+                radial-gradient(circle at 88% 14%, rgba(16, 185, 129, 0.08), transparent 42%),
+                linear-gradient(180deg, rgba(7, 39, 23, 0.98), rgba(3, 20, 12, 0.98));
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                0 24px 48px rgba(0, 0, 0, 0.34);
+            isolation: isolate;
+        }
+
+        .task-calibration-card.is-active {
+            border-color: rgba(251, 191, 36, 0.26);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                0 24px 52px rgba(0, 0, 0, 0.38),
+                0 0 0 1px rgba(245, 158, 11, 0.08);
+        }
+
+        .task-calibration-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto;
+            height: 4px;
+            background: linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b);
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.45);
+            z-index: 2;
+        }
+
+        .task-calibration-glow {
+            position: absolute;
+            top: 18%;
+            left: var(--task-calibration-glow-x);
+            width: min(62%, 260px);
+            height: min(62%, 220px);
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(245, 158, 11, 0.92) 0%, rgba(245, 158, 11, 0) 72%);
+            filter: blur(48px);
+            opacity: var(--task-calibration-glow-opacity);
+            transform: translate(-50%, -50%);
+            transition: left 0.18s ease-out, opacity 0.22s ease-out;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .task-calibration-content {
+            position: relative;
+            z-index: 1;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .task-calibration-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .task-calibration-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .task-calibration-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #fbbf24;
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.24);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            flex: 0 0 auto;
+        }
+
+        .task-calibration-icon svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .task-calibration-kicker {
+            color: rgba(251, 191, 36, 0.9);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .task-calibration-clear-btn {
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.34);
+            font: inherit;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: color 0.18s ease, opacity 0.18s ease;
+            padding: 0;
+        }
+
+        .task-calibration-clear-btn:hover {
+            color: #fbbf24;
+        }
+
+        .task-calibration-block {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .task-calibration-label {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.72);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .task-calibration-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .task-calibration-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            flex: 1 1 auto;
+            background: transparent;
+        }
+
+        .task-calibration-slider:focus {
+            outline: none;
+        }
+
+        .task-calibration-slider::-webkit-slider-runnable-track {
+            height: 6px;
+            border-radius: 999px;
+            background: linear-gradient(
+                90deg,
+                rgba(245, 158, 11, 0.96) 0%,
+                rgba(251, 191, 36, 0.92) var(--task-calibration-progress, 0%),
+                rgba(255, 255, 255, 0.1) var(--task-calibration-progress, 0%),
+                rgba(255, 255, 255, 0.08) 100%
+            );
+        }
+
+        .task-calibration-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            margin-top: -6px;
+            border-radius: 999px;
+            background: #f59e0b;
+            border: 2px solid rgba(255, 255, 255, 0.95);
+            box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18), 0 0 18px rgba(245, 158, 11, 0.4);
+            cursor: pointer;
+        }
+
+        .task-calibration-slider::-moz-range-track {
+            height: 6px;
+            border: none;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .task-calibration-slider::-moz-range-progress {
+            height: 6px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.96), rgba(251, 191, 36, 0.92));
+        }
+
+        .task-calibration-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.95);
+            border-radius: 999px;
+            background: #f59e0b;
+            box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18), 0 0 18px rgba(245, 158, 11, 0.4);
+            cursor: pointer;
+        }
+
+        .task-calibration-value {
+            min-width: 52px;
+            color: #fbbf24;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            text-align: right;
+        }
+
+        .task-calibration-effort-box {
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+            padding: 14px 16px;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            transition: border-color 0.18s ease, background 0.18s ease;
+        }
+
+        .task-calibration-effort-box:focus-within {
+            border-color: rgba(245, 158, 11, 0.28);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .task-calibration-effort-input {
+            width: 100%;
+            min-width: 0;
+            border: none;
+            background: transparent;
+            color: #fff;
+            font: inherit;
+            font-size: clamp(36px, 6vw, 48px);
+            font-weight: 300;
+            letter-spacing: -0.05em;
+            outline: none;
+            padding: 0;
+        }
+
+        .task-calibration-effort-input::placeholder {
+            color: rgba(255, 255, 255, 0.18);
+        }
+
+        .task-calibration-effort-input::-webkit-outer-spin-button,
+        .task-calibration-effort-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .task-calibration-stepper {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 8px;
+            flex: 0 0 auto;
+        }
+
+        .task-calibration-step-btn {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.34);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+        }
+
+        .task-calibration-step-btn:hover {
+            color: #fbbf24;
+            background: rgba(245, 158, 11, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .task-calibration-step-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .task-calibration-presets {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .task-calibration-preset {
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            color: #f9d2a1;
+            font: inherit;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            padding: 8px 12px;
+            transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+        }
+
+        .task-calibration-preset:hover,
+        .task-calibration-preset.is-selected {
+            border-color: rgba(245, 158, 11, 0.46);
+            background: linear-gradient(180deg, rgba(245, 158, 11, 0.32), rgba(217, 119, 6, 0.24));
+            color: #fffaf0;
+            transform: translateY(-1px);
+        }
+
+        .task-calibration-footer {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .task-calibration-status-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .task-calibration-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.38);
+            box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+            flex: 0 0 auto;
+        }
+
+        .task-calibration-status-dot.is-active {
+            background: #34d399;
+            animation: task-calibration-pulse 1.8s infinite;
+        }
+
+        .task-calibration-status-text {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.28);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            line-height: 1.45;
+            min-width: 0;
+        }
+
+        .task-calibration-status-text.is-active {
+            color: #f4ba72;
+        }
+
+        .task-calibration-timestamp {
+            color: rgba(244, 186, 114, 0.56);
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            text-align: right;
+            line-height: 1.45;
+            margin-left: auto;
+        }
+
+        .task-calibration-reflection {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .task-calibration-reflection-label {
+            color: #f5ca98;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .task-calibration-reflection-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .task-calibration-reflection-chip {
+            --task-reflection-color: #f59e0b;
+            border: 1px solid var(--task-reflection-color);
+            border-radius: 999px;
+            background: transparent;
+            color: var(--task-reflection-color);
+            font: inherit;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 7px 11px;
+            cursor: pointer;
+            transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+        }
+
+        .task-calibration-reflection-chip:hover,
+        .task-calibration-reflection-chip.is-selected {
+            background: var(--task-reflection-color);
+            color: #04110a;
+            transform: translateY(-1px);
+        }
+
+        .task-calibration-reflection-text {
+            color: rgba(240, 190, 126, 0.76);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .task-calibration-reflection-text.is-active {
+            color: var(--task-reflection-summary-color, #f5ca98);
+        }
+
+        .task-calibration-actual-log {
+            color: rgba(244, 186, 114, 0.58);
+            font-size: 10px;
+            letter-spacing: 0.04em;
+        }
+
+        @keyframes task-calibration-pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55);
+            }
+
+            70% {
+                box-shadow: 0 0 0 8px rgba(52, 211, 153, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+            }
+        }
+
+        #inspector-expanded-modal .task-calibration-content {
+            padding: 20px;
+            gap: 18px;
+        }
+
+        #inspector-expanded-modal .task-calibration-value {
+            font-size: 30px;
+        }
+
+        #inspector-expanded-modal .inspector-detail-nav {
+            margin-top: 16px;
+            gap: 10px;
+        }
+
+        #inspector-expanded-modal .inspector-detail-switch {
+            padding: 3px;
+            border-radius: 9px;
+            background: rgba(2, 6, 23, 0.8);
+            border-color: rgba(71, 85, 105, 0.72);
+        }
+
+        #inspector-expanded-modal .inspector-detail-option {
+            padding: 6px 13px;
+            font-size: 12px;
+        }
+
+        #inspector-expanded-modal .inspector-detail-caption {
+            font-size: 12px;
+        }
+
+        #inspector-expanded-modal .inspector-detail-group-work {
+            grid-column: 1 / -1;
+        }
+
+        #inspector-expanded-modal .inspector-section-work-cluster {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 16px 18px;
+        }
+
+        #inspector-expanded-modal .inspector-section-context-cluster {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
         }
 
         .subtask-list {
@@ -1303,11 +1846,17 @@
                 grid-template-columns: 1fr;
             }
 
+            #inspector-expanded-modal .inspector-section-work-cluster {
+                grid-template-columns: 1fr;
+            }
+
             #inspector-expanded-modal .inspector-section-core,
+            #inspector-expanded-modal .inspector-section-calibration,
             #inspector-expanded-modal .inspector-section-due,
             #inspector-expanded-modal .inspector-section-reminder,
             #inspector-expanded-modal .inspector-section-notes,
             #inspector-expanded-modal .inspector-section-link,
+            #inspector-expanded-modal .inspector-section-projects,
             #inspector-expanded-modal .inspector-section-subtasks,
             #inspector-expanded-modal .inspector-section-dependencies,
             #inspector-expanded-modal .inspector-section-unblocks,

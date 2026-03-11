@@ -214,6 +214,24 @@
             easier: { label: 'Easier', emoji: '🌱', color: '#fbbf24' }
         };
 
+        const INSPECTOR_DETAIL_GROUP_META = {
+            plan: {
+                label: 'Plan',
+                activeClass: 'plan-active',
+                description: 'Timing, deadlines, reminders, and self-estimates.'
+            },
+            work: {
+                label: 'Work',
+                activeClass: 'work-active',
+                description: 'Subtasks, blockers, and immediate follow-on tasks.'
+            },
+            context: {
+                label: 'Context',
+                activeClass: 'context-active',
+                description: 'Notes, links, project placement, and connected goals.'
+            }
+        };
+
         function ensureTaskSelfAssessment(task) {
             if (!task || typeof task !== 'object') {
                 if (typeof createDefaultTaskSelfAssessment === 'function') return createDefaultTaskSelfAssessment();
@@ -296,11 +314,82 @@
             return null;
         }
 
-        function previewTaskConfidence(value) {
+        function buildTaskCalibrationPreviewState({
+            confidenceValue = 0,
+            hasConfidenceValue = false,
+            estimatedMinutesValue = null,
+            hasEstimatedMinutesValue = false
+        } = {}) {
+            const confidence = Math.max(0, Math.min(100, Math.round(Number(confidenceValue) || 0)));
+            const estimatedMinutes = hasEstimatedMinutesValue && Number.isFinite(Number(estimatedMinutesValue))
+                ? Math.max(1, Math.min(10080, Math.round(Number(estimatedMinutesValue))))
+                : null;
+            const isActive = !!hasConfidenceValue || Number.isFinite(estimatedMinutes);
+
+            let statusText = 'No estimate yet';
+            if (Number.isFinite(estimatedMinutes) && hasConfidenceValue) {
+                statusText = `Calibrating ${estimatedMinutes}m at ${confidence}% confidence`;
+            } else if (Number.isFinite(estimatedMinutes)) {
+                statusText = `Estimated ${estimatedMinutes}m with confidence pending`;
+            } else if (hasConfidenceValue) {
+                statusText = `Confidence set to ${confidence}%`;
+            }
+
+            return {
+                confidence,
+                confidenceLabel: `${confidence}%`,
+                estimatedMinutes,
+                hasConfidenceValue: !!hasConfidenceValue,
+                hasEstimatedMinutesValue: Number.isFinite(estimatedMinutes),
+                isActive,
+                statusText,
+                glowX: 14 + (confidence * 0.72),
+                glowOpacity: isActive ? (0.13 + (confidence / 420)).toFixed(3) : '0.10'
+            };
+        }
+
+        function previewTaskCalibration() {
+            const slider = document.getElementById('task-confidence-slider');
             const output = document.getElementById('task-self-confidence-value');
-            if (!output) return;
-            const confidence = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
-            output.textContent = `${confidence}%`;
+            const effortInput = document.getElementById('task-estimated-minutes-input');
+            const card = document.getElementById('task-calibration-card');
+            const statusText = document.getElementById('task-calibration-status-text');
+            const statusDot = document.getElementById('task-calibration-status-dot');
+
+            if (!slider || !output || !effortInput || !card || !statusText || !statusDot) return;
+
+            const confidence = Math.max(0, Math.min(100, Math.round(Number(slider.value) || 0)));
+            const effortRaw = String(effortInput.value || '').trim();
+            const hasEstimatedMinutesValue = effortRaw !== '' && Number.isFinite(Number(effortRaw)) && Number(effortRaw) > 0;
+            const preview = buildTaskCalibrationPreviewState({
+                confidenceValue: confidence,
+                hasConfidenceValue: slider.dataset.empty !== 'true',
+                estimatedMinutesValue: hasEstimatedMinutesValue ? Number(effortRaw) : null,
+                hasEstimatedMinutesValue
+            });
+
+            output.textContent = preview.confidenceLabel;
+            slider.style.setProperty('--task-calibration-progress', `${preview.confidence}%`);
+            card.style.setProperty('--task-calibration-glow-x', `${preview.glowX}%`);
+            card.style.setProperty('--task-calibration-glow-opacity', preview.glowOpacity);
+            card.classList.toggle('is-active', preview.isActive);
+            statusText.textContent = preview.statusText;
+            statusText.classList.toggle('is-active', preview.isActive);
+            statusDot.classList.toggle('is-active', preview.isActive);
+
+            document.querySelectorAll('.task-calibration-preset').forEach(button => {
+                const presetMinutes = Number(button.dataset.minutes);
+                button.classList.toggle('is-selected', preview.hasEstimatedMinutesValue && presetMinutes === preview.estimatedMinutes);
+            });
+        }
+
+        function previewTaskConfidence(value) {
+            const slider = document.getElementById('task-confidence-slider');
+            if (slider) {
+                slider.value = String(Math.max(0, Math.min(100, Math.round(Number(value) || 0))));
+                slider.dataset.empty = 'false';
+            }
+            previewTaskCalibration();
         }
 
         function updateTaskCalibrationField(field, value) {
@@ -341,6 +430,19 @@
             const preset = Number(minutes);
             if (!Number.isFinite(preset) || preset <= 0) return;
             updateTaskCalibrationField('estimatedMinutes', preset);
+        }
+
+        function adjustTaskCalibrationEstimate(amount) {
+            const input = document.getElementById('task-estimated-minutes-input');
+            if (!input) return;
+
+            const current = Number(input.value);
+            const baseMinutes = Number.isFinite(current) && current > 0 ? Math.round(current) : 0;
+            const nextMinutes = Math.max(1, Math.min(10080, baseMinutes + Math.round(Number(amount) || 0)));
+
+            input.value = String(nextMinutes);
+            previewTaskCalibration();
+            updateTaskCalibrationField('estimatedMinutes', nextMinutes);
         }
 
         function clearTaskCalibrationEstimate() {
@@ -429,6 +531,21 @@
 
         // --- INSPECTOR Logic ---
         let inspectorExpandedModalOpen = false;
+        let inspectorDetailGroup = 'plan';
+
+        function normalizeInspectorDetailGroup(group) {
+            const normalized = String(group || '').trim().toLowerCase();
+            return Object.prototype.hasOwnProperty.call(INSPECTOR_DETAIL_GROUP_META, normalized)
+                ? normalized
+                : 'plan';
+        }
+
+        function setInspectorDetailGroup(group) {
+            const nextGroup = normalizeInspectorDetailGroup(group);
+            if (inspectorDetailGroup === nextGroup) return;
+            inspectorDetailGroup = nextGroup;
+            if (selectedNodeId) updateInspector();
+        }
 
         function isInspectorExpandedModalOpen() {
             return !!inspectorExpandedModalOpen;
@@ -503,21 +620,28 @@
             const isRunning = !!node.activeTimerStart;
             const linkedNotes = notes.filter(n => n.taskIds && n.taskIds.includes(node.id));
             const selfAssessment = ensureTaskSelfAssessment(node);
-            const confidenceValue = Number.isFinite(Number(selfAssessment.confidence))
+            const hasConfidenceValue = Number.isFinite(Number(selfAssessment.confidence));
+            const confidenceValue = hasConfidenceValue
                 ? Math.max(0, Math.min(100, Math.round(Number(selfAssessment.confidence))))
                 : null;
-            const confidenceSliderValue = Number.isFinite(confidenceValue) ? confidenceValue : 50;
+            const confidenceSliderValue = Number.isFinite(confidenceValue) ? confidenceValue : 0;
             const estimatedMinutesValue = Number.isFinite(Number(selfAssessment.estimatedMinutes))
                 ? Math.max(1, Math.round(Number(selfAssessment.estimatedMinutes)))
                 : null;
             const predictionTimestamp = Number(selfAssessment.lastPredictedAt) || 0;
             const predictionLabel = predictionTimestamp
-                ? `Updated ${new Date(predictionTimestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
-                : 'No estimate yet';
+                ? `Saved ${new Date(predictionTimestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                : 'Not saved yet';
             const completionTs = Number(node.completedDate) || null;
             const completionReflection = completionTs ? findTaskReflectionForCompletion(node, completionTs) : null;
             const reflectionMeta = getTaskReflectionMeta(completionReflection && completionReflection.outcome);
             const actualMinutesLogged = getTaskActualMinutes(node);
+            const calibrationPreview = buildTaskCalibrationPreviewState({
+                confidenceValue: confidenceSliderValue,
+                hasConfidenceValue,
+                estimatedMinutesValue,
+                hasEstimatedMinutesValue: Number.isFinite(estimatedMinutesValue)
+            });
             const urgencyMode = node.isManualUrgent ? 'urgent' : (node.isManualNotUrgent ? 'not-urgent' : 'standard');
             const isUrgent = urgencyMode === 'urgent';
             const sortedProjects = (Array.isArray(projects) ? [...projects] : [])
@@ -527,6 +651,8 @@
                 ? getProjectUrgencyMeta(linkedProject.id)
                 : { level: 1, tag: 'LOWEST', score: 0 };
             const linkedProjectUrgencyLevel = Math.min(5, Math.max(1, Number(linkedProjectUrgency && linkedProjectUrgency.level) || 1));
+            const activeDetailGroup = normalizeInspectorDetailGroup(inspectorDetailGroup);
+            const activeDetailGroupMeta = INSPECTOR_DETAIL_GROUP_META[activeDetailGroup];
             const linkedProjectPillHtml = linkedProject ? `
                 <div class="inspector-linked-project-row">
                     <button type="button"
@@ -545,6 +671,17 @@
                     <div class="urgency-option ${urgencyMode === 'standard' ? 'active standard-active' : ''}" onclick="setUrgencyMode('standard')">Standard</div>
                     <div class="urgency-option ${urgencyMode === 'urgent' ? 'active urgent-active' : ''}" onclick="setUrgencyMode('urgent')">Urgent</div>
                     <div class="urgency-option ${urgencyMode === 'not-urgent' ? 'active not-urgent-active' : ''}" onclick="setUrgencyMode('not-urgent')">Not Urgent</div>
+                </div>
+            `;
+            const detailGroupSwitchHtml = `
+                <div class="inspector-detail-nav">
+                    <div class="urgency-switch urgency-switch-panel inspector-detail-switch">
+                        ${Object.entries(INSPECTOR_DETAIL_GROUP_META).map(([key, meta]) => `
+                            <div class="urgency-option inspector-detail-option ${activeDetailGroup === key ? `active ${meta.activeClass}` : ''}"
+                                onclick="setInspectorDetailGroup('${key}')">${meta.label}</div>
+                        `).join('')}
+                    </div>
+                    <p class="inspector-detail-caption">${escapeHtml(activeDetailGroupMeta.description)}</p>
                 </div>
             `;
 
@@ -569,6 +706,7 @@
                         <input type="text" class="inspector-title-input" value="${node.title}" placeholder="Task Title..." oninput="updateNodeField('title', this.value)">
                     </div>
                     ${renderCheckInGrid(node)}
+                    ${detailGroupSwitchHtml}
                 </div>`;
 
             // --- CONTENT FIELDS ---
@@ -597,58 +735,119 @@
                 ? `${Number(completionReflection.deltaMinutes) >= 0 ? '+' : ''}${Math.round(Number(completionReflection.deltaMinutes))}m vs est`
                 : '';
             const calibrationHtml = `
-                <div class="inspector-section inspector-section-calibration inspector-meta-card" style="margin-bottom:16px; border-color:rgba(245,158,11,0.42); background:linear-gradient(160deg, rgba(120,66,20,0.26), rgba(46,24,8,0.2));">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <label class="field-label" style="margin:0;">🧭 CALIBRATION</label>
-                        <button class="add-subtask-btn" style="color:#f4ba72; border-color:rgba(245,158,11,0.5); background:rgba(120,66,20,0.2);" onclick="clearTaskCalibrationEstimate()">CLEAR</button>
-                    </div>
+                <div class="inspector-section inspector-section-calibration inspector-meta-card" style="margin-bottom:16px;">
+                    <div id="task-calibration-card"
+                        class="task-calibration-card ${calibrationPreview.isActive ? 'is-active' : ''}"
+                        style="--task-calibration-glow-x:${calibrationPreview.glowX}%; --task-calibration-glow-opacity:${calibrationPreview.glowOpacity};">
+                        <div class="task-calibration-glow" aria-hidden="true"></div>
 
-                    <div style="margin-bottom:10px;">
-                        <div style="font-size:11px; color:#f4ba72; margin-bottom:6px;">Before Starting: confidence you can finish as planned</div>
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <input type="range" min="0" max="100" step="5" value="${confidenceSliderValue}" 
-                                style="flex:1;" oninput="previewTaskConfidence(this.value)" onchange="updateTaskCalibrationField('confidence', this.value)">
-                            <span id="task-self-confidence-value" style="font-size:12px; font-weight:700; color:#ffd9a8; min-width:44px; text-align:right;">${Number.isFinite(confidenceValue) ? `${confidenceValue}%` : 'Unset'}</span>
-                        </div>
-                    </div>
+                        <div class="task-calibration-content">
+                            <div class="task-calibration-header">
+                                <div class="task-calibration-title-wrap">
+                                    <span class="task-calibration-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M12 3v2"></path>
+                                            <path d="M12 19v2"></path>
+                                            <path d="M3 12h2"></path>
+                                            <path d="M19 12h2"></path>
+                                            <path d="m5.64 5.64 1.41 1.41"></path>
+                                            <path d="m16.95 16.95 1.41 1.41"></path>
+                                            <path d="m18.36 5.64-1.41 1.41"></path>
+                                            <path d="m7.05 16.95-1.41 1.41"></path>
+                                            <circle cx="12" cy="12" r="4.25"></circle>
+                                        </svg>
+                                    </span>
+                                    <span class="task-calibration-kicker">Calibration</span>
+                                </div>
+                                <button type="button" class="task-calibration-clear-btn" onclick="clearTaskCalibrationEstimate()">Clear</button>
+                            </div>
 
-                    <div style="margin-bottom:8px;">
-                        <div style="font-size:11px; color:#f4ba72; margin-bottom:6px;">Estimated effort (minutes)</div>
-                        <div class="field-box" style="padding:8px 12px;">
-                            <input type="number" min="1" step="5" value="${Number.isFinite(estimatedMinutesValue) ? estimatedMinutesValue : ''}" placeholder="e.g. 45"
-                                style="background:transparent; border:none; color:white; width:100%; font-family:inherit; font-size:13px; outline:none;"
-                                onchange="updateTaskCalibrationField('estimatedMinutes', this.value)">
-                        </div>
-                    </div>
+                            <div class="task-calibration-block">
+                                <p class="task-calibration-label">Before starting: confidence you can finish as planned</p>
+                                <div class="task-calibration-slider-row">
+                                    <input id="task-confidence-slider"
+                                        class="task-calibration-slider"
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        step="5"
+                                        value="${confidenceSliderValue}"
+                                        data-empty="${hasConfidenceValue ? 'false' : 'true'}"
+                                        style="--task-calibration-progress:${confidenceSliderValue}%"
+                                        oninput="previewTaskConfidence(this.value)"
+                                        onchange="updateTaskCalibrationField('confidence', this.value)">
+                                    <span id="task-self-confidence-value" class="task-calibration-value">${calibrationPreview.confidenceLabel}</span>
+                                </div>
+                            </div>
 
-                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
-                        <button class="add-subtask-btn" style="color:#f9c27e; border-color:rgba(245,158,11,0.48); background:rgba(120,66,20,0.18);" onclick="setTaskCalibrationEstimatePreset(25)">25m</button>
-                        <button class="add-subtask-btn" style="color:#f9c27e; border-color:rgba(245,158,11,0.48); background:rgba(120,66,20,0.18);" onclick="setTaskCalibrationEstimatePreset(45)">45m</button>
-                        <button class="add-subtask-btn" style="color:#f9c27e; border-color:rgba(245,158,11,0.48); background:rgba(120,66,20,0.18);" onclick="setTaskCalibrationEstimatePreset(60)">60m</button>
-                        <button class="add-subtask-btn" style="color:#f9c27e; border-color:rgba(245,158,11,0.48); background:rgba(120,66,20,0.18);" onclick="setTaskCalibrationEstimatePreset(90)">90m</button>
-                    </div>
+                            <div class="task-calibration-block">
+                                <p class="task-calibration-label">Estimated effort (minutes)</p>
+                                <div class="task-calibration-effort-box">
+                                    <input id="task-estimated-minutes-input"
+                                        class="task-calibration-effort-input"
+                                        type="number"
+                                        min="1"
+                                        step="5"
+                                        inputmode="numeric"
+                                        value="${Number.isFinite(estimatedMinutesValue) ? estimatedMinutesValue : ''}"
+                                        placeholder="45"
+                                        oninput="previewTaskCalibration()"
+                                        onchange="updateTaskCalibrationField('estimatedMinutes', this.value)">
+                                    <div class="task-calibration-stepper">
+                                        <button type="button" class="task-calibration-step-btn" onclick="adjustTaskCalibrationEstimate(5)" aria-label="Increase estimate">
+                                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 0 1-1.414 0L10 9.414l-3.293 3.293a1 1 0 1 1-1.414-1.414l4-4a1 1 0 0 1 1.414 0l4 4a1 1 0 0 1 0 1.414Z" clip-rule="evenodd"></path>
+                                            </svg>
+                                        </button>
+                                        <button type="button" class="task-calibration-step-btn" onclick="adjustTaskCalibrationEstimate(-5)" aria-label="Decrease estimate">
+                                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 0 1 1.414 0L10 10.586l3.293-3.293a1 1 0 1 1 1.414 1.414l-4 4a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 0-1.414Z" clip-rule="evenodd"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
 
-                    <div style="font-size:10px; color:#cb8f4f; margin-bottom:${node.completed ? '10px' : '0'};">${escapeHtml(predictionLabel)}</div>
+                            <div class="task-calibration-presets">
+                                ${[25, 45, 60, 90].map(minutes => `
+                                    <button type="button"
+                                        class="task-calibration-preset ${estimatedMinutesValue === minutes ? 'is-selected' : ''}"
+                                        data-minutes="${minutes}"
+                                        onclick="setTaskCalibrationEstimatePreset(${minutes})">${minutes}m</button>
+                                `).join('')}
+                            </div>
 
-                    ${node.completed ? `
-                    <div style="border-top:1px dashed rgba(245,158,11,0.35); padding-top:10px;">
-                        <div style="font-size:11px; color:#f8c890; margin-bottom:8px;">One-click completion reflection</div>
-                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
-                            ${Object.entries(TASK_REFLECTION_META).map(([key, meta]) => `
-                                <button class="add-subtask-btn"
-                                    style="color:${completionReflection && completionReflection.outcome === key ? '#0f172a' : meta.color}; background:${completionReflection && completionReflection.outcome === key ? meta.color : 'transparent'}; border-color:${meta.color};"
-                                    onclick="recordTaskReflection('${key}')">${meta.emoji} ${meta.label}</button>
-                            `).join('')}
-                        </div>
-                        <div style="font-size:11px; color:${completionReflection ? reflectionMeta.color : '#d09a64'}; line-height:1.35;">
-                            ${completionReflection
+                            <div class="task-calibration-footer ${node.completed ? 'has-reflection' : ''}">
+                                <div class="task-calibration-status-row">
+                                    <span id="task-calibration-status-dot" class="task-calibration-status-dot ${calibrationPreview.isActive ? 'is-active' : ''}"></span>
+                                    <p id="task-calibration-status-text" class="task-calibration-status-text ${calibrationPreview.isActive ? 'is-active' : ''}">${escapeHtml(calibrationPreview.statusText)}</p>
+                                </div>
+                                <div class="task-calibration-timestamp">${escapeHtml(predictionLabel)}</div>
+                            </div>
+
+                            ${node.completed ? `
+                            <div class="task-calibration-reflection">
+                                <div class="task-calibration-reflection-label">One-click completion reflection</div>
+                                <div class="task-calibration-reflection-actions">
+                                    ${Object.entries(TASK_REFLECTION_META).map(([key, meta]) => `
+                                        <button type="button"
+                                            class="task-calibration-reflection-chip ${completionReflection && completionReflection.outcome === key ? 'is-selected' : ''}"
+                                            style="--task-reflection-color:${meta.color};"
+                                            onclick="recordTaskReflection('${key}')">${meta.emoji} ${meta.label}</button>
+                                    `).join('')}
+                                </div>
+                                <div class="task-calibration-reflection-text ${completionReflection ? 'is-active' : ''}"
+                                    style="${completionReflection ? `--task-reflection-summary-color:${reflectionMeta.color};` : ''}">
+                                    ${completionReflection
                     ? `${reflectionMeta.emoji} ${reflectionMeta.label} • Est ${formatTaskMinutes(completionReflection.estimatedMinutes)} • Actual ${formatTaskMinutes(completionReflection.actualMinutes)}${reflectionDeltaLabel ? ` • ${reflectionDeltaLabel}` : ''}`
                     : 'No reflection recorded for this completion yet.'}
-                        </div>
-                        ${Number.isFinite(Number(actualMinutesLogged))
-                    ? `<div style="font-size:10px; color:#cb8f4f; margin-top:4px;">Based on logged sessions: ${formatTaskMinutes(actualMinutesLogged)}</div>`
+                                </div>
+                                ${Number.isFinite(Number(actualMinutesLogged))
+                    ? `<div class="task-calibration-actual-log">Based on logged sessions: ${formatTaskMinutes(actualMinutesLogged)}</div>`
                     : ''}
-                    </div>` : ''}
+                            </div>` : ''}
+                        </div>
+                    </div>
                 </div>`;
 
             // 2. Due Date
@@ -912,7 +1111,7 @@
                 goalById.set(goalId, item);
             });
             const linkedProjectHtml = `
-                <div class="inspector-section inspector-section-projects" style="margin-bottom:16px;">
+                <div class="inspector-section inspector-section-projects inspector-meta-card" style="margin-bottom:16px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <label class="field-label">📁 PROJECT</label>
                         <span style="font-size:10px; color:#64748b;">${linkedProject ? (linkedProject.status || 'active').toUpperCase() : 'UNASSIGNED'}</span>
@@ -1001,28 +1200,43 @@
                     </select>
                 </div>`;
 
-            const metadataClusterHtml = `
-                <div class="inspector-section-metadata-cluster">
+            const planGroupHtml = `
+                <div class="inspector-section-metadata-cluster inspector-section-plan-cluster inspector-detail-group inspector-detail-group-plan">
                     ${durationStatusHtml}
                     ${calibrationHtml}
                     ${dueDateHtml}
                     ${reminderHtml}
-                    ${linkedNotesHtml}
-                    ${externalLinkHtml}
                 </div>
             `;
+            const workGroupHtml = `
+                <div class="inspector-detail-group inspector-detail-group-work">
+                    ${subtasksHtml}
+                    <div class="inspector-section-work-cluster">
+                        ${dependenciesHtml}
+                        ${unblocksHtml}
+                    </div>
+                </div>
+            `;
+            const contextGroupHtml = `
+                <div class="inspector-section-metadata-cluster inspector-section-context-cluster inspector-detail-group inspector-detail-group-context">
+                    ${linkedProjectHtml}
+                    ${linkedNotesHtml}
+                    ${externalLinkHtml}
+                    ${linkedGoalsHtml}
+                </div>
+            `;
+            const detailGroupHtml = activeDetailGroup === 'work'
+                ? workGroupHtml
+                : activeDetailGroup === 'context'
+                    ? contextGroupHtml
+                    : planGroupHtml;
 
             // --- ASSEMBLE ---
             panel.innerHTML = `
                 ${headerHtml}
                 <div class="inspector-body-scroll" style="padding: 16px 20px; overflow-y: auto; flex-grow:1;">
                     <div class="inspector-grid">
-                        ${metadataClusterHtml}
-                        ${subtasksHtml}
-                        ${dependenciesHtml}
-                        ${unblocksHtml}
-                        ${linkedProjectHtml}
-                        ${linkedGoalsHtml}
+                        ${detailGroupHtml}
                     </div>
                 </div>
                 ${footerHtml}
