@@ -893,6 +893,21 @@ function setupInteractions() {
             return;
         }
 
+        if (!e.altKey && !e.ctrlKey && !e.metaKey) {
+            const step = e.shiftKey ? 40 : 10;
+            let dx = 0;
+            let dy = 0;
+            if (e.key === 'ArrowLeft') dx = -step;
+            else if (e.key === 'ArrowRight') dx = step;
+            else if (e.key === 'ArrowUp') dy = -step;
+            else if (e.key === 'ArrowDown') dy = step;
+
+            if ((dx !== 0 || dy !== 0) && nudgeSelectedNodesByKeyboard(dx, dy)) {
+                e.preventDefault();
+                return;
+            }
+        }
+
         // 3. Shortcuts (Option + Key)
         if (e.altKey) {
             e.preventDefault();
@@ -1236,6 +1251,8 @@ function toggleShortcutsHelp() {
                 <div><b>Alt+R</b> - Recenter</div>
                 <div><b>Alt+D</b> - Declutter</div>
                 <div><b>Alt+E</b> - Cycle engine mode</div>
+                <div><b>Arrow Keys</b> - Move selected task(s)</div>
+                <div><b>Shift+Arrow</b> - Move selected task(s) faster</div>
                 <div><b>Alt+Space</b> - Global search</div>
             </div>
             <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border); font-size:11px; color:var(--text-muted);">
@@ -1499,6 +1516,70 @@ function clearSelection() {
     const bar = document.getElementById('bulk-ops-bar');
     if (bar) bar.remove();
     render();
+}
+
+let keyboardNudgeSaveTimer = null;
+
+function getSelectedNodesForKeyboardNudge() {
+    const targetIds = [];
+    if (selectedIds && typeof selectedIds.forEach === 'function' && selectedIds.size > 0) {
+        selectedIds.forEach((id) => targetIds.push(String(id || '').trim()));
+    } else if (selectedNodeId) {
+        targetIds.push(String(selectedNodeId || '').trim());
+    }
+
+    const seen = new Set();
+    return targetIds
+        .filter(Boolean)
+        .filter((id) => {
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+        })
+        .map(id => nodes.find(node => node && node.id === id))
+        .filter(Boolean);
+}
+
+function scheduleKeyboardNudgeSave() {
+    if (keyboardNudgeSaveTimer) clearTimeout(keyboardNudgeSaveTimer);
+    keyboardNudgeSaveTimer = setTimeout(() => {
+        keyboardNudgeSaveTimer = null;
+        saveToStorage();
+    }, 120);
+}
+
+function nudgeSelectedNodesByKeyboard(dx, dy) {
+    if (isUltraEcoMode || isDragging || isPanning || isBoxSelecting) return false;
+    if (typeof isFinanceCaptureModalOpen === 'function' && isFinanceCaptureModalOpen()) return false;
+    if (document.getElementById('shortcuts-modal')) return false;
+
+    const blockingModalIds = [
+        'project-details-modal',
+        'ai-modal',
+        'ai-project-planner-modal',
+        'ai-messy-import-modal',
+        'ai-urgency-scores-modal',
+        'inbox-modal',
+        'reminders-modal'
+    ];
+    if (blockingModalIds.some((id) => {
+        const el = document.getElementById(id);
+        return !!(el && el.classList.contains('visible'));
+    })) {
+        return false;
+    }
+
+    const selectedNodes = getSelectedNodesForKeyboardNudge();
+    if (selectedNodes.length === 0) return false;
+
+    selectedNodes.forEach((node) => {
+        node.x += dx;
+        node.y += dy;
+    });
+
+    render();
+    scheduleKeyboardNudgeSave();
+    return true;
 }
 
 function bulkComplete() {
