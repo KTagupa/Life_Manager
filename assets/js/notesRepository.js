@@ -138,6 +138,40 @@
         };
     }
 
+    function dedupeNotesById(notes) {
+        if (!Array.isArray(notes) || notes.length === 0) return [];
+
+        const orderedIds = [];
+        const noteMap = new Map();
+
+        notes.forEach((note) => {
+            if (!note || typeof note !== 'object') return;
+
+            const normalized = normalizeNote(note);
+            const existing = noteMap.get(normalized.id);
+
+            if (!existing) {
+                orderedIds.push(normalized.id);
+                noteMap.set(normalized.id, normalized);
+                return;
+            }
+
+            const existingTimestamp = Number(existing.timestamp) || 0;
+            const candidateTimestamp = Number(normalized.timestamp) || 0;
+            if (candidateTimestamp > existingTimestamp) {
+                noteMap.set(normalized.id, normalized);
+            }
+        });
+
+        return orderedIds.map((id) => noteMap.get(id));
+    }
+
+    function replaceNotesCollection(target, nextNotes) {
+        if (!Array.isArray(target)) return;
+        target.length = 0;
+        nextNotes.forEach((note) => target.push(note));
+    }
+
     function sortNotes(notes, sort) {
         const output = [...notes];
         const mode = sort || 'pinned-timestamp-desc';
@@ -278,6 +312,7 @@
                     if (!Array.isArray(data.notes)) data.notes = [];
 
                     operationResult = mutator(data.notes, data);
+                    replaceNotesCollection(data.notes, dedupeNotesById(data.notes));
                     record.id = MAIN_RECORD_ID;
                     record.data = data;
                     writtenDataSnapshot = clone(data);
@@ -313,7 +348,7 @@
         const search = typeof options.search === 'string' ? options.search.trim().toLowerCase() : '';
         const sort = options.sort || 'pinned-timestamp-desc';
 
-        let output = state.data.notes.map(note => normalizeNote(note));
+        let output = dedupeNotesById(state.data.notes);
         if (search) {
             output = output.filter((note) => {
                 const title = (note.title || '').toLowerCase();
