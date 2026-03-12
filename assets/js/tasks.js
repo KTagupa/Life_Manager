@@ -932,11 +932,18 @@
                 </div>`;
 
             // 4. Subtasks
+            const subtasksActionButtonsHtml = `
+                <div style="display:flex; align-items:center; gap:6px;">
+                    ${(!node.completed && !isArchived)
+                    ? `<button class="add-subtask-btn" style="color:#14b8a6;" onclick="openAITaskMessyImportModal('${node.id}')">🧹 PARSE MESSY</button>`
+                    : ''}
+                    <button class="add-subtask-btn" onclick="addSubtask()">+ ADD SUBTASK</button>
+                </div>`;
             const subtasksHtml = `
                 <div class="inspector-section inspector-section-subtasks" style="margin-bottom:16px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <label class="field-label">SUBTASKS</label>
-                        <button class="add-subtask-btn" onclick="addSubtask()">+ ADD SUBTASK</button>
+                        ${subtasksActionButtonsHtml}
                     </div>
                     
                     <div class="subtask-list">

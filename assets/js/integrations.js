@@ -2540,12 +2540,19 @@ function getAIProjectPlannerDepthConfig(depth) {
     return { depth: 'balanced', minTasks: 10, maxTasks: 16, label: 'Balanced' };
 }
 
-function populateAIProjectPlannerGoalSelect() {
-    const goalSelect = document.getElementById('ai-project-goal-select');
-    if (!goalSelect) return;
+function populateAIGoalSelect(selectEl, options = {}) {
+    if (!selectEl) return;
 
-    const previousValue = goalSelect.value;
-    goalSelect.innerHTML = '<option value="">No linked goal</option>';
+    const safeOptions = options && typeof options === 'object' ? options : {};
+    const emptyLabel = String(safeOptions.emptyLabel || 'No linked goal').trim() || 'No linked goal';
+    const previousValue = safeOptions.preserveSelection === false ? '' : String(selectEl.value || '').trim();
+    const preferredValue = String(safeOptions.preferredValue || '').trim();
+
+    selectEl.innerHTML = '';
+    const emptyOption = document.createElement('option');
+    emptyOption.value = '';
+    emptyOption.textContent = emptyLabel;
+    selectEl.appendChild(emptyOption);
 
     const allGoals = (typeof getLinkableGoalsFlat === 'function')
         ? getLinkableGoalsFlat({ includeSubgoals: true })
@@ -2556,12 +2563,302 @@ function populateAIProjectPlannerGoalSelect() {
         const option = document.createElement('option');
         option.value = item.goal.id;
         option.textContent = goalPath ? `${item.year} • ${goalPath}` : `${item.year} • ${item.goal.text || 'Untitled Goal'}`;
-        goalSelect.appendChild(option);
+        selectEl.appendChild(option);
     });
 
-    if (previousValue && Array.from(goalSelect.options).some(option => option.value === previousValue)) {
-        goalSelect.value = previousValue;
+    const fallbackValue = preferredValue || previousValue;
+    if (fallbackValue && Array.from(selectEl.options).some(option => option.value === fallbackValue)) {
+        selectEl.value = fallbackValue;
     }
+}
+
+function populateAIProjectPlannerGoalSelect() {
+    const goalSelect = document.getElementById('ai-project-goal-select');
+    if (!goalSelect) return;
+    populateAIGoalSelect(goalSelect, { emptyLabel: 'No linked goal' });
+}
+
+function populateAIMessyImportGoalSelect(options = {}) {
+    const goalSelect = document.getElementById('ai-messy-import-goal-select');
+    if (!goalSelect) return;
+    populateAIGoalSelect(goalSelect, {
+        emptyLabel: 'No linked goal',
+        ...(options && typeof options === 'object' ? options : {})
+    });
+}
+
+let aiMessyImportModalState = {
+    launchContext: 'general',
+    lockedMode: '',
+    taskId: '',
+    projectId: '',
+    preferredGoalId: ''
+};
+
+function resetAIMessyImportModalState() {
+    aiMessyImportModalState = {
+        launchContext: 'general',
+        lockedMode: '',
+        taskId: '',
+        projectId: '',
+        preferredGoalId: ''
+    };
+}
+
+function getProjectByIdForAIMessyImport(projectId) {
+    const normalizedProjectId = String(projectId || '').trim();
+    if (!normalizedProjectId) return null;
+    if (typeof getProjectById === 'function') {
+        const project = getProjectById(normalizedProjectId);
+        if (project) return project;
+    }
+    return Array.isArray(projects)
+        ? (projects.find(project => project && String(project.id || '').trim() === normalizedProjectId) || null)
+        : null;
+}
+
+function getActiveTaskByIdForAIMessyImport(taskId) {
+    const normalizedTaskId = String(taskId || '').trim();
+    if (!normalizedTaskId || !Array.isArray(nodes)) return null;
+    return nodes.find(node => node && node.id === normalizedTaskId && !node.completed) || null;
+}
+
+function getSelectedActiveTaskForAIMessyImport() {
+    return getActiveTaskByIdForAIMessyImport(selectedNodeId);
+}
+
+function getLockedTaskForAIMessyImport() {
+    return getActiveTaskByIdForAIMessyImport(aiMessyImportModalState.taskId);
+}
+
+function getActiveTaskTargetForAIMessyImport() {
+    return getLockedTaskForAIMessyImport() || getSelectedActiveTaskForAIMessyImport();
+}
+
+function getLockedProjectForAIMessyImport() {
+    return getProjectByIdForAIMessyImport(aiMessyImportModalState.projectId);
+}
+
+function getAIMessyImportGraphProjectNameFallback() {
+    const lockedProject = getLockedProjectForAIMessyImport();
+    if (lockedProject && lockedProject.name) return String(lockedProject.name || '').trim();
+    const selectedTask = getActiveTaskTargetForAIMessyImport();
+    const selectedProjectId = String(selectedTask && selectedTask.projectId || '').trim();
+    if (!selectedProjectId) return '';
+    const project = getProjectByIdForAIMessyImport(selectedProjectId);
+    return project ? String(project.name || '').trim() : '';
+}
+
+function syncAIMessyImportModeUI() {
+    const state = aiMessyImportModalState && typeof aiMessyImportModalState === 'object'
+        ? aiMessyImportModalState
+        : {};
+    const modeEl = document.getElementById('ai-messy-import-mode');
+    const modeFieldEl = document.getElementById('ai-messy-import-mode-field');
+    const titleEl = document.getElementById('ai-messy-import-title');
+    const summaryEl = document.getElementById('ai-messy-import-target-summary');
+    const hintEl = document.getElementById('ai-messy-import-hint');
+    const graphFieldsEl = document.getElementById('ai-messy-import-graph-fields');
+    const projectFieldEl = document.getElementById('ai-messy-import-project-field');
+    const sourceEl = document.getElementById('ai-messy-import-source');
+    const submitBtn = document.getElementById('ai-messy-import-submit-btn');
+    const projectNameEl = document.getElementById('ai-messy-import-project-name');
+    const goalSelect = document.getElementById('ai-messy-import-goal-select');
+    if (!modeEl || !summaryEl || !hintEl || !graphFieldsEl || !sourceEl || !submitBtn) return;
+
+    const lockedMode = String(state.lockedMode || '').trim().toLowerCase();
+    if (lockedMode && modeEl.value !== lockedMode) {
+        modeEl.value = lockedMode;
+    }
+    const mode = String(modeEl.value || lockedMode || 'subtasks').trim().toLowerCase();
+    const lockedProject = getLockedProjectForAIMessyImport();
+    const selectedTask = getActiveTaskTargetForAIMessyImport();
+    const selectedTaskMatchesLockedProject = !lockedProject
+        || String(selectedTask && selectedTask.projectId || '').trim() === String(lockedProject && lockedProject.id || '').trim();
+    const selectedTaskForGraph = selectedTaskMatchesLockedProject ? selectedTask : null;
+    const selectedProjectName = getAIMessyImportGraphProjectNameFallback();
+    const enteredProjectName = String(projectNameEl && projectNameEl.value || '').trim();
+    const effectiveProjectName = (lockedProject && String(lockedProject.name || '').trim()) || enteredProjectName || selectedProjectName;
+    const selectedGoalValue = String(goalSelect && goalSelect.value || '').trim();
+    const selectedGoalLabel = selectedGoalValue
+        ? String(goalSelect.options[goalSelect.selectedIndex]?.text || '').trim()
+        : '';
+
+    if (modeFieldEl) modeFieldEl.classList.toggle('hidden', !!lockedMode);
+    modeEl.disabled = !!lockedMode;
+    graphFieldsEl.classList.toggle('hidden', mode !== 'graph');
+    if (projectFieldEl) projectFieldEl.classList.toggle('hidden', mode !== 'graph' || !!lockedProject);
+
+    if (titleEl) {
+        if (state.launchContext === 'task') titleEl.textContent = 'Import Subtasks from Messy Notes';
+        else if (state.launchContext === 'project') titleEl.textContent = 'Import Project Plan';
+        else titleEl.textContent = 'Messy Plan Import';
+    }
+
+    if (mode === 'graph') {
+        const summaryBits = [];
+        if (lockedProject) summaryBits.push(`Applying to project: ${lockedProject.name || 'Untitled Project'}`);
+        else if (effectiveProjectName) summaryBits.push(`Target project: ${effectiveProjectName}`);
+        else summaryBits.push('No project selected. Tasks will be added without a linked project unless you enter one.');
+        if (selectedGoalLabel) summaryBits.push(`Goal: ${selectedGoalLabel}`);
+        if (selectedTaskForGraph) summaryBits.push(`Current task: ${selectedTaskForGraph.title}`);
+        summaryEl.textContent = summaryBits.join(' • ');
+        summaryEl.classList.toggle('is-warning', !lockedProject && !effectiveProjectName);
+        hintEl.textContent = lockedProject
+            ? 'Paste messy planning text and the AI will organize it into clean tasks and subtasks for this project.'
+            : 'Paste messy planning text and the AI will extract clean tasks, subtasks, and dependencies for graph import.';
+        sourceEl.placeholder = lockedProject
+            ? `Paste the rough project plan, notes, or chat for "${lockedProject.name || 'this project'}".`
+            : 'Paste the rough plan, brainstorm, call transcript, or chat here. The AI will turn it into clean tasks and subtasks for the app.';
+        submitBtn.textContent = lockedProject ? 'Normalize to Project Tasks' : 'Normalize to Task Graph';
+    } else {
+        if (selectedTask) {
+            const summaryBits = [`Applying to task: ${selectedTask.title}`];
+            if (selectedProjectName) summaryBits.push(`Project: ${selectedProjectName}`);
+            summaryEl.textContent = summaryBits.join(' • ');
+            summaryEl.classList.remove('is-warning');
+        } else {
+            summaryEl.textContent = 'Select an active task first. The AI will convert the pasted text into subtasks for that task.';
+            summaryEl.classList.add('is-warning');
+        }
+        hintEl.textContent = 'Paste messy notes or chat and the AI will pull out only the actionable subtasks that belong under the selected task.';
+        sourceEl.placeholder = 'Paste rough notes, bullets, or chat for the selected task. The AI will remove chatter and organize the actionable subtasks.';
+        submitBtn.textContent = 'Normalize to Subtasks';
+    }
+}
+
+function openAITaskMessyImportModal(taskId = '') {
+    const targetTask = getActiveTaskByIdForAIMessyImport(taskId || selectedNodeId);
+    if (!targetTask) {
+        showNotification('Select an active task first.');
+        return;
+    }
+    openAIMessyImportModal({
+        launchContext: 'task',
+        lockedMode: 'subtasks',
+        taskId: targetTask.id
+    });
+}
+
+function openAIProjectMessyImportModal(projectId = '') {
+    const fallbackProjectId = (typeof projectDetailsProjectId !== 'undefined')
+        ? String(projectDetailsProjectId || '').trim()
+        : '';
+    const normalizedProjectId = String(projectId || fallbackProjectId).trim();
+    const targetProject = getProjectByIdForAIMessyImport(normalizedProjectId);
+    if (!targetProject) {
+        showNotification('Open a project first.');
+        return;
+    }
+    const preferredGoalId = Array.isArray(targetProject.goalIds)
+        ? String(targetProject.goalIds.find(goalId => String(goalId || '').trim()) || '').trim()
+        : '';
+    openAIMessyImportModal({
+        launchContext: 'project',
+        lockedMode: 'graph',
+        projectId: targetProject.id,
+        preferredGoalId
+    });
+}
+
+function openAIMessyImportModal(options = null) {
+    const safeOptions = options && typeof options === 'object' ? options : {};
+    aiMessyImportModalState = {
+        launchContext: String(safeOptions.launchContext || 'general').trim().toLowerCase() || 'general',
+        lockedMode: String(safeOptions.lockedMode || '').trim().toLowerCase(),
+        taskId: String(safeOptions.taskId || '').trim(),
+        projectId: String(safeOptions.projectId || '').trim(),
+        preferredGoalId: String(safeOptions.preferredGoalId || '').trim()
+    };
+    populateAIMessyImportGoalSelect({
+        emptyLabel: 'No linked goal',
+        preserveSelection: aiMessyImportModalState.launchContext === 'general',
+        preferredValue: aiMessyImportModalState.preferredGoalId || ''
+    });
+
+    const modal = document.getElementById('ai-messy-import-modal');
+    const backdrop = document.getElementById('ai-messy-import-backdrop');
+    const modeEl = document.getElementById('ai-messy-import-mode');
+    const projectNameEl = document.getElementById('ai-messy-import-project-name');
+    const sourceEl = document.getElementById('ai-messy-import-source');
+    if (!modal || !backdrop || !modeEl || !projectNameEl || !sourceEl) return;
+
+    const lockedProject = getLockedProjectForAIMessyImport();
+    const selectedTask = getActiveTaskTargetForAIMessyImport();
+    const selectedProjectName = getAIMessyImportGraphProjectNameFallback();
+    modeEl.value = aiMessyImportModalState.lockedMode || (selectedTask ? 'subtasks' : 'graph');
+    if (lockedProject) projectNameEl.value = String(lockedProject.name || '').trim();
+    else if (!String(projectNameEl.value || '').trim() && selectedProjectName) projectNameEl.value = selectedProjectName;
+
+    syncAIMessyImportModeUI();
+    backdrop.classList.add('visible');
+    modal.classList.add('visible');
+
+    setTimeout(() => {
+        if (sourceEl && !sourceEl.disabled) sourceEl.focus();
+    }, 90);
+}
+
+function closeAIMessyImportModal() {
+    const modal = document.getElementById('ai-messy-import-modal');
+    const backdrop = document.getElementById('ai-messy-import-backdrop');
+    if (!modal || !backdrop) return;
+    modal.classList.remove('visible');
+    backdrop.classList.remove('visible');
+    resetAIMessyImportModalState();
+}
+
+function getAIMessyImportFormValues() {
+    const state = aiMessyImportModalState && typeof aiMessyImportModalState === 'object'
+        ? aiMessyImportModalState
+        : {};
+    const modeEl = document.getElementById('ai-messy-import-mode');
+    const sourceEl = document.getElementById('ai-messy-import-source');
+    const projectNameEl = document.getElementById('ai-messy-import-project-name');
+    const goalSelect = document.getElementById('ai-messy-import-goal-select');
+
+    return {
+        mode: String(modeEl && modeEl.value || 'subtasks').trim().toLowerCase(),
+        source: String(sourceEl && sourceEl.value || '').trim(),
+        projectName: String(projectNameEl && projectNameEl.value || '').trim(),
+        projectId: String(state.projectId || '').trim(),
+        taskId: String(state.taskId || '').trim(),
+        launchContext: String(state.launchContext || 'general').trim().toLowerCase(),
+        goalId: String(goalSelect && goalSelect.value || '').trim(),
+        goalLabel: goalSelect && String(goalSelect.value || '').trim()
+            ? String(goalSelect.options[goalSelect.selectedIndex]?.text || '').trim()
+            : ''
+    };
+}
+
+function submitAIMessyImport() {
+    const form = getAIMessyImportFormValues();
+    if (!form.source) {
+        showNotification('Paste messy text first.');
+        const sourceEl = document.getElementById('ai-messy-import-source');
+        if (sourceEl) sourceEl.focus();
+        return;
+    }
+
+    if (form.mode === 'graph') {
+        const request = buildAIMessyGraphImportRequest(form);
+        if (!request) return;
+        closeAIMessyImportModal();
+        quickPrompt(request.query, ['tasks', 'goals'], request.requestConfig);
+        return;
+    }
+
+    const selectedTask = getActiveTaskTargetForAIMessyImport();
+    if (!selectedTask) {
+        showNotification('Select an active task first for subtask import.');
+        syncAIMessyImportModeUI();
+        return;
+    }
+
+    const request = buildAIMessySubtaskImportRequest(form, selectedTask);
+    if (!request) return;
+    closeAIMessyImportModal();
+    quickPrompt(request.query, ['tasks'], request.requestConfig);
 }
 
 function openAIProjectPlannerModal() {
@@ -2693,6 +2990,8 @@ function closeAIModal() {
     const backdrop = document.getElementById('ai-modal-backdrop');
     if (!modal || !backdrop) return;
     if (!modal.classList.contains('visible')) return;
+
+    if (typeof closeAIMessyImportModal === 'function') closeAIMessyImportModal();
 
     // Save position before closing
     const rect = modal.getBoundingClientRect();
@@ -3483,6 +3782,357 @@ function buildTaskGroupContextForDecomposition(taskId) {
     };
 }
 
+function buildMessyImportLinkedGoals(goalIds) {
+    const uniqueGoalIds = Array.from(new Set(
+        (Array.isArray(goalIds) ? goalIds : [])
+            .map(goalId => String(goalId || '').trim())
+            .filter(Boolean)
+    ));
+
+    return uniqueGoalIds.map((goalId) => {
+        const title = (typeof getGoalTextById === 'function') ? getGoalTextById(goalId) : '';
+        const path = (typeof getGoalPath === 'function') ? getGoalPath(goalId) : '';
+        return {
+            id: goalId,
+            title: title || 'Unknown Goal',
+            path: path || null
+        };
+    });
+}
+
+function buildMessyImportTaskSummary(task, taskMap) {
+    if (!task || !task.id) return null;
+
+    const safeTaskMap = taskMap instanceof Map ? taskMap : new Map();
+    return {
+        id: String(task.id || '').trim(),
+        title: String(task.title || 'Untitled Task').trim() || 'Untitled Task',
+        completed: !!task.completed,
+        due: task.dueDate || null,
+        isUrgent: !!task.isManualUrgent || !!task._isUrgent,
+        isCritical: !!task._isCritical,
+        isBlocked: !!task._isBlocked,
+        projectId: String(task.projectId || '').trim() || null,
+        dependencies: (Array.isArray(task.dependencies) ? task.dependencies : [])
+            .map((dep) => {
+                if (!dep || !dep.id) return null;
+                const depTask = safeTaskMap.get(dep.id);
+                return {
+                    id: dep.id,
+                    title: depTask ? String(depTask.title || 'Untitled Task').trim() || 'Untitled Task' : 'Unknown Task',
+                    type: dep.type === 'soft' ? 'soft' : 'hard'
+                };
+            })
+            .filter(Boolean)
+            .slice(0, 20),
+        subtasks: (Array.isArray(task.subtasks) ? task.subtasks : [])
+            .map((subtask) => ({
+                text: String(subtask && subtask.text || '').trim(),
+                done: !!(subtask && subtask.done)
+            }))
+            .filter(subtask => subtask.text)
+            .slice(0, 40),
+        linkedGoals: buildMessyImportLinkedGoals(task.goalIds)
+    };
+}
+
+function buildMessyImportProjectContext(form) {
+    const safeForm = form && typeof form === 'object' ? form : {};
+    const lockedProjectId = String(safeForm.projectId || '').trim();
+    let selectedTask = getActiveTaskTargetForAIMessyImport();
+    const selectedTaskProjectId = String(selectedTask && selectedTask.projectId || '').trim();
+    const selectedGoalId = resolveGoalIdFromHint(safeForm.goalId || '');
+    const requestedProjectName = normalizeDecompositionProjectName(safeForm.projectName);
+
+    let targetProject = null;
+    let projectSource = 'none';
+    if (lockedProjectId) {
+        targetProject = getProjectByIdForAIMessyImport(lockedProjectId);
+        if (targetProject) projectSource = 'locked-project';
+    }
+    if (!targetProject && requestedProjectName) {
+        targetProject = findProjectByNameForDecomposition(requestedProjectName);
+        if (targetProject) projectSource = 'name-match';
+    }
+    if (!targetProject && selectedTaskProjectId) {
+        targetProject = getProjectByIdForAIMessyImport(selectedTaskProjectId);
+        if (targetProject) projectSource = 'selected-task';
+    }
+
+    const targetProjectId = String(targetProject && targetProject.id || '').trim();
+    if (selectedTask && targetProjectId && selectedTaskProjectId !== targetProjectId) {
+        selectedTask = null;
+    }
+    const targetProjectName = targetProject
+        ? String(targetProject.name || '').trim()
+        : (requestedProjectName || '');
+    const allTasks = [...(Array.isArray(nodes) ? nodes : []), ...(Array.isArray(archivedNodes) ? archivedNodes : [])];
+    const taskMap = new Map();
+    allTasks.forEach((task) => {
+        if (!task || !task.id || taskMap.has(task.id)) return;
+        taskMap.set(task.id, task);
+    });
+
+    const projectTaskSource = targetProjectId
+        ? allTasks
+            .filter(task => task && String(task.projectId || '').trim() === targetProjectId)
+            .slice()
+            .sort((a, b) => {
+                if (!!a.completed !== !!b.completed) return Number(a.completed) - Number(b.completed);
+                const updatedA = Math.max(Number(a && a.updatedAt) || 0, Number(a && a.createdAt) || 0);
+                const updatedB = Math.max(Number(b && b.updatedAt) || 0, Number(b && b.createdAt) || 0);
+                return updatedB - updatedA;
+            })
+            .slice(0, 80)
+        : [];
+
+    const existingProjectSubtaskTexts = new Set();
+    const existingProjectTasks = projectTaskSource
+        .map((task) => {
+            const summary = buildMessyImportTaskSummary(task, taskMap);
+            if (!summary) return null;
+            (summary.subtasks || []).forEach((subtask) => {
+                const key = String(subtask && subtask.text || '').trim().toLowerCase();
+                if (key) existingProjectSubtaskTexts.add(key);
+            });
+            return summary;
+        })
+        .filter(Boolean);
+
+    const linkedGoalIds = Array.from(new Set([
+        ...(Array.isArray(targetProject && targetProject.goalIds) ? targetProject.goalIds : []),
+        ...(Array.isArray(selectedTask && selectedTask.goalIds) ? selectedTask.goalIds : []),
+        ...(selectedGoalId ? [selectedGoalId] : [])
+    ].map(goalId => String(goalId || '').trim()).filter(Boolean)));
+
+    return {
+        currentTime: new Date().toLocaleString(),
+        includedData: ['messy_import_graph'],
+        messyImportMode: 'graph',
+        messyImportSource: String(safeForm.source || '').trim(),
+        selectedTask: buildMessyImportTaskSummary(selectedTask, taskMap),
+            targetProjectRequest: {
+                projectId: targetProjectId || null,
+                projectName: targetProjectName || null,
+                matchedExistingProject: !!targetProject,
+                projectSource,
+                lockedProjectId: lockedProjectId || null,
+                selectedGoalId: selectedGoalId || null,
+                selectedGoalLabel: String(safeForm.goalLabel || '').trim() || null
+            },
+        targetProject: targetProject
+            ? {
+                id: targetProjectId,
+                name: targetProjectName || 'Untitled Project',
+                status: String(targetProject.status || 'active').trim() || 'active',
+                description: String(targetProject.description || '').trim() || null,
+                goalIds: Array.isArray(targetProject.goalIds) ? targetProject.goalIds.slice(0, 12) : []
+            }
+            : null,
+        existingProjectTasks,
+        existingProjectSubtaskTexts: Array.from(existingProjectSubtaskTexts),
+        linkedGoals: buildMessyImportLinkedGoals(linkedGoalIds)
+    };
+}
+
+function buildAIMessySubtaskImportRequest(form, selectedTask) {
+    const safeForm = form && typeof form === 'object' ? form : {};
+    const safeTask = selectedTask && typeof selectedTask === 'object' ? selectedTask : null;
+    if (!safeTask || !safeTask.id) return null;
+
+    const scopedContext = buildTaskGroupContextForDecomposition(safeTask.id) || {
+        currentTime: new Date().toLocaleString(),
+        includedData: ['task_group_decomposition'],
+        selectedTask: {
+            id: safeTask.id,
+            title: safeTask.title || 'Untitled Task'
+        }
+    };
+
+    return {
+        query: 'Normalize the pasted planning text into import-ready subtasks for the selected task.',
+        requestConfig: {
+            contextOverride: {
+                ...scopedContext,
+                includedData: Array.from(new Set([
+                    ...(Array.isArray(scopedContext.includedData) ? scopedContext.includedData : []),
+                    'messy_import_source'
+                ])),
+                messyImportMode: 'subtasks',
+                messyImportSource: String(safeForm.source || '').trim(),
+                targetTask: {
+                    id: safeTask.id,
+                    title: safeTask.title || 'Untitled Task',
+                    projectId: String(safeTask.projectId || '').trim() || null
+                }
+            },
+            contextLabel: 'Messy Source + Selected Task Group + Project Scope',
+            extraInstructions: [
+                '- The messy planning source is in CONTEXT.messyImportSource.',
+                '- Extract only actionable subtasks for CONTEXT.targetTask.',
+                '- Ignore filler, discussion, rationale, greetings, status chatter, and duplicate phrasing.',
+                '- Use tasksInGroup, relatedProjectTasks, and existingSubtaskTexts from CONTEXT to avoid duplicate work.',
+                '- Keep subtasks concise, action-oriented, and non-overlapping.',
+                '- Prefer 4-18 subtasks when the source supports them; return fewer if only a few real actions exist.',
+                '- Do not invent major work that is not supported by the pasted source or local task context.',
+                `- Return [SUBTASK_DATA] with taskId "${safeTask.id}" and valid double-quoted JSON only.`
+            ].join('\n')
+        }
+    };
+}
+
+function buildAIMessyGraphImportRequest(form) {
+    const safeForm = form && typeof form === 'object' ? form : {};
+    const context = buildMessyImportProjectContext(safeForm);
+    const targetProjectRequest = context && context.targetProjectRequest && typeof context.targetProjectRequest === 'object'
+        ? context.targetProjectRequest
+        : {};
+    const targetProjectId = String(targetProjectRequest.projectId || '').trim();
+    const targetProjectName = normalizeDecompositionProjectName(targetProjectRequest.projectName || safeForm.projectName || '');
+    const selectedGoalId = String(targetProjectRequest.selectedGoalId || '').trim();
+
+    return {
+        query: 'Normalize the pasted planning text into import-ready tasks and subtasks for the app.',
+        requestConfig: {
+            contextOverride: context,
+            contextLabel: 'Messy Source + Target Project Context + Goals',
+            extraInstructions: [
+                '- The messy planning source is in CONTEXT.messyImportSource.',
+                '- Convert it into a clean task graph for the app: tasks first, subtasks when they add meaningful execution detail.',
+                '- Ignore filler, greetings, deliberation, and duplicate wording.',
+                '- Merge duplicate or near-duplicate work items.',
+                '- Use existingProjectTasks and existingProjectSubtaskTexts from CONTEXT to avoid duplicating work already in the project.',
+                '- Infer dependencies only when the source suggests real sequencing; otherwise leave tasks independent.',
+                '- Prefer 4-24 tasks depending on the amount of actionable material in the source.',
+                '- Keep task titles short and concrete. Keep subtasks concise and action-oriented.',
+                targetProjectName
+                    ? `- Treat "${targetProjectName}" as the target project name for this import.`
+                    : '- If CONTEXT.targetProjectRequest.projectName is empty, do not invent a project name unless the source clearly provides one.',
+                selectedGoalId
+                    ? `- Include goalIds: ["${selectedGoalId}"] on tasks when that goal is clearly relevant.`
+                    : '- Include goalIds only when they map confidently to existing goals from CONTEXT.',
+                '- Return [DECOMPOSITION_DATA] only with valid double-quoted JSON.'
+            ].join('\n'),
+            decompositionDefaults: {
+                defaultGoalId: selectedGoalId || null,
+                projectId: targetProjectId || null,
+                projectName: targetProjectName || null,
+                projectGoalId: selectedGoalId || null,
+                autoCreateProject: !!targetProjectName && !targetProjectId
+            }
+        }
+    };
+}
+
+function getAiContextTaskDueDayDelta(dueDate, nowTs = Date.now()) {
+    const raw = String(dueDate || '').trim();
+    if (!raw) return Infinity;
+
+    let parsed = null;
+    const localMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (localMatch) {
+        parsed = new Date(
+            Number(localMatch[1]),
+            Number(localMatch[2]) - 1,
+            Number(localMatch[3]),
+            0, 0, 0, 0
+        );
+    } else {
+        parsed = new Date(raw);
+    }
+
+    if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) return Infinity;
+
+    const due = new Date(parsed.getTime());
+    const today = new Date(nowTs);
+    due.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    return Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function getAiContextTaskPriorityScore(task, nowTs = Date.now()) {
+    if (!task || task.completed) return Number.NEGATIVE_INFINITY;
+
+    let score = Number.isFinite(Number(task._urgencyScore)) ? Number(task._urgencyScore) : 0;
+    const downstreamWeight = Math.max(0, Number(task._downstreamWeight) || 0);
+    const isUrgent = !!task.isManualUrgent || !!task._isUrgent;
+    const isCritical = !!task._isCritical;
+    const isBlocked = !!task._isBlocked;
+    const blockedImportant = isBlocked && (isUrgent || isCritical || downstreamWeight > 0);
+    const dueDayDelta = getAiContextTaskDueDayDelta(task.dueDate, nowTs);
+    const updatedAt = Math.max(Number(task.updatedAt) || 0, Number(task.createdAt) || 0);
+
+    if (task.isManualUrgent) score = Math.max(score, 100);
+    if (task._isUrgent) score = Math.max(score, 92);
+    else if (task._isCritical) score = Math.max(score, 78);
+
+    if (Number.isFinite(dueDayDelta)) {
+        if (dueDayDelta <= 0) score += 40;
+        else if (dueDayDelta <= 1) score += 34;
+        else if (dueDayDelta <= 3) score += 26;
+        else if (dueDayDelta <= 7) score += 18;
+        else if (dueDayDelta <= 14) score += 10;
+    }
+
+    score += Math.min(22, downstreamWeight * 3);
+
+    if (blockedImportant) score += 20;
+    else if (isBlocked) score += 8;
+
+    if (updatedAt > 0) {
+        const ageHours = Math.max(0, (nowTs - updatedAt) / (1000 * 60 * 60));
+        if (ageHours <= 24) score += 8;
+        else if (ageHours <= 72) score += 5;
+        else if (ageHours <= 168) score += 3;
+    }
+
+    return score;
+}
+
+function selectActiveTasksForAiContext(limit = 50) {
+    const safeLimit = Math.max(1, Number(limit) || 50);
+    const nowTs = Date.now();
+    const activeTasks = Array.isArray(nodes) ? nodes.filter(task => task && !task.completed) : [];
+
+    return activeTasks
+        .map((task, index) => {
+            const downstreamWeight = Math.max(0, Number(task._downstreamWeight) || 0);
+            return {
+                task,
+                index,
+                priorityScore: getAiContextTaskPriorityScore(task, nowTs),
+                dueDayDelta: getAiContextTaskDueDayDelta(task.dueDate, nowTs),
+                updatedAt: Math.max(Number(task.updatedAt) || 0, Number(task.createdAt) || 0),
+                createdAt: Number(task.createdAt) || 0,
+                downstreamWeight,
+                isUrgent: !!task.isManualUrgent || !!task._isUrgent,
+                isCritical: !!task._isCritical,
+                blockedImportant: !!task._isBlocked && ((!!task.isManualUrgent || !!task._isUrgent) || !!task._isCritical || downstreamWeight > 0)
+            };
+        })
+        .sort((a, b) => {
+            if (b.priorityScore !== a.priorityScore) return b.priorityScore - a.priorityScore;
+            if (b.isCritical !== a.isCritical) return Number(b.isCritical) - Number(a.isCritical);
+            if (b.isUrgent !== a.isUrgent) return Number(b.isUrgent) - Number(a.isUrgent);
+            if (b.blockedImportant !== a.blockedImportant) return Number(b.blockedImportant) - Number(a.blockedImportant);
+
+            const aHasDue = Number.isFinite(a.dueDayDelta);
+            const bHasDue = Number.isFinite(b.dueDayDelta);
+            if (aHasDue && bHasDue && a.dueDayDelta !== b.dueDayDelta) return a.dueDayDelta - b.dueDayDelta;
+            if (aHasDue !== bHasDue) return aHasDue ? -1 : 1;
+
+            if (b.downstreamWeight !== a.downstreamWeight) return b.downstreamWeight - a.downstreamWeight;
+            if (b.updatedAt !== a.updatedAt) return b.updatedAt - a.updatedAt;
+            if (b.createdAt !== a.createdAt) return b.createdAt - a.createdAt;
+
+            const titleCompare = String(a.task.title || '').localeCompare(String(b.task.title || ''), undefined, { sensitivity: 'base' });
+            if (titleCompare !== 0) return titleCompare;
+            return a.index - b.index;
+        })
+        .slice(0, safeLimit)
+        .map(entry => entry.task);
+}
+
 function buildContextFromSelection(dataTypes) {
     const context = {
         currentTime: new Date().toLocaleString(),
@@ -3492,11 +4142,11 @@ function buildContextFromSelection(dataTypes) {
     if (dataTypes.has('tasks')) {
         const projectNameById = new Map((Array.isArray(projects) ? projects : [])
             .map(project => [project.id, project.name || 'Untitled Project']));
-        context.activeTasks = nodes.filter(n => !n.completed).slice(0, 50).map(n => ({
+        context.activeTasks = selectActiveTasksForAiContext(50).map(n => ({
             id: n.id,
             title: n.title,
             due: n.dueDate,
-            isUrgent: n.isManualUrgent,
+            isUrgent: !!n.isManualUrgent || !!n._isUrgent,
             isCritical: n._isCritical,
             isBlocked: n._isBlocked,
             isReady: n._isReady,
@@ -4044,6 +4694,18 @@ function applyDecomposition(data, options = null) {
             renderProjectsList();
         } catch (error) {
             console.warn('[ai] Failed to refresh projects list after decomposition:', error);
+        }
+    }
+    if (targetProject
+        && typeof isProjectDetailsModalOpen === 'function'
+        && isProjectDetailsModalOpen()
+        && typeof renderProjectDetailsModal === 'function'
+        && typeof projectDetailsProjectId !== 'undefined'
+        && String(projectDetailsProjectId || '').trim() === String(targetProject.id || '').trim()) {
+        try {
+            renderProjectDetailsModal();
+        } catch (error) {
+            console.warn('[ai] Failed to refresh project details after decomposition:', error);
         }
     }
     saveToStorage();

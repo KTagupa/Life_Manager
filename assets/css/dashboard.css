@@ -321,6 +321,157 @@
             }
         }
 
+        #ai-messy-import-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.62);
+            backdrop-filter: blur(2px);
+            z-index: 4302;
+            display: none;
+        }
+
+        #ai-messy-import-modal {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: min(760px, calc(100vw - 24px));
+            max-height: calc(100vh - 24px);
+            display: none;
+            flex-direction: column;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            background: var(--panel-bg-elevated);
+            box-shadow: var(--shadow-xl);
+            z-index: 4303;
+            overflow: hidden;
+        }
+
+        #ai-messy-import-backdrop.visible,
+        #ai-messy-import-modal.visible {
+            display: block;
+        }
+
+        #ai-messy-import-modal.visible {
+            display: flex;
+        }
+
+        #ai-messy-import-modal .ai-messy-import-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            background:
+                radial-gradient(circle at top left, rgba(16, 185, 129, 0.14), transparent 42%),
+                rgba(15, 23, 42, 0.9);
+        }
+
+        #ai-messy-import-modal .ai-messy-import-title-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        #ai-messy-import-modal .ai-messy-import-icon {
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        #ai-messy-import-modal .ai-messy-import-body {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 14px 16px;
+            overflow-y: auto;
+        }
+
+        #ai-messy-import-modal .ai-messy-import-label {
+            font-size: 11px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        #ai-messy-import-modal .ai-messy-import-input,
+        #ai-messy-import-modal .ai-messy-import-textarea {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.72);
+            color: var(--text-main);
+            padding: 10px 12px;
+            font-size: 13px;
+            outline: none;
+        }
+
+        #ai-messy-import-modal .ai-messy-import-input:focus,
+        #ai-messy-import-modal .ai-messy-import-textarea:focus {
+            border-color: #10b981;
+            box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25);
+        }
+
+        #ai-messy-import-modal .ai-messy-import-textarea {
+            resize: vertical;
+            min-height: 220px;
+            line-height: 1.5;
+            font-family: inherit;
+        }
+
+        #ai-messy-import-modal .ai-messy-import-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        #ai-messy-import-modal .ai-messy-import-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        #ai-messy-import-modal .ai-messy-import-summary {
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.45);
+            color: var(--text-main);
+            padding: 12px;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        #ai-messy-import-modal .ai-messy-import-summary.is-warning {
+            border-color: rgba(245, 158, 11, 0.35);
+            background: rgba(120, 53, 15, 0.18);
+            color: #facc15;
+        }
+
+        #ai-messy-import-modal .ai-messy-import-hint {
+            font-size: 12px;
+            line-height: 1.45;
+            color: var(--text-muted);
+        }
+
+        #ai-messy-import-modal .ai-messy-import-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+            background: rgba(2, 6, 23, 0.58);
+        }
+
+        @media (max-width: 720px) {
+            #ai-messy-import-modal .ai-messy-import-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         #ai-settings-pane,
         #ai-presets-pane {
             padding: 10px;

@@ -818,6 +818,12 @@ function setupInteractions() {
                 return;
             }
 
+            const aiMessyImportModal = document.getElementById('ai-messy-import-modal');
+            if (aiMessyImportModal && aiMessyImportModal.classList.contains('visible') && typeof closeAIMessyImportModal === 'function') {
+                closeAIMessyImportModal();
+                return;
+            }
+
             const expandedInspectorModal = document.getElementById('inspector-expanded-modal');
             if (expandedInspectorModal && expandedInspectorModal.classList.contains('visible') && typeof closeInspectorExpandedModal === 'function') {
                 closeInspectorExpandedModal();
@@ -955,6 +961,12 @@ function setupInteractions() {
         const aiBackdrop = document.getElementById('ai-modal-backdrop');
         if (aiBackdrop && aiBackdrop.classList.contains('visible') && e.target === aiBackdrop) {
             closeAIModal();
+            return;
+        }
+
+        const aiMessyImportBackdrop = document.getElementById('ai-messy-import-backdrop');
+        if (aiMessyImportBackdrop && aiMessyImportBackdrop.classList.contains('visible') && e.target === aiMessyImportBackdrop && typeof closeAIMessyImportModal === 'function') {
+            closeAIMessyImportModal();
             return;
         }
 

@@ -1991,6 +1991,7 @@ function renderProjectDetailsModal() {
     const goalSelectEl = document.getElementById('project-details-goal-select');
     const linkGoalBtnEl = document.getElementById('project-details-link-goal-btn');
     const goalListEl = document.getElementById('project-details-goal-list');
+    const messyImportBtnEl = document.getElementById('project-details-messy-import-btn');
 
     if (!titleEl || !statusBadgeEl || !nameEl || !descriptionEl || !metaGridEl || !taskListEl || !goalListEl) return;
     applyProjectDetailsTheme([]);
@@ -2013,6 +2014,7 @@ function renderProjectDetailsModal() {
             goalSelectEl.disabled = true;
         }
         if (linkGoalBtnEl) linkGoalBtnEl.disabled = true;
+        if (messyImportBtnEl) messyImportBtnEl.disabled = true;
         goalListEl.innerHTML = '<div class="project-details-empty">No linked goals.</div>';
         if (prevBtnEl) prevBtnEl.disabled = true;
         if (nextBtnEl) nextBtnEl.disabled = true;
@@ -2036,6 +2038,10 @@ function renderProjectDetailsModal() {
     statusBadgeEl.textContent = PROJECT_STATUS_LABELS[status] || 'Active';
     nameEl.textContent = project.name || 'Untitled Project';
     descriptionEl.textContent = String(project.description || '').trim() || 'No description provided.';
+    if (messyImportBtnEl) {
+        messyImportBtnEl.disabled = false;
+        messyImportBtnEl.title = `Parse messy notes into tasks for "${project.name || 'Untitled Project'}"`;
+    }
 
     const navState = getProjectDetailsNavigationState(project.id);
     if (prevBtnEl) {

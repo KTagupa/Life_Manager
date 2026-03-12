@@ -627,6 +627,54 @@
         </div>
     </div>
 
+    <div id="ai-messy-import-backdrop" onclick="closeAIMessyImportModal()"></div>
+    <div id="ai-messy-import-modal" role="dialog" aria-modal="true" aria-labelledby="ai-messy-import-title">
+        <div class="ai-messy-import-header">
+            <div class="ai-messy-import-title-wrap">
+                <span class="ai-messy-import-icon">🧹</span>
+                <span id="ai-messy-import-title">Messy Plan Import</span>
+            </div>
+            <button class="modal-close-btn" onclick="closeAIMessyImportModal()">✕</button>
+        </div>
+        <div class="ai-messy-import-body">
+            <div id="ai-messy-import-mode-field">
+                <label class="ai-messy-import-label" for="ai-messy-import-mode">Import Type</label>
+                <select id="ai-messy-import-mode" class="ai-messy-import-input" onchange="syncAIMessyImportModeUI()">
+                    <option value="subtasks">Subtasks for selected task</option>
+                    <option value="graph">Tasks + subtasks to graph</option>
+                </select>
+            </div>
+
+            <div id="ai-messy-import-target-summary" class="ai-messy-import-summary"></div>
+
+            <div id="ai-messy-import-graph-fields" class="ai-messy-import-grid hidden">
+                <div id="ai-messy-import-project-field" class="ai-messy-import-field">
+                    <label class="ai-messy-import-label" for="ai-messy-import-project-name">Target Project (Optional)</label>
+                    <input id="ai-messy-import-project-name" class="ai-messy-import-input" type="text" maxlength="160" oninput="syncAIMessyImportModeUI()"
+                        placeholder="Use selected task's project or enter a project name" />
+                </div>
+                <div id="ai-messy-import-goal-field" class="ai-messy-import-field">
+                    <label class="ai-messy-import-label" for="ai-messy-import-goal-select">Link Goal (Optional)</label>
+                    <select id="ai-messy-import-goal-select" class="ai-messy-import-input" onchange="syncAIMessyImportModeUI()">
+                        <option value="">No linked goal</option>
+                    </select>
+                </div>
+            </div>
+
+            <label class="ai-messy-import-label" for="ai-messy-import-source">Paste messy chat / bullets / notes</label>
+            <textarea id="ai-messy-import-source" class="ai-messy-import-textarea" rows="11" maxlength="20000"
+                placeholder="Paste the rough chat, brainstorm, bullet list, meeting notes, or transcript here..."></textarea>
+
+            <div id="ai-messy-import-hint" class="ai-messy-import-hint">
+                The AI will clean this up, remove chatter, and turn it into structured app data you can apply.
+            </div>
+        </div>
+        <div class="ai-messy-import-footer">
+            <button class="btn" onclick="closeAIMessyImportModal()">Cancel</button>
+            <button id="ai-messy-import-submit-btn" class="btn btn-primary" onclick="submitAIMessyImport()">Normalize with AI</button>
+        </div>
+    </div>
+
     <div id="goals-panel" class="hidden">
         <div class="panel-header-row">
             <span>🎯 Life Goals</span>
@@ -1219,6 +1267,11 @@
                 </div>
                 <div id="project-details-name" class="project-details-name">Untitled Project</div>
                 <div id="project-details-description" class="project-details-description">No description provided.</div>
+                <div class="project-details-overview-actions">
+                    <button id="project-details-messy-import-btn" class="project-details-inline-btn" type="button" onclick="openAIProjectMessyImportModal()">
+                        🧹 Parse Messy Plan
+                    </button>
+                </div>
                 <div id="project-details-meta-grid" class="project-details-meta-grid">
                     <!-- Metadata rows render here -->
                 </div>

@@ -2584,6 +2584,11 @@
             white-space: nowrap;
         }
 
+        .project-details-overview-actions {
+            display: flex;
+            justify-content: flex-start;
+        }
+
         .project-details-status-badge {
             border: 1px solid rgba(249, 115, 22, 0.66);
             border-radius: 999px;
