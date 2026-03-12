@@ -415,6 +415,9 @@ if (typeof document !== 'undefined') {
 let masterKey = null;
 let cryptoKey = null;
 let kdfMeta = null;
+let previewMode = false;
+let previewDBSnapshot = null;
+let previewSessionLabel = '';
 let activeCurrency = 'PHP';
 let exchangeRates = {
     PHP: 1,

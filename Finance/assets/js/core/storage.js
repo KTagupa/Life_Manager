@@ -1034,7 +1034,25 @@ function buildRemoteVaultPayload(db) {
     return remotePayload;
 }
 
+function cloneStorageSafeValue(value) {
+    if (typeof structuredClone === 'function') {
+        try {
+            return structuredClone(value);
+        } catch (_) { }
+    }
+
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+        return value;
+    }
+}
+
 async function getDB() {
+    if (previewMode && previewDBSnapshot) {
+        return normalizeDBSchema(cloneStorageSafeValue(previewDBSnapshot));
+    }
+
     let localDB = normalizeDBSchema(getDefaultDB());
     try {
         localDB = await getLocalDBSnapshot();
@@ -1079,6 +1097,16 @@ async function getDB() {
 
 async function saveDB(inputDB) {
     let db = normalizeDBSchema(inputDB);
+    if (previewMode) {
+        const nowISO = new Date().toISOString();
+        const previewRevision = `preview_rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        db.sync.revision = previewRevision;
+        db.sync.lastKnownRemoteRevision = previewRevision;
+        db.sync.updatedAt = nowISO;
+        previewDBSnapshot = cloneStorageSafeValue(db);
+        return normalizeDBSchema(cloneStorageSafeValue(previewDBSnapshot));
+    }
+
     const localCryptoPrices = { ...(db.crypto_prices || {}) };
     // Lightweight sync diagnostics. Enable via `window.DEBUG_SYNC_DIAGNOSTICS = true`.
     try {

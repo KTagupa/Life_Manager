@@ -275,7 +275,7 @@ async function statementsComputeCryptoPositionAsOf(endTs, targetMonthKey) {
                         sellInflowInMonth += total;
                     }
                 } else if (tx.swapId) {
-                    pendingSwaps[tx.swapId] = costOfSold;
+                    pendingSwaps[tx.swapId] = statementsToNumber(pendingSwaps[tx.swapId], 0) + costOfSold;
                 }
                 return;
             }

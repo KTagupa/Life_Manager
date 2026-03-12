@@ -208,7 +208,35 @@ async function resolveKdfMeta(password) {
     return { vaultId, meta };
 }
 
+function createPreviewVaultPayload(data) {
+    return {
+        __previewPlain: true,
+        value: data
+    };
+}
+
+function isPreviewVaultPayload(payload) {
+    return !!(payload && payload.__previewPlain === true && Object.prototype.hasOwnProperty.call(payload, 'value'));
+}
+
+function clonePreviewPayloadValue(value) {
+    if (typeof structuredClone === 'function') {
+        try {
+            return structuredClone(value);
+        } catch (_) { }
+    }
+
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+        return value;
+    }
+}
+
 async function encryptData(data) {
+    if (previewMode) {
+        return createPreviewVaultPayload(clonePreviewPayloadValue(data));
+    }
     const iv = window.crypto.getRandomValues(new Uint8Array(12));
     const enc = new TextEncoder();
     const encrypted = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, cryptoKey, enc.encode(JSON.stringify(data)));
@@ -247,6 +275,9 @@ async function updateExchangeRates() {
 
 async function decryptData(encryptedObj) {
     try {
+        if (isPreviewVaultPayload(encryptedObj)) {
+            return clonePreviewPayloadValue(encryptedObj.value);
+        }
         if (!encryptedObj || !encryptedObj.iv || !encryptedObj.content) return null;
         const dec = new TextDecoder();
         const decrypted = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(encryptedObj.iv) }, cryptoKey, new Uint8Array(encryptedObj.content));

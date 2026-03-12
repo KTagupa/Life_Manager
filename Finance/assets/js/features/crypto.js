@@ -6,6 +6,7 @@
             sourceRef: null,
             length: -1,
             decryptedTxs: null,
+            chronologicalTxs: null,
             pendingDecryptPromise: null,
             holdingsByMethod: new Map()
         };
@@ -14,6 +15,7 @@
             cryptoComputationCache.sourceRef = null;
             cryptoComputationCache.length = -1;
             cryptoComputationCache.decryptedTxs = null;
+            cryptoComputationCache.chronologicalTxs = null;
             cryptoComputationCache.pendingDecryptPromise = null;
             cryptoComputationCache.holdingsByMethod = new Map();
         }
@@ -24,6 +26,7 @@
                 cryptoComputationCache.sourceRef = source;
                 cryptoComputationCache.length = source.length;
                 cryptoComputationCache.decryptedTxs = null;
+                cryptoComputationCache.chronologicalTxs = null;
                 cryptoComputationCache.pendingDecryptPromise = null;
                 cryptoComputationCache.holdingsByMethod = new Map();
             }
@@ -306,6 +309,28 @@
             } finally {
                 cryptoComputationCache.pendingDecryptPromise = null;
             }
+        }
+
+        function getCryptoProcessingRank(tx) {
+            const type = String(tx?.type || '').trim();
+            if (type === 'swap_out') return 0;
+            if (type === 'swap_in') return 2;
+            return 1;
+        }
+
+        function sortCryptoTransactionsChronologically(txs) {
+            return [...(txs || [])]
+                .map((tx, index) => ({ tx, index }))
+                .sort((a, b) => {
+                    const timeDiff = Date.parse(a.tx?.date) - Date.parse(b.tx?.date);
+                    if (Number.isFinite(timeDiff) && timeDiff !== 0) return timeDiff;
+
+                    const rankDiff = getCryptoProcessingRank(a.tx) - getCryptoProcessingRank(b.tx);
+                    if (rankDiff !== 0) return rankDiff;
+
+                    return a.index - b.index;
+                })
+                .map(entry => entry.tx);
         }
 
         function calculateWeightedHoldingDays(lots) {
@@ -621,8 +646,9 @@
             // holdings structure: 
             // { 'bitcoin': { amount: 0, totalCost: 0, realizedPL: 0, symbol: 'BTC', lots: [] } }
 
-            // Process oldest first
-            const sorted = [...txs].reverse();
+            // Process oldest first while preserving same-day entry order and swap direction.
+            const sorted = cryptoComputationCache.chronologicalTxs || sortCryptoTransactionsChronologically(txs);
+            cryptoComputationCache.chronologicalTxs = sorted;
             const pendingSwaps = {}; // Stores cost basis for swaps: { swapId: totalCostTransferred }
 
             sorted.forEach(tx => {
@@ -644,7 +670,9 @@
                         amount: tx.amount,
                         price: tx.phpPrice,
                         total: tx.total,
-                        date: tx.date
+                        date: tx.date,
+                        sourceType: 'buy',
+                        sourceSymbol: tx.symbol
                     });
 
                 } else if (tx.type === 'sell' || tx.type === 'swap_out') {
@@ -709,7 +737,7 @@
                         // We store the 'costOfSold' (which is the cost basis of the tokens leaving)
                         // to be applied to the incoming token.
                         if (tx.swapId) {
-                            pendingSwaps[tx.swapId] = costOfSold;
+                            pendingSwaps[tx.swapId] = (pendingSwaps[tx.swapId] || 0) + costOfSold;
                         }
                     }
 
@@ -727,8 +755,12 @@
                         amount: tx.amount,
                         price: effectivePrice,
                         total: transferredCost,
-                        date: tx.date
+                        date: tx.date,
+                        sourceType: 'swap',
+                        sourceSymbol: tx.linkedToken || tx.symbol
                     });
+
+                    if (tx.swapId) delete pendingSwaps[tx.swapId];
                 }
             });
 
@@ -1076,6 +1108,63 @@
             return { taxMethod, targetUnrealizedPct };
         }
 
+        function formatCryptoTokenAmountHTML(amount) {
+            const numericAmount = Number(amount);
+            if (!Number.isFinite(numericAmount)) {
+                return '<span class="text-slate-500">0.<span class="text-slate-600">00000000</span></span>';
+            }
+
+            const isNegative = numericAmount < 0;
+            const absoluteAmount = Math.abs(numericAmount);
+            const [integerPart, decimalPartRaw] = absoluteAmount.toFixed(8).split('.');
+            const decimalPart = decimalPartRaw || '00000000';
+            const formattedInteger = Number(integerPart).toLocaleString('en-US');
+
+            const lastNonZeroIndex = (() => {
+                for (let index = decimalPart.length - 1; index >= 0; index -= 1) {
+                    if (decimalPart[index] !== '0') return index;
+                }
+                return -1;
+            })();
+
+            let decimalMarkup = '';
+            if (lastNonZeroIndex === -1) {
+                decimalMarkup = `<span class="text-slate-600">${decimalPart}</span>`;
+            } else {
+                const significant = decimalPart.slice(0, lastNonZeroIndex + 1);
+                const trailing = decimalPart.slice(lastNonZeroIndex + 1);
+
+                decimalMarkup += significant;
+                if (trailing) decimalMarkup += `<span class="text-slate-600">${trailing}</span>`;
+            }
+
+            return `${isNegative ? '-' : ''}${formattedInteger}.<span>${decimalMarkup}</span>`;
+        }
+
+        function summarizeCryptoHoldingSources(lots) {
+            const swapSymbols = new Set();
+            let swapCost = 0;
+
+            (lots || []).forEach(lot => {
+                if (!lot || lot.amount <= 0.000001) return;
+                const lotCost = Math.max(0, (Number(lot.amount) || 0) * (Number(lot.price) || 0));
+                if (lot.sourceType === 'swap') {
+                    swapCost += lotCost;
+                    const sourceSymbol = String(lot.sourceSymbol || '').trim().toUpperCase();
+                    if (sourceSymbol) swapSymbols.add(sourceSymbol);
+                }
+            });
+
+            return {
+                swapCost,
+                directCost: Math.max(0, (lots || []).reduce((sum, lot) => {
+                    if (!lot || lot.amount <= 0.000001) return sum;
+                    return sum + Math.max(0, (Number(lot.amount) || 0) * (Number(lot.price) || 0));
+                }, 0) - swapCost),
+                swapSymbols: Array.from(swapSymbols)
+            };
+        }
+
         function createCryptoHoldingCardElement({
             id,
             h,
@@ -1094,8 +1183,20 @@
             const encodedTokenId = encodeInlineArg(id);
             const tokenTargetPct = getCryptoTokenTargetPct(id, targetUnrealizedPct);
             const showTokenTarget = !cryptoTargetLossesOnly || unrealized < 0;
+            const sourceSummary = summarizeCryptoHoldingSources(h.lots);
+            const formattedAmount = formatCryptoTokenAmountHTML(h.amount);
             let tokenTargetUI = '';
             let tokenTargetNote = '';
+            let sourceNote = '';
+
+            if (sourceSummary.swapCost > 0.01) {
+                const swapFrom = sourceSummary.swapSymbols.length > 0 ? ` from ${escapeHTML(sourceSummary.swapSymbols.join(', '))}` : '';
+                if (sourceSummary.directCost > 0.01) {
+                    sourceNote = `<p class="text-[10px] text-sky-300 mt-0.5">Swap-derived cost basis: ${fmt(sourceSummary.swapCost)}${swapFrom}</p>`;
+                } else {
+                    sourceNote = `<p class="text-[10px] text-sky-300 mt-0.5">Acquired via swap${swapFrom} • carrying ${fmt(sourceSummary.swapCost)} original cost basis</p>`;
+                }
+            }
 
             if (showTokenTarget) {
                 tokenTargetUI = `
@@ -1203,8 +1304,10 @@
                         <h4 class="font-bold text-white">${safeSymbol}</h4>
                         <span class="text-[10px] bg-slate-700 text-slate-400 px-1.5 rounded">${safeTokenId}</span>
                     </div>
-                    <p class="text-xs text-slate-400 mt-1">${h.amount.toFixed(4)} tokens @ ${fmt(avgPrice)} avg</p>
-                    <p class="text-[10px] text-slate-500 mt-0.5">Invested: ${fmt(h.totalCost)} • Avg hold: ${weightedHoldingDays.toFixed(1)} days</p>
+                    <p class="text-sm font-semibold text-slate-200 mt-1 font-mono tabular-nums">${formattedAmount} <span class="text-[11px] font-medium text-slate-400">tokens</span></p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Avg entry: ${fmt(avgPrice)}</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Cost basis: ${fmt(h.totalCost)} • Avg hold: ${weightedHoldingDays.toFixed(1)} days</p>
+                    ${sourceNote}
                     <p class="text-[10px] text-slate-500 mt-0.5">${taxMethod.toUpperCase()} Basis</p>
                     ${tokenTargetUI}
                     ${tokenTargetNote}
@@ -1378,6 +1481,8 @@
                 });
             }
 
+            if (window.lucide) window.lucide.createIcons();
+
             // Update Header Stats
             document.getElementById('cp-current-val').innerText = fmt(totalVal);
             document.getElementById('cp-invested').innerText = fmt(totalInvested);
@@ -1444,15 +1549,29 @@
             const timeStr = lastUpdate > 0 ? new Date(lastUpdate).toLocaleTimeString() : 'Never';
             document.getElementById('crypto-last-updated').innerText = `Prices updated: ${timeStr}`;
 
-            // Sync widget too
-            renderCryptoWidget();
+            // Keep the main portfolio UI responsive even if a secondary widget fails.
+            try {
+                await renderCryptoWidget();
+            } catch (error) {
+                console.error('Crypto widget render failed:', error);
+            }
+            try {
+                renderCryptoAllocationChart(holdings);
+            } catch (error) {
+                console.error('Crypto allocation chart render failed:', error);
+            }
+            try {
+                await renderInvestmentGoals();
+            } catch (error) {
+                console.error('Crypto investment goals render failed:', error);
+            }
+            try {
+                calculateTaxSummary(holdings);
+            } catch (error) {
+                console.error('Crypto tax summary render failed:', error);
+            }
 
-            // New Renderers
-            renderCryptoAllocationChart(holdings);
-            renderInvestmentGoals();
-            calculateTaxSummary(holdings);
-
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
         }
 
         function renderCryptoAllocationChart(holdings) {
@@ -1593,7 +1712,7 @@
                 `;
                 list.appendChild(div);
             });
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
         }
 
         // --- TAX & METRICS ---
