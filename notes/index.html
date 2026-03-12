@@ -43,6 +43,13 @@
             flex-wrap: wrap;
         }
 
+        .notes-topbar-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
         .notes-title {
             font-size: 22px;
             margin: 0;
@@ -110,6 +117,7 @@
             display: flex;
             gap: 8px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .notes-list-controls-row #notes-search {
@@ -117,10 +125,39 @@
             min-width: 0;
         }
 
+        .notes-disclosure-btn {
+            white-space: nowrap;
+        }
+
+        .notes-disclosure-btn.is-active {
+            border-color: rgba(79, 156, 249, 0.6);
+            box-shadow: inset 0 0 0 1px rgba(79, 156, 249, 0.22);
+        }
+
+        .notes-list-filters-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .notes-list-filters-wrap[hidden] {
+            display: none !important;
+        }
+
         .notes-list-filters {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 8px;
+        }
+
+        .notes-list-filters-help {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.4;
         }
 
         .notes-list-scroll {
@@ -235,7 +272,46 @@
             font-weight: 600;
         }
 
+        .editor-primary-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
         .editor-action-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .editor-action-row-primary {
+            flex: 1;
+        }
+
+        .editor-details-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .editor-details-panel[hidden] {
+            display: none !important;
+        }
+
+        .editor-details-summary {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.45;
+        }
+
+        .editor-details-actions {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
@@ -560,6 +636,7 @@
             justify-content: space-between;
             gap: 8px;
             min-height: 18px;
+            flex-wrap: wrap;
         }
 
         .notes-conflict-banner {
@@ -821,6 +898,25 @@
                 justify-content: flex-start;
             }
 
+            .notes-topbar-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .editor-primary-row {
+                align-items: stretch;
+            }
+
+            .editor-action-row-primary,
+            .editor-primary-row > .notes-btn-inline {
+                width: 100%;
+            }
+
+            .editor-details-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
             .note-block-split {
                 grid-template-columns: 1fr;
             }
@@ -833,7 +929,7 @@
     <main class="notes-page">
         <div class="notes-topbar">
             <h1 class="notes-title">Notes Workspace</h1>
-            <div style="display:flex; gap:12px; align-items:center;">
+            <div class="notes-topbar-actions">
                 <span class="notes-muted">Shared with main app storage</span>
                 <a class="notes-topbar-link" href="../index.html">Back to Main App</a>
             </div>
@@ -849,33 +945,38 @@
                     <div class="notes-list-controls-row">
                         <input type="text" id="notes-search" placeholder="Search notes...">
                         <button id="new-note-btn" class="btn notes-btn-inline">+ New</button>
+                        <button id="notes-list-controls-toggle-btn" type="button" class="btn notes-btn-inline notes-disclosure-btn"
+                            aria-expanded="false" aria-controls="notes-list-filters-wrap">Filters</button>
                     </div>
-                    <div class="notes-list-filters">
-                        <select id="notes-filter-select" aria-label="Filter notes">
-                            <option value="all">Filter: All Notes</option>
-                            <option value="pinned">Filter: Pinned</option>
-                            <option value="linked">Filter: Linked to Tasks</option>
-                            <option value="bookmarked">Filter: With Bookmarks</option>
-                            <option value="unlinked">Filter: No Task Links</option>
-                            <option value="has-reminder">Filter: Has Reminder</option>
-                            <option value="urgent-linked">Filter: Urgent-linked</option>
-                            <option value="recently-edited">Filter: Recently Edited</option>
-                        </select>
-                        <select id="notes-sort-select" aria-label="Sort notes">
-                            <option value="pinned-timestamp-desc">Sort: Pinned + Recent</option>
-                            <option value="timestamp-desc">Sort: Recently Updated</option>
-                            <option value="timestamp-asc">Sort: Oldest Updated</option>
-                            <option value="title-asc">Sort: Title A-Z</option>
-                            <option value="title-desc">Sort: Title Z-A</option>
-                        </select>
-                        <select id="notes-tag-filter-select" aria-label="Filter notes by tag">
-                            <option value="all">Tag: All Tags</option>
-                        </select>
-                        <select id="notes-recent-window-select" aria-label="Recent edit window">
-                            <option value="24h">Recent Window: Last 24 Hours</option>
-                            <option value="7d" selected>Recent Window: Last 7 Days</option>
-                            <option value="30d">Recent Window: Last 30 Days</option>
-                        </select>
+                    <div id="notes-list-filters-wrap" class="notes-list-filters-wrap" hidden>
+                        <div class="notes-list-filters-help">Filter, sort, or narrow the note list when you need it.</div>
+                        <div class="notes-list-filters">
+                            <select id="notes-filter-select" aria-label="Filter notes">
+                                <option value="all">Filter: All Notes</option>
+                                <option value="pinned">Filter: Pinned</option>
+                                <option value="linked">Filter: Linked to Tasks</option>
+                                <option value="bookmarked">Filter: With Bookmarks</option>
+                                <option value="unlinked">Filter: No Task Links</option>
+                                <option value="has-reminder">Filter: Has Reminder</option>
+                                <option value="urgent-linked">Filter: Urgent-linked</option>
+                                <option value="recently-edited">Filter: Recently Edited</option>
+                            </select>
+                            <select id="notes-sort-select" aria-label="Sort notes">
+                                <option value="pinned-timestamp-desc">Sort: Pinned + Recent</option>
+                                <option value="timestamp-desc">Sort: Recently Updated</option>
+                                <option value="timestamp-asc">Sort: Oldest Updated</option>
+                                <option value="title-asc">Sort: Title A-Z</option>
+                                <option value="title-desc">Sort: Title Z-A</option>
+                            </select>
+                            <select id="notes-tag-filter-select" aria-label="Filter notes by tag">
+                                <option value="all">Tag: All Tags</option>
+                            </select>
+                            <select id="notes-recent-window-select" aria-label="Recent edit window">
+                                <option value="24h">Recent Window: Last 24 Hours</option>
+                                <option value="7d" selected>Recent Window: Last 7 Days</option>
+                                <option value="30d">Recent Window: Last 30 Days</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div id="notes-list" class="notes-list-scroll"></div>
@@ -885,52 +986,59 @@
                 <div class="notes-panel-header">
                     <strong>Editor</strong>
                     <div class="editor-header-meta">
-                        <button id="notes-shortcuts-btn" type="button" class="btn notes-btn-inline notes-help-btn"
-                            title="Show commands and shortcuts" aria-label="Show commands and shortcuts">(i)</button>
                         <span id="notes-dirty-indicator" class="notes-dirty-indicator clean">All changes saved</span>
-                        <span id="notes-status" class="notes-status"></span>
+                        <button id="notes-shortcuts-btn" type="button" class="btn notes-btn-inline notes-help-btn"
+                            title="Show commands and shortcuts" aria-label="Show commands and shortcuts">Commands</button>
                     </div>
                 </div>
                 <div class="notes-editor-main">
                     <input type="text" id="note-title" placeholder="Note title">
 
-                    <div class="editor-meta-toggle-row">
-                        <button id="meta-linked-toggle-btn" type="button" class="btn notes-btn-inline editor-meta-toggle-btn"
-                            aria-expanded="false" aria-controls="meta-linked-field">Linked Tasks (0)</button>
-                        <button id="meta-bookmark-toggle-btn" type="button" class="btn notes-btn-inline editor-meta-toggle-btn"
-                            aria-expanded="false" aria-controls="meta-bookmark-field">Bookmarks (0)</button>
+                    <div class="editor-primary-row">
+                        <div class="editor-action-row editor-action-row-primary">
+                            <button id="add-block-btn" class="btn notes-btn-inline">+ Add Block</button>
+                            <button id="toggle-view-btn" class="btn notes-btn-inline">View Mode</button>
+                            <button id="save-note-btn" class="btn btn-primary notes-btn-inline">Save</button>
+                        </div>
+                        <button id="editor-details-toggle-btn" type="button" class="btn notes-btn-inline notes-disclosure-btn"
+                            aria-expanded="false" aria-controls="editor-details-panel">Details</button>
                     </div>
 
-                    <div id="editor-meta-grid" class="editor-meta-grid" hidden>
-                        <div id="meta-linked-field" class="editor-meta-field" hidden>
-                            <label for="note-task-search">Linked Tasks</label>
-                            <div id="note-task-picker" class="task-picker">
-                                <div id="note-task-chip-list" class="task-chip-list"></div>
-                                <div class="task-picker-search-row">
-                                    <input type="text" id="note-task-search" placeholder="Search tasks by title or ID">
-                                    <button id="note-task-clear-btn" type="button" class="btn notes-btn-inline">Clear</button>
+                    <div id="editor-details-panel" class="editor-details-panel" hidden>
+                        <div id="editor-details-summary" class="editor-details-summary">Select a note to manage links, bookmarks, and note actions.</div>
+                        <div class="editor-details-actions">
+                            <button id="meta-linked-toggle-btn" type="button" class="btn notes-btn-inline editor-meta-toggle-btn"
+                                aria-expanded="false" aria-controls="meta-linked-field">Linked Tasks (0)</button>
+                            <button id="meta-bookmark-toggle-btn" type="button" class="btn notes-btn-inline editor-meta-toggle-btn"
+                                aria-expanded="false" aria-controls="meta-bookmark-field">Bookmarks (0)</button>
+                            <button id="pin-note-btn" class="btn notes-btn-inline">Pin</button>
+                            <button id="delete-note-btn" class="btn notes-btn-inline">Delete</button>
+                        </div>
+
+                        <div id="editor-meta-grid" class="editor-meta-grid" hidden>
+                            <div id="meta-linked-field" class="editor-meta-field" hidden>
+                                <label for="note-task-search">Linked Tasks</label>
+                                <div id="note-task-picker" class="task-picker">
+                                    <div id="note-task-chip-list" class="task-chip-list"></div>
+                                    <div class="task-picker-search-row">
+                                        <input type="text" id="note-task-search" placeholder="Search tasks by title or ID">
+                                        <button id="note-task-clear-btn" type="button" class="btn notes-btn-inline">Clear</button>
+                                    </div>
+                                    <div id="note-task-suggestions" class="task-suggestions" hidden></div>
                                 </div>
-                                <div id="note-task-suggestions" class="task-suggestions" hidden></div>
+                            </div>
+                            <div id="meta-bookmark-field" class="editor-meta-field" hidden>
+                                <label for="bookmark-jump">Jump To Bookmark</label>
+                                <select id="bookmark-jump">
+                                    <option value="">No bookmarks</option>
+                                </select>
                             </div>
                         </div>
-                        <div id="meta-bookmark-field" class="editor-meta-field" hidden>
-                            <label for="bookmark-jump">Jump To Bookmark</label>
-                            <select id="bookmark-jump">
-                                <option value="">No bookmarks</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="editor-action-row">
-                        <button id="add-block-btn" class="btn notes-btn-inline">+ Add Block</button>
-                        <button id="toggle-view-btn" class="btn notes-btn-inline">View Mode</button>
-                        <button id="pin-note-btn" class="btn notes-btn-inline">Pin</button>
-                        <button id="save-note-btn" class="btn btn-primary notes-btn-inline">Save</button>
-                        <button id="delete-note-btn" class="btn notes-btn-inline">Delete</button>
                     </div>
 
                     <div class="notes-save-row">
                         <span id="notes-last-saved" class="notes-muted">Last saved: --</span>
+                        <span id="notes-status" class="notes-status"></span>
                     </div>
 
                     <div id="notes-conflict-banner" class="notes-conflict-banner" hidden>

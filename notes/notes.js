@@ -33,7 +33,9 @@
         paletteActiveIndex: 0,
         isReady: false,
         dirty: false,
-        saveTimer: null
+        saveTimer: null,
+        listControlsOpen: false,
+        detailsPanelOpen: false
     };
 
     const els = {
@@ -48,10 +50,15 @@
         conflictKeepBtn: null,
         conflictReloadBtn: null,
         title: null,
+        listControlsToggleBtn: null,
+        listFiltersWrap: null,
         filterSelect: null,
         tagFilterSelect: null,
         recentWindowSelect: null,
         sortSelect: null,
+        detailsToggleBtn: null,
+        detailsPanel: null,
+        detailsSummary: null,
         metaGrid: null,
         metaLinkedToggleBtn: null,
         metaBookmarkToggleBtn: null,
@@ -137,6 +144,36 @@
         if (els.lastSaved) {
             els.lastSaved.textContent = `Last saved: ${formatClockTime(state.lastSavedAt)}`;
         }
+    }
+
+    function getActiveAdvancedListControlCount() {
+        let count = 0;
+        if (normalizeFilterMode(state.activeListFilter) !== 'all') count += 1;
+        if (normalizeSortMode(state.activeSortMode) !== 'pinned-timestamp-desc') count += 1;
+        if (normalizeTagFilterValue(state.activeTagFilter) !== 'all') count += 1;
+        if (
+            normalizeFilterMode(state.activeListFilter) === 'recently-edited' &&
+            normalizeRecentWindow(state.activeRecentWindow) !== '7d'
+        ) {
+            count += 1;
+        }
+        return count;
+    }
+
+    function updateListControlsToggleButton() {
+        if (!els.listControlsToggleBtn) return;
+        const activeCount = getActiveAdvancedListControlCount();
+        els.listControlsToggleBtn.textContent = activeCount > 0 ? `Filters (${activeCount})` : 'Filters';
+        els.listControlsToggleBtn.setAttribute('aria-expanded', state.listControlsOpen ? 'true' : 'false');
+        els.listControlsToggleBtn.classList.toggle('is-active', state.listControlsOpen || activeCount > 0);
+    }
+
+    function setListControlsOpen(open) {
+        state.listControlsOpen = !!open;
+        if (els.listFiltersWrap) {
+            els.listFiltersWrap.hidden = !state.listControlsOpen;
+        }
+        updateListControlsToggleButton();
     }
 
     function showConflictBanner(message = '') {
@@ -327,6 +364,7 @@
         const projection = recalculateVisibleNotes({ keepSelection: true });
         renderList();
         updateCount();
+        updateListControlsToggleButton();
         if (projection.selectionChanged) loadSelectedNoteIntoEditor();
     }
 
@@ -456,6 +494,64 @@
         els.recentWindowSelect.disabled = !recentModeActive;
     }
 
+    function getDetailsSummaryText() {
+        const note = getSelectedNote();
+        if (!note) {
+            return 'Select a note to manage links, bookmarks, and note actions.';
+        }
+
+        const linkedCount = state.selectedTaskIds.length;
+        const bookmarkCount = getBookmarkCount();
+        const pinLabel = note.isPinned ? 'Pinned' : 'Not pinned';
+        return `${linkedCount} linked task(s) • ${bookmarkCount} bookmark(s) • ${pinLabel}.`;
+    }
+
+    function updateDetailsToggleButton() {
+        const hasNote = !!getSelectedNote();
+        if (els.detailsToggleBtn) {
+            els.detailsToggleBtn.textContent = state.detailsPanelOpen ? 'Hide Details' : 'Details';
+            els.detailsToggleBtn.setAttribute('aria-expanded', state.detailsPanelOpen ? 'true' : 'false');
+            els.detailsToggleBtn.classList.toggle('is-active', state.detailsPanelOpen);
+            els.detailsToggleBtn.disabled = !hasNote;
+        }
+
+        if (els.detailsSummary) {
+            els.detailsSummary.textContent = getDetailsSummaryText();
+        }
+    }
+
+    function setDetailsPanelOpen(open) {
+        const shouldOpen = !!open && !!getSelectedNote();
+        state.detailsPanelOpen = shouldOpen;
+
+        if (!shouldOpen) {
+            state.activeMetaPanel = null;
+        }
+
+        if (els.detailsPanel) {
+            els.detailsPanel.hidden = !shouldOpen;
+        }
+
+        if (!shouldOpen) {
+            if (els.metaGrid) els.metaGrid.hidden = true;
+            if (els.metaLinkedField) els.metaLinkedField.hidden = true;
+            if (els.metaBookmarkField) els.metaBookmarkField.hidden = true;
+            closeTaskSuggestions();
+            if (els.taskSearch) els.taskSearch.value = '';
+        }
+
+        updateDetailsToggleButton();
+        updateMetaToggleButtons();
+    }
+
+    function toggleDetailsPanel() {
+        if (!getSelectedNote()) {
+            setStatus('Select a note first.');
+            return;
+        }
+        setDetailsPanelOpen(!state.detailsPanelOpen);
+    }
+
     function updateTagFilterOptions() {
         if (!els.tagFilterSelect) return;
 
@@ -567,6 +663,8 @@
         if (!els.pinBtn) return;
         const note = getSelectedNote();
         els.pinBtn.textContent = note && note.isPinned ? 'Unpin' : 'Pin';
+        els.pinBtn.disabled = !note;
+        updateDetailsToggleButton();
         if (state.paletteOpen) renderCommandPalette();
         if (state.shortcutsHelpOpen) renderShortcutsHelp();
     }
@@ -593,10 +691,11 @@
         const bookmarkCount = getBookmarkCount();
         const activePanel = state.activeMetaPanel;
         const hasNote = !!getSelectedNote();
+        const detailsOpen = state.detailsPanelOpen;
 
         if (els.metaLinkedToggleBtn) {
             els.metaLinkedToggleBtn.textContent = `Linked Tasks (${linkedCount})`;
-            const expanded = activePanel === 'tasks';
+            const expanded = detailsOpen && activePanel === 'tasks';
             els.metaLinkedToggleBtn.classList.toggle('is-active', expanded);
             els.metaLinkedToggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
             els.metaLinkedToggleBtn.disabled = !hasNote;
@@ -604,7 +703,7 @@
 
         if (els.metaBookmarkToggleBtn) {
             els.metaBookmarkToggleBtn.textContent = `Bookmarks (${bookmarkCount})`;
-            const expanded = activePanel === 'bookmarks';
+            const expanded = detailsOpen && activePanel === 'bookmarks';
             els.metaBookmarkToggleBtn.classList.toggle('is-active', expanded);
             els.metaBookmarkToggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
             els.metaBookmarkToggleBtn.disabled = !hasNote;
@@ -618,15 +717,15 @@
         state.activeMetaPanel = normalized;
 
         if (els.metaGrid) {
-            els.metaGrid.hidden = !normalized;
+            els.metaGrid.hidden = !state.detailsPanelOpen || !normalized;
         }
 
         if (els.metaLinkedField) {
-            els.metaLinkedField.hidden = normalized !== 'tasks';
+            els.metaLinkedField.hidden = !state.detailsPanelOpen || normalized !== 'tasks';
         }
 
         if (els.metaBookmarkField) {
-            els.metaBookmarkField.hidden = normalized !== 'bookmarks';
+            els.metaBookmarkField.hidden = !state.detailsPanelOpen || normalized !== 'bookmarks';
         }
 
         if (normalized !== 'tasks') {
@@ -635,12 +734,16 @@
         }
 
         updateMetaToggleButtons();
+        updateDetailsToggleButton();
     }
 
     function toggleMetaPanel(panel) {
         if (!getSelectedNote()) {
             setStatus('Select a note first.');
             return;
+        }
+        if (!state.detailsPanelOpen) {
+            setDetailsPanelOpen(true);
         }
         const nextPanel = state.activeMetaPanel === panel ? null : panel;
         setActiveMetaPanel(nextPanel);
@@ -1106,8 +1209,12 @@
         }
 
         if (isTyping) {
-            if (lower === 'escape' && state.activeMetaPanel) {
-                setActiveMetaPanel(null);
+            if (lower === 'escape') {
+                if (state.activeMetaPanel) {
+                    setActiveMetaPanel(null);
+                } else if (state.detailsPanelOpen) {
+                    setDetailsPanelOpen(false);
+                }
             }
             return;
         }
@@ -1142,8 +1249,14 @@
             return;
         }
 
-        if (lower === 'escape' && state.activeMetaPanel) {
-            setActiveMetaPanel(null);
+        if (lower === 'escape') {
+            if (state.activeMetaPanel) {
+                setActiveMetaPanel(null);
+                return;
+            }
+            if (state.detailsPanelOpen) {
+                setDetailsPanelOpen(false);
+            }
         }
     }
 
@@ -1169,6 +1282,7 @@
             els.bookmarkJump.value = '';
         }
         updateMetaToggleButtons();
+        updateDetailsToggleButton();
     }
 
     function normalizeTaskOption(rawTask, isArchived) {
@@ -1363,6 +1477,7 @@
         if (!state.selectedTaskIds.length) {
             els.taskChipList.innerHTML = '<span class="task-chip-empty">No linked tasks.</span>';
             updateMetaToggleButtons();
+            updateDetailsToggleButton();
             return;
         }
 
@@ -1383,6 +1498,7 @@
             });
         });
         updateMetaToggleButtons();
+        updateDetailsToggleButton();
     }
 
     function reorderBlockById(sourceId, targetId, placeAfter = false) {
@@ -1592,7 +1708,7 @@
         if (els.taskSearch) els.taskSearch.value = '';
         state.selectedTaskIds = [];
         state.blocks = [];
-        setActiveMetaPanel(null);
+        setDetailsPanelOpen(false);
         state.dirty = false;
         state.isSaving = false;
         state.lastSavedAt = null;
@@ -1613,7 +1729,7 @@
 
         if (els.title) els.title.value = note.title || '';
         if (els.taskSearch) els.taskSearch.value = '';
-        setActiveMetaPanel(null);
+        setDetailsPanelOpen(false);
         state.selectedTaskIds = normalizeTaskIds(note.taskIds);
         renderTaskChips();
         closeTaskSuggestions();
@@ -1686,6 +1802,7 @@
         state.allNotes = await repo.listNotes({ search });
         updateTagFilterOptions();
         updateRecentFilterControlState();
+        updateListControlsToggleButton();
         const projection = recalculateVisibleNotes({ keepSelection, forceSelectId });
 
         renderList();
@@ -1720,7 +1837,12 @@
             state.activeListFilter = 'all';
             if (els.filterSelect) els.filterSelect.value = 'all';
         }
+        if (state.activeTagFilter !== 'all') {
+            state.activeTagFilter = 'all';
+            if (els.tagFilterSelect) els.tagFilterSelect.value = 'all';
+        }
         if (els.search) els.search.value = '';
+        setListControlsOpen(false);
         state.selectedId = created.id;
         await refreshNotes({ keepSelection: true, forceSelectId: created.id, silent: true });
         broadcast('create', created.id);
@@ -1938,6 +2060,7 @@
                 const applyFilter = () => {
                     state.activeListFilter = normalizeFilterMode(els.filterSelect.value);
                     updateRecentFilterControlState();
+                    updateListControlsToggleButton();
                     applyListProjectionAndRender();
                 };
                 applyListChange(applyFilter, 'filter change');
@@ -1948,6 +2071,7 @@
             els.sortSelect.addEventListener('change', () => {
                 const applySort = () => {
                     state.activeSortMode = normalizeSortMode(els.sortSelect.value);
+                    updateListControlsToggleButton();
                     applyListProjectionAndRender();
                 };
                 applyListChange(applySort, 'sort change');
@@ -1958,6 +2082,7 @@
             els.tagFilterSelect.addEventListener('change', () => {
                 const applyTagFilter = () => {
                     state.activeTagFilter = normalizeTagFilterValue(els.tagFilterSelect.value);
+                    updateListControlsToggleButton();
                     applyListProjectionAndRender();
                 };
                 applyListChange(applyTagFilter, 'tag filter change');
@@ -1968,9 +2093,16 @@
             els.recentWindowSelect.addEventListener('change', () => {
                 const applyRecentWindow = () => {
                     state.activeRecentWindow = normalizeRecentWindow(els.recentWindowSelect.value);
+                    updateListControlsToggleButton();
                     applyListProjectionAndRender();
                 };
                 applyListChange(applyRecentWindow, 'recent window change');
+            });
+        }
+
+        if (els.listControlsToggleBtn) {
+            els.listControlsToggleBtn.addEventListener('click', () => {
+                setListControlsOpen(!state.listControlsOpen);
             });
         }
 
@@ -2001,6 +2133,10 @@
 
         if (els.toggleViewBtn) {
             els.toggleViewBtn.addEventListener('click', toggleViewMode);
+        }
+
+        if (els.detailsToggleBtn) {
+            els.detailsToggleBtn.addEventListener('click', toggleDetailsPanel);
         }
 
         if (els.pinBtn) {
@@ -2211,10 +2347,15 @@
         els.conflictKeepBtn = document.getElementById('notes-conflict-keep-btn');
         els.conflictReloadBtn = document.getElementById('notes-conflict-reload-btn');
         els.title = document.getElementById('note-title');
+        els.listControlsToggleBtn = document.getElementById('notes-list-controls-toggle-btn');
+        els.listFiltersWrap = document.getElementById('notes-list-filters-wrap');
         els.filterSelect = document.getElementById('notes-filter-select');
         els.tagFilterSelect = document.getElementById('notes-tag-filter-select');
         els.recentWindowSelect = document.getElementById('notes-recent-window-select');
         els.sortSelect = document.getElementById('notes-sort-select');
+        els.detailsToggleBtn = document.getElementById('editor-details-toggle-btn');
+        els.detailsPanel = document.getElementById('editor-details-panel');
+        els.detailsSummary = document.getElementById('editor-details-summary');
         els.metaGrid = document.getElementById('editor-meta-grid');
         els.metaLinkedToggleBtn = document.getElementById('meta-linked-toggle-btn');
         els.metaBookmarkToggleBtn = document.getElementById('meta-bookmark-toggle-btn');
@@ -2253,10 +2394,12 @@
         closeShortcutsHelp();
         updateViewModeButton();
         updateRecentFilterControlState();
-        setActiveMetaPanel(null);
+        setListControlsOpen(false);
+        setDetailsPanelOpen(false);
         hideConflictBanner();
         updateSaveIndicators();
         updateMetaToggleButtons();
+        updateDetailsToggleButton();
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
