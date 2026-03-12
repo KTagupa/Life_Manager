@@ -142,6 +142,12 @@
             margin-top: 0;
         }
 
+        textarea.st-input:focus {
+            background: transparent;
+            border-color: transparent;
+            box-shadow: none;
+        }
+
         .st-input.done {
             text-decoration: line-through;
             color: #334155;
