@@ -2205,6 +2205,11 @@
             padding: 8px 10px;
         }
 
+        .project-bootstrap-preview-bulk-toggle {
+            display: flex;
+            justify-content: flex-start;
+        }
+
         .project-bootstrap-preview-list {
             overflow-y: auto;
             min-height: 160px;

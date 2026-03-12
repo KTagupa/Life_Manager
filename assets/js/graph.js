@@ -779,6 +779,7 @@ function render() {
         const endRender = performance.now(); // Stop timer
         lastRenderTime = endRender - startRender;
         updateHealthMonitor(); // <--- Trigger Dashboard Update
+        if (typeof refreshGroupsTabIfVisible === 'function') refreshGroupsTabIfVisible();
     } catch (error) {
         console.error("Error in render:", error);
         if(typeof showNotification === "function") showNotification("Render Error: Check console", "error");

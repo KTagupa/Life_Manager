@@ -2,6 +2,7 @@
 const TASK_GROUP_NODE_WIDTH = 200;
 const TASK_GROUP_NODE_HEIGHT = 124;
 const TASK_GROUP_VIEW_PADDING = 48;
+let lastTaskGroupsRenderSignature = '';
 
 function getTaskGroupId(nodeIds) {
     const ids = (Array.isArray(nodeIds) ? nodeIds : [])
@@ -95,6 +96,36 @@ function collectConnectedNodes(startId, visited, nodeById, adjacency) {
     }
 
     return groupNodes;
+}
+
+function getTaskGroupsRenderSignature() {
+    const nodeSignature = (Array.isArray(nodes) ? nodes : [])
+        .map((node) => {
+            const depIds = (Array.isArray(node && node.dependencies) ? node.dependencies : [])
+                .map(getDependencyNodeIdForGrouping)
+                .filter(Boolean)
+                .sort()
+                .join(',');
+            return [
+                String(node && node.id || '').trim(),
+                String(node && node.title || '').trim(),
+                node && node.completed ? '1' : '0',
+                node && node.isManualUrgent ? '1' : '0',
+                node && node._isUrgent ? '1' : '0',
+                node && node._isCritical ? '1' : '0',
+                String(node && node.dueDate || '').trim(),
+                depIds
+            ].join('~');
+        })
+        .sort()
+        .join('||');
+
+    const focusSignature = (typeof taskGroupFocusState !== 'undefined' && taskGroupFocusState && taskGroupFocusState.active)
+        ? `focus:${String(taskGroupFocusState.activeGroupId || '').trim()}:${Number.isInteger(taskGroupFocusState.currentIndex) ? taskGroupFocusState.currentIndex : -1}`
+        : 'focus:off';
+    const hiddenSignature = `hidden:${Array.from(hiddenNodeGroups || []).map(id => String(id || '').trim()).filter(Boolean).sort().join(',')}`;
+
+    return `${nodeSignature}###${focusSignature}###${hiddenSignature}`;
 }
 
 function buildTaskGroups({ includeSingles = true, sort = 'priority' } = {}) {
@@ -254,10 +285,12 @@ function fitCameraToGroup(group) {
     if (typeof updateTransform === 'function') updateTransform();
 }
 
-function refreshGroupsTabIfVisible() {
+function refreshGroupsTabIfVisible({ force = false } = {}) {
     const panel = document.getElementById('navigator-panel');
     if (!panel || panel.classList.contains('hidden')) return;
     if (currentNavigatorTab !== 'groups') return;
+    const nextSignature = getTaskGroupsRenderSignature();
+    if (!force && nextSignature === lastTaskGroupsRenderSignature) return;
     detectAndRenderNodeGroups();
 }
 
@@ -285,7 +318,7 @@ function enterTaskGroupFocusMode(groupId) {
     fitCameraToGroup(activeGroup);
     updateTaskGroupFocusControls({ groups, activeGroup, activeIndex: targetIndex });
     render();
-    refreshGroupsTabIfVisible();
+    refreshGroupsTabIfVisible({ force: true });
 }
 
 function focusNextTaskGroup() {
@@ -309,7 +342,7 @@ function focusNextTaskGroup() {
     fitCameraToGroup(activeGroup);
     updateTaskGroupFocusControls({ groups, activeGroup, activeIndex: nextIndex });
     render();
-    refreshGroupsTabIfVisible();
+    refreshGroupsTabIfVisible({ force: true });
 }
 
 function focusPrevTaskGroup() {
@@ -333,7 +366,7 @@ function focusPrevTaskGroup() {
     fitCameraToGroup(activeGroup);
     updateTaskGroupFocusControls({ groups, activeGroup, activeIndex: prevIndex });
     render();
-    refreshGroupsTabIfVisible();
+    refreshGroupsTabIfVisible({ force: true });
 }
 
 function exitTaskGroupFocusMode() {
@@ -351,7 +384,7 @@ function exitTaskGroupFocusMode() {
     });
     if (wasActive) {
         render();
-        refreshGroupsTabIfVisible();
+        refreshGroupsTabIfVisible({ force: true });
     }
 }
 
@@ -371,6 +404,7 @@ function closeNodeGroupsModal() {
 function detectAndRenderNodeGroups() {
     const container = document.getElementById('node-groups-list');
     if (!container) return;
+    lastTaskGroupsRenderSignature = getTaskGroupsRenderSignature();
 
     const snapshot = getTaskGroupFocusSnapshot({ refitOnMissing: false });
     const groups = snapshot.groups;

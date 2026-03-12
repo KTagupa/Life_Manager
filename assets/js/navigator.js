@@ -864,6 +864,23 @@ function getProjectBootstrapSelectedSummary(plan) {
     return summary;
 }
 
+function getProjectBootstrapEligibleCounts(plan) {
+    const safePlan = (plan && typeof plan === 'object') ? plan : null;
+    const rows = safePlan && Array.isArray(safePlan.rows) ? safePlan.rows : [];
+    let eligibleCount = 0;
+    let enabledEligibleCount = 0;
+
+    rows.forEach((row) => {
+        const action = String(row && row.action || '').trim().toLowerCase();
+        const canApply = action === 'create' || action === 'extend';
+        if (!canApply) return;
+        eligibleCount++;
+        if (row.enabled !== false) enabledEligibleCount++;
+    });
+
+    return { eligibleCount, enabledEligibleCount };
+}
+
 function setProjectBootstrapRowEnabled(rowIndex, enabled) {
     const plan = projectBootstrapPreviewPlan;
     if (!plan || !Array.isArray(plan.rows)) return;
@@ -873,6 +890,27 @@ function setProjectBootstrapRowEnabled(rowIndex, enabled) {
     const action = String(row && row.action || '').trim().toLowerCase();
     if (action !== 'create' && action !== 'extend') return;
     row.enabled = !!enabled;
+    renderProjectBootstrapPreviewModal(plan);
+}
+
+function setProjectBootstrapAllEnabled(enabled) {
+    const plan = projectBootstrapPreviewPlan;
+    if (!plan || !Array.isArray(plan.rows)) return;
+    const shouldEnable = !!enabled;
+    let changed = false;
+
+    plan.rows.forEach((row) => {
+        const action = String(row && row.action || '').trim().toLowerCase();
+        if (action !== 'create' && action !== 'extend') return;
+        if (row.enabled === shouldEnable) return;
+        row.enabled = shouldEnable;
+        changed = true;
+    });
+
+    if (!changed && shouldEnable === false) {
+        renderProjectBootstrapPreviewModal(plan);
+        return;
+    }
     renderProjectBootstrapPreviewModal(plan);
 }
 
@@ -887,14 +925,21 @@ function renderProjectBootstrapPreviewModal(plan) {
     const summaryEl = document.getElementById('project-bootstrap-preview-summary');
     const listEl = document.getElementById('project-bootstrap-preview-list');
     const applyBtn = document.getElementById('project-bootstrap-preview-apply-btn');
+    const toggleAllEl = document.getElementById('project-bootstrap-preview-toggle-all');
     if (!summaryEl || !listEl || !applyBtn) return;
 
     const safePlan = (plan && typeof plan === 'object') ? plan : null;
     const rows = safePlan && Array.isArray(safePlan.rows) ? safePlan.rows : [];
     const selectedSummary = getProjectBootstrapSelectedSummary(safePlan);
+    const eligibleCounts = getProjectBootstrapEligibleCounts(safePlan);
 
     summaryEl.textContent = `Selected -> Create: ${selectedSummary.createGroups} | Extend: ${selectedSummary.extendGroups} | Skip: ${selectedSummary.skipGroups} | Tasks to assign: ${selectedSummary.assignableTasks} | Total groups: ${rows.length}`;
     applyBtn.disabled = selectedSummary.assignableTasks <= 0;
+    if (toggleAllEl) {
+        toggleAllEl.disabled = eligibleCounts.eligibleCount <= 0;
+        toggleAllEl.checked = eligibleCounts.eligibleCount > 0 && eligibleCounts.enabledEligibleCount === eligibleCounts.eligibleCount;
+        toggleAllEl.indeterminate = eligibleCounts.enabledEligibleCount > 0 && eligibleCounts.enabledEligibleCount < eligibleCounts.eligibleCount;
+    }
     listEl.innerHTML = '';
 
     const encode = (value) => {
