@@ -429,6 +429,7 @@ let exchangeRates = {
 let rawTransactions = [];
 let rawBills = [];
 let rawDebts = [];
+let rawCreditCards = [];
 let rawLent = [];
 let rawCrypto = [];
 let rawWishlist = [];

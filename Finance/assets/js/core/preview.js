@@ -89,6 +89,13 @@
             lastModified: now
         };
 
+        const primaryCardId = makeId('cc');
+        const primaryCardName = 'Aurora Rewards';
+        const primaryCardCreatedAt = previewDateDaysAgo(120, rand);
+        const backupCardId = makeId('cc');
+        const backupCardName = 'Transit Visa';
+        const backupCardCreatedAt = previewDateDaysAgo(84, rand);
+
         const transactionTemplates = [
             ['Client Retainer', 'Salary', 'income', 2],
             ['Marketplace Payout', 'Freelance', 'income', 6],
@@ -168,6 +175,58 @@
             notes: 'Preview debt source'
         }, familyDebtOriginDate));
 
+        const hotelChargeDate = previewDateDaysAgo(26, rand);
+        db.transactions.push(createPreviewEncryptedEntry(makeId, 'tx', {
+            desc: 'Conference Hotel Deposit',
+            amt: 12850,
+            category: 'Travel',
+            type: 'expense',
+            paymentSource: 'credit_card',
+            creditCardId: primaryCardId,
+            creditCardName: primaryCardName,
+            date: hotelChargeDate,
+            notes: 'Preview credit card charge'
+        }, hotelChargeDate));
+
+        const gearChargeDate = previewDateDaysAgo(12, rand);
+        db.transactions.push(createPreviewEncryptedEntry(makeId, 'tx', {
+            desc: 'Wireless Headphones',
+            amt: 6400,
+            category: 'Gear',
+            type: 'expense',
+            paymentSource: 'credit_card',
+            creditCardId: primaryCardId,
+            creditCardName: primaryCardName,
+            date: gearChargeDate,
+            notes: 'Preview credit card charge'
+        }, gearChargeDate));
+
+        const commuteChargeDate = previewDateDaysAgo(18, rand);
+        db.transactions.push(createPreviewEncryptedEntry(makeId, 'tx', {
+            desc: 'Ride Share Bundle',
+            amt: 1850,
+            category: 'Transport',
+            type: 'expense',
+            paymentSource: 'credit_card',
+            creditCardId: backupCardId,
+            creditCardName: backupCardName,
+            date: commuteChargeDate,
+            notes: 'Preview backup card charge'
+        }, commuteChargeDate));
+
+        const primaryPaymentDate = previewDateDaysAgo(5, rand);
+        db.transactions.push(createPreviewEncryptedEntry(makeId, 'tx', {
+            desc: `Payment for ${primaryCardName}`,
+            amt: 5000,
+            category: primaryCardName,
+            type: 'credit_card_payment',
+            paymentSource: 'cash',
+            creditCardId: primaryCardId,
+            creditCardName: primaryCardName,
+            date: primaryPaymentDate,
+            notes: 'Preview card payment'
+        }, primaryPaymentDate));
+
         const billDefinitions = [
             ['Apartment Rent', 5, 18000, false],
             ['Fiber Internet', 8, 1899, false],
@@ -193,6 +252,32 @@
                 name,
                 amount
             }, createdAt));
+        });
+
+        db.credit_cards.push({
+            id: primaryCardId,
+            data: createPreviewVaultPayload({
+                name: primaryCardName,
+                last4: '4242',
+                limit: 65000,
+                openingBalance: 3200
+            }),
+            deletedAt: null,
+            createdAt: primaryCardCreatedAt,
+            lastModified: Date.parse(primaryCardCreatedAt) || now
+        });
+
+        db.credit_cards.push({
+            id: backupCardId,
+            data: createPreviewVaultPayload({
+                name: backupCardName,
+                last4: '1010',
+                limit: 24000,
+                openingBalance: 900
+            }),
+            deletedAt: null,
+            createdAt: backupCardCreatedAt,
+            lastModified: Date.parse(backupCardCreatedAt) || now
         });
 
         [

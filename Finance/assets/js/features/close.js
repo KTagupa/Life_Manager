@@ -71,7 +71,9 @@
                 const amt = Number(tx.amt) || 0;
                 if (tx.type === 'income' || tx.type === 'debt_increase') {
                     balance += amt;
-                } else if (tx.type === 'expense') {
+                } else if (tx.type === 'expense' && !isCreditCardCharge(tx)) {
+                    balance -= amt;
+                } else if (isCreditCardPayment(tx)) {
                     balance -= amt;
                 }
             });

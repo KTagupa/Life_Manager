@@ -59,6 +59,92 @@
             }
         }
 
+        function getTrackedCreditCards() {
+            return Array.isArray(window.allDecryptedCreditCards) ? window.allDecryptedCreditCards : [];
+        }
+
+        function findTrackedCreditCard(cardId) {
+            return getTrackedCreditCards().find(card => card && card.id === cardId) || null;
+        }
+
+        function populateCreditCardSelect(selectEl, preferredValue = null) {
+            if (!selectEl) return;
+
+            const cards = getTrackedCreditCards();
+            selectEl.innerHTML = cards.length
+                ? cards.map(card => {
+                    const name = escapeHTML(card.name || 'Credit Card');
+                    const suffix = card.last4 ? ` •••• ${escapeHTML(card.last4)}` : '';
+                    return `<option value="${escapeAttr(card.id)}">${name}${suffix}</option>`;
+                }).join('')
+                : '<option value="">No tracked cards yet</option>';
+
+            if (!cards.length) {
+                selectEl.disabled = true;
+                return;
+            }
+
+            selectEl.disabled = false;
+            const nextValue = preferredValue && cards.some(card => card.id === preferredValue)
+                ? preferredValue
+                : cards[0].id;
+            selectEl.value = nextValue;
+        }
+
+        function refreshTransactionPaymentSourceUI() {
+            const type = document.getElementById('t-type')?.value;
+            const paymentWrap = document.getElementById('t-payment-source-wrap');
+            const creditCardWrap = document.getElementById('t-credit-card-wrap');
+            const paymentSourceInput = document.getElementById('t-payment-source');
+            const payCashBtn = document.getElementById('btn-t-pay-cash');
+            const payCreditBtn = document.getElementById('btn-t-pay-credit');
+
+            if (!paymentWrap || !paymentSourceInput || !payCashBtn || !payCreditBtn) return;
+
+            if (type !== 'expense') {
+                paymentWrap.classList.add('hidden');
+                paymentSourceInput.value = 'cash';
+                if (creditCardWrap) creditCardWrap.classList.add('hidden');
+                return;
+            }
+
+            paymentWrap.classList.remove('hidden');
+            const source = paymentSourceInput.value === 'credit_card' ? 'credit_card' : 'cash';
+
+            payCashBtn.className = source === 'cash'
+                ? 'py-2 rounded-xl font-bold bg-white text-slate-700 shadow-sm'
+                : 'py-2 rounded-xl font-bold text-slate-400';
+            payCreditBtn.className = source === 'credit_card'
+                ? 'py-2 rounded-xl font-bold bg-white text-amber-600 shadow-sm'
+                : 'py-2 rounded-xl font-bold text-slate-400';
+
+            if (creditCardWrap) {
+                creditCardWrap.classList.toggle('hidden', source !== 'credit_card');
+            }
+        }
+
+        function setTPaymentSource(source) {
+            const paymentSourceInput = document.getElementById('t-payment-source');
+            const creditCardSelect = document.getElementById('t-credit-card');
+            if (!paymentSourceInput) return;
+
+            let nextSource = source === 'credit_card' ? 'credit_card' : 'cash';
+            if (nextSource === 'credit_card') {
+                const cards = getTrackedCreditCards();
+                if (!cards.length) {
+                    nextSource = 'cash';
+                    if (typeof showToast === 'function') {
+                        showToast('ℹ️ Add a credit card first');
+                    }
+                } else if (creditCardSelect) {
+                    populateCreditCardSelect(creditCardSelect, creditCardSelect.value || cards[0].id);
+                }
+            }
+
+            paymentSourceInput.value = nextSource;
+            refreshTransactionPaymentSourceUI();
+        }
+
         async function addCategoryFromTransactionModal() {
             const input = document.getElementById('t-new-category');
             if (!input) return;
@@ -454,6 +540,8 @@
                 btnInc.className = "py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm";
                 btnExp.className = "py-2 rounded-xl font-bold text-slate-400";
             }
+
+            refreshTransactionPaymentSourceUI();
         }
 
         function openTransactionModal(id = null, options = {}) {
@@ -464,6 +552,7 @@
             const amt = document.getElementById('t-amount');
             const cat = document.getElementById('t-category');
             const newCategoryInput = document.getElementById('t-new-category');
+            const creditCardSelect = document.getElementById('t-credit-card');
 
             if (!options.fromWishlist) {
                 wishlistConvertId = null;
@@ -471,6 +560,7 @@
 
             // Populate categories fresh every time to catch new debts
             populateCategorySelect(cat);
+            populateCreditCardSelect(creditCardSelect);
             if (newCategoryInput) {
                 newCategoryInput.value = '';
             }
@@ -485,8 +575,8 @@
                 // Check if category exists in dropdown
                 const categoryExists = Array.from(cat.options).some(o => o.value === item.category);
 
-                if (item.type === 'debt_increase' || !categoryExists) {
-                    alert("This transaction typically belongs to a restricted category (e.g. Debt) or type. Please manage it within its specific section (e.g. Debts to Pay).");
+                if (item.type === 'debt_increase' || item.type === 'credit_card_payment' || !categoryExists) {
+                    alert("This transaction belongs to a specialized workflow. Please manage it from its dedicated section instead.");
                     return;
                 }
 
@@ -515,6 +605,10 @@
 
                 updateConversionPreview();
                 document.getElementById('t-notes').value = item.notes || '';
+                setTPaymentSource(item.paymentSource === 'credit_card' ? 'credit_card' : 'cash');
+                if (item.paymentSource === 'credit_card' && creditCardSelect && item.creditCardId) {
+                    populateCreditCardSelect(creditCardSelect, item.creditCardId);
+                }
             } else {
                 title.innerText = "New Transaction";
                 tId.value = "";
@@ -528,7 +622,9 @@
                 // Default to today
                 document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
                 document.getElementById('t-notes').value = '';
+                setTPaymentSource('cash');
             }
+            refreshTransactionPaymentSourceUI();
             modal.classList.remove('hidden');
         }
 
@@ -578,6 +674,155 @@
             document.getElementById('debt-modal').classList.remove('hidden');
         }
 
+        async function openCreditCardModal(id = null) {
+            const modal = document.getElementById('credit-card-modal');
+            const title = document.getElementById('cc-modal-title');
+            const ccId = document.getElementById('cc-id');
+            const name = document.getElementById('cc-name');
+            const last4 = document.getElementById('cc-last4');
+            const limit = document.getElementById('cc-limit');
+            const openingBalance = document.getElementById('cc-opening-balance');
+
+            if (id) {
+                const raw = rawCreditCards.find(card => card.id === id);
+                if (raw) {
+                    const data = await decryptData(raw.data);
+                    if (data) {
+                        title.innerText = 'Edit Credit Card';
+                        ccId.value = id;
+                        name.value = data.name || '';
+                        last4.value = data.last4 || '';
+                        limit.value = Number(data.limit || 0) || '';
+                        openingBalance.value = Number(data.openingBalance || 0) || '';
+                        modal.classList.remove('hidden');
+                        return;
+                    }
+                }
+            }
+
+            title.innerText = 'Add Credit Card';
+            ccId.value = '';
+            name.value = '';
+            last4.value = '';
+            limit.value = '';
+            openingBalance.value = '';
+            modal.classList.remove('hidden');
+        }
+
+        async function saveCreditCard() {
+            const id = document.getElementById('cc-id').value;
+            const name = document.getElementById('cc-name').value.trim();
+            const last4 = document.getElementById('cc-last4').value.trim();
+            const limit = Math.max(0, parseFloat(document.getElementById('cc-limit').value || '0') || 0);
+            const openingBalance = Math.max(0, parseFloat(document.getElementById('cc-opening-balance').value || '0') || 0);
+
+            if (!name) {
+                alert('Please enter a card name.');
+                return;
+            }
+
+            const encrypted = await encryptData({ name, last4, limit, openingBalance });
+            const db = await getDB();
+            db.credit_cards = Array.isArray(db.credit_cards) ? db.credit_cards : [];
+
+            if (id) {
+                const idx = db.credit_cards.findIndex(card => card.id === id);
+                if (idx !== -1) {
+                    const existing = db.credit_cards[idx] || {};
+                    db.credit_cards[idx] = {
+                        ...existing,
+                        id,
+                        data: encrypted,
+                        lastModified: Date.now(),
+                        deletedAt: existing.deletedAt || null
+                    };
+                }
+            } else {
+                db.credit_cards.push({
+                    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                    data: encrypted,
+                    createdAt: Date.now(),
+                    deletedAt: null
+                });
+            }
+
+            await saveDB(db);
+            rawCreditCards = (db.credit_cards || []).filter(card => !card.deletedAt);
+            toggleModal('credit-card-modal');
+            await renderCreditCards(rawCreditCards);
+            populateCreditCardSelect(document.getElementById('t-credit-card'));
+            refreshTransactionPaymentSourceUI();
+            await refreshLinkedPanels({
+                refreshKPI: true,
+                refreshForecast: true,
+                refreshStatements: true
+            });
+            showToast(id ? '✅ Credit card updated' : '✅ Credit card added');
+        }
+
+        function openCreditCardPaymentModal(id) {
+            const card = findTrackedCreditCard(id);
+            if (!card) return;
+
+            document.getElementById('cc-payment-card-id').value = id;
+            document.getElementById('cc-payment-card-label').innerText = card.name || 'Credit Card';
+            document.getElementById('cc-payment-amount').value = '';
+            document.getElementById('cc-payment-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('cc-payment-notes').value = '';
+            document.getElementById('credit-card-payment-modal').classList.remove('hidden');
+        }
+
+        async function saveCreditCardPayment() {
+            const cardId = document.getElementById('cc-payment-card-id').value;
+            const card = findTrackedCreditCard(cardId);
+            const amount = parseFloat(document.getElementById('cc-payment-amount').value);
+            const noteInput = document.getElementById('cc-payment-notes').value.trim();
+            const selectedDate = document.getElementById('cc-payment-date').value;
+
+            if (!card || !Number.isFinite(amount) || amount <= 0) {
+                alert('Enter a valid payment amount.');
+                return;
+            }
+
+            const date = selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString();
+            const desc = noteInput || `Payment for ${card.name}`;
+
+            const encrypted = await encryptData({
+                desc,
+                merchant: null,
+                tags: [],
+                amt: amount,
+                originalAmt: amount,
+                originalCurrency: 'PHP',
+                quantity: 1,
+                notes: noteInput,
+                type: 'credit_card_payment',
+                category: card.name,
+                creditCardId: card.id,
+                creditCardName: card.name,
+                paymentSource: 'cash',
+                date,
+                importId: null,
+                dedupeHash: null,
+                deletedAt: null
+            });
+
+            const db = await getDB();
+            db.transactions.push({
+                id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                data: encrypted,
+                createdAt: Date.now(),
+                deletedAt: null
+            });
+            await saveDB(db);
+
+            rawTransactions = db.transactions.filter(t => !t.deletedAt);
+            toggleModal('credit-card-payment-modal');
+            await loadAndRender();
+            await renderCreditCards(rawCreditCards);
+            showToast('✅ Card payment recorded');
+        }
+
         async function saveTransaction() {
             const id = document.getElementById('t-id').value;
             const desc = document.getElementById('t-desc').value;
@@ -585,10 +830,19 @@
             const currency = document.getElementById('t-currency').value;
             const type = document.getElementById('t-type').value;
             const category = document.getElementById('t-category').value;
+            const paymentSource = type === 'expense'
+                ? (document.getElementById('t-payment-source')?.value === 'credit_card' ? 'credit_card' : 'cash')
+                : 'cash';
+            const creditCardId = paymentSource === 'credit_card' ? document.getElementById('t-credit-card')?.value || '' : '';
+            const linkedCreditCard = creditCardId ? findTrackedCreditCard(creditCardId) : null;
 
             if (!desc || isNaN(amt)) return;
             if (!category) {
                 alert('Please select a category.');
+                return;
+            }
+            if (paymentSource === 'credit_card' && !linkedCreditCard) {
+                alert('Please choose a tracked credit card.');
                 return;
             }
 
@@ -614,6 +868,9 @@
                 notes: notes,
                 type,
                 category,
+                paymentSource,
+                creditCardId: linkedCreditCard ? linkedCreditCard.id : null,
+                creditCardName: linkedCreditCard ? linkedCreditCard.name : null,
                 date,
                 importId: null,
                 dedupeHash: null,
@@ -649,6 +906,7 @@
 
             // Re-render debts because a transaction might have been a payment towards a debt
             await renderDebts(rawDebts);
+            await renderCreditCards(rawCreditCards);
 
             if (wishlistConvertId) {
                 const convertId = wishlistConvertId;
@@ -1251,6 +1509,7 @@
                 rawTransactions = (persistedDB.transactions || []).filter(t => !t.deletedAt);
                 await loadAndRender();
                 await renderDebts(rawDebts); // Update debt progress if a payment was deleted
+                await renderCreditCards(rawCreditCards);
             } else if (col === 'bills') {
                 rawBills = (persistedDB.bills || []).filter(b => !b.deletedAt);
                 recurringTransactions = persistedDB.recurring_transactions || recurringTransactions;
@@ -1307,6 +1566,7 @@
             loadAndRender();
             renderBills(rawBills);
             renderDebts(rawDebts);
+            renderCreditCards(rawCreditCards);
             renderLent(rawLent);
             renderCryptoWidget(); // Update crypto summary
             if (!document.getElementById('crypto-portfolio-modal').classList.contains('hidden')) {

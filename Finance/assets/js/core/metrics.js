@@ -38,7 +38,12 @@
             }
 
             if (typeof tx._searchText !== 'string') {
-                tx._searchText = `${String(tx.desc || '')} ${String(tx.category || '')}`.toLowerCase();
+                tx._searchText = [
+                    String(tx.desc || ''),
+                    String(tx.category || ''),
+                    String(tx.creditCardName || ''),
+                    String(tx.paymentSource || '')
+                ].join(' ').toLowerCase();
             }
 
             return tx;
@@ -62,6 +67,66 @@
         function getTxSearchText(tx) {
             const cached = hydrateTransactionCache(tx);
             return cached && typeof cached._searchText === 'string' ? cached._searchText : '';
+        }
+
+        function getTxPaymentSource(tx) {
+            const raw = String(tx?.paymentSource || '').trim().toLowerCase();
+            return raw === 'credit_card' ? 'credit_card' : 'cash';
+        }
+
+        function getTxCreditCardId(tx) {
+            return String(tx?.creditCardId || '').trim();
+        }
+
+        function getTxCreditCardName(tx) {
+            const explicit = String(tx?.creditCardName || '').trim();
+            if (explicit) return explicit;
+            const cardId = getTxCreditCardId(tx);
+            const linkedCard = (window.allDecryptedCreditCards || []).find(card => card && card.id === cardId);
+            return linkedCard ? String(linkedCard.name || '').trim() : '';
+        }
+
+        function isCreditCardCharge(tx) {
+            return tx?.type === 'expense' && getTxPaymentSource(tx) === 'credit_card' && !!getTxCreditCardId(tx);
+        }
+
+        function isCreditCardPayment(tx) {
+            return tx?.type === 'credit_card_payment' && !!getTxCreditCardId(tx);
+        }
+
+        function computeCreditCardOutstandingMapAsOf(endTs, transactions) {
+            const cards = window.allDecryptedCreditCards || [];
+            const outstanding = new Map();
+
+            cards.forEach(card => {
+                if (!card?.id) return;
+                outstanding.set(card.id, Math.max(0, Number(card.openingBalance || 0)));
+            });
+
+            (transactions || []).forEach(tx => {
+                const ts = getTxTimestamp(tx);
+                const cardId = getTxCreditCardId(tx);
+                if (!cardId || !Number.isFinite(ts) || ts > endTs || !outstanding.has(cardId)) return;
+
+                const amount = Math.max(0, Number(tx?.amt || 0));
+                if (!Number.isFinite(amount) || amount <= 0) return;
+
+                if (isCreditCardCharge(tx)) {
+                    outstanding.set(cardId, outstanding.get(cardId) + amount);
+                    return;
+                }
+
+                if (isCreditCardPayment(tx)) {
+                    outstanding.set(cardId, Math.max(0, outstanding.get(cardId) - amount));
+                }
+            });
+
+            return outstanding;
+        }
+
+        function computeCreditCardOutstandingAsOf(endTs, transactions) {
+            return Array.from(computeCreditCardOutstandingMapAsOf(endTs, transactions).values())
+                .reduce((sum, amount) => sum + (Number(amount) || 0), 0);
         }
 
         function toTxMetaTimestamp(value) {
@@ -202,8 +267,15 @@
 
                 if (t.type === 'expense') {
                     expense += t.amt;
-                    balance -= t.amt;
+                    if (!isCreditCardCharge(t)) {
+                        balance -= t.amt;
+                    }
                     categoryExpenses[t.category] = (categoryExpenses[t.category] || 0) + t.amt;
+                    return;
+                }
+
+                if (isCreditCardPayment(t)) {
+                    balance -= t.amt;
                 }
             });
 

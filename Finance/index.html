@@ -716,6 +716,25 @@
                     </div>
                 </div>
 
+                <!-- Credit Cards Section -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-amber-100 text-amber-600 p-1.5 rounded-lg">
+                                <i data-lucide="wallet-cards" class="w-4 h-4"></i>
+                            </div>
+                            <h2 class="font-bold text-slate-800">Credit Cards</h2>
+                        </div>
+                        <button onclick="openCreditCardModal()"
+                            class="text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 px-3 py-1 rounded-full transition-colors">
+                            + Add
+                        </button>
+                    </div>
+                    <div id="credit-card-list" class="space-y-3">
+                        <div class="text-center text-xs text-slate-400 py-2">No credit cards tracked yet.</div>
+                    </div>
+                </div>
+
                 <!-- Money Lent Section (Receivables) -->
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
                     <div class="flex justify-between items-center mb-4">
@@ -790,10 +809,11 @@
 
     <!-- Modal: Add/Edit Transaction -->
     <div id="transaction-modal"
-        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
-            <h3 class="text-2xl font-bold text-slate-800 mb-6" id="t-modal-title">New Entry</h3>
-            <div class="space-y-4">
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div
+            class="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden flex flex-col my-auto">
+            <h3 class="text-2xl font-bold text-slate-800 mb-5 sm:mb-6" id="t-modal-title">New Entry</h3>
+            <div class="space-y-4 overflow-y-auto custom-scrollbar pr-1 sm:pr-2 min-h-0">
                 <input type="hidden" id="t-id">
                 <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border">
                     <button onclick="setTType('expense')" id="btn-expense"
@@ -845,18 +865,35 @@
                         </button>
                     </div>
                 </div>
+                <div id="t-payment-source-wrap">
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Paid With</label>
+                    <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border">
+                        <button type="button" onclick="setTPaymentSource('cash')" id="btn-t-pay-cash"
+                            class="py-2 rounded-xl font-bold bg-white text-slate-700 shadow-sm">Cash / Bank</button>
+                        <button type="button" onclick="setTPaymentSource('credit_card')" id="btn-t-pay-credit"
+                            class="py-2 rounded-xl font-bold text-slate-400">Credit Card</button>
+                        <input type="hidden" id="t-payment-source" value="cash">
+                    </div>
+                    <div id="t-credit-card-wrap" class="hidden mt-2">
+                        <select id="t-credit-card"
+                            class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-amber-500 font-bold text-slate-700">
+                            <!-- Populated by JS -->
+                        </select>
+                        <p class="text-xs text-slate-400 mt-1 ml-2">Charges stay in your spending totals now. Card payments are recorded separately.</p>
+                    </div>
+                </div>
                 <div>
                     <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Notes (Optional)</label>
                     <textarea id="t-notes" placeholder="Add any additional notes..." rows="2"
                         class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 resize-none text-sm"></textarea>
                 </div>
+            </div>
 
-                <div class="flex gap-3 pt-4">
-                    <button onclick="closeTransactionModal()"
-                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveTransaction()"
-                        class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">Save</button>
-                </div>
+            <div class="flex gap-3 pt-4 mt-4 border-t border-slate-100 shrink-0">
+                <button onclick="closeTransactionModal()"
+                    class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                <button onclick="saveTransaction()"
+                    class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">Save</button>
             </div>
         </div>
     </div>
@@ -1213,6 +1250,71 @@
                     class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 mt-2">
                     Save Transaction
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add/Edit Credit Card -->
+    <div id="credit-card-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-amber-100 p-2 rounded-xl text-amber-600">
+                    <i data-lucide="wallet-cards" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-slate-800" id="cc-modal-title">Add Credit Card</h3>
+            </div>
+            <input type="hidden" id="cc-id">
+            <div class="space-y-4">
+                <input type="text" id="cc-name" placeholder="Card Name (e.g. BPI Blue)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-amber-500">
+                <input type="text" id="cc-last4" placeholder="Last 4 digits (optional)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-amber-500">
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="number" id="cc-limit" placeholder="Credit Limit"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-amber-500">
+                    <input type="number" id="cc-opening-balance" placeholder="Starting Balance"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-amber-500">
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="toggleModal('credit-card-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="saveCreditCard()"
+                        class="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200">Save Card</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Record Credit Card Payment -->
+    <div id="credit-card-payment-modal"
+        class="fixed inset-0 z-[115] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-emerald-100 p-2 rounded-xl text-emerald-600">
+                    <i data-lucide="banknote-arrow-down" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">Record Card Payment</h3>
+                    <p id="cc-payment-card-label" class="text-sm text-slate-500 mt-1">Credit card</p>
+                </div>
+            </div>
+            <input type="hidden" id="cc-payment-card-id">
+            <div class="space-y-4">
+                <input type="number" id="cc-payment-amount" placeholder="Payment Amount"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500">
+                <input type="date" id="cc-payment-date"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500 font-bold text-slate-700">
+                <input type="text" id="cc-payment-notes" placeholder="Notes (optional)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500">
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="toggleModal('credit-card-payment-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="saveCreditCardPayment()"
+                        class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save Payment</button>
+                </div>
             </div>
         </div>
     </div>

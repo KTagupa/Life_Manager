@@ -4,7 +4,7 @@
 const DB_KEY = 'finance_flow_encrypted_v3';
 const BACKUP_SETTINGS_KEY = 'finance_flow_backup_settings_v1';
 const KDF_META_PREFIX = 'finance_flow_kdf_meta_v1_';
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 const UNDO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const LOCAL_DB_NAME = 'finance_flow_local_v1';
 const LOCAL_DB_VERSION = 1;
@@ -244,6 +244,7 @@ function countDBRecords(db) {
         transactions: (safe.transactions || []).filter(i => i && !i.deletedAt).length,
         bills: (safe.bills || []).filter(i => i && !i.deletedAt).length,
         debts: (safe.debts || []).filter(i => i && !i.deletedAt).length,
+        creditCards: (safe.credit_cards || []).filter(i => i && !i.deletedAt).length,
         lent: (safe.lent || []).filter(i => i && !i.deletedAt).length,
         crypto: (safe.crypto || []).filter(i => i && !i.deletedAt).length,
         wishlist: (safe.wishlist || []).filter(i => i && !i.deletedAt).length,
@@ -418,7 +419,7 @@ async function refreshStorageDiagnosticsPanel() {
         setDiagText('diag-idb-write', writeTs);
         setDiagText(
             'diag-counts',
-            `Tx ${diag.counts.transactions} • Bills ${diag.counts.bills} • Debts ${diag.counts.debts} • Lent ${diag.counts.lent} • Crypto ${diag.counts.crypto} • Wishlist ${diag.counts.wishlist} • Assets ${diag.counts.fixedAssets} • AGM ${diag.counts.agmRecords} • Closes ${diag.counts.monthlyCloses} • KPI ${diag.counts.kpiSnapshots} • Forecast ${diag.counts.forecastRuns} • Statements ${diag.counts.statementSnapshots} • Undo ${diag.counts.undoLog}`
+            `Tx ${diag.counts.transactions} • Bills ${diag.counts.bills} • Debts ${diag.counts.debts} • Cards ${diag.counts.creditCards} • Lent ${diag.counts.lent} • Crypto ${diag.counts.crypto} • Wishlist ${diag.counts.wishlist} • Assets ${diag.counts.fixedAssets} • AGM ${diag.counts.agmRecords} • Closes ${diag.counts.monthlyCloses} • KPI ${diag.counts.kpiSnapshots} • Forecast ${diag.counts.forecastRuns} • Statements ${diag.counts.statementSnapshots} • Undo ${diag.counts.undoLog}`
         );
         setDiagText('diag-status', `Last refresh: ${new Date().toLocaleTimeString()}`);
     } catch (error) {
@@ -469,6 +470,7 @@ function getDefaultDB() {
         transactions: [],
         bills: [],
         debts: [],
+        credit_cards: [],
         lent: [],
         crypto: [],
         crypto_prices: {},
@@ -843,14 +845,22 @@ function normalizeStatementSnapshotEntry(entry) {
         month,
         pnl: {
             income: Math.max(0, toFiniteNumber(pnl.income, 0)),
+            costOfEarning: Math.max(0, toFiniteNumber(pnl.costOfEarning, 0)),
+            grossProfit: toFiniteNumber(pnl.grossProfit, 0),
+            grossMargin: toFiniteNumber(pnl.grossMargin, 0),
             operatingExpenses: Math.max(0, toFiniteNumber(pnl.operatingExpenses, 0)),
+            ebitda: toFiniteNumber(pnl.ebitda, 0),
+            ebitdaMargin: toFiniteNumber(pnl.ebitdaMargin, 0),
             debtService: Math.max(0, toFiniteNumber(pnl.debtService, 0)),
             growthSpend: Math.max(0, toFiniteNumber(pnl.growthSpend, 0)),
-            netIncome: toFiniteNumber(pnl.netIncome, 0)
+            netIncome: toFiniteNumber(pnl.netIncome, 0),
+            netMargin: toFiniteNumber(pnl.netMargin, 0)
         },
         cashflow: {
             operatingCashFlow: toFiniteNumber(cashflow.operatingCashFlow, 0),
             investingCashFlow: toFiniteNumber(cashflow.investingCashFlow, 0),
+            creditCardBorrowing: Math.max(0, toFiniteNumber(cashflow.creditCardBorrowing, 0)),
+            creditCardPayments: Math.max(0, toFiniteNumber(cashflow.creditCardPayments, 0)),
             financingCashFlow: toFiniteNumber(cashflow.financingCashFlow, 0),
             freeCashFlow: toFiniteNumber(cashflow.freeCashFlow, 0),
             netCashFlow: toFiniteNumber(cashflow.netCashFlow, 0)
@@ -860,6 +870,7 @@ function normalizeStatementSnapshotEntry(entry) {
             receivables: toFiniteNumber(balanceSheet.receivables, 0),
             crypto: toFiniteNumber(balanceSheet.crypto, 0),
             debt: toFiniteNumber(balanceSheet.debt, 0),
+            creditCardDebt: toFiniteNumber(balanceSheet.creditCardDebt, 0),
             totalAssets: toFiniteNumber(balanceSheet.totalAssets, 0),
             totalLiabilities: toFiniteNumber(balanceSheet.totalLiabilities, 0),
             netWorth: toFiniteNumber(balanceSheet.netWorth, 0)
@@ -880,6 +891,7 @@ function normalizeDBSchema(rawDB) {
     db.transactions = normalizeCollectionEntries(db.transactions);
     db.bills = normalizeCollectionEntries(db.bills);
     db.debts = normalizeCollectionEntries(db.debts);
+    db.credit_cards = normalizeCollectionEntries(db.credit_cards);
     db.lent = normalizeCollectionEntries(db.lent);
     db.crypto = normalizeCollectionEntries(db.crypto);
     db.wishlist = normalizeCollectionEntries(db.wishlist);
@@ -961,6 +973,7 @@ function mergeSafeDB(localDB, remoteDB) {
     merged.transactions = mergeSafeList(local.transactions, merged.transactions);
     merged.bills = mergeSafeList(local.bills, merged.bills);
     merged.debts = mergeSafeList(local.debts, merged.debts);
+    merged.credit_cards = mergeSafeList(local.credit_cards, merged.credit_cards);
     merged.lent = mergeSafeList(local.lent, merged.lent);
     merged.crypto = mergeSafeList(local.crypto, merged.crypto);
     merged.wishlist = mergeSafeList(local.wishlist, merged.wishlist);

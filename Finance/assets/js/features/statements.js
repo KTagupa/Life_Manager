@@ -137,7 +137,8 @@ function statementsComputeCashBalanceAsOf(endTs, transactions) {
         const amount = Number(tx.amt || 0);
         if (!Number.isFinite(amount) || amount <= 0) return sum;
         if (tx.type === 'income' || tx.type === 'debt_increase') return sum + amount;
-        if (tx.type === 'expense') return sum - amount;
+        if (tx.type === 'expense') return isCreditCardCharge(tx) ? sum : sum - amount;
+        if (isCreditCardPayment(tx)) return sum - amount;
         return sum;
     }, 0);
 }
@@ -360,15 +361,22 @@ function getStatementsTrendCacheKey(endMonthKey) {
         return ts > max ? ts : max;
     }, 0);
 
+    const creditCardLastModified = (rawCreditCards || []).reduce((max, item) => {
+        const ts = Number(item?.lastModified || 0);
+        return ts > max ? ts : max;
+    }, 0);
+
     return [
         endMonthKey,
         txs.length,
         txHash,
         snapshotLastModified,
         closeLastModified,
+        creditCardLastModified,
         (rawCrypto || []).length,
         (rawDebts || []).length,
-        (rawLent || []).length
+        (rawLent || []).length,
+        (rawCreditCards || []).length
     ].join('|');
 }
 
@@ -527,6 +535,8 @@ async function computeStatementForMonth(monthKey) {
     let operatingExpenses = 0;
     let debtService = 0;
     let savingsContribution = 0;
+    let creditCardBorrowing = 0;
+    let creditCardPayments = 0;
 
     monthTransactions.forEach(tx => {
         const amount = Number(tx?.amt || 0);
@@ -544,7 +554,16 @@ async function computeStatementForMonth(monthKey) {
             return;
         }
 
+        if (isCreditCardPayment(tx)) {
+            creditCardPayments += amount;
+            return;
+        }
+
         if (tx.type !== 'expense') return;
+
+        if (isCreditCardCharge(tx)) {
+            creditCardBorrowing += amount;
+        }
 
         if (debtNames.has(category)) {
             debtService += amount;
@@ -580,7 +599,7 @@ async function computeStatementForMonth(monthKey) {
 
     const operatingCashFlow = income - costOfEarning - operatingExpenses;
     const investingCashFlow = -(savingsContribution + cryptoPosition.buyOutflowInMonth) + cryptoPosition.sellInflowInMonth;
-    const financingCashFlow = debtIncreases - debtService;
+    const financingCashFlow = debtIncreases + creditCardBorrowing - debtService - creditCardPayments;
     const freeCashFlow = operatingCashFlow + investingCashFlow;
     const netCashFlow = operatingCashFlow + investingCashFlow + financingCashFlow;
 
@@ -588,9 +607,10 @@ async function computeStatementForMonth(monthKey) {
     const cash = cashFromTransactions - cryptoPosition.buyOutflowToDate + cryptoPosition.sellInflowToDate;
     const receivables = statementsComputeReceivablesAsOf(range.endTs, allTransactions);
     const debt = statementsComputeDebtOutstandingAsOf(range.endTs, allTransactions);
+    const creditCardDebt = computeCreditCardOutstandingAsOf(range.endTs, allTransactions);
     const crypto = cryptoPosition.bookValue;
     const totalAssets = cash + receivables + crypto;
-    const totalLiabilities = debt;
+    const totalLiabilities = debt + creditCardDebt;
     const netWorth = totalAssets - totalLiabilities;
 
     return {
@@ -611,6 +631,8 @@ async function computeStatementForMonth(monthKey) {
         cashflow: {
             operatingCashFlow,
             investingCashFlow,
+            creditCardBorrowing,
+            creditCardPayments,
             financingCashFlow,
             freeCashFlow,
             netCashFlow
@@ -620,6 +642,7 @@ async function computeStatementForMonth(monthKey) {
             receivables,
             crypto,
             debt,
+            creditCardDebt,
             totalAssets,
             totalLiabilities,
             netWorth
@@ -643,6 +666,8 @@ function statementsDescriptorKeyForLabel(label) {
         'operating expenses': 'operating expenses',
         'ebitda': 'ebitda',
         'debt service': 'debt service',
+        'card borrowing': 'financing cash flow',
+        'card payments': 'financing cash flow',
         'growth/investment': 'growth investment',
         'net income': 'net income',
         'operating cf': 'operating cash flow',
@@ -654,6 +679,7 @@ function statementsDescriptorKeyForLabel(label) {
         'receivables': 'receivables',
         'crypto': 'balance sheet',
         'debt': 'debt service',
+        'credit cards': 'total liabilities',
         'total assets': 'total assets',
         'total liabilities': 'total liabilities',
         'net worth': 'estimated net worth'
@@ -728,6 +754,8 @@ function renderStatementPanels(statement, source = 'live') {
     cfEl.innerHTML = [
         statementsMetricRow('Operating CF', fmt(Number(cashflow.operatingCashFlow || 0))),
         statementsMetricRow('Investing CF', fmt(Number(cashflow.investingCashFlow || 0))),
+        statementsMetricRow('Card Borrowing', fmt(Number(cashflow.creditCardBorrowing || 0))),
+        statementsMetricRow('Card Payments', fmt(Number(cashflow.creditCardPayments || 0))),
         statementsMetricRow('Financing CF', fmt(Number(cashflow.financingCashFlow || 0))),
         statementsMetricRow('Free Cash Flow', fmt(Number(cashflow.freeCashFlow || 0))),
         '<div class="border-t border-slate-100 my-1"></div>',
@@ -739,6 +767,7 @@ function renderStatementPanels(statement, source = 'live') {
         statementsMetricRow('Receivables', fmt(Number(balanceSheet.receivables || 0))),
         statementsMetricRow('Crypto (Book)', fmt(Number(balanceSheet.crypto || 0))),
         statementsMetricRow('Debt', fmt(Number(balanceSheet.debt || 0))),
+        statementsMetricRow('Credit Cards', fmt(Number(balanceSheet.creditCardDebt || 0))),
         '<div class="border-t border-slate-100 my-1"></div>',
         statementsMetricRow('Total Assets', fmt(Number(balanceSheet.totalAssets || 0))),
         statementsMetricRow('Total Liabilities', fmt(Number(balanceSheet.totalLiabilities || 0))),
@@ -877,6 +906,8 @@ async function exportStatementToPDF(statement, sourceLabel = 'Live') {
         const cashFlowRows = [
             ['Operating CF', fmt(Number(statement?.cashflow?.operatingCashFlow || 0))],
             ['Investing CF', fmt(Number(statement?.cashflow?.investingCashFlow || 0))],
+            ['Card Borrowing', fmt(Number(statement?.cashflow?.creditCardBorrowing || 0))],
+            ['Card Payments', fmt(Number(statement?.cashflow?.creditCardPayments || 0))],
             ['Financing CF', fmt(Number(statement?.cashflow?.financingCashFlow || 0))],
             ['Free Cash Flow', fmt(Number(statement?.cashflow?.freeCashFlow || 0))],
             ['Net Cash Flow', fmt(Number(statement?.cashflow?.netCashFlow || 0))]
@@ -887,6 +918,7 @@ async function exportStatementToPDF(statement, sourceLabel = 'Live') {
             ['Receivables', fmt(Number(statement?.balanceSheet?.receivables || 0))],
             ['Crypto (Book)', fmt(Number(statement?.balanceSheet?.crypto || 0))],
             ['Debt', fmt(Number(statement?.balanceSheet?.debt || 0))],
+            ['Credit Cards', fmt(Number(statement?.balanceSheet?.creditCardDebt || 0))],
             ['Total Assets', fmt(Number(statement?.balanceSheet?.totalAssets || 0))],
             ['Total Liabilities', fmt(Number(statement?.balanceSheet?.totalLiabilities || 0))],
             ['Net Worth', fmt(Number(statement?.balanceSheet?.netWorth || 0))]
@@ -1014,6 +1046,8 @@ async function generateMonthlyStatementSnapshot() {
             cashflow: {
                 operatingCashFlow: Number(statement?.cashflow?.operatingCashFlow || 0),
                 investingCashFlow: Number(statement?.cashflow?.investingCashFlow || 0),
+                creditCardBorrowing: Number(statement?.cashflow?.creditCardBorrowing || 0),
+                creditCardPayments: Number(statement?.cashflow?.creditCardPayments || 0),
                 financingCashFlow: Number(statement?.cashflow?.financingCashFlow || 0),
                 freeCashFlow: Number(statement?.cashflow?.freeCashFlow || 0),
                 netCashFlow: Number(statement?.cashflow?.netCashFlow || 0)
@@ -1023,6 +1057,7 @@ async function generateMonthlyStatementSnapshot() {
                 receivables: Number(statement?.balanceSheet?.receivables || 0),
                 crypto: Number(statement?.balanceSheet?.crypto || 0),
                 debt: Number(statement?.balanceSheet?.debt || 0),
+                creditCardDebt: Number(statement?.balanceSheet?.creditCardDebt || 0),
                 totalAssets: Number(statement?.balanceSheet?.totalAssets || 0),
                 totalLiabilities: Number(statement?.balanceSheet?.totalLiabilities || 0),
                 netWorth: Number(statement?.balanceSheet?.netWorth || 0)

@@ -122,13 +122,19 @@
                     .filter(tx => tx.type === 'income')
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
                 const expense = monthTx
-                    .filter(tx => tx.type === 'expense')
+                    .filter(tx => tx.type === 'expense' && !isCreditCardCharge(tx))
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
                 const debtService = monthTx
-                    .filter(tx => tx.type === 'expense' && debtCategories.has(String(tx.category || '').trim()))
+                    .filter(tx => {
+                        if (isCreditCardPayment(tx)) return true;
+                        return tx.type === 'expense' && debtCategories.has(String(tx.category || '').trim());
+                    })
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
                 const savings = monthTx
-                    .filter(tx => tx.type === 'expense' && String(tx.category || '').trim().toLowerCase() === 'savings')
+                    .filter(tx => {
+                        if (tx.type !== 'expense' || isCreditCardCharge(tx)) return false;
+                        return String(tx.category || '').trim().toLowerCase() === 'savings';
+                    })
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
 
                 monthlyIncome.push(income);

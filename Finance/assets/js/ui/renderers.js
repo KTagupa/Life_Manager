@@ -9,12 +9,15 @@
             items.forEach(i => {
                 const isInc = i.type === 'income';
                 const isDebtInc = i.type === 'debt_increase';
+                const isCardPayment = i.type === 'credit_card_payment';
+                const isCardCharge = typeof isCreditCardCharge === 'function' ? isCreditCardCharge(i) : false;
                 const isToday = isTxAssignedToToday(i);
                 const encodedTxId = encodeInlineArg(i.id);
                 const safeDesc = escapeHTML(i.desc || 'Untitled');
                 const safeCategory = escapeHTML(i.category || 'Uncategorized');
                 const initials = escapeHTML(i.category ? i.category.substring(0, 2).toUpperCase() : '??');
                 const displayDate = new Date(i.date).toLocaleDateString();
+                const safeCardName = escapeHTML((typeof getTxCreditCardName === 'function' ? getTxCreditCardName(i) : '') || '');
 
                 const div = document.createElement('div');
                 div.className = `recent-movement-item p-4 flex items-center justify-between group transition-colors cursor-pointer ${isToday ? 'recent-movement-item--today' : 'hover:bg-slate-50'}`;
@@ -26,19 +29,28 @@
                 const currencyBadge = i.originalCurrency && i.originalCurrency !== 'PHP'
                     ? `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold">${escapeHTML(i.originalCurrency)}</span>`
                     : '';
+                const creditCardBadge = isCardCharge && safeCardName
+                    ? `<span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">CARD • ${safeCardName}</span>`
+                    : isCardPayment && safeCardName
+                        ? `<span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">PAYMENT • ${safeCardName}</span>`
+                        : '';
 
                 // Icon & Color Logic
-                let iconBg, iconText, amountColor, sign;
+                let iconBg, iconText, amountColor, sign, amountText;
                 if (isInc) {
                     iconBg = 'bg-emerald-50'; iconText = 'text-emerald-600';
                     amountColor = 'text-emerald-600'; sign = '+';
                 } else if (isDebtInc) {
                     iconBg = 'bg-blue-50'; iconText = 'text-blue-600';
                     amountColor = 'text-blue-600'; sign = '+';
+                } else if (isCardPayment) {
+                    iconBg = 'bg-blue-50'; iconText = 'text-blue-600';
+                    amountColor = 'text-blue-600'; sign = '';
                 } else {
                     iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
                     amountColor = 'text-rose-600'; sign = '-';
                 }
+                amountText = isCardPayment ? fmt(i.amt) : `${sign}${fmt(i.amt)}`;
 
                 div.innerHTML = `
                     <div class="flex items-center gap-4">
@@ -46,12 +58,12 @@
                             ${initials}
                         </div>
                         <div>
-                            <p class="font-bold text-slate-800">${safeDesc} ${currencyBadge}</p>
+                            <p class="font-bold text-slate-800">${safeDesc} ${currencyBadge} ${creditCardBadge}</p>
                             <p class="recent-movement-meta text-[10px] uppercase font-bold text-slate-400 tracking-widest">${displayDate} • ${safeCategory}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-4">
-                        <p class="font-bold ${amountColor}">${sign}${fmt(i.amt)}</p>
+                        <p class="font-bold ${amountColor}">${amountText}</p>
                         <button onclick="deleteItem('transactions', decodeURIComponent('${encodedTxId}'))" class="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                     </div>`;
                 list.appendChild(div);
@@ -172,6 +184,66 @@
                     `;
                 list.appendChild(div);
             });
+            lucide.createIcons();
+        }
+
+        async function renderCreditCards(items) {
+            const list = document.getElementById('credit-card-list');
+            if (!list) return;
+            list.innerHTML = '';
+
+            const decrypted = (await Promise.all((items || []).map(async item => {
+                const data = await decryptData(item.data);
+                return data ? { ...data, id: item.id } : null;
+            }))).filter(Boolean);
+
+            window.allDecryptedCreditCards = decrypted;
+
+            if (decrypted.length === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No credit cards tracked yet.</div>';
+                return;
+            }
+
+            const outstandingMap = typeof computeCreditCardOutstandingMapAsOf === 'function'
+                ? computeCreditCardOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
+                : new Map();
+
+            decrypted.forEach(card => {
+                const safeName = escapeHTML(card.name || 'Credit Card');
+                const safeLast4 = escapeHTML(card.last4 || '');
+                const outstanding = Number(outstandingMap.get(card.id) || 0);
+                const limit = Number(card.limit || 0);
+                const utilizationPct = limit > 0 ? Math.min(100, Math.max(0, (outstanding / limit) * 100)) : 0;
+                const utilizationLabel = limit > 0
+                    ? `${utilizationPct.toFixed(0)}% of ${fmt(limit)}`
+                    : 'No limit set';
+                const encodedCardId = encodeInlineArg(card.id);
+
+                const div = document.createElement('div');
+                div.className = 'p-4 bg-slate-50 rounded-2xl border border-slate-200';
+                div.innerHTML = `
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-bold text-slate-800">${safeName}${safeLast4 ? ` <span class="text-[11px] text-slate-400">•••• ${safeLast4}</span>` : ''}</p>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">Outstanding ${fmt(outstanding)}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="openCreditCardPaymentModal(decodeURIComponent('${encodedCardId}'))"
+                                class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Payment</button>
+                            <button onclick="openCreditCardModal(decodeURIComponent('${encodedCardId}'))"
+                                class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-amber-500 rounded-full" style="width:${utilizationPct}%"></div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1">${escapeHTML(utilizationLabel)}</p>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+
             lucide.createIcons();
         }
 

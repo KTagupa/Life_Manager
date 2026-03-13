@@ -74,7 +74,8 @@ function computeCashBalanceAsOf(endTs, transactions) {
         if (!Number.isFinite(ts) || ts > endTs) return sum;
         const amt = Number(tx.amt) || 0;
         if (tx.type === 'income' || tx.type === 'debt_increase') return sum + amt;
-        if (tx.type === 'expense') return sum - amt;
+        if (tx.type === 'expense') return isCreditCardCharge(tx) ? sum : sum - amt;
+        if (isCreditCardPayment(tx)) return sum - amt;
         return sum;
     }, 0);
 }
@@ -206,10 +207,13 @@ async function refreshBusinessKPIPanel() {
 
     const debtNameSet = new Set((window.allDecryptedDebts || []).map(d => String(d.name || '').trim()).filter(Boolean));
     const debtService = scopedTransactions.reduce((sum, tx) => {
+        const amount = Number(tx.amt) || 0;
+        if (!Number.isFinite(amount) || amount <= 0) return sum;
+        if (isCreditCardPayment(tx)) return sum + amount;
         if (tx.type !== 'expense') return sum;
         const category = String(tx.category || '').trim();
         if (!debtNameSet.has(category)) return sum;
-        return sum + (Number(tx.amt) || 0);
+        return sum + amount;
     }, 0);
 
     const savingsContribution = scopedTransactions.reduce((sum, tx) => {
@@ -233,7 +237,7 @@ async function refreshBusinessKPIPanel() {
     const investmentRate = income > 0 ? (investmentContribution / income) * 100 : NaN;
 
     const cashNow = computeCurrentBalance(allTx);
-    const debtOutstandingNow = computeDebtOutstandingAsOf(Date.now(), allTx);
+    const debtOutstandingNow = computeDebtOutstandingAsOf(Date.now(), allTx) + computeCreditCardOutstandingAsOf(Date.now(), allTx);
     const lentOutstandingNow = computeLentOutstandingAsOf(Date.now(), allTx);
     const netWorth = cashNow + lentOutstandingNow + cryptoValue - debtOutstandingNow;
 
@@ -242,10 +246,10 @@ async function refreshBusinessKPIPanel() {
     const prevMonthEnd = new Date(range.end.getFullYear(), range.end.getMonth(), 0, 23, 59, 59, 999);
     const currentCore = computeCashBalanceAsOf(currentEndTs, allTx)
         + computeLentOutstandingAsOf(currentEndTs, allTx)
-        - computeDebtOutstandingAsOf(currentEndTs, allTx);
+        - (computeDebtOutstandingAsOf(currentEndTs, allTx) + computeCreditCardOutstandingAsOf(currentEndTs, allTx));
     const prevCore = computeCashBalanceAsOf(prevMonthEnd.getTime(), allTx)
         + computeLentOutstandingAsOf(prevMonthEnd.getTime(), allTx)
-        - computeDebtOutstandingAsOf(prevMonthEnd.getTime(), allTx);
+        - (computeDebtOutstandingAsOf(prevMonthEnd.getTime(), allTx) + computeCreditCardOutstandingAsOf(prevMonthEnd.getTime(), allTx));
     const coreTrendPct = Math.abs(prevCore) > 0.01
         ? ((currentCore - prevCore) / Math.abs(prevCore)) * 100
         : NaN;
@@ -285,7 +289,7 @@ async function refreshBusinessKPIPanel() {
     const trendPositive = Number.isFinite(coreTrendPct) && coreTrendPct >= 0;
     setBusinessKpiCard('kpi-networth', {
         valueText: fmt(netWorth),
-        detailText: `Cash ${fmt(cashNow)} + lent ${fmt(lentOutstandingNow)} + crypto ${fmt(cryptoValue)} - debt ${fmt(debtOutstandingNow)}`,
+        detailText: `Cash ${fmt(cashNow)} + lent ${fmt(lentOutstandingNow)} + crypto ${fmt(cryptoValue)} - liabilities ${fmt(debtOutstandingNow)}`,
         trendText: Number.isFinite(coreTrendPct)
             ? `Core trend vs prior month: ${coreTrendPct >= 0 ? '+' : ''}${coreTrendPct.toFixed(1)}%`
             : 'Core trend vs prior month: n/a',
