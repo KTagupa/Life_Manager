@@ -367,6 +367,9 @@ function setPlannerTab(tab = 'agenda') {
     panel.querySelectorAll('.planner-tab').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.plannerTab === tab);
     });
+    if (typeof syncSegmentedSlider === 'function') {
+        syncSegmentedSlider(panel.querySelector('.planner-tabs'));
+    }
 
     const sections = {
         agenda: document.getElementById('planner-tab-agenda'),

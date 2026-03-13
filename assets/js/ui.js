@@ -168,6 +168,42 @@ function getSavedNavigatorTab() {
     }
 }
 
+function syncSegmentedSlider(slider) {
+    if (!slider || typeof slider.querySelectorAll !== 'function') return;
+
+    const buttons = Array.from(slider.querySelectorAll('.panel-slider-option'))
+        .filter((button) => !button.hasAttribute('hidden'));
+
+    if (!buttons.length) return;
+
+    const activeIndex = Math.max(0, buttons.findIndex((button) => button.classList.contains('active')));
+    const activeButton = buttons[activeIndex] || buttons[0];
+
+    slider.style.setProperty('--slider-count', String(Math.max(buttons.length, 1)));
+    slider.style.setProperty('--slider-index', String(activeIndex));
+
+    if (!activeButton || typeof window.getComputedStyle !== 'function') return;
+
+    const activeStyles = window.getComputedStyle(activeButton);
+    const accent = activeStyles.getPropertyValue('--slider-accent').trim();
+    const activeText = activeStyles.getPropertyValue('--slider-active-text').trim();
+    const accentShadow = activeStyles.getPropertyValue('--slider-accent-shadow').trim();
+
+    if (accent) slider.style.setProperty('--slider-active-bg', accent);
+    if (activeText) slider.style.setProperty('--slider-active-color', activeText);
+    if (accentShadow) slider.style.setProperty('--slider-active-shadow', accentShadow);
+}
+
+function syncAllSegmentedSliders(scope = document) {
+    const root = (scope && typeof scope.querySelectorAll === 'function') ? scope : document;
+    root.querySelectorAll('.panel-slider').forEach((slider) => {
+        syncSegmentedSlider(slider);
+    });
+}
+
+window.syncSegmentedSlider = syncSegmentedSlider;
+window.syncAllSegmentedSliders = syncAllSegmentedSliders;
+
 let currentWorkspaceSection = getSavedWorkspaceSection();
 let viewportOriginGuardActive = false;
 

@@ -229,24 +229,47 @@ function updateSideNotesRecentFilterControlState() {
     recentSelect.disabled = normalizeSideNotesFilterMode(sideNotesFilterMode) !== 'recently-edited';
 }
 
+function syncSideNotesFilterSliderState() {
+    const filterSlider = document.getElementById('note-quick-filter-slider');
+    if (!filterSlider) return;
+
+    sideNotesFilterMode = normalizeSideNotesFilterMode(sideNotesFilterMode);
+    filterSlider.querySelectorAll('.panel-slider-option').forEach((button) => {
+        button.classList.toggle('active', button.dataset.filterMode === sideNotesFilterMode);
+    });
+
+    if (typeof syncSegmentedSlider === 'function') syncSegmentedSlider(filterSlider);
+}
+
 function ensureSideNotesFilterControls(noteList) {
     const controlsHost = document.getElementById('note-tags-filter');
     if (!controlsHost) return;
 
     if (!controlsHost.dataset.filtersInitialized) {
-        const filterSelect = document.createElement('select');
-        filterSelect.id = 'note-quick-filter-select';
-        filterSelect.className = 'note-filter-select';
-        filterSelect.innerHTML = [
-            '<option value="all">Filter: All Notes</option>',
-            '<option value="has-reminder">Filter: Has Reminder</option>',
-            '<option value="urgent-linked">Filter: Urgent-linked</option>',
-            '<option value="recently-edited">Filter: Recently Edited</option>'
-        ].join('');
-        filterSelect.addEventListener('change', () => {
-            sideNotesFilterMode = normalizeSideNotesFilterMode(filterSelect.value);
-            updateSideNotesRecentFilterControlState();
-            renderNotesList();
+        const filterSlider = document.createElement('div');
+        filterSlider.id = 'note-quick-filter-slider';
+        filterSlider.className = 'panel-slider panel-slider-compact note-filter-slider';
+        filterSlider.setAttribute('aria-label', 'Filter notes');
+
+        [
+            { value: 'all', label: 'All', title: 'Show all notes' },
+            { value: 'has-reminder', label: 'Reminders', title: 'Show notes with reminders' },
+            { value: 'urgent-linked', label: 'Urgent', title: 'Show notes linked to urgent tasks' },
+            { value: 'recently-edited', label: 'Recent', title: 'Show recently edited notes' }
+        ].forEach((option) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'panel-slider-option note-filter-btn';
+            button.dataset.filterMode = option.value;
+            button.textContent = option.label;
+            button.title = option.title;
+            button.addEventListener('click', () => {
+                sideNotesFilterMode = normalizeSideNotesFilterMode(option.value);
+                syncSideNotesFilterSliderState();
+                updateSideNotesRecentFilterControlState();
+                renderNotesList();
+            });
+            filterSlider.appendChild(button);
         });
 
         const tagSelect = document.createElement('select');
@@ -270,16 +293,14 @@ function ensureSideNotesFilterControls(noteList) {
             renderNotesList();
         });
 
-        controlsHost.appendChild(filterSelect);
-        controlsHost.appendChild(tagSelect);
-        controlsHost.appendChild(recentSelect);
-        controlsHost.dataset.filtersInitialized = 'true';
-    }
+        const secondaryRow = document.createElement('div');
+        secondaryRow.className = 'note-filter-secondary-row';
+        secondaryRow.appendChild(tagSelect);
+        secondaryRow.appendChild(recentSelect);
 
-    const filterSelect = document.getElementById('note-quick-filter-select');
-    if (filterSelect) {
-        sideNotesFilterMode = normalizeSideNotesFilterMode(sideNotesFilterMode);
-        filterSelect.value = sideNotesFilterMode;
+        controlsHost.appendChild(filterSlider);
+        controlsHost.appendChild(secondaryRow);
+        controlsHost.dataset.filtersInitialized = 'true';
     }
 
     const recentSelect = document.getElementById('note-recent-window-select');
@@ -288,6 +309,7 @@ function ensureSideNotesFilterControls(noteList) {
         recentSelect.value = sideNotesRecentWindow;
     }
 
+    syncSideNotesFilterSliderState();
     updateSideNotesTagFilterOptions(collectAllSideNoteTags(noteList));
     updateSideNotesRecentFilterControlState();
 }

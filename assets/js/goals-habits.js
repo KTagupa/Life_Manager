@@ -359,6 +359,9 @@ function setHabitFilter(filter) {
     document.querySelectorAll('.habit-filter-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.filter === currentHabitFilter);
     });
+    if (typeof syncSegmentedSlider === 'function') {
+        syncSegmentedSlider(document.getElementById('habits-filter-row'));
+    }
     renderHabits();
 }
 

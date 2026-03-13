@@ -526,17 +526,6 @@
             document.getElementById('auth-overlay')?.classList.add('hidden');
             document.getElementById('main-content')?.classList.remove('opacity-0');
             updatePreviewModeBanner();
-
-            if (typeof initFilters === 'function') initFilters();
-            if (!spendChart && typeof initChart === 'function') initChart();
-
-            await loadFromStorage();
-
-            if (window.lucide) window.lucide.createIcons();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            if (typeof showToast === 'function') {
-                showToast('Preview mode loaded. Demo data stays only in this tab.');
-            }
         } catch (error) {
             console.error('Preview mode failed to load.', error);
             previewMode = false;
@@ -545,6 +534,38 @@
             updatePreviewModeBanner();
             if (authStatusEl) authStatusEl.innerText = 'Preview failed';
             alert('Could not load preview mode.');
+            return;
+        }
+
+        let hadSoftLoadIssue = false;
+
+        try {
+            if (typeof initFilters === 'function') initFilters();
+            if (!spendChart && typeof initChart === 'function') initChart();
+            await loadFromStorage();
+        } catch (error) {
+            hadSoftLoadIssue = true;
+            console.error('Preview mode loaded with follow-up UI issues.', error);
+        }
+
+        try {
+            if (window.lucide) window.lucide.createIcons();
+        } catch (error) {
+            hadSoftLoadIssue = true;
+            console.error('Preview mode icon refresh failed.', error);
+        }
+
+        try {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (_) { }
+
+        if (authStatusEl) authStatusEl.innerText = 'Preview ready';
+        if (typeof showToast === 'function') {
+            showToast(
+                hadSoftLoadIssue
+                    ? 'Preview opened. A few non-critical UI modules were skipped.'
+                    : 'Preview mode loaded. Demo data stays only in this tab.'
+            );
         }
     }
 

@@ -1,24 +1,141 @@
         // =============================================
         // SECTION 5: CHARTS & FILTERS
         // =============================================
+        function getPrimaryMonthFilterControl() {
+            return document.getElementById('filter-month');
+        }
+
+        function getPrimaryYearFilterControl() {
+            return document.getElementById('filter-year');
+        }
+
+        function getPrimarySearchFilterControl() {
+            return document.getElementById('search-transactions');
+        }
+
+        function getFilterToolbarState() {
+            return {
+                month: getPrimaryMonthFilterControl()?.value || 'all',
+                year: getPrimaryYearFilterControl()?.value || 'all',
+                search: getPrimarySearchFilterControl()?.value || '',
+                scope: metricScope || 'selected_period'
+            };
+        }
+
+        function applyFinanceTheme(scope = metricScope) {
+            if (!document.body) return;
+            document.body.setAttribute('data-finance-theme', scope || 'selected_period');
+        }
+
+        function updateScopeSliderState(scope = metricScope) {
+            document.querySelectorAll('[data-scope-slider]').forEach(slider => {
+                slider.dataset.activeScope = scope || 'selected_period';
+
+                slider.querySelectorAll('[data-scope-option]').forEach(button => {
+                    const isActive = button.dataset.scopeOption === scope;
+                    button.classList.toggle('is-active', isActive);
+                    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                });
+            });
+        }
+
+        function syncToolbarControls() {
+            const state = getFilterToolbarState();
+
+            document.querySelectorAll('[data-filter-month]').forEach(control => {
+                if (control.value !== state.month) control.value = state.month;
+            });
+
+            document.querySelectorAll('[data-filter-year]').forEach(control => {
+                if (control.value !== state.year) control.value = state.year;
+            });
+
+            document.querySelectorAll('[data-filter-search]').forEach(control => {
+                if (control.value !== state.search) control.value = state.search;
+            });
+
+            const metricScopeSel = document.getElementById('metric-scope');
+            if (metricScopeSel && metricScopeSel.value !== state.scope) {
+                metricScopeSel.value = state.scope;
+            }
+
+            updateScopeSliderState(state.scope);
+            applyFinanceTheme(state.scope);
+        }
+
+        function bindFilterToolbarControls() {
+            if (window.__financeFilterControlsBound) return;
+            window.__financeFilterControlsBound = true;
+
+            document.querySelectorAll('[data-filter-month]').forEach(control => {
+                control.addEventListener('change', () => {
+                    const primary = getPrimaryMonthFilterControl();
+                    if (primary && control !== primary) primary.value = control.value;
+                    syncToolbarControls();
+                    applyFilters();
+                });
+            });
+
+            document.querySelectorAll('[data-filter-year]').forEach(control => {
+                control.addEventListener('change', () => {
+                    const primary = getPrimaryYearFilterControl();
+                    if (primary && control !== primary) primary.value = control.value;
+                    syncToolbarControls();
+                    applyFilters();
+                });
+            });
+
+            document.querySelectorAll('[data-filter-search]').forEach(control => {
+                control.addEventListener('input', () => {
+                    const primary = getPrimarySearchFilterControl();
+                    if (primary && control !== primary) primary.value = control.value;
+                    syncToolbarControls();
+                    applyFilters();
+                });
+            });
+
+            document.querySelectorAll('[data-filter-reset]').forEach(button => {
+                button.addEventListener('click', () => {
+                    resetFilters();
+                });
+            });
+
+            document.querySelectorAll('[data-scope-option]').forEach(button => {
+                button.addEventListener('click', () => {
+                    setMetricScope(button.dataset.scopeOption || 'selected_period');
+                });
+            });
+        }
+
         function initFilters() {
-            const mSel = document.getElementById('filter-month');
-            const ySel = document.getElementById('filter-year');
+            const monthControls = document.querySelectorAll('[data-filter-month]');
+            const yearControls = document.querySelectorAll('[data-filter-year]');
             const months = ["All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-            mSel.innerHTML = months.map((m, i) => `<option value="${i === 0 ? 'all' : i}">${m}</option>`).join('');
+            const monthMarkup = months.map((m, i) => `<option value="${i === 0 ? 'all' : i}">${m}</option>`).join('');
+            monthControls.forEach(control => {
+                control.innerHTML = monthMarkup;
+            });
 
             // Year: Current +/- 5
             const curY = new Date().getFullYear();
             let ops = `<option value="all">All Years</option>`;
             for (let i = curY - 2; i <= curY + 2; i++) ops += `<option value="${i}" ${i === curY ? 'selected' : ''}>${i}</option>`;
-            ySel.innerHTML = ops;
+            yearControls.forEach(control => {
+                control.innerHTML = ops;
+            });
 
             // Set current month default
-            mSel.value = new Date().getMonth() + 1;
+            const primaryMonth = getPrimaryMonthFilterControl();
+            const primaryYear = getPrimaryYearFilterControl();
+            if (primaryMonth) primaryMonth.value = String(new Date().getMonth() + 1);
+            if (primaryYear) primaryYear.value = String(curY);
 
             const metricScopeSel = document.getElementById('metric-scope');
             if (metricScopeSel) metricScopeSel.value = metricScope;
+
+            bindFilterToolbarControls();
+            syncToolbarControls();
         }
 
         let trendsChart = null;
@@ -148,9 +265,11 @@
         }
 
         function applyFilters() {
-            const m = document.getElementById('filter-month').value;
-            const y = document.getElementById('filter-year').value;
-            const searchQuery = document.getElementById('search-transactions')?.value.toLowerCase() || '';
+            const m = getPrimaryMonthFilterControl()?.value || 'all';
+            const y = getPrimaryYearFilterControl()?.value || 'all';
+            const searchQuery = getPrimarySearchFilterControl()?.value.toLowerCase() || '';
+
+            syncToolbarControls();
 
             let filtered = [...(window.allDecryptedTransactions || [])];
 
@@ -197,8 +316,16 @@
         }
 
         function resetFilters() {
-            document.getElementById('filter-month').value = new Date().getMonth() + 1;
-            document.getElementById('filter-year').value = new Date().getFullYear();
+            const primaryMonth = getPrimaryMonthFilterControl();
+            const primaryYear = getPrimaryYearFilterControl();
+            const primarySearch = getPrimarySearchFilterControl();
+
+            if (primaryMonth) primaryMonth.value = String(new Date().getMonth() + 1);
+            if (primaryYear) primaryYear.value = String(new Date().getFullYear());
+            if (primarySearch) primarySearch.value = '';
+
+            metricScope = 'selected_period';
+            syncToolbarControls();
             applyFilters();
         }
 

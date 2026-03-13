@@ -221,180 +221,206 @@
                 Centralized controls for sync, AI, backups, and performance.
             </div>
 
-            <section class="settings-card settings-card-system">
-                <div class="settings-card-heading">
-                    <span class="settings-card-icon" aria-hidden="true">🧰</span>
-                    <h3>System Controls</h3>
-                </div>
+            <div id="settings-hub-slider" class="panel-slider panel-slider-compact settings-hub-slider"
+                role="tablist" aria-label="Settings sections">
+                <button type="button" class="panel-slider-option active" data-settings-section="system"
+                    onclick="setSettingsHubSection('system')">System</button>
+                <button type="button" class="panel-slider-option" data-settings-section="data"
+                    onclick="setSettingsHubSection('data')">Data</button>
+                <button type="button" class="panel-slider-option" data-settings-section="gemini"
+                    onclick="setSettingsHubSection('gemini')">Gemini</button>
+                <button type="button" class="panel-slider-option" data-settings-section="urgency"
+                    onclick="setSettingsHubSection('urgency')">Urgency</button>
+                <button type="button" class="panel-slider-option" data-settings-section="sync"
+                    onclick="setSettingsHubSection('sync')">Sync</button>
+            </div>
 
-                <div class="settings-action-grid">
-                    <button class="settings-action-btn" onclick="cycleEcoMode()">Mode: <span id="settings-eco-status">Turbo</span></button>
-                    <button class="settings-action-btn" onclick="cleanAppMemory()">🧹 Clean Memory</button>
-                </div>
-
-                <div class="settings-action-grid">
-                    <button class="settings-action-btn" onclick="saveData(true)">⬇ Backup Now</button>
-                    <button class="settings-action-btn" onclick="updateDataMetrics()">↻ Refresh Metrics</button>
-                </div>
-
-                <div class="settings-meta">
-                    Last auto backup: <span id="backup-timestamp-settings">None</span>
-                </div>
-            </section>
-
-            <section id="data-health-panel" class="settings-card settings-card-metrics">
-                <div class="settings-metrics-header">
-                    <span class="settings-metrics-title">📊 Data Health & Metrics</span>
-                    <span id="total-gist-size" class="settings-metrics-total">0.0 KB</span>
-                </div>
-                <div class="settings-metrics-compact-grid">
-                    <div class="settings-metrics-compact-item">
-                        <span>Tasks</span>
-                        <strong id="metrics-summary-tasks">0.0 KB</strong>
-                    </div>
-                    <div class="settings-metrics-compact-item">
-                        <span>Notes</span>
-                        <strong id="metrics-summary-notes">0.0 KB</strong>
-                    </div>
-                    <div class="settings-metrics-compact-item">
-                        <span>Projects</span>
-                        <strong id="metrics-summary-projects">0.0 KB</strong>
-                    </div>
-                    <div class="settings-metrics-compact-item">
-                        <span>Tracked</span>
-                        <strong id="metrics-summary-collections">0 collections</strong>
-                    </div>
-                </div>
-                <div class="settings-action-grid settings-metrics-compact-actions">
-                    <button class="settings-action-btn settings-action-btn-compact" type="button"
-                        onclick="openInsightsDataFootprintFromSettings()">View Full Metrics</button>
-                </div>
-                <div class="settings-meta" id="metrics-summary-updated">Updated: —</div>
-            </section>
-
-            <section class="settings-card settings-card-ai">
-                <div class="settings-card-heading">
-                    <span class="settings-card-icon" aria-hidden="true">✨</span>
-                    <h3>Gemini API Key</h3>
-                </div>
-
-                <div class="form-group">
-                    <label class="settings-field-label" for="settings-gemini-key-input">API Key</label>
-                    <input type="password" id="settings-gemini-key-input" placeholder="Paste API key..."
-                        onchange="saveGeminiKey(this.value)">
-                </div>
-
-                <div class="settings-action-grid">
-                    <button class="settings-action-btn" onclick="toggleAIModal()">Open AI Workspace</button>
-                    <button class="settings-action-btn" onclick="toggleAIPresets()">Quick Presets</button>
-                </div>
-
-                <div class="gemini-usage-panel" id="gemini-usage-panel">
-                    <div class="gemini-usage-header">
-                        <span class="gemini-usage-title">Gemini Usage (Local Estimate)</span>
-                        <span class="gemini-usage-model" id="gemini-usage-model">Model: gemini-2.5-flash</span>
-                    </div>
-                    <div class="gemini-usage-grid">
-                        <div class="gemini-usage-item">
-                            <span>Requests (Last 60s)</span>
-                            <strong id="gemini-usage-minute-requests">0</strong>
+            <div class="settings-slider-sections">
+                <div class="settings-slider-section active" data-settings-section="system">
+                    <section class="settings-card settings-card-system">
+                        <div class="settings-card-heading">
+                            <span class="settings-card-icon" aria-hidden="true">🧰</span>
+                            <h3>System Controls</h3>
                         </div>
-                        <div class="gemini-usage-item">
-                            <span>Tokens (Last 60s)</span>
-                            <strong id="gemini-usage-minute-tokens">0</strong>
+
+                        <div class="settings-action-grid">
+                            <button class="settings-action-btn" onclick="cycleEcoMode()">Mode: <span id="settings-eco-status">Turbo</span></button>
+                            <button class="settings-action-btn" onclick="cleanAppMemory()">🧹 Clean Memory</button>
                         </div>
-                        <div class="gemini-usage-item">
-                            <span>Requests Today (Pacific)</span>
-                            <strong id="gemini-usage-today-requests">0</strong>
+
+                        <div class="settings-action-grid">
+                            <button class="settings-action-btn" onclick="saveData(true)">⬇ Backup Now</button>
+                            <button class="settings-action-btn" onclick="updateDataMetrics()">↻ Refresh Metrics</button>
                         </div>
-                        <div class="gemini-usage-item">
-                            <span>Tokens Today (Pacific)</span>
-                            <strong id="gemini-usage-today-tokens">0</strong>
+
+                        <div class="settings-meta">
+                            Last auto backup: <span id="backup-timestamp-settings">None</span>
                         </div>
-                        <div class="gemini-usage-item">
-                            <span>All-Time Requests</span>
-                            <strong id="gemini-usage-all-requests">0</strong>
+                    </section>
+                </div>
+
+                <div class="settings-slider-section" data-settings-section="data" hidden>
+                    <section id="data-health-panel" class="settings-card settings-card-metrics">
+                        <div class="settings-metrics-header">
+                            <span class="settings-metrics-title">📊 Data Health & Metrics</span>
+                            <span id="total-gist-size" class="settings-metrics-total">0.0 KB</span>
                         </div>
-                        <div class="gemini-usage-item">
-                            <span>All-Time Tokens</span>
-                            <strong id="gemini-usage-all-tokens">0</strong>
+                        <div class="settings-metrics-compact-grid">
+                            <div class="settings-metrics-compact-item">
+                                <span>Tasks</span>
+                                <strong id="metrics-summary-tasks">0.0 KB</strong>
+                            </div>
+                            <div class="settings-metrics-compact-item">
+                                <span>Notes</span>
+                                <strong id="metrics-summary-notes">0.0 KB</strong>
+                            </div>
+                            <div class="settings-metrics-compact-item">
+                                <span>Projects</span>
+                                <strong id="metrics-summary-projects">0.0 KB</strong>
+                            </div>
+                            <div class="settings-metrics-compact-item">
+                                <span>Tracked</span>
+                                <strong id="metrics-summary-collections">0 collections</strong>
+                            </div>
                         </div>
-                    </div>
-                    <div class="gemini-usage-footer">
-                        <span id="gemini-usage-updated">Updated: —</span>
-                        <button type="button" class="btn" onclick="resetGeminiUsageStats()">Reset Counters</button>
-                    </div>
-                </div>
-            </section>
-
-            <section class="settings-card settings-card-ai-urgency">
-                <div class="settings-card-heading">
-                    <span class="settings-card-icon" aria-hidden="true">🧠</span>
-                    <h3>AI Urgency Prioritization</h3>
+                        <div class="settings-action-grid settings-metrics-compact-actions">
+                            <button class="settings-action-btn settings-action-btn-compact" type="button"
+                                onclick="openInsightsDataFootprintFromSettings()">View Full Metrics</button>
+                        </div>
+                        <div class="settings-meta" id="metrics-summary-updated">Updated: —</div>
+                    </section>
                 </div>
 
-                <div class="form-group">
-                    <label class="settings-field-label" for="ai-urgency-mode-select">AI Urgency Mode</label>
-                    <div class="settings-inline-row">
-                        <select id="ai-urgency-mode-select" onchange="handleAiUrgencyModeChange(this.value)">
-                            <option value="shadow">Shadow (compute only)</option>
-                            <option value="system">System (current behavior)</option>
-                            <option value="ai">AI (project urgency)</option>
-                            <option value="blended">Blended (system + AI)</option>
-                        </select>
-                        <button class="settings-action-btn settings-action-btn-compact" onclick="recomputeAiUrgencyFromSettings()">↻ Recompute</button>
-                    </div>
+                <div class="settings-slider-section" data-settings-section="gemini" hidden>
+                    <section class="settings-card settings-card-ai">
+                        <div class="settings-card-heading">
+                            <span class="settings-card-icon" aria-hidden="true">✨</span>
+                            <h3>Gemini API Key</h3>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="settings-field-label" for="settings-gemini-key-input">API Key</label>
+                            <input type="password" id="settings-gemini-key-input" placeholder="Paste API key..."
+                                onchange="saveGeminiKey(this.value)">
+                        </div>
+
+                        <div class="settings-action-grid">
+                            <button class="settings-action-btn" onclick="toggleAIModal()">Open AI Workspace</button>
+                            <button class="settings-action-btn" onclick="toggleAIPresets()">Quick Presets</button>
+                        </div>
+
+                        <div class="gemini-usage-panel" id="gemini-usage-panel">
+                            <div class="gemini-usage-header">
+                                <span class="gemini-usage-title">Gemini Usage (Local Estimate)</span>
+                                <span class="gemini-usage-model" id="gemini-usage-model">Model: gemini-2.5-flash</span>
+                            </div>
+                            <div class="gemini-usage-grid">
+                                <div class="gemini-usage-item">
+                                    <span>Requests (Last 60s)</span>
+                                    <strong id="gemini-usage-minute-requests">0</strong>
+                                </div>
+                                <div class="gemini-usage-item">
+                                    <span>Tokens (Last 60s)</span>
+                                    <strong id="gemini-usage-minute-tokens">0</strong>
+                                </div>
+                                <div class="gemini-usage-item">
+                                    <span>Requests Today (Pacific)</span>
+                                    <strong id="gemini-usage-today-requests">0</strong>
+                                </div>
+                                <div class="gemini-usage-item">
+                                    <span>Tokens Today (Pacific)</span>
+                                    <strong id="gemini-usage-today-tokens">0</strong>
+                                </div>
+                                <div class="gemini-usage-item">
+                                    <span>All-Time Requests</span>
+                                    <strong id="gemini-usage-all-requests">0</strong>
+                                </div>
+                                <div class="gemini-usage-item">
+                                    <span>All-Time Tokens</span>
+                                    <strong id="gemini-usage-all-tokens">0</strong>
+                                </div>
+                            </div>
+                            <div class="gemini-usage-footer">
+                                <span id="gemini-usage-updated">Updated: —</span>
+                                <button type="button" class="btn" onclick="resetGeminiUsageStats()">Reset Counters</button>
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
-                <div class="form-group">
-                    <label class="settings-field-label" for="ai-urgency-blend-range">Blend AI Weight</label>
-                    <div class="settings-inline-row">
-                        <input type="range" id="ai-urgency-blend-range" min="0" max="100" step="5"
-                            oninput="updateAiUrgencyBlendPreview(this.value)">
-                        <span id="ai-urgency-blend-value" style="min-width:46px; text-align:right;">30%</span>
-                        <button class="settings-action-btn settings-action-btn-compact" onclick="applyAiUrgencyBlendFromSettings()">Apply</button>
-                    </div>
+                <div class="settings-slider-section" data-settings-section="urgency" hidden>
+                    <section class="settings-card settings-card-ai-urgency">
+                        <div class="settings-card-heading">
+                            <span class="settings-card-icon" aria-hidden="true">🧠</span>
+                            <h3>AI Urgency Prioritization</h3>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="settings-field-label" for="ai-urgency-mode-select">AI Urgency Mode</label>
+                            <div class="settings-inline-row">
+                                <select id="ai-urgency-mode-select" onchange="handleAiUrgencyModeChange(this.value)">
+                                    <option value="shadow">Shadow (compute only)</option>
+                                    <option value="system">System (current behavior)</option>
+                                    <option value="ai">AI (project urgency)</option>
+                                    <option value="blended">Blended (system + AI)</option>
+                                </select>
+                                <button class="settings-action-btn settings-action-btn-compact" onclick="recomputeAiUrgencyFromSettings()">↻ Recompute</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="settings-field-label" for="ai-urgency-blend-range">Blend AI Weight</label>
+                            <div class="settings-inline-row">
+                                <input type="range" id="ai-urgency-blend-range" min="0" max="100" step="5"
+                                    oninput="updateAiUrgencyBlendPreview(this.value)">
+                                <span id="ai-urgency-blend-value" style="min-width:46px; text-align:right;">30%</span>
+                                <button class="settings-action-btn settings-action-btn-compact" onclick="applyAiUrgencyBlendFromSettings()">Apply</button>
+                            </div>
+                        </div>
+
+                        <div class="settings-action-grid">
+                            <button id="semantic-ai-urgency-btn" class="settings-action-btn" onclick="runSemanticAiUrgencyFromSettings()">Semantic Re-score Batch (Gemini)</button>
+                            <button class="settings-action-btn" onclick="openAiUrgencyScoresModal()">View Urgency Scores</button>
+                        </div>
+                        <div class="settings-meta">
+                            Heuristic AI = fast local score from due dates, dependencies, and activity. Semantic AI = Gemini text-based score from task/project wording.
+                            Use <strong>AI</strong> for AI-only ranking or <strong>Blended</strong> to mix AI with system scoring.
+                            Semantic Gemini calls are manual batches. Send one batch, then send the next after the 65s cooldown.
+                        </div>
+                        <div class="settings-meta" id="ai-urgency-status">AI urgency ready.</div>
+                    </section>
                 </div>
 
-                <div class="settings-action-grid">
-                    <button id="semantic-ai-urgency-btn" class="settings-action-btn" onclick="runSemanticAiUrgencyFromSettings()">Semantic Re-score Batch (Gemini)</button>
-                    <button class="settings-action-btn" onclick="openAiUrgencyScoresModal()">View Urgency Scores</button>
-                </div>
-                <div class="settings-meta">
-                    Heuristic AI = fast local score from due dates, dependencies, and activity. Semantic AI = Gemini text-based score from task/project wording.
-                    Use <strong>AI</strong> for AI-only ranking or <strong>Blended</strong> to mix AI with system scoring.
-                    Semantic Gemini calls are manual batches. Send one batch, then send the next after the 65s cooldown.
-                </div>
-                <div class="settings-meta" id="ai-urgency-status">AI urgency ready.</div>
-            </section>
+                <div class="settings-slider-section" data-settings-section="sync" hidden>
+                    <section class="settings-card settings-card-sync">
+                        <div class="settings-card-heading">
+                            <span class="settings-card-icon" aria-hidden="true">☁️</span>
+                            <h3>GitHub Gist Sync</h3>
+                        </div>
 
-            <section class="settings-card settings-card-sync">
-                <div class="settings-card-heading">
-                    <span class="settings-card-icon" aria-hidden="true">☁️</span>
-                    <h3>GitHub Gist Sync</h3>
-                </div>
+                        <div class="form-group">
+                            <label class="settings-field-label" for="github-token">Personal Access Token</label>
+                            <div class="settings-inline-row">
+                                <input type="password" id="github-token" placeholder="ghp_xxxxxxxxxxxx"
+                                    onchange="saveGithubToken(this.value)">
+                                <button class="settings-action-btn settings-action-btn-compact" onclick="testGithubConnection()" title="Test Token">🧪 Test</button>
+                            </div>
+                        </div>
 
-                <div class="form-group">
-                    <label class="settings-field-label" for="github-token">Personal Access Token</label>
-                    <div class="settings-inline-row">
-                        <input type="password" id="github-token" placeholder="ghp_xxxxxxxxxxxx"
-                            onchange="saveGithubToken(this.value)">
-                        <button class="settings-action-btn settings-action-btn-compact" onclick="testGithubConnection()" title="Test Token">🧪 Test</button>
-                    </div>
-                </div>
+                        <div class="form-group">
+                            <label class="settings-field-label" for="gist-id">Gist ID (Auto-filled on Push)</label>
+                            <input type="text" id="gist-id" placeholder="Autogenerated..." readonly>
+                        </div>
 
-                <div class="form-group">
-                    <label class="settings-field-label" for="gist-id">Gist ID (Auto-filled on Push)</label>
-                    <input type="text" id="gist-id" placeholder="Autogenerated..." readonly>
-                </div>
+                        <div class="settings-action-grid">
+                            <button class="settings-action-btn" onclick="pullFromGist()">⬇ Pull</button>
+                            <button class="settings-action-btn" onclick="pushToGist()">⬆ Push</button>
+                        </div>
 
-                <div class="settings-action-grid">
-                    <button class="settings-action-btn" onclick="pullFromGist()">⬇ Pull</button>
-                    <button class="settings-action-btn" onclick="pushToGist()">⬆ Push</button>
+                        <div id="sync-status" class="sync-status"></div>
+                    </section>
                 </div>
-
-                <div id="sync-status" class="sync-status"></div>
-            </section>
+            </div>
         </div>
     </div>
 
@@ -753,11 +779,11 @@
             </div>
         </div>
 
-        <div id="habits-filter-row" class="habit-filter-row">
-            <button class="habit-filter-btn active" data-filter="all" onclick="setHabitFilter('all')">All</button>
-            <button class="habit-filter-btn" data-filter="needs-action" onclick="setHabitFilter('needs-action')">Needs
+        <div id="habits-filter-row" class="habit-filter-row panel-slider" aria-label="Habit filter">
+            <button type="button" class="habit-filter-btn panel-slider-option active" data-filter="all" onclick="setHabitFilter('all')">All</button>
+            <button type="button" class="habit-filter-btn panel-slider-option" data-filter="needs-action" onclick="setHabitFilter('needs-action')">Needs
                 Action</button>
-            <button class="habit-filter-btn" data-filter="completed"
+            <button type="button" class="habit-filter-btn panel-slider-option" data-filter="completed"
                 onclick="setHabitFilter('completed')">Completed</button>
         </div>
 
@@ -777,7 +803,7 @@
 
         <div  class="layout-group-54">
             <input type="text" id="note-search-input" placeholder="Search notes or tags..." oninput="renderNotesList()">
-            <div id="note-tags-filter"  class="layout-group-55"></div>
+            <div id="note-tags-filter"  class="layout-group-55 note-filter-controls"></div>
             <div class="ai-note-selection-row">
                 <div id="ai-note-selection-summary">AI context selection: 0 full note(s), 0 block(s)</div>
                 <button class=" layout-group-56" 
@@ -800,12 +826,12 @@
             <span>🗓️ Planner</span>
             <button class="btn planner-close-btn" onclick="toggleAgenda()" aria-label="Close planner">✕</button>
         </div>
-        <div class="planner-tabs" role="tablist" aria-label="Planner Views">
-            <button class="planner-tab active" data-planner-tab="agenda"
+        <div class="planner-tabs panel-slider" role="tablist" aria-label="Planner Views">
+            <button type="button" class="planner-tab panel-slider-option active" data-planner-tab="agenda"
                 onclick="setPlannerTab('agenda')">Agenda</button>
-            <button class="planner-tab" data-planner-tab="calendar"
+            <button type="button" class="planner-tab panel-slider-option" data-planner-tab="calendar"
                 onclick="setPlannerTab('calendar')">Calendar</button>
-            <button class="planner-tab" data-planner-tab="heatmap" onclick="setPlannerTab('heatmap')">Heatmap</button>
+            <button type="button" class="planner-tab panel-slider-option" data-planner-tab="heatmap" onclick="setPlannerTab('heatmap')">Heatmap</button>
         </div>
 
         <div id="planner-tab-agenda" class="planner-tab-content">
@@ -1319,11 +1345,11 @@
             <span>🧭 Navigator</span>
             <button class="btn" onclick="toggleNavigatorPanel()">✕</button>
         </div>
-        <div class="navigator-tabs">
-            <button class="navigator-tab active" data-nav-tab="pinned"
+        <div class="navigator-tabs panel-slider" role="tablist" aria-label="Navigator views">
+            <button type="button" class="navigator-tab panel-slider-option active" data-nav-tab="pinned"
                 onclick="setNavigatorTab('pinned')">Pinned</button>
-            <button class="navigator-tab" data-nav-tab="tasks" onclick="setNavigatorTab('tasks')">Tasks</button>
-            <button class="navigator-tab" data-nav-tab="groups" onclick="setNavigatorTab('groups')">Groups</button>
+            <button type="button" class="navigator-tab panel-slider-option" data-nav-tab="tasks" onclick="setNavigatorTab('tasks')">Tasks</button>
+            <button type="button" class="navigator-tab panel-slider-option" data-nav-tab="groups" onclick="setNavigatorTab('groups')">Groups</button>
         </div>
 
         <div id="navigator-tab-pinned" class="navigator-tab-content">
@@ -1389,27 +1415,40 @@
                 </div>
             </div>
             <div class="navigator-projects-filters-row">
-                <label class="project-filter-control" for="projects-panel-sort">
+                <div class="project-filter-control">
                     <span class="project-filter-label">Sort</span>
-                    <select id="projects-panel-sort" onchange="setProjectsPanelSort(this.value)">
-                        <option value="default" selected>Default</option>
-                        <option value="alpha-asc">Alphabetical (A-Z)</option>
-                        <option value="alpha-desc">Alphabetical (Z-A)</option>
-                        <option value="urgency-desc">Urgency (High-Low)</option>
-                        <option value="urgency-asc">Urgency (Low-High)</option>
-                    </select>
-                </label>
-                <label class="project-filter-control" for="projects-panel-urgency-filter">
+                    <div id="projects-panel-sort" class="panel-slider panel-slider-compact project-sort-slider"
+                        aria-label="Project sort">
+                        <button type="button" class="panel-slider-option project-sort-option active" data-sort="default"
+                            onclick="setProjectsPanelSort('default')" title="Default order">Default</button>
+                        <button type="button" class="panel-slider-option project-sort-option" data-sort="alpha-asc"
+                            onclick="setProjectsPanelSort('alpha-asc')" title="Alphabetical A to Z">A-Z</button>
+                        <button type="button" class="panel-slider-option project-sort-option" data-sort="alpha-desc"
+                            onclick="setProjectsPanelSort('alpha-desc')" title="Alphabetical Z to A">Z-A</button>
+                        <button type="button" class="panel-slider-option project-sort-option" data-sort="urgency-desc"
+                            onclick="setProjectsPanelSort('urgency-desc')" title="Urgency high to low">Urgent↓</button>
+                        <button type="button" class="panel-slider-option project-sort-option" data-sort="urgency-asc"
+                            onclick="setProjectsPanelSort('urgency-asc')" title="Urgency low to high">Urgent↑</button>
+                    </div>
+                </div>
+                <div class="project-filter-control">
                     <span class="project-filter-label">Urgency</span>
-                    <select id="projects-panel-urgency-filter" onchange="setProjectsPanelUrgencyFilter(this.value)">
-                        <option value="all" selected>All Levels</option>
-                        <option value="5">Critical</option>
-                        <option value="4">High</option>
-                        <option value="3">Medium</option>
-                        <option value="2">Normal</option>
-                        <option value="1">Lowest</option>
-                    </select>
-                </label>
+                    <div id="projects-panel-urgency-filter" class="panel-slider panel-slider-compact project-urgency-slider"
+                        aria-label="Project urgency filter">
+                        <button type="button" class="panel-slider-option project-urgency-option is-all active" data-urgency="all"
+                            onclick="setProjectsPanelUrgencyFilter('all')" title="All urgency levels">All</button>
+                        <button type="button" class="panel-slider-option project-urgency-option level-1" data-urgency="1"
+                            onclick="setProjectsPanelUrgencyFilter('1')" title="Lowest urgency">Lowest</button>
+                        <button type="button" class="panel-slider-option project-urgency-option level-2" data-urgency="2"
+                            onclick="setProjectsPanelUrgencyFilter('2')" title="Normal urgency">Normal</button>
+                        <button type="button" class="panel-slider-option project-urgency-option level-3" data-urgency="3"
+                            onclick="setProjectsPanelUrgencyFilter('3')" title="Medium urgency">Medium</button>
+                        <button type="button" class="panel-slider-option project-urgency-option level-4" data-urgency="4"
+                            onclick="setProjectsPanelUrgencyFilter('4')" title="High urgency">High</button>
+                        <button type="button" class="panel-slider-option project-urgency-option level-5" data-urgency="5"
+                            onclick="setProjectsPanelUrgencyFilter('5')" title="Critical urgency">Critical</button>
+                    </div>
+                </div>
             </div>
             <div class="navigator-projects-urgency-legend" aria-label="Project urgency color legend">
                 <span class="project-urgency-legend-item level-1">1 Lowest</span>

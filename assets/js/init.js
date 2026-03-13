@@ -114,6 +114,7 @@
                 ? getSavedWorkspaceSection()
                 : 'today';
             if (typeof setWorkspaceSection === 'function') setWorkspaceSection(initialSection);
+            if (typeof syncAllSegmentedSliders === 'function') syncAllSegmentedSliders();
             if (typeof updateAINoteSelectionSummary === 'function') updateAINoteSelectionSummary();
             if (typeof renderReminderStrip === 'function') renderReminderStrip();
             if (typeof shouldOpenDashboardOnStartup === 'function' && shouldOpenDashboardOnStartup()) {

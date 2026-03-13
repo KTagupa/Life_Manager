@@ -243,6 +243,9 @@
             metricScope = scope;
             const sel = document.getElementById('metric-scope');
             if (sel && sel.value !== scope) sel.value = scope;
+            if (typeof syncToolbarControls === 'function') {
+                syncToolbarControls();
+            }
             applyFilters();
         }
 

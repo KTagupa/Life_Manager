@@ -16,6 +16,9 @@ function setNavigatorTab(tab = 'pinned') {
     panel.querySelectorAll('.navigator-tab').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.navTab === tab);
     });
+    if (typeof syncSegmentedSlider === 'function') {
+        syncSegmentedSlider(panel.querySelector('.navigator-tabs'));
+    }
 
     const sections = {
         pinned: document.getElementById('navigator-tab-pinned'),
@@ -395,13 +398,20 @@ function bindProjectsPanelListScroll() {
 }
 
 function syncProjectsPanelFilterControls() {
-    const sortSelect = document.getElementById('projects-panel-sort');
-    if (sortSelect && sortSelect.value !== projectsPanelSortMode) {
-        sortSelect.value = projectsPanelSortMode;
+    const sortSlider = document.getElementById('projects-panel-sort');
+    if (sortSlider) {
+        sortSlider.querySelectorAll('[data-sort]').forEach((button) => {
+            button.classList.toggle('active', button.dataset.sort === projectsPanelSortMode);
+        });
+        if (typeof syncSegmentedSlider === 'function') syncSegmentedSlider(sortSlider);
     }
-    const urgencySelect = document.getElementById('projects-panel-urgency-filter');
-    if (urgencySelect && urgencySelect.value !== projectsPanelUrgencyFilter) {
-        urgencySelect.value = projectsPanelUrgencyFilter;
+
+    const urgencySlider = document.getElementById('projects-panel-urgency-filter');
+    if (urgencySlider) {
+        urgencySlider.querySelectorAll('[data-urgency]').forEach((button) => {
+            button.classList.toggle('active', button.dataset.urgency === projectsPanelUrgencyFilter);
+        });
+        if (typeof syncSegmentedSlider === 'function') syncSegmentedSlider(urgencySlider);
     }
 }
 

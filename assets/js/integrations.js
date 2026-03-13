@@ -1405,9 +1405,64 @@ function updateSettingsHubUI() {
     if (typeof updateDataMetrics === 'function') updateDataMetrics();
     updateGeminiUsageUI();
     syncAiUrgencySettingsUI();
+    syncSettingsHubSectionUI();
 }
 
+const SETTINGS_HUB_SECTION_STORAGE_KEY = 'urgencyFlow_settings_hub_section_v1';
+const SETTINGS_HUB_SECTIONS = new Set(['system', 'data', 'gemini', 'urgency', 'sync']);
+let currentSettingsHubSection = loadSettingsHubSection();
+
+function normalizeSettingsHubSection(section) {
+    const normalized = String(section || '').trim().toLowerCase();
+    return SETTINGS_HUB_SECTIONS.has(normalized) ? normalized : 'system';
+}
+
+function loadSettingsHubSection() {
+    try {
+        return normalizeSettingsHubSection(localStorage.getItem(SETTINGS_HUB_SECTION_STORAGE_KEY) || 'system');
+    } catch (error) {
+        return 'system';
+    }
+}
+
+function syncSettingsHubSectionUI() {
+    const panel = document.getElementById('sync-panel');
+    if (!panel) return;
+
+    const slider = document.getElementById('settings-hub-slider');
+    if (slider) {
+        slider.querySelectorAll('.panel-slider-option').forEach((button) => {
+            button.classList.toggle('active', button.dataset.settingsSection === currentSettingsHubSection);
+        });
+        if (typeof syncSegmentedSlider === 'function') syncSegmentedSlider(slider);
+    }
+
+    panel.querySelectorAll('.settings-slider-section').forEach((section) => {
+        const isActive = section.dataset.settingsSection === currentSettingsHubSection;
+        section.classList.toggle('active', isActive);
+        if (isActive) section.removeAttribute('hidden');
+        else section.setAttribute('hidden', '');
+    });
+}
+
+function setSettingsHubSection(section = 'system', options = {}) {
+    currentSettingsHubSection = normalizeSettingsHubSection(section);
+
+    if (options.persist !== false) {
+        try {
+            localStorage.setItem(SETTINGS_HUB_SECTION_STORAGE_KEY, currentSettingsHubSection);
+        } catch (error) {
+            console.warn('[settings] Failed to persist settings hub section:', error);
+        }
+    }
+
+    syncSettingsHubSectionUI();
+}
+
+window.setSettingsHubSection = setSettingsHubSection;
+
 function openSettingsHubToGeminiKey() {
+    setSettingsHubSection('gemini');
     if (typeof closeAIModal === 'function') closeAIModal();
     if (typeof toggleSyncPanel === 'function') toggleSyncPanel(true);
     window.setTimeout(() => {
