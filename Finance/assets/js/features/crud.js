@@ -2,6 +2,7 @@
         // SECTION 7: CRUD OPERATIONS
         // =============================================
         let wishlistConvertId = null;
+        const pendingBillPauseToggles = new Set();
 
         function getUniqueCategoryList(items = []) {
             const seen = new Set();
@@ -699,35 +700,59 @@
         }
 
         async function toggleBillPaused(id) {
-            if (!id) return;
+            if (!id || pendingBillPauseToggles.has(id)) return;
 
-            const db = await getDB();
-            const bills = db.bills || [];
-            const idx = bills.findIndex(b => b && b.id === id && !b.deletedAt);
-            if (idx === -1) return;
+            pendingBillPauseToggles.add(id);
 
-            const raw = bills[idx];
-            const data = await decryptData(raw.data);
-            if (!data) return;
+            try {
+                const db = await getDB();
+                const bills = db.bills || [];
+                const idx = bills.findIndex(b => b && b.id === id && !b.deletedAt);
+                if (idx === -1) return;
 
-            const nextPaused = !data.paused;
-            const encrypted = await encryptData({ ...data, paused: nextPaused });
-            db.bills[idx] = {
-                ...raw,
-                data: encrypted,
-                lastModified: Date.now(),
-                deletedAt: raw.deletedAt || null
-            };
+                const raw = bills[idx];
+                const data = await decryptData(raw.data);
+                if (!data) return;
 
-            await syncBillToReminder(id, data.name, data.day, data.amt, { paused: nextPaused });
-            db.recurring_transactions = recurringTransactions;
-            await saveDB(db);
+                const nextPaused = !data.paused;
+                const encrypted = await encryptData({ ...data, paused: nextPaused });
+                const previousRawBills = rawBills;
+                const previousRecurringTransactions = Array.isArray(recurringTransactions)
+                    ? recurringTransactions.map(reminder => ({ ...reminder }))
+                    : [];
 
-            rawBills = db.bills.filter(b => !b.deletedAt);
-            await renderBills(rawBills);
-            checkRecurringReminders();
-            await refreshLinkedPanels({ refreshMonthlyClose: true });
-            showToast(nextPaused ? '⏸️ Bill paused' : '▶️ Bill resumed');
+                db.bills[idx] = {
+                    ...raw,
+                    data: encrypted,
+                    lastModified: Date.now(),
+                    deletedAt: raw.deletedAt || null
+                };
+
+                await syncBillToReminder(id, data.name, data.day, data.amt, { paused: nextPaused });
+                db.recurring_transactions = recurringTransactions;
+
+                // Render the new state immediately so pause/resume feels instant.
+                rawBills = db.bills.filter(b => !b.deletedAt);
+                await renderBills(rawBills);
+                checkRecurringReminders();
+
+                try {
+                    await saveDB(db);
+                } catch (error) {
+                    rawBills = previousRawBills;
+                    recurringTransactions = previousRecurringTransactions;
+                    await renderBills(rawBills);
+                    checkRecurringReminders();
+                    console.error('Failed to persist bill pause state.', error);
+                    showToast('❌ Could not update bill status');
+                    return;
+                }
+
+                await refreshLinkedPanels({ refreshMonthlyClose: true });
+                showToast(nextPaused ? '⏸️ Bill paused' : '▶️ Bill resumed');
+            } finally {
+                pendingBillPauseToggles.delete(id);
+            }
         }
 
 
