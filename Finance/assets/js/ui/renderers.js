@@ -213,10 +213,14 @@
                 const safeLast4 = escapeHTML(card.last4 || '');
                 const outstanding = Number(outstandingMap.get(card.id) || 0);
                 const limit = Number(card.limit || 0);
+                const dueDay = Number(card.paymentDueDay || 0);
                 const utilizationPct = limit > 0 ? Math.min(100, Math.max(0, (outstanding / limit) * 100)) : 0;
                 const utilizationLabel = limit > 0
                     ? `${utilizationPct.toFixed(0)}% of ${fmt(limit)}`
                     : 'No limit set';
+                const dueLabel = dueDay > 0
+                    ? `Due every ${dueDay}${typeof getDaySuffix === 'function' ? getDaySuffix(dueDay) : 'th'}${card.paymentReminderPaused ? ' • reminder paused' : ''}`
+                    : 'No payment reminder set';
                 const encodedCardId = encodeInlineArg(card.id);
 
                 const div = document.createElement('div');
@@ -239,6 +243,7 @@
                             <div class="h-full bg-amber-500 rounded-full" style="width:${utilizationPct}%"></div>
                         </div>
                         <p class="text-[10px] text-slate-500 mt-1">${escapeHTML(utilizationLabel)}</p>
+                        <p class="text-[10px] text-slate-400 mt-1">${escapeHTML(dueLabel)}</p>
                     </div>
                 `;
                 list.appendChild(div);

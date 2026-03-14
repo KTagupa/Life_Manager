@@ -82,7 +82,7 @@
 
         .subtask-row {
             display: grid;
-            grid-template-columns: 20px minmax(0, 1fr) auto auto;
+            grid-template-columns: 20px minmax(0, 1fr) auto auto auto;
             align-items: start;
             gap: 10px;
             padding: 10px 12px;
@@ -96,6 +96,10 @@
             background: #ffe887;
             transform: translate(-2px, -2px);
             box-shadow: 6px 6px 0 0 #000;
+        }
+
+        .subtask-row.has-reminder {
+            background: #ffe16d;
         }
 
         .subtask-check {
@@ -182,6 +186,17 @@
         .subtask-action-promote {
             background: #ddfbd6;
             color: #0d5e3a;
+        }
+
+        .subtask-action-reminder {
+            background: #fff6cf;
+            color: #8a6500;
+        }
+
+        .subtask-action-reminder.active {
+            background: #fff;
+            border-color: #b45309;
+            color: #b45309;
         }
 
         .subtask-action-remove {

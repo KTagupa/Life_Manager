@@ -607,6 +607,7 @@ function demoteToInbox() {
     transferReminderAssignment('task', node.id, 'inbox', newInboxId, node.title);
     nodes = nodes.filter(n => n.id !== selectedNodeId);
     nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); });
+    if (typeof cleanupOrphanReminders === 'function') cleanupOrphanReminders({ persist: false, render: true, refreshInspector: false });
 
     deselectNode();
     updateCalculations();

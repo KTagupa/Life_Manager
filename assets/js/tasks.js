@@ -532,6 +532,7 @@
         // --- INSPECTOR Logic ---
         let inspectorExpandedModalOpen = false;
         let inspectorDetailGroup = 'plan';
+        let pendingReminderSubtaskId = null;
 
         function normalizeInspectorDetailGroup(group) {
             const normalized = String(group || '').trim().toLowerCase();
@@ -545,6 +546,27 @@
             if (inspectorDetailGroup === nextGroup) return;
             inspectorDetailGroup = nextGroup;
             if (selectedNodeId) updateInspector();
+        }
+
+        function setPendingReminderSubtaskFocus(subtaskId) {
+            const normalized = String(subtaskId || '').trim();
+            pendingReminderSubtaskId = normalized || null;
+        }
+
+        function focusPendingReminderSubtask(scope = document, node = null) {
+            if (!pendingReminderSubtaskId || !scope) return;
+            const activeNode = node || getSelectedNode();
+            if (!activeNode || !Array.isArray(activeNode.subtasks)) return;
+            if (!activeNode.subtasks.some(subtask => subtask && subtask.id === pendingReminderSubtaskId)) {
+                pendingReminderSubtaskId = null;
+                return;
+            }
+            const target = scope.querySelector(`.subtask-row[data-subtask-id="${pendingReminderSubtaskId}"]`);
+            if (!target) return;
+            target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            target.classList.add('reminder-focus-target');
+            setTimeout(() => target.classList.remove('reminder-focus-target'), 1800);
+            pendingReminderSubtaskId = null;
         }
 
         function isInspectorExpandedModalOpen() {
@@ -901,7 +923,7 @@
                         </label>
                         <div style="display:flex; gap:8px;">
                             <button class="add-subtask-btn" style="color:#f59e0b;" onclick="openRemindersModal('task', '${node.id}')">Manage</button>
-                            <button class="add-subtask-btn" style="color:#ef4444;" onclick="discardReminder('${taskReminder.id}'); updateInspector();">Discard</button>
+                            <button class="add-subtask-btn" style="color:#ef4444;" onclick="discardReminder('${taskReminder.id}'); updateInspector();">Delete</button>
                         </div>
                     </div>
                 </div>` : `
@@ -939,6 +961,24 @@
                     : ''}
                     <button class="add-subtask-btn" onclick="addSubtask()">+ ADD SUBTASK</button>
                 </div>`;
+            const subtaskRowsHtml = node.subtasks.map((st, idx) => {
+                const subtaskId = String(st && st.id || '').trim();
+                const subtaskReminder = subtaskId ? getReminderForItem('subtask', subtaskId) : null;
+                const reminderTitle = subtaskReminder ? 'Manage reminder' : 'Add reminder';
+                return `
+                        <div class="subtask-row ${subtaskReminder ? 'has-reminder' : ''}" data-subtask-id="${escapeHtml(subtaskId)}">
+                            <div class="subtask-check ${st.done ? 'checked' : ''}" onclick="toggleSubtask(${idx})">
+                                ${st.done ? '✓' : ''}
+                            </div>
+                            <textarea class="st-input ${st.done ? 'done' : ''}" rows="1"
+                                oninput="resizeSubtaskTextarea(this)"
+                                onchange="updateSubtaskText(${idx}, this.value)">${escapeHtml(st.text || '')}</textarea>
+                            <button class="subtask-action-btn subtask-action-reminder ${subtaskReminder ? 'active' : ''}" onclick="openRemindersModal('subtask', '${subtaskId}')" title="${reminderTitle}">⏰</button>
+                            <button class="subtask-action-btn subtask-action-promote" onclick="promoteSubtaskToNode(${idx})" title="Promote to Subsequent Task">⬆</button>
+                            <button class="subtask-action-btn subtask-action-remove" onclick="removeSubtask(${idx})" title="Remove Subtask">✕</button>
+                        </div>
+                `;
+            }).join('');
             const subtasksHtml = `
                 <div class="inspector-section inspector-section-subtasks" style="margin-bottom:16px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -947,18 +987,7 @@
                     </div>
                     
                     <div class="subtask-list">
-                        ${node.subtasks.map((st, idx) => `
-                        <div class="subtask-row">
-                            <div class="subtask-check ${st.done ? 'checked' : ''}" onclick="toggleSubtask(${idx})">
-                                ${st.done ? '✓' : ''}
-                            </div>
-                            <textarea class="st-input ${st.done ? 'done' : ''}" rows="1"
-                                oninput="resizeSubtaskTextarea(this)"
-                                onchange="updateSubtaskText(${idx}, this.value)">${escapeHtml(st.text || '')}</textarea>
-                            <button class="subtask-action-btn subtask-action-promote" onclick="promoteSubtaskToNode(${idx})" title="Promote to Subsequent Task">⬆</button>
-                            <button class="subtask-action-btn subtask-action-remove" onclick="removeSubtask(${idx})" title="Remove Subtask">✕</button>
-                        </div>
-                        `).join('')}
+                        ${subtaskRowsHtml}
                         ${node.subtasks.length === 0 ? '<div class="subtask-empty-msg">No subtasks</div>' : ''}
                     </div>
                 </div>`;
@@ -1249,6 +1278,7 @@
                 ${footerHtml}
             `;
             initializeSubtaskTextareas(panel);
+            focusPendingReminderSubtask(panel, node);
         }
 
         function resizeSubtaskTextarea(textarea) {
@@ -1458,7 +1488,7 @@
         }
         function removeDependency(parentId, event) { if (event) event.stopPropagation(); const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies = node.dependencies.filter(d => d.id !== parentId); if (typeof touchTask === 'function') touchTask(node); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
         function toggleDepType(parentId, event) { if (event) event.stopPropagation(); const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; if (typeof touchTask === 'function') touchTask(node); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
-        function addSubtask() { const node = getSelectedNode(); if (node) { node.subtasks.push({ text: 'New Step', done: false }); if (typeof touchTask === 'function') touchTask(node); render(); updateInspector(); saveToStorage(); } }
+        function addSubtask() { const node = getSelectedNode(); if (node) { node.subtasks.push(typeof createSubtask === 'function' ? createSubtask('New Step') : { text: 'New Step', done: false }); if (typeof touchTask === 'function') touchTask(node); render(); updateInspector(); saveToStorage(); } }
         function toggleSubtask(index) {
             const node = getSelectedNode();
             if (node) {
@@ -1560,19 +1590,23 @@
             document.getElementById('inspector').classList.add('hidden');
             render();
         }
-        function updateSubtaskText(index, val) { const node = getSelectedNode(); node.subtasks[index].text = val; if (typeof touchTask === 'function') touchTask(node); saveToStorage(); }
-        function removeSubtask(index) { const node = getSelectedNode(); node.subtasks.splice(index, 1); if (typeof touchTask === 'function') touchTask(node); render(); updateInspector(); saveToStorage(); }
+        function updateSubtaskText(index, val) { const node = getSelectedNode(); const subtask = node && Array.isArray(node.subtasks) ? node.subtasks[index] : null; if (!subtask) return; subtask.text = val; if (typeof touchTask === 'function') touchTask(node); saveToStorage(); }
+        function removeSubtask(index) { const node = getSelectedNode(); if (!node || !Array.isArray(node.subtasks)) return; node.subtasks.splice(index, 1); if (typeof touchTask === 'function') touchTask(node); if (typeof cleanupOrphanReminders === 'function') cleanupOrphanReminders({ persist: false, render: true, refreshInspector: false }); render(); updateInspector(); saveToStorage(); }
 
         function promoteSubtaskToNode(index) {
             const parentNode = getSelectedNode();
             if (!parentNode) return;
             const subtask = parentNode.subtasks[index];
+            if (!subtask) return;
             parentNode.subtasks.splice(index, 1);
             if (typeof touchTask === 'function') touchTask(parentNode);
             const newNode = createNode(parentNode.x + 220, parentNode.y, subtask.text);
             newNode.completed = subtask.done;
             if (newNode.completed) newNode.completedDate = Date.now();
             nodes.push(newNode);
+            if (subtask.id && typeof transferReminderAssignment === 'function') {
+                transferReminderAssignment('subtask', subtask.id, 'task', newNode.id, newNode.title);
+            }
             // Promoted subtasks should become subsequent tasks unblocked by the current task.
             newNode.dependencies.push({ id: parentNode.id, type: 'hard' });
             if (typeof inheritTaskGoalsFromParent === 'function') {
@@ -1591,12 +1625,18 @@
             if (!targetNode) return;
             const parentNode = nodes.find(n => n.id === parentId);
             if (!parentNode) return;
-            parentNode.subtasks.push({ text: targetNode.title, done: targetNode.completed });
+            const newSubtask = typeof createSubtask === 'function'
+                ? createSubtask(targetNode.title, { done: targetNode.completed })
+                : { text: targetNode.title, done: targetNode.completed };
+            parentNode.subtasks.push(newSubtask);
             if (typeof touchTask === 'function') touchTask(parentNode);
-            discardReminderByItem('task', targetId);
+            if (typeof transferReminderAssignment === 'function' && newSubtask.id) {
+                transferReminderAssignment('task', targetId, 'subtask', newSubtask.id, newSubtask.text || targetNode.title);
+            }
             nodes = nodes.filter(n => n.id !== targetId);
             archivedNodes = archivedNodes.filter(n => n.id !== targetId);
             nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== targetId); });
+            if (typeof cleanupOrphanReminders === 'function') cleanupOrphanReminders({ persist: false, render: true, refreshInspector: false });
             selectNode(parentNode.id);
             updateCalculations();
             render();
@@ -1607,10 +1647,10 @@
         function deleteSelectedNode() {
             if (!selectedNodeId) return;
             if (!confirm('Delete this task completely?')) return;
-            discardReminderByItem('task', selectedNodeId);
             nodes = nodes.filter(n => n.id !== selectedNodeId);
             archivedNodes = archivedNodes.filter(n => n.id !== selectedNodeId);
             nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); });
+            if (typeof cleanupOrphanReminders === 'function') cleanupOrphanReminders({ persist: false, render: true, refreshInspector: false });
             deselectNode();
             updateCalculations();
             render();

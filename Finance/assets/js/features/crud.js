@@ -532,13 +532,19 @@
             document.getElementById('t-type').value = t;
             const btnExp = document.getElementById('btn-expense');
             const btnInc = document.getElementById('btn-income');
+            const modalPanel = document.getElementById('transaction-modal-panel');
+            const baseButtonClass = 'transaction-type-button py-2 rounded-xl font-bold';
+
+            if (modalPanel) {
+                modalPanel.dataset.transactionTone = t === 'income' ? 'income' : 'expense';
+            }
 
             if (t === 'expense') {
-                btnExp.className = "py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm";
-                btnInc.className = "py-2 rounded-xl font-bold text-slate-400";
+                btnExp.className = `${baseButtonClass} is-active`;
+                btnInc.className = baseButtonClass;
             } else {
-                btnInc.className = "py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm";
-                btnExp.className = "py-2 rounded-xl font-bold text-slate-400";
+                btnInc.className = `${baseButtonClass} is-active`;
+                btnExp.className = baseButtonClass;
             }
 
             refreshTransactionPaymentSourceUI();
@@ -682,6 +688,8 @@
             const last4 = document.getElementById('cc-last4');
             const limit = document.getElementById('cc-limit');
             const openingBalance = document.getElementById('cc-opening-balance');
+            const paymentDueDay = document.getElementById('cc-payment-due-day');
+            const paymentReminderPaused = document.getElementById('cc-payment-reminder-paused');
 
             if (id) {
                 const raw = rawCreditCards.find(card => card.id === id);
@@ -694,6 +702,8 @@
                         last4.value = data.last4 || '';
                         limit.value = Number(data.limit || 0) || '';
                         openingBalance.value = Number(data.openingBalance || 0) || '';
+                        paymentDueDay.value = Number(data.paymentDueDay || 0) || '';
+                        paymentReminderPaused.checked = data.paymentReminderPaused === true;
                         modal.classList.remove('hidden');
                         return;
                     }
@@ -706,6 +716,8 @@
             last4.value = '';
             limit.value = '';
             openingBalance.value = '';
+            paymentDueDay.value = '';
+            paymentReminderPaused.checked = false;
             modal.classList.remove('hidden');
         }
 
@@ -713,17 +725,25 @@
             const id = document.getElementById('cc-id').value;
             const name = document.getElementById('cc-name').value.trim();
             const last4 = document.getElementById('cc-last4').value.trim();
-            const limit = Math.max(0, parseFloat(document.getElementById('cc-limit').value || '0') || 0);
-            const openingBalance = Math.max(0, parseFloat(document.getElementById('cc-opening-balance').value || '0') || 0);
+            const rawLimit = document.getElementById('cc-limit').value.trim();
+            const rawOpeningBalance = document.getElementById('cc-opening-balance').value.trim();
+            const parsedLimit = rawLimit === '' ? null : parseFloat(rawLimit);
+            const parsedOpeningBalance = rawOpeningBalance === '' ? null : parseFloat(rawOpeningBalance);
+            const limit = Number.isFinite(parsedLimit) ? Math.max(0, parsedLimit) : null;
+            const openingBalance = Number.isFinite(parsedOpeningBalance) ? Math.max(0, parsedOpeningBalance) : null;
+            const rawDueDay = parseInt(document.getElementById('cc-payment-due-day').value || '', 10);
+            const paymentDueDay = Number.isInteger(rawDueDay) ? Math.max(1, Math.min(31, rawDueDay)) : null;
+            const paymentReminderPaused = document.getElementById('cc-payment-reminder-paused').checked;
 
             if (!name) {
                 alert('Please enter a card name.');
                 return;
             }
 
-            const encrypted = await encryptData({ name, last4, limit, openingBalance });
+            const encrypted = await encryptData({ name, last4, limit, openingBalance, paymentDueDay, paymentReminderPaused });
             const db = await getDB();
             db.credit_cards = Array.isArray(db.credit_cards) ? db.credit_cards : [];
+            let cardId = id;
 
             if (id) {
                 const idx = db.credit_cards.findIndex(card => card.id === id);
@@ -738,12 +758,21 @@
                     };
                 }
             } else {
+                cardId = Date.now().toString(36) + Math.random().toString(36).substr(2);
                 db.credit_cards.push({
-                    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                    id: cardId,
                     data: encrypted,
                     createdAt: Date.now(),
                     deletedAt: null
                 });
+            }
+
+            if (typeof syncCreditCardToReminder === 'function') {
+                await syncCreditCardToReminder(cardId, name, paymentDueDay, {
+                    persist: false,
+                    paused: paymentReminderPaused
+                });
+                db.recurring_transactions = recurringTransactions;
             }
 
             await saveDB(db);
@@ -752,6 +781,12 @@
             await renderCreditCards(rawCreditCards);
             populateCreditCardSelect(document.getElementById('t-credit-card'));
             refreshTransactionPaymentSourceUI();
+            if (typeof renderRecurringList === 'function') {
+                renderRecurringList();
+            }
+            if (typeof checkRecurringReminders === 'function') {
+                checkRecurringReminders();
+            }
             await refreshLinkedPanels({
                 refreshKPI: true,
                 refreshForecast: true,
@@ -760,15 +795,17 @@
             showToast(id ? '✅ Credit card updated' : '✅ Credit card added');
         }
 
-        function openCreditCardPaymentModal(id) {
+        function openCreditCardPaymentModal(id, options = {}) {
             const card = findTrackedCreditCard(id);
             if (!card) return;
 
             document.getElementById('cc-payment-card-id').value = id;
             document.getElementById('cc-payment-card-label').innerText = card.name || 'Credit Card';
-            document.getElementById('cc-payment-amount').value = '';
-            document.getElementById('cc-payment-date').value = new Date().toISOString().split('T')[0];
-            document.getElementById('cc-payment-notes').value = '';
+            document.getElementById('cc-payment-amount').value = Number.isFinite(Number(options.amount))
+                ? Number(options.amount).toFixed(2)
+                : '';
+            document.getElementById('cc-payment-date').value = options.date || new Date().toISOString().split('T')[0];
+            document.getElementById('cc-payment-notes').value = options.notes || '';
             document.getElementById('credit-card-payment-modal').classList.remove('hidden');
         }
 
@@ -820,6 +857,12 @@
             toggleModal('credit-card-payment-modal');
             await loadAndRender();
             await renderCreditCards(rawCreditCards);
+            if (typeof renderRecurringList === 'function') {
+                renderRecurringList();
+            }
+            if (typeof checkRecurringReminders === 'function') {
+                checkRecurringReminders();
+            }
             showToast('✅ Card payment recorded');
         }
 
@@ -907,6 +950,12 @@
             // Re-render debts because a transaction might have been a payment towards a debt
             await renderDebts(rawDebts);
             await renderCreditCards(rawCreditCards);
+            if (typeof renderRecurringList === 'function') {
+                renderRecurringList();
+            }
+            if (typeof checkRecurringReminders === 'function') {
+                checkRecurringReminders();
+            }
 
             if (wishlistConvertId) {
                 const convertId = wishlistConvertId;

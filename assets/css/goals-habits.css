@@ -737,6 +737,17 @@
             color: #fff;
         }
 
+        .habit-icon-btn.paused-alert {
+            border-color: rgba(245, 158, 11, 0.82);
+            background: rgba(245, 158, 11, 0.18);
+            color: #fde68a;
+        }
+
+        .habit-icon-btn.paused-alert:hover {
+            background: rgba(245, 158, 11, 0.82);
+            color: #1f2937;
+        }
+
         .habit-icon-btn.danger {
             border-color: rgba(239, 68, 68, 0.7);
             color: #fca5a5;

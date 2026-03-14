@@ -141,6 +141,7 @@ function estimateDBPayloadWeight(db) {
         db.kpi_snapshots,
         db.forecast_runs,
         db.statement_snapshots,
+        db.quick_links,
         db.undo_log
     ].reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
 }
@@ -492,6 +493,8 @@ function getDefaultDB() {
         forecast_assumptions: getDefaultForecastAssumptions(),
         forecast_runs: [],
         statement_snapshots: [],
+        quick_links: [],
+        quick_links_last_modified: 0,
         operations_guardrails: getDefaultOperationsGuardrails(),
         undo_log: [],
         sync: {
@@ -831,6 +834,32 @@ function normalizeForecastRunEntry(entry) {
     };
 }
 
+function normalizeQuickLinkEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    const url = String(entry.url || '').trim();
+    if (!url) return null;
+
+    const id = String(entry.id || `quick_link_${Math.random().toString(36).slice(2, 10)}`);
+    const label = typeof entry.label === 'string' ? entry.label.trim() : '';
+    const icon = typeof entry.icon === 'string' ? entry.icon.trim() : '';
+    const color = typeof entry.color === 'string' ? entry.color.trim() : '';
+    const createdAt = Math.max(0, toFiniteNumber(entry.createdAt, 0));
+    const lastModified = Math.max(
+        0,
+        toFiniteNumber(entry.lastModified, createdAt)
+    );
+
+    return {
+        id,
+        label,
+        url,
+        icon,
+        color,
+        createdAt,
+        lastModified
+    };
+}
+
 function normalizeStatementSnapshotEntry(entry) {
     if (!entry || typeof entry !== 'object') return null;
     const month = normalizeMonthKey(entry.month);
@@ -924,6 +953,18 @@ function normalizeDBSchema(rawDB) {
         .map(normalizeStatementSnapshotEntry)
         .filter(Boolean)
         .sort((a, b) => (b.month || '').localeCompare(a.month || ''));
+    db.quick_links = (Array.isArray(db.quick_links) ? db.quick_links : [])
+        .map(normalizeQuickLinkEntry)
+        .filter(Boolean)
+        .sort((a, b) => {
+            const timeDiff = getEntryTimestamp(a) - getEntryTimestamp(b);
+            if (timeDiff !== 0) return timeDiff;
+            return String(a.id || '').localeCompare(String(b.id || ''));
+        });
+    db.quick_links_last_modified = Math.max(
+        toFiniteNumber(db.quick_links_last_modified, 0),
+        ...db.quick_links.map(link => getEntryTimestamp(link))
+    );
     db.operations_guardrails = normalizeOperationsGuardrailsShape(db.operations_guardrails);
     db.undo_log = pruneUndoLog(dedupeUndoLogEntries(Array.isArray(db.undo_log) ? db.undo_log : []));
 
@@ -1000,6 +1041,21 @@ function mergeSafeDB(localDB, remoteDB) {
     const remoteForecastAssumptionsTs = getEntryTimestamp(merged.forecast_assumptions);
     if (!merged.forecast_assumptions || localForecastAssumptionsTs >= remoteForecastAssumptionsTs) {
         merged.forecast_assumptions = local.forecast_assumptions;
+    }
+
+    const localQuickLinksTs = Math.max(
+        toFiniteNumber(local.quick_links_last_modified, 0),
+        ...((local.quick_links || []).map(link => getEntryTimestamp(link)))
+    );
+    const remoteQuickLinksTs = Math.max(
+        toFiniteNumber(merged.quick_links_last_modified, 0),
+        ...((merged.quick_links || []).map(link => getEntryTimestamp(link)))
+    );
+    if (!Array.isArray(merged.quick_links) || localQuickLinksTs >= remoteQuickLinksTs) {
+        merged.quick_links = local.quick_links;
+        merged.quick_links_last_modified = localQuickLinksTs;
+    } else {
+        merged.quick_links_last_modified = remoteQuickLinksTs;
     }
 
     const localOperationsGuardrailsTs = getEntryTimestamp(local.operations_guardrails);

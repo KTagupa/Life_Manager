@@ -52,6 +52,68 @@
             return true;
         }
 
+        async function syncCreditCardToReminder(cardId, cardName, dayOfMonth, options = {}) {
+            const shouldPersist = options.persist !== false;
+            const paused = options.paused === true;
+            const normalizedDay = Number.isInteger(Number(dayOfMonth))
+                ? Math.max(1, Math.min(31, Number(dayOfMonth)))
+                : null;
+            const existingReminderIndex = recurringTransactions.findIndex(r => r.linkedCreditCardId === cardId);
+            const existingReminder = existingReminderIndex >= 0 ? recurringTransactions[existingReminderIndex] : null;
+
+            if (!normalizedDay) {
+                if (existingReminderIndex === -1) return false;
+                recurringTransactions.splice(existingReminderIndex, 1);
+                if (shouldPersist) {
+                    const db = await getDB();
+                    db.recurring_transactions = recurringTransactions;
+                    await saveDB(db);
+                }
+                return true;
+            }
+
+            const reminderData = {
+                id: existingReminder ? existingReminder.id : `credit_card_${cardId}`,
+                desc: `Pay ${cardName}`,
+                type: 'expense',
+                frequency: 'monthly',
+                category: cardName,
+                dayOfMonth: normalizedDay,
+                estimatedAmount: null,
+                linkedCreditCardId: cardId,
+                lastDismissed: existingReminder ? existingReminder.lastDismissed : null,
+                createdAt: existingReminder ? existingReminder.createdAt : new Date().toISOString(),
+                paused,
+                autoSynced: true,
+                autoSyncedSource: 'credit_card'
+            };
+            const changed = !existingReminder
+                || existingReminder.desc !== reminderData.desc
+                || existingReminder.dayOfMonth !== reminderData.dayOfMonth
+                || existingReminder.type !== reminderData.type
+                || existingReminder.frequency !== reminderData.frequency
+                || existingReminder.category !== reminderData.category
+                || existingReminder.linkedCreditCardId !== reminderData.linkedCreditCardId
+                || !!existingReminder.paused !== reminderData.paused
+                || existingReminder.autoSynced !== reminderData.autoSynced
+                || existingReminder.autoSyncedSource !== reminderData.autoSyncedSource;
+
+            if (!changed) return false;
+
+            if (existingReminderIndex >= 0) {
+                recurringTransactions[existingReminderIndex] = reminderData;
+            } else {
+                recurringTransactions.push(reminderData);
+            }
+
+            if (shouldPersist) {
+                const db = await getDB();
+                db.recurring_transactions = recurringTransactions;
+                await saveDB(db);
+            }
+            return true;
+        }
+
         async function syncAllBillsToReminders() {
             if (rawBills.length === 0) return;
 
@@ -71,6 +133,48 @@
             const db = await getDB();
             db.recurring_transactions = recurringTransactions;
             await saveDB(db);
+        }
+
+        async function syncAllCreditCardsToReminders() {
+            if (rawCreditCards.length === 0) return;
+
+            const decryptedCards = await Promise.all(rawCreditCards.map(async card => {
+                const data = await decryptData(card.data);
+                return data ? { ...data, id: card.id } : null;
+            }));
+
+            let hasChanges = false;
+            for (const card of decryptedCards.filter(Boolean)) {
+                const changed = await syncCreditCardToReminder(card.id, card.name, card.paymentDueDay, {
+                    persist: false,
+                    paused: card.paymentReminderPaused === true
+                });
+                hasChanges = hasChanges || changed;
+            }
+
+            if (!hasChanges) return;
+
+            const db = await getDB();
+            db.recurring_transactions = recurringTransactions;
+            await saveDB(db);
+        }
+
+        function getRecurringReminderSource(reminder) {
+            if (reminder && reminder.linkedCreditCardId) return 'credit_card';
+            if (reminder && reminder.linkedBillId) return 'bill';
+            return '';
+        }
+
+        function getRecurringReminderEstimate(reminder, creditCardOutstandingMap = null) {
+            if (reminder && reminder.linkedCreditCardId) {
+                const outstandingMap = creditCardOutstandingMap || (
+                    typeof computeCreditCardOutstandingMapAsOf === 'function'
+                        ? computeCreditCardOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
+                        : new Map()
+                );
+                return Math.max(0, Number(outstandingMap.get(reminder.linkedCreditCardId) || 0));
+            }
+            return Math.max(0, Number(reminder?.estimatedAmount || 0));
         }
 
 
@@ -147,9 +251,11 @@
         async function deleteRecurringReminder(id) {
             const reminder = recurringTransactions.find(r => r.id === id);
 
-            // Prevent deletion of auto-synced bill reminders
+            // Prevent deletion of auto-synced reminders
             if (reminder && reminder.autoSynced) {
-                alert('This reminder is auto-synced from your Recurring Bills.\n\nTo remove it, delete the bill from the "Recurring Bills" section instead.');
+                const source = getRecurringReminderSource(reminder);
+                const sourceLabel = source === 'credit_card' ? 'Credit Cards' : 'Recurring Bills';
+                alert(`This reminder is auto-synced from your ${sourceLabel}.\n\nTo remove it, edit the source item instead.`);
                 return;
             }
 
@@ -174,9 +280,18 @@
                 return;
             }
 
+            const creditCardOutstandingMap = typeof computeCreditCardOutstandingMapAsOf === 'function'
+                ? computeCreditCardOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
+                : new Map();
+
             list.innerHTML = recurringTransactions.map(r => {
-                const icon = r.type === 'income' ? 'arrow-down-left' : 'arrow-up-right';
-                const color = r.type === 'income' ? 'emerald' : 'rose';
+                const source = getRecurringReminderSource(r);
+                const icon = source === 'credit_card'
+                    ? 'credit-card'
+                    : (r.type === 'income' ? 'arrow-down-left' : 'arrow-up-right');
+                const color = source === 'credit_card'
+                    ? 'amber'
+                    : (r.type === 'income' ? 'emerald' : 'rose');
                 const freqLabel = r.frequency.charAt(0).toUpperCase() + r.frequency.slice(1);
                 const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                 const encodedReminderId = encodeInlineArg(r.id);
@@ -192,11 +307,14 @@
                 }
                 const safeDayLabel = escapeHTML(dayLabel);
 
-                const autoSyncBadge = r.autoSynced ? '<span class="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">AUTO-SYNCED</span>' : '';
+                const autoSyncBadge = r.autoSynced
+                    ? `<span class="text-[9px] ${source === 'credit_card' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-600'} px-1.5 py-0.5 rounded font-bold">${source === 'credit_card' ? 'CARD' : 'AUTO-SYNCED'}</span>`
+                    : '';
                 const pausedBadge = r.paused ? '<span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">PAUSED</span>' : '';
-                const estimateText = r.estimatedAmount ? ` • Est. ${fmt(r.estimatedAmount)}` : '';
+                const estimateAmount = getRecurringReminderEstimate(r, creditCardOutstandingMap);
+                const estimateText = estimateAmount > 0 ? ` • Est. ${fmt(estimateAmount)}` : '';
                 const deleteButton = r.autoSynced
-                    ? `<span class="text-[10px] text-slate-400 italic">Edit via Bills</span>`
+                    ? `<span class="text-[10px] text-slate-400 italic">${source === 'credit_card' ? 'Edit via Credit Cards' : 'Edit via Bills'}</span>`
                     : `<button onclick="deleteRecurringReminder(decodeURIComponent('${encodedReminderId}'))" 
                         class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-all">
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -280,16 +398,27 @@
         function showReminderBanner(reminders) {
             const banner = document.getElementById('recurring-reminders-banner');
             const list = document.getElementById('reminder-items-list');
+            const creditCardOutstandingMap = typeof computeCreditCardOutstandingMapAsOf === 'function'
+                ? computeCreditCardOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
+                : new Map();
 
             list.innerHTML = reminders.map(r => {
-                const icon = r.type === 'income' ? 'arrow-down-left' : 'arrow-up-right';
-                const color = r.type === 'income' ? 'emerald' : 'amber';
+                const source = getRecurringReminderSource(r);
+                const icon = source === 'credit_card'
+                    ? 'credit-card'
+                    : (r.type === 'income' ? 'arrow-down-left' : 'arrow-up-right');
+                const color = source === 'credit_card'
+                    ? 'amber'
+                    : (r.type === 'income' ? 'emerald' : 'amber');
                 const encodedReminderId = encodeInlineArg(r.id);
                 const safeDesc = escapeHTML(r.desc || 'Reminder');
                 const safeCategory = escapeHTML(r.category || 'Others');
 
-                const estimateText = r.estimatedAmount ? `~${fmt(r.estimatedAmount)}` : '';
-                const autoSyncBadge = r.autoSynced ? '<span class="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold ml-1">BILL</span>' : '';
+                const estimateAmount = getRecurringReminderEstimate(r, creditCardOutstandingMap);
+                const estimateText = estimateAmount > 0 ? `~${fmt(estimateAmount)}` : '';
+                const autoSyncBadge = r.autoSynced
+                    ? `<span class="text-[9px] ${source === 'credit_card' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-600'} px-1.5 py-0.5 rounded font-bold ml-1">${source === 'credit_card' ? 'CARD' : 'BILL'}</span>`
+                    : '';
 
                 return `
                     <div class="flex items-center justify-between bg-white/50 p-2 rounded-lg">
@@ -325,6 +454,18 @@
         async function quickAddFromReminder(reminderId) {
             const reminder = recurringTransactions.find(r => r.id === reminderId);
             if (!reminder) return;
+
+            if (reminder.linkedCreditCardId) {
+                const outstanding = getRecurringReminderEstimate(reminder);
+                openCreditCardPaymentModal(reminder.linkedCreditCardId, {
+                    amount: outstanding > 0 ? outstanding : undefined
+                });
+                if (outstanding > 0) {
+                    showToast(`💡 Current outstanding: ${fmt(outstanding)}`);
+                }
+                await dismissReminder(reminderId);
+                return;
+            }
 
             // Open transaction modal with pre-filled data
             openTransactionModal();

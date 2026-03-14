@@ -5314,6 +5314,26 @@
             color: var(--rem-btn-keep-text, var(--ready-color));
         }
 
+        .reminder-item-card .reminder-edit-actions .rem-pause-btn,
+        .reminder-item-card .reminder-edit-actions .rem-resume-btn {
+            border-color: rgba(245, 158, 11, 0.56);
+            background: rgba(245, 158, 11, 0.14);
+            color: #fde68a;
+        }
+
+        .reminder-item-card .reminder-edit-actions .rem-pause-btn:hover,
+        .reminder-item-card .reminder-edit-actions .rem-resume-btn:hover {
+            border-color: rgba(245, 158, 11, 0.74);
+            background: rgba(245, 158, 11, 0.22);
+            color: #fef3c7;
+        }
+
+        .reminder-item-card .reminder-edit-actions .rem-resume-btn.active {
+            border-color: rgba(59, 130, 246, 0.68);
+            background: rgba(59, 130, 246, 0.18);
+            color: #bfdbfe;
+        }
+
         .reminder-item-card .reminder-edit-actions .btn-danger {
             background: var(--rem-btn-discard-bg, rgba(239, 68, 68, 0.2));
             border-color: var(--rem-btn-discard-border, var(--blocked-color));

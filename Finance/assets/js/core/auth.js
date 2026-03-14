@@ -570,6 +570,11 @@ async function loadFromStorage() {
     await runLoadStep('crypto-widget', async () => renderCryptoWidget());
     // AUTO-SYNC: Sync all bills to reminders on load
     await runLoadStep('sync-bills-reminders', async () => syncAllBillsToReminders());
+    await runLoadStep('sync-credit-card-reminders', async () => {
+        if (typeof syncAllCreditCardsToReminders === 'function') {
+            await syncAllCreditCardsToReminders();
+        }
+    });
 
     if (db.budgets && db.budgets.data) {
         budgets = await decryptData(db.budgets.data) || {};
@@ -589,6 +594,11 @@ async function loadFromStorage() {
     statementSnapshots = db.statement_snapshots || [];
     operationsGuardrails = db.operations_guardrails || {};
     undoLog = db.undo_log || [];
+    await runLoadStep('quick-links', async () => {
+        if (typeof syncFinanceQuickLinksFromDB === 'function') {
+            await syncFinanceQuickLinksFromDB(db);
+        }
+    });
     checkRecurringReminders();
     renderBudgets(window.allDecryptedTransactions || []);
     if (typeof renderInsightsPanel === 'function') renderInsightsPanel();

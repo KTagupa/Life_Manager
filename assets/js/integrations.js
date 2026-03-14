@@ -3511,7 +3511,9 @@ function applyAISubtasksToTask(subtasks, preferredTaskId = null) {
         if (!text) return;
         const key = text.toLowerCase();
         if (existing.has(key)) return;
-        task.subtasks.push({ text, done: false });
+        task.subtasks.push(typeof createSubtask === 'function'
+            ? createSubtask(text, { done: false })
+            : { text, done: false });
         existing.add(key);
         added += 1;
     });
@@ -4696,10 +4698,15 @@ function applyDecomposition(data, options = null) {
         const newNode = createNode(startX + (index % 3) * 220, startY + Math.floor(index / 3) * 150, item.title);
         newNode.duration = item.duration || 1;
         if (Array.isArray(item.subtasks) && item.subtasks.length > 0) {
-            newNode.subtasks = item.subtasks.map(st => ({
-                text: String(st && st.text || '').trim(),
-                done: false
-            })).filter(st => st.text);
+            newNode.subtasks = item.subtasks
+                .map(st => {
+                    const text = String(st && st.text || '').trim();
+                    if (!text) return null;
+                    return typeof createSubtask === 'function'
+                        ? createSubtask(text, { done: false })
+                        : { text, done: false };
+                })
+                .filter(Boolean);
         }
         if (Array.isArray(item.goalIds) && item.goalIds.length > 0) {
             newNode.goalIds = Array.from(new Set(item.goalIds.filter(Boolean)));

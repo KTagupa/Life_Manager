@@ -8,7 +8,7 @@ let habits = [];
 let notes = [];
 let reminders = [];
 let projects = [];
-let dataModelVersion = 2;
+let dataModelVersion = 3;
 let aiUrgencyConfig = {
     mode: 'shadow',
     enabled: true,
@@ -18,7 +18,7 @@ let aiUrgencyConfig = {
     semanticProvider: 'heuristic'
 };
 
-const DATA_MODEL_VERSION = 2;
+const DATA_MODEL_VERSION = 3;
 const PROJECT_STATUS_VALUES = ['active', 'paused', 'completed', 'archived'];
 const PROJECT_ORIGIN_VALUES = ['manual', 'ai', 'migrated'];
 const TASK_REFLECTION_OUTCOME_VALUES = ['on_target', 'harder', 'easier'];
@@ -452,6 +452,78 @@ let noteSelectionRange = null; // Store indices for note replacement
 
 
 // --- DATA STRUCTURE ---
+function createSubtask(text = 'New Step', options = {}) {
+    const rawText = text === null || text === undefined ? '' : String(text);
+    const allowEmptyText = options.allowEmptyText === true;
+    const fallbackText = allowEmptyText ? '' : 'New Step';
+    const trimmed = rawText.trim();
+    const safeText = (trimmed || fallbackText).substring(0, 400);
+    const providedId = typeof options.id === 'string' ? options.id.trim() : '';
+
+    return {
+        id: providedId || 'subtask_' + Date.now() + Math.random().toString(36).substr(2, 5),
+        text: safeText,
+        done: !!options.done
+    };
+}
+
+function normalizeSubtaskRecord(subtask, fallbackText = 'New Step') {
+    if (typeof subtask === 'string') {
+        return createSubtask(subtask, { allowEmptyText: true });
+    }
+    if (!subtask || typeof subtask !== 'object') return null;
+
+    const sourceText = typeof subtask.text === 'string'
+        ? subtask.text
+        : typeof subtask.title === 'string'
+            ? subtask.title
+            : typeof subtask.name === 'string'
+                ? subtask.name
+                : fallbackText;
+
+    return createSubtask(sourceText, {
+        id: subtask.id,
+        done: !!subtask.done,
+        allowEmptyText: true
+    });
+}
+
+function normalizeTaskSubtasks(task) {
+    if (!task || typeof task !== 'object') return [];
+    const source = Array.isArray(task.subtasks) ? task.subtasks : [];
+    task.subtasks = source
+        .map(subtask => normalizeSubtaskRecord(subtask))
+        .filter(subtask => !!subtask);
+    return task.subtasks;
+}
+
+function findTaskAndSubtaskById(subtaskId) {
+    const id = String(subtaskId || '').trim();
+    if (!id) return null;
+
+    const taskCollections = [
+        { list: nodes, isArchived: false },
+        { list: archivedNodes, isArchived: true }
+    ];
+
+    for (const collection of taskCollections) {
+        const list = Array.isArray(collection.list) ? collection.list : [];
+        for (const task of list) {
+            const subtasks = Array.isArray(task && task.subtasks) ? task.subtasks : [];
+            const index = subtasks.findIndex(subtask => subtask && subtask.id === id);
+            if (index === -1) continue;
+            return {
+                task,
+                subtask: subtasks[index],
+                subtaskIndex: index,
+                isArchived: collection.isArchived
+            };
+        }
+    }
+
+    return null;
+}
+
 function createNode(x, y, title = 'New Task') {
     title = (title || 'New Task').toString().trim();
     if (title.length > 500) title = title.substring(0, 500) + '...';
@@ -588,6 +660,7 @@ function migrateStateData(rawState) {
         if (!task || typeof task !== 'object') return;
         const projectId = String(task.projectId || '').trim();
         task.projectId = projectId || null;
+        normalizeTaskSubtasks(task);
 
         const fallbackCreatedAt = Number(task.completedDate) || Number(task.updatedAt) || Date.now();
         task.createdAt = Number.isFinite(Number(task.createdAt)) ? Number(task.createdAt) : fallbackCreatedAt;
@@ -617,7 +690,7 @@ function initDemoData() {
         {
             id: '1', title: 'Define Goal', x: 100, y: 300, completed: true, completedDate: now, duration: 1, dueDate: '', syncDurationDate: true, isManualUrgent: false,
             noDueDate: false,
-            dependencies: [], subtasks: [{ text: 'Brainstorm', done: true }],
+            dependencies: [], subtasks: [createSubtask('Brainstorm', { done: true })],
             activeTimerStart: null, timeLogs: [], projectId: null,
             createdAt: now, updatedAt: now,
             aiUrgency: createDefaultAiUrgency('task'),
@@ -953,7 +1026,7 @@ function sanitizeLoadedData() {
     aiUrgencyConfig = normalizeAiUrgencyConfig(aiUrgencyConfig);
     const sanitizeTask = (n) => {
         if (!n.dependencies) n.dependencies = [];
-        if (!n.subtasks) n.subtasks = [];
+        normalizeTaskSubtasks(n);
         if (!n.dueDate) n.dueDate = '';
         if (n.noDueDate === undefined) n.noDueDate = false;
         if (n.expiresOnDue === undefined) n.expiresOnDue = false;
@@ -1096,10 +1169,11 @@ function sanitizeLoadedData() {
     });
     // --- REMINDERS CLEANUP ---
     if (!Array.isArray(reminders)) reminders = [];
-    const isValidType = (type) => ['task', 'note', 'habit', 'inbox'].includes(type);
+    const isValidType = (type) => ['task', 'subtask', 'note', 'habit', 'inbox'].includes(type);
     const itemExists = (type, id) => {
         if (!id) return false;
         if (type === 'task') return nodes.some(n => n.id === id) || archivedNodes.some(n => n.id === id);
+        if (type === 'subtask') return typeof findTaskAndSubtaskById === 'function' ? !!findTaskAndSubtaskById(id) : false;
         if (type === 'note') return notes.some(n => n.id === id);
         if (type === 'habit') return habits.some(h => h.id === id && !(Number(h.archivedAt) > 0));
         if (type === 'inbox') return inbox.some(i => i.id === id);
@@ -1126,12 +1200,13 @@ function sanitizeLoadedData() {
             kept: !!rem.kept,
             keepUntilTs: rem.keepUntilTs ? Number(rem.keepUntilTs) : null,
             discarded: !!rem.discarded,
-            lastFiredOccurrenceTs: rem.lastFiredOccurrenceTs ? Number(rem.lastFiredOccurrenceTs) : null
+            lastFiredOccurrenceTs: rem.lastFiredOccurrenceTs ? Number(rem.lastFiredOccurrenceTs) : null,
+            paused: !!rem.paused
         };
         const prev = normalized.get(key);
         if (!prev || candidate.updatedAt >= prev.updatedAt) normalized.set(key, candidate);
     });
-    reminders = Array.from(normalized.values()).filter(rem => itemExists(rem.itemType, rem.itemId));
+    reminders = Array.from(normalized.values()).filter(rem => itemExists(rem.itemType, rem.itemId) && !(rem.discarded && rem.itemType !== 'habit'));
     if (!Array.isArray(agenda)) agenda = [];
     // Remove agenda slots for deleted tasks (except inbox items)
     agenda = agenda.filter(slot => {

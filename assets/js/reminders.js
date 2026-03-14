@@ -28,6 +28,22 @@ function hasReminderForItem(itemType, itemId) {
 
 function getReminderItem(itemType, itemId) {
     if (itemType === 'task') return nodes.find(n => n.id === itemId) || archivedNodes.find(n => n.id === itemId) || null;
+    if (itemType === 'subtask') {
+        const context = typeof findTaskAndSubtaskById === 'function'
+            ? findTaskAndSubtaskById(itemId)
+            : null;
+        if (!context || !context.task || !context.subtask) return null;
+        return {
+            id: context.subtask.id,
+            title: String(context.subtask.text || '').trim() || '(Untitled Subtask)',
+            text: context.subtask.text || '',
+            done: !!context.subtask.done,
+            parentTaskId: context.task.id,
+            parentTaskTitle: context.task.title || '(Untitled Task)',
+            parentTask: context.task,
+            isArchivedParent: !!context.isArchived
+        };
+    }
     if (itemType === 'note') return notes.find(n => n.id === itemId) || null;
     if (itemType === 'habit') return habits.find(h => {
         const archived = typeof isHabitArchived === 'function'
@@ -43,6 +59,7 @@ function getReminderItemTitle(reminder) {
     const item = getReminderItem(reminder.itemType, reminder.itemId);
     if (item) {
         if (reminder.itemType === 'note') return item.title || '(Untitled Note)';
+        if (reminder.itemType === 'subtask') return item.title || '(Untitled Subtask)';
         return item.title || '(Untitled)';
     }
     return reminder.itemTitleSnapshot || '(Missing Item)';
@@ -50,6 +67,7 @@ function getReminderItemTitle(reminder) {
 
 function getReminderTypeLabel(itemType) {
     if (itemType === 'task') return 'Task';
+    if (itemType === 'subtask') return 'Subtask';
     if (itemType === 'note') return 'Note';
     if (itemType === 'habit') return 'Habit';
     if (itemType === 'inbox') return 'Inbox';
@@ -137,6 +155,19 @@ function getReminderItemTheme(reminder) {
         return theme;
     }
 
+    if (reminder.itemType === 'subtask') {
+        const parentTask = item.parentTask || null;
+        const taskTheme = parentTask && typeof getTaskTheme === 'function' ? getTaskTheme(parentTask) : null;
+        if (!taskTheme) return theme;
+
+        theme.background = taskTheme.background || theme.background;
+        theme.border = reminderWithAlpha(taskTheme.border, 0.72, taskTheme.border || theme.border);
+        theme.borderHover = reminderWithAlpha(taskTheme.border, 0.92, taskTheme.border || theme.borderHover);
+        theme.text = taskTheme.text || theme.text;
+        theme.subtleText = taskTheme.subtleText || theme.subtleText;
+        return theme;
+    }
+
     if (reminder.itemType === 'habit') {
         const habitHex = (typeof getEffectiveHabitColorHex === 'function')
             ? getEffectiveHabitColorHex(item)
@@ -206,6 +237,32 @@ function isReminderCardInteractiveTarget(target) {
     return !!target.closest('button, input, select, label, textarea, a');
 }
 
+function isReminderSoftDiscarded(reminder) {
+    return !!(reminder && reminder.itemType !== 'habit' && reminder.discarded);
+}
+
+function isReminderPaused(reminder) {
+    return !!(reminder && reminder.paused);
+}
+
+function getReminderDiscardLabel(reminder) {
+    return reminder && reminder.itemType === 'habit' ? 'Dismiss' : 'Delete';
+}
+
+function getReminderPauseLabel(reminder) {
+    return isReminderPaused(reminder) ? 'Resume' : 'Pause';
+}
+
+function getReminderOwningTaskId(reminder) {
+    if (!reminder) return null;
+    if (reminder.itemType === 'task') return reminder.itemId || null;
+    if (reminder.itemType === 'subtask') {
+        const item = getReminderItem('subtask', reminder.itemId);
+        return item && item.parentTaskId ? item.parentTaskId : null;
+    }
+    return null;
+}
+
 function openReminderItem(itemType, itemId) {
     resetViewportOrigin();
     const item = getReminderItem(itemType, itemId);
@@ -221,6 +278,12 @@ function openReminderItem(itemType, itemId) {
 
     if (itemType === 'task') {
         if (typeof jumpToTask === 'function') jumpToTask(itemId);
+        return true;
+    }
+    if (itemType === 'subtask') {
+        if (typeof setInspectorDetailGroup === 'function') setInspectorDetailGroup('work');
+        if (typeof setPendingReminderSubtaskFocus === 'function') setPendingReminderSubtaskFocus(itemId);
+        if (typeof jumpToTask === 'function') jumpToTask(item.parentTaskId);
         return true;
     }
     if (itemType === 'note') {
@@ -263,6 +326,7 @@ function createOrUpdateReminderForItem(itemType, itemId, payload = {}) {
         if (typeof payload.keepUntilTs !== 'undefined') existing.keepUntilTs = payload.keepUntilTs;
         if (typeof payload.discarded !== 'undefined') existing.discarded = !!payload.discarded;
         if (typeof payload.lastFiredOccurrenceTs !== 'undefined') existing.lastFiredOccurrenceTs = payload.lastFiredOccurrenceTs;
+        if (typeof payload.paused !== 'undefined') existing.paused = !!payload.paused;
         return existing;
     }
 
@@ -281,7 +345,8 @@ function createOrUpdateReminderForItem(itemType, itemId, payload = {}) {
         kept: false,
         keepUntilTs: null,
         discarded: false,
-        lastFiredOccurrenceTs: null
+        lastFiredOccurrenceTs: null,
+        paused: false
     };
     reminders.push(reminder);
     return reminder;
@@ -463,6 +528,9 @@ function getReminderNextOccurrence(reminder, nowTs = Date.now()) {
 
 function formatReminderWhen(reminder) {
     const nextTs = getReminderNextOccurrence(reminder, Date.now());
+    if (isReminderPaused(reminder)) {
+        return 'Paused';
+    }
     if (reminder.discarded && reminder.itemType !== 'habit') {
         return 'Discarded';
     }
@@ -476,7 +544,7 @@ function formatReminderWhen(reminder) {
 function updateReminderButtonState() {
     const btn = document.getElementById('btn-reminders-modal');
     if (!btn) return;
-    const firedCount = reminders.filter(rem => !!rem.firedAt).length;
+    const firedCount = reminders.filter(rem => !!rem.firedAt && !rem.discarded && !isReminderPaused(rem)).length;
     btn.innerText = firedCount > 0 ? `🔔 ${firedCount}` : '🔔';
 }
 
@@ -488,7 +556,7 @@ function renderReminderStrip() {
 
     const nowTs = Date.now();
     const activeFired = reminders.filter(rem => {
-        if (!rem.firedAt || rem.discarded) return false;
+        if (!rem.firedAt || rem.discarded || isReminderPaused(rem)) return false;
         if (rem.kept && rem.keepUntilTs && nowTs > rem.keepUntilTs) return false;
         return true;
     });
@@ -513,7 +581,7 @@ function renderReminderStrip() {
             <div class="reminder-chip-meta">${getReminderTypeLabel(reminder.itemType)} • ${new Date(reminder.firedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
             <div class="reminder-chip-actions">
                 <button class="rem-chip-btn keep ${reminder.kept ? 'active' : ''}" onclick="event.stopPropagation(); keepReminder('${reminder.id}')">${reminder.kept ? 'Kept' : 'Keep'}</button>
-                <button class="rem-chip-btn discard" onclick="event.stopPropagation(); discardReminder('${reminder.id}')">Discard</button>
+                <button class="rem-chip-btn discard" onclick="event.stopPropagation(); discardReminder('${reminder.id}')">${getReminderDiscardLabel(reminder)}</button>
             </div>
         `;
         card.addEventListener('click', (event) => {
@@ -538,7 +606,9 @@ function renderRemindersModal() {
     if (!list) return;
     list.innerHTML = '';
 
-    const sorted = [...reminders].sort((a, b) => {
+    const sorted = reminders
+        .filter(reminder => !isReminderSoftDiscarded(reminder))
+        .sort((a, b) => {
         const aFired = !!a.firedAt;
         const bFired = !!b.firedAt;
         if (aFired !== bFired) return aFired ? -1 : 1;
@@ -559,6 +629,19 @@ function renderRemindersModal() {
         card.setAttribute('tabindex', '0');
         card.setAttribute('aria-label', `Open ${getReminderTypeLabel(reminder.itemType)}: ${getReminderItemTitle(reminder)}`);
 
+        const actionButtons = [];
+        if (reminder.firedAt) {
+            actionButtons.push(`<button class="btn rem-keep-btn ${reminder.kept ? 'active' : ''}" onclick="event.stopPropagation(); keepReminder('${reminder.id}')">${reminder.kept ? 'Kept' : 'Keep'}</button>`);
+        }
+        if (reminder.itemType === 'habit') {
+            actionButtons.push(`<button class="btn ${isReminderPaused(reminder) ? 'rem-resume-btn active' : 'rem-pause-btn'}" onclick="event.stopPropagation(); toggleReminderPaused('${reminder.id}')">${getReminderPauseLabel(reminder)}</button>`);
+            if (reminder.firedAt) {
+                actionButtons.push(`<button class="btn btn-danger" onclick="event.stopPropagation(); discardReminder('${reminder.id}')">${getReminderDiscardLabel(reminder)}</button>`);
+            }
+        } else {
+            actionButtons.push(`<button class="btn btn-danger" onclick="event.stopPropagation(); discardReminder('${reminder.id}')">${getReminderDiscardLabel(reminder)}</button>`);
+        }
+
         card.innerHTML = `
             <div class="reminder-item-head">
                 <div class="reminder-item-type">${getReminderTypeLabel(reminder.itemType)}</div>
@@ -574,8 +657,7 @@ function renderRemindersModal() {
                 </label>
             </div>
             <div class="reminder-edit-actions">
-                ${reminder.firedAt ? `<button class="btn rem-keep-btn ${reminder.kept ? 'active' : ''}" onclick="event.stopPropagation(); keepReminder('${reminder.id}')">${reminder.kept ? 'Kept' : 'Keep'}</button>` : ''}
-                <button class="btn btn-danger" onclick="event.stopPropagation(); discardReminder('${reminder.id}')">Discard</button>
+                ${actionButtons.join('')}
             </div>
         `;
         card.addEventListener('click', (event) => {
@@ -609,7 +691,7 @@ function updateReminderField(reminderId, field, value) {
     saveToStorage();
     renderReminderStrip();
     renderRemindersModal();
-    if (selectedNodeId && reminder.itemType === 'task' && reminder.itemId === selectedNodeId) updateInspector();
+    if (selectedNodeId && getReminderOwningTaskId(reminder) === selectedNodeId) updateInspector();
 }
 
 function updateReminderFieldByItem(itemType, itemId, field, value) {
@@ -634,7 +716,7 @@ function toggleReminderAllDay(reminderId, checked) {
     saveToStorage();
     renderReminderStrip();
     renderRemindersModal();
-    if (selectedNodeId && reminder.itemType === 'task' && reminder.itemId === selectedNodeId) updateInspector();
+    if (selectedNodeId && getReminderOwningTaskId(reminder) === selectedNodeId) updateInspector();
 }
 
 function toggleReminderAllDayByItem(itemType, itemId, checked) {
@@ -657,27 +739,50 @@ function keepReminder(reminderId) {
     renderRemindersModal();
 }
 
-function discardReminder(reminderId) {
+function setReminderPaused(reminderId, paused) {
     ensureRemindersArray();
     const reminder = reminders.find(rem => rem.id === reminderId);
+    if (!reminder || reminder.itemType !== 'habit') return;
+
+    reminder.paused = !!paused;
+    reminder.firedAt = null;
+    reminder.kept = false;
+    reminder.keepUntilTs = null;
+    reminder.discarded = false;
+    reminder.lastFiredOccurrenceTs = getHabitOccurrenceAtOrBefore(reminder, Date.now());
+    reminder.updatedAt = Date.now();
+    saveToStorage();
+    renderReminderStrip();
+    renderRemindersModal();
+    if (typeof renderHabits === 'function') renderHabits();
+}
+
+function toggleReminderPaused(reminderId) {
+    const reminder = reminders.find(rem => rem.id === reminderId);
+    if (!reminder || reminder.itemType !== 'habit') return;
+    setReminderPaused(reminderId, !reminder.paused);
+}
+
+function discardReminder(reminderId) {
+    ensureRemindersArray();
+    const index = reminders.findIndex(rem => rem.id === reminderId);
+    if (index === -1) return;
+    const reminder = reminders[index];
     if (!reminder) return;
     if (reminder.itemType === 'habit') {
         reminder.firedAt = null;
         reminder.kept = false;
         reminder.keepUntilTs = null;
         reminder.discarded = false;
+        reminder.updatedAt = Date.now();
     } else {
-        reminder.firedAt = null;
-        reminder.kept = false;
-        reminder.keepUntilTs = null;
-        reminder.discarded = true;
+        reminders.splice(index, 1);
     }
     const removed = reminder;
-    reminder.updatedAt = Date.now();
     saveToStorage();
     renderReminderStrip();
     renderRemindersModal();
-    if (selectedNodeId && removed.itemType === 'task' && removed.itemId === selectedNodeId) updateInspector();
+    if (selectedNodeId && getReminderOwningTaskId(removed) === selectedNodeId) updateInspector();
     if (typeof renderNotesList === 'function') renderNotesList();
     if (typeof renderHabits === 'function') renderHabits();
     if (typeof renderInbox === 'function') renderInbox();
@@ -706,15 +811,22 @@ function transferReminderAssignment(fromType, fromId, toType, toId, toTitle = ''
     renderRemindersModal();
 }
 
-function cleanupOrphanReminders() {
+function cleanupOrphanReminders(options = {}) {
     ensureRemindersArray();
     const before = reminders.length;
-    reminders = reminders.filter(rem => !!getReminderItem(rem.itemType, rem.itemId));
-    if (reminders.length !== before) {
-        saveToStorage();
-        renderReminderStrip();
-        renderRemindersModal();
+    reminders = reminders.filter(rem => !!getReminderItem(rem.itemType, rem.itemId) && !isReminderSoftDiscarded(rem));
+    const removedCount = before - reminders.length;
+    if (removedCount > 0) {
+        if (options.persist !== false) saveToStorage();
+        if (options.render !== false) {
+            renderReminderStrip();
+            renderRemindersModal();
+        }
+        if (options.refreshInspector && selectedNodeId && typeof updateInspector === 'function') {
+            updateInspector();
+        }
     }
+    return removedCount;
 }
 
 function fireReminder(reminder, occurrenceTs, nowTs) {
@@ -735,21 +847,28 @@ function fireReminder(reminder, occurrenceTs, nowTs) {
 
 function checkReminderTriggers() {
     ensureRemindersArray();
-    cleanupOrphanReminders();
+    const orphanedRemoved = cleanupOrphanReminders({ persist: false, render: false });
 
     const nowTs = Date.now();
-    let changed = false;
+    let changed = orphanedRemoved > 0;
+    const reminderIdsToDelete = new Set();
 
     reminders.forEach(reminder => {
         if (reminder.kept && reminder.keepUntilTs && nowTs > reminder.keepUntilTs) {
             reminder.kept = false;
             reminder.keepUntilTs = null;
             reminder.firedAt = null;
-            if (reminder.itemType !== 'habit') reminder.discarded = true;
+            if (reminder.itemType !== 'habit') {
+                reminderIdsToDelete.add(reminder.id);
+                changed = true;
+                return;
+            }
             reminder.updatedAt = nowTs;
             changed = true;
             return;
         }
+
+        if (isReminderPaused(reminder)) return;
 
         if (reminder.itemType === 'habit') {
             const occurrenceTs = getHabitOccurrenceAtOrBefore(reminder, nowTs);
@@ -768,6 +887,10 @@ function checkReminderTriggers() {
             changed = true;
         }
     });
+
+    if (reminderIdsToDelete.size > 0) {
+        reminders = reminders.filter(reminder => !reminderIdsToDelete.has(reminder.id));
+    }
 
     if (changed) {
         saveToStorage();

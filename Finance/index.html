@@ -83,14 +83,75 @@
                         </button>
                     </div>
                 </div>
-                <div
-                    class="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-medium transition-all group cursor-pointer">
-                    <i data-lucide="layout-list" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
-                    <span class="hidden sm:inline">Life Manager</span>
-                </div>
+                <button id="finance-quick-links-launcher" type="button" onclick="toggleFinanceQuickLinks()"
+                    class="finance-quick-links-launcher"
+                    aria-label="Toggle quick links" aria-controls="finance-quick-links-panel" aria-expanded="false">
+                    <span class="finance-quick-links-launcher-icon">
+                        <i data-lucide="layout-list" class="w-4 h-4"></i>
+                    </span>
+                    <span class="hidden sm:inline">Quick Links</span>
+                    <i data-lucide="chevron-down" class="finance-quick-links-launcher-chevron w-4 h-4"></i>
+                </button>
             </div>
         </div>
     </nav>
+
+    <div id="finance-quick-links-panel" class="finance-quick-links-panel" aria-hidden="true">
+        <div class="finance-quick-links-shell">
+            <div class="finance-quick-links-toolbar">
+                <span class="finance-quick-links-toolbar-label">Quick Links</span>
+                <span id="finance-quick-links-count" class="finance-quick-links-count">0 / 25</span>
+                <button id="finance-quick-links-add-btn" type="button" onclick="openFinanceQuickLinkModal()"
+                    class="finance-quick-links-add-btn" aria-label="Add quick link" title="Add quick link">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <button id="finance-quick-links-scroll-up" type="button" onclick="scrollFinanceQuickLinks(-1)"
+                class="finance-quick-links-scroll-btn hidden" aria-label="Scroll quick links up" title="Scroll up">
+                <i data-lucide="chevron-up" class="w-4 h-4"></i>
+            </button>
+            <div id="finance-quick-links-list" class="finance-quick-links-list custom-scrollbar"></div>
+            <button id="finance-quick-links-scroll-down" type="button" onclick="scrollFinanceQuickLinks(1)"
+                class="finance-quick-links-scroll-btn hidden" aria-label="Scroll quick links down" title="Scroll down">
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </div>
+
+    <div id="finance-quick-link-modal"
+        class="finance-quick-link-modal hidden fixed inset-0 z-[160] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="finance-quick-link-window">
+            <div class="finance-quick-link-window-head">
+                <div>
+                    <p class="finance-quick-link-window-eyebrow">Finance Shortcuts</p>
+                    <h3 class="finance-quick-link-window-title">Add Quick Link</h3>
+                    <p class="finance-quick-link-window-body">Each new link gets the next unused money icon and color pair automatically.</p>
+                </div>
+                <button type="button" onclick="closeFinanceQuickLinkModal()" class="finance-quick-link-window-close"
+                    aria-label="Close quick link modal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div id="finance-quick-link-preview" class="finance-quick-link-preview"></div>
+
+            <label class="finance-quick-link-field">
+                <span class="finance-quick-link-field-label">Label</span>
+                <input type="text" id="finance-quick-link-label" placeholder="Label (optional)">
+            </label>
+
+            <label class="finance-quick-link-field">
+                <span class="finance-quick-link-field-label">URL or path</span>
+                <input type="text" id="finance-quick-link-url"
+                    placeholder="https://example.com or ../index.html">
+            </label>
+
+            <div class="finance-quick-link-window-actions">
+                <button type="button" class="finance-quick-link-secondary-btn" onclick="closeFinanceQuickLinkModal()">Cancel</button>
+                <button type="button" class="finance-quick-link-primary-btn" onclick="saveFinanceQuickLink()">Save Link</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Master Key Entry Overlay -->
     <div id="auth-overlay"
@@ -811,15 +872,17 @@
     <div id="transaction-modal"
         class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
         <div
-            class="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden flex flex-col my-auto">
+            id="transaction-modal-panel"
+            data-transaction-tone="expense"
+            class="transaction-modal-panel rounded-3xl p-6 sm:p-8 max-w-lg w-full max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden flex flex-col my-auto">
             <h3 class="text-2xl font-bold text-slate-800 mb-5 sm:mb-6" id="t-modal-title">New Entry</h3>
             <div class="space-y-4 overflow-y-auto custom-scrollbar pr-1 sm:pr-2 min-h-0">
                 <input type="hidden" id="t-id">
-                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border">
+                <div class="transaction-type-switch grid grid-cols-2 gap-2 p-1 rounded-2xl">
                     <button onclick="setTType('expense')" id="btn-expense"
-                        class="py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm">Expense</button>
+                        class="transaction-type-button is-active py-2 rounded-xl font-bold">Expense</button>
                     <button onclick="setTType('income')" id="btn-income"
-                        class="py-2 rounded-xl font-bold text-slate-400">Income</button>
+                        class="transaction-type-button py-2 rounded-xl font-bold">Income</button>
                     <input type="hidden" id="t-type" value="expense">
                 </div>
                 <input type="text" id="t-desc" placeholder="Description (e.g. Lunch)"
@@ -889,11 +952,12 @@
                 </div>
             </div>
 
-            <div class="flex gap-3 pt-4 mt-4 border-t border-slate-100 shrink-0">
+            <div class="transaction-modal-footer flex gap-3 pt-4 mt-4 border-t shrink-0">
                 <button onclick="closeTransactionModal()"
                     class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
                 <button onclick="saveTransaction()"
-                    class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">Save</button>
+                    id="transaction-save-button"
+                    class="transaction-save-btn flex-1 py-4 text-white rounded-2xl font-bold">Save</button>
             </div>
         </div>
     </div>
@@ -1271,11 +1335,23 @@
                 <input type="text" id="cc-last4" placeholder="Last 4 digits (optional)"
                     class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-amber-500">
                 <div class="grid grid-cols-2 gap-4">
-                    <input type="number" id="cc-limit" placeholder="Credit Limit"
+                    <input type="number" id="cc-limit" placeholder="Credit Limit (optional)"
                         class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-amber-500">
-                    <input type="number" id="cc-opening-balance" placeholder="Starting Balance"
+                    <input type="number" id="cc-opening-balance" placeholder="Starting Balance (optional)"
                         class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-amber-500">
                 </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Payment Due Day</label>
+                        <input type="number" id="cc-payment-due-day" min="1" max="31" placeholder="e.g. 15"
+                            class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-amber-500 font-bold text-slate-700">
+                    </div>
+                    <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 mt-[22px]">
+                        <input type="checkbox" id="cc-payment-reminder-paused" class="w-4 h-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500">
+                        <span class="text-sm font-bold text-slate-600">Pause payment reminder</span>
+                    </label>
+                </div>
+                <p class="text-xs text-slate-400 ml-2">Set a monthly due day to auto-create a recurring credit card payment reminder.</p>
 
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('credit-card-modal')"
@@ -2663,6 +2739,7 @@
     <script src="assets/js/ui/renderers.js"></script>
     <script src="assets/js/features/crud.js"></script>
     <script src="assets/js/features/backup.js"></script>
+    <script src="assets/js/features/quick-links.js"></script>
     <script src="assets/js/features/item-tracking.js"></script>
     <script src="assets/js/features/reminders.js"></script>
     <script src="assets/js/features/reports.js"></script>

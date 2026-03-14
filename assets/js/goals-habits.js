@@ -920,6 +920,14 @@ function renderHabits() {
             const goalStyle = h.goalId ? getGoalColorBoxInlineStyle(h.goalId) : '';
             const progressLabel = getHabitProgressLabel(h, metrics);
             const controlsHtml = getHabitCardControls(h, metrics);
+            const habitReminder = typeof getReminderForItem === 'function' ? getReminderForItem('habit', h.id) : null;
+            const habitReminderPaused = !!(habitReminder && habitReminder.paused);
+            const reminderButtonClass = habitReminder
+                ? (habitReminderPaused ? 'paused-alert' : 'active-alert')
+                : '';
+            const reminderButtonTitle = habitReminder
+                ? (habitReminderPaused ? 'Reminder paused' : 'Reminder active')
+                : 'Set reminder';
     
             const el = document.createElement('div');
             el.className = `habit-item ${metrics.isDone ? 'done-today' : ''}`;
@@ -959,7 +967,7 @@ function renderHabits() {
                                         ${usesLinkedGoalColor ? 'disabled' : ''}
                                         onclick="event.stopPropagation();"
                                         onchange="setHabitColor('${h.id}', this.value)">
-                                    <button class="habit-icon-btn ${hasReminderForItem('habit', h.id) ? 'active-alert' : ''}" onclick="openRemindersModal('habit', '${h.id}')" title="Reminder">⏰</button>
+                                    <button class="habit-icon-btn ${reminderButtonClass}" onclick="openRemindersModal('habit', '${h.id}')" title="${reminderButtonTitle}">⏰</button>
                                     <button class="habit-icon-btn" onclick="editHabit('${h.id}')" title="Edit">✎</button>
                                     <button class="habit-icon-btn ${isPinned('habit', h.id) ? 'active' : ''}" onclick="togglePinItem('habit', '${h.id}'); renderHabits();" title="Pin">📌</button>
                                     <button class="habit-icon-btn" onclick="archiveHabit('${h.id}')" title="Archive">🗄</button>

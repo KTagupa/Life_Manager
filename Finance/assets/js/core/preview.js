@@ -260,7 +260,9 @@
                 name: primaryCardName,
                 last4: '4242',
                 limit: 65000,
-                openingBalance: 3200
+                openingBalance: 3200,
+                paymentDueDay: 14,
+                paymentReminderPaused: false
             }),
             deletedAt: null,
             createdAt: primaryCardCreatedAt,
@@ -273,7 +275,9 @@
                 name: backupCardName,
                 last4: '1010',
                 limit: 24000,
-                openingBalance: 900
+                openingBalance: 900,
+                paymentDueDay: 22,
+                paymentReminderPaused: false
             }),
             deletedAt: null,
             createdAt: backupCardCreatedAt,
