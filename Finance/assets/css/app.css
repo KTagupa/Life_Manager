@@ -1220,3 +1220,12 @@
                 max-height: min(52vh, calc(100vh - 190px));
             }
         }
+
+        button.finance-action-pending,
+        button[aria-busy="true"] {
+            cursor: wait;
+            opacity: 0.78;
+            transform: none !important;
+            pointer-events: none;
+            box-shadow: none !important;
+        }

@@ -9,9 +9,17 @@ const UNDO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const LOCAL_DB_NAME = 'finance_flow_local_v1';
 const LOCAL_DB_VERSION = 1;
 const LOCAL_DB_STORE = 'app_kv';
+const LOCAL_STORAGE_MIRROR_DELAY_MS = 300;
+const REMOTE_REFRESH_TTL_MS = 30 * 1000;
 
 let localIndexedDBPromise = null;
 let latestStorageDiagnostics = null;
+let cachedLocalDBSnapshot = null;
+let pendingLocalStorageMirrorTimer = null;
+let lastRemoteReadAt = 0;
+let remoteRefreshPromise = null;
+let remoteSyncPromise = null;
+let remoteSyncDirty = false;
 
 function canUseIndexedDB() {
     return typeof window !== 'undefined' && 'indexedDB' in window;
@@ -105,6 +113,54 @@ async function writeDBToIndexedDB(dbData) {
     }
 }
 
+function setCachedLocalDBSnapshot(dbData) {
+    const normalized = normalizeDBSchema(dbData);
+    cachedLocalDBSnapshot = cloneStorageSafeValue(normalized);
+    return normalized;
+}
+
+function getCachedLocalDBSnapshotClone() {
+    if (!cachedLocalDBSnapshot) return null;
+    return normalizeDBSchema(cloneStorageSafeValue(cachedLocalDBSnapshot));
+}
+
+function flushLocalStorageMirrorNow() {
+    if (pendingLocalStorageMirrorTimer != null && typeof window !== 'undefined') {
+        window.clearTimeout(pendingLocalStorageMirrorTimer);
+        pendingLocalStorageMirrorTimer = null;
+    }
+
+    if (!cachedLocalDBSnapshot) return;
+
+    try {
+        localStorage.setItem(DB_KEY, JSON.stringify(cachedLocalDBSnapshot));
+    } catch (error) {
+        console.error('Failed to update localStorage cache.', error);
+    }
+}
+
+function scheduleLocalStorageMirrorWrite() {
+    if (typeof window === 'undefined') {
+        flushLocalStorageMirrorNow();
+        return;
+    }
+
+    if (pendingLocalStorageMirrorTimer != null) {
+        window.clearTimeout(pendingLocalStorageMirrorTimer);
+    }
+
+    pendingLocalStorageMirrorTimer = window.setTimeout(() => {
+        pendingLocalStorageMirrorTimer = null;
+        flushLocalStorageMirrorNow();
+    }, LOCAL_STORAGE_MIRROR_DELAY_MS);
+}
+
+if (typeof window !== 'undefined' && !window.__financeLocalStorageMirrorFlushBound) {
+    window.__financeLocalStorageMirrorFlushBound = true;
+    window.addEventListener('pagehide', flushLocalStorageMirrorNow);
+    window.addEventListener('beforeunload', flushLocalStorageMirrorNow);
+}
+
 function readDBFromLocalStorage() {
     try {
         const raw = localStorage.getItem(DB_KEY);
@@ -162,18 +218,18 @@ function choosePreferredLocalDB(localStorageDB, indexedDBData) {
     return { db: localStorageDB, source: 'localstorage' };
 }
 
-async function persistLocalDBSnapshot(dbData) {
-    const normalized = normalizeDBSchema(dbData);
+async function persistLocalDBSnapshot(dbData, options = {}) {
+    const normalized = setCachedLocalDBSnapshot(dbData);
     await writeDBToIndexedDB(normalized);
-    try {
-        localStorage.setItem(DB_KEY, JSON.stringify(normalized));
-    } catch (error) {
-        console.error('Failed to update localStorage cache.', error);
-    }
+    if (options.flushLocalStorage === true) flushLocalStorageMirrorNow();
+    else scheduleLocalStorageMirrorWrite();
     return normalized;
 }
 
 async function getLocalDBSnapshot() {
+    const cached = getCachedLocalDBSnapshotClone();
+    if (cached) return cached;
+
     const rawLocalStorageDB = readDBFromLocalStorage();
     const rawLocalStorageStr = rawLocalStorageDB ? JSON.stringify(rawLocalStorageDB) : null;
     let localStorageDB = rawLocalStorageDB ? normalizeDBSchema(rawLocalStorageDB) : null;
@@ -209,6 +265,7 @@ async function getLocalDBSnapshot() {
             console.error('Failed to update localStorage cache.', error);
         }
     }
+    setCachedLocalDBSnapshot(resolved);
     return resolved;
 }
 
@@ -1117,25 +1174,28 @@ function cloneStorageSafeValue(value) {
     }
 }
 
-async function getDB() {
-    if (previewMode && previewDBSnapshot) {
-        return normalizeDBSchema(cloneStorageSafeValue(previewDBSnapshot));
-    }
+function hasRemoteSyncSession() {
+    return !previewMode && !!(masterKey && firestoreDB);
+}
 
-    let localDB = normalizeDBSchema(getDefaultDB());
-    try {
-        localDB = await getLocalDBSnapshot();
-    } catch (e) {
-        console.error('Local DB snapshot load failed, resetting to default schema.', e);
-        localDB = normalizeDBSchema(getDefaultDB());
-    }
-    let resolvedDB = localDB;
+function hasUnsyncedLocalChanges(db) {
+    if (!hasRemoteSyncSession()) return false;
+    const snapshot = db && typeof db === 'object' ? db : cachedLocalDBSnapshot;
+    const revision = snapshot?.sync?.revision || null;
+    const knownRemoteRevision = snapshot?.sync?.lastKnownRemoteRevision || null;
+    return !!(revision && revision !== knownRemoteRevision);
+}
+
+async function resolveDBAgainstRemote(localDB) {
+    let resolvedDB = normalizeDBSchema(localDB);
     let loadedFromRemote = false;
+    let remoteChecked = false;
 
     try {
         if (masterKey && firestoreDB) {
             const vaultId = await getVaultId(masterKey);
             const doc = await firestoreDB.collection('vaults').doc(vaultId).get();
+            remoteChecked = true;
             if (doc.exists) {
                 const remoteDB = normalizeDBSchema(doc.data().vaultData || getDefaultDB());
                 const strategy = localDB.sync?.conflictStrategy || remoteDB.sync?.conflictStrategy || 'merge_safe_lists';
@@ -1157,11 +1217,150 @@ async function getDB() {
         console.error('Firebase load failed, using localStorage:', error);
     }
 
-    if (loadedFromRemote) {
+    return {
+        resolvedDB: normalizeDBSchema(resolvedDB),
+        loadedFromRemote,
+        remoteChecked
+    };
+}
+
+function maybeRefreshDBFromRemoteInBackground(localDB) {
+    if (!hasRemoteSyncSession()) return;
+    if (remoteRefreshPromise || remoteSyncPromise) return;
+    if (hasUnsyncedLocalChanges(localDB)) return;
+    if (lastRemoteReadAt > 0 && (Date.now() - lastRemoteReadAt) < REMOTE_REFRESH_TTL_MS) return;
+
+    remoteRefreshPromise = (async () => {
+        const startingLocal = getCachedLocalDBSnapshotClone() || normalizeDBSchema(localDB);
+        if (hasUnsyncedLocalChanges(startingLocal) || remoteSyncPromise) return;
+
+        const startingRevision = startingLocal.sync?.revision || null;
+        const { resolvedDB, loadedFromRemote, remoteChecked } = await resolveDBAgainstRemote(startingLocal);
+        if (remoteChecked) lastRemoteReadAt = Date.now();
+        if (!loadedFromRemote) return;
+
+        const latestLocal = getCachedLocalDBSnapshotClone();
+        if (!latestLocal) return;
+        if (hasUnsyncedLocalChanges(latestLocal)) return;
+        if ((latestLocal.sync?.revision || null) !== startingRevision) return;
+
         await persistLocalDBSnapshot(resolvedDB);
+    })().catch((error) => {
+        console.error('Background Firebase refresh failed:', error);
+    }).finally(() => {
+        remoteRefreshPromise = null;
+    });
+}
+
+function queueRemoteDBSync() {
+    if (!hasRemoteSyncSession()) {
+        return Promise.resolve(getCachedLocalDBSnapshotClone());
     }
 
-    return normalizeDBSchema(resolvedDB);
+    remoteSyncDirty = true;
+    if (remoteSyncPromise) return remoteSyncPromise;
+
+    remoteSyncPromise = (async () => {
+        while (remoteSyncDirty) {
+            remoteSyncDirty = false;
+
+            const localSnapshot = getCachedLocalDBSnapshotClone() || await getLocalDBSnapshot();
+            if (!hasUnsyncedLocalChanges(localSnapshot)) continue;
+
+            const processingRevision = localSnapshot.sync?.revision || null;
+            const localCryptoPrices = { ...(localSnapshot.crypto_prices || {}) };
+            let dbToSync = normalizeDBSchema(localSnapshot);
+
+            try {
+                const vaultId = await getVaultId(masterKey);
+                const ref = firestoreDB.collection('vaults').doc(vaultId);
+                const remoteDoc = await ref.get();
+                lastRemoteReadAt = Date.now();
+                const remoteDB = remoteDoc.exists ? normalizeDBSchema(remoteDoc.data().vaultData || getDefaultDB()) : null;
+
+                if (remoteDB) {
+                    const remoteRev = remoteDB.sync?.revision || null;
+                    const knownRemoteRev = dbToSync.sync?.lastKnownRemoteRevision || null;
+                    const localRev = dbToSync.sync?.revision || null;
+                    const strategy = dbToSync.sync?.conflictStrategy || 'local_wins';
+                    const conflictDetected = !!(
+                        remoteRev &&
+                        ((knownRemoteRev && remoteRev !== knownRemoteRev) ||
+                            (!knownRemoteRev && localRev && remoteRev !== localRev))
+                    );
+
+                    if (conflictDetected) {
+                        if (strategy === 'remote_wins') {
+                            dbToSync = remoteDB;
+                        } else if (strategy === 'merge_safe_lists') {
+                            dbToSync = mergeSafeDB(dbToSync, remoteDB);
+                        }
+                    }
+                }
+
+                dbToSync.crypto_prices = localCryptoPrices;
+
+                const newRevision = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                dbToSync.sync.revision = newRevision;
+                dbToSync.sync.lastKnownRemoteRevision = newRevision;
+                dbToSync.sync.updatedAt = new Date().toISOString();
+
+                await firestoreDB.collection('vaults').doc(vaultId).set({
+                    vaultData: buildRemoteVaultPayload(dbToSync),
+                    kdfMeta: kdfMeta || null,
+                    kdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    lastModified: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                const latestLocal = getCachedLocalDBSnapshotClone();
+                if (latestLocal && (latestLocal.sync?.revision || null) === processingRevision) {
+                    await persistLocalDBSnapshot(dbToSync);
+                } else {
+                    remoteSyncDirty = true;
+                }
+            } catch (error) {
+                console.error('❌ Background Firebase sync failed:', error);
+            }
+        }
+
+        return getCachedLocalDBSnapshotClone();
+    })().finally(() => {
+        remoteSyncPromise = null;
+    });
+
+    return remoteSyncPromise;
+}
+
+async function getDB(options = {}) {
+    if (previewMode && previewDBSnapshot) {
+        return normalizeDBSchema(cloneStorageSafeValue(previewDBSnapshot));
+    }
+
+    const allowRemote = options.allowRemote !== false;
+    const forceRemote = options.forceRemote === true;
+    let localDB = normalizeDBSchema(getDefaultDB());
+    try {
+        localDB = await getLocalDBSnapshot();
+    } catch (e) {
+        console.error('Local DB snapshot load failed, resetting to default schema.', e);
+        localDB = normalizeDBSchema(getDefaultDB());
+    }
+
+    if (!allowRemote || !hasRemoteSyncSession()) {
+        return normalizeDBSchema(localDB);
+    }
+
+    if (forceRemote || lastRemoteReadAt === 0) {
+        const { resolvedDB, loadedFromRemote, remoteChecked } = await resolveDBAgainstRemote(localDB);
+        if (remoteChecked) lastRemoteReadAt = Date.now();
+        if (loadedFromRemote) {
+            await persistLocalDBSnapshot(resolvedDB);
+        }
+        return normalizeDBSchema(resolvedDB);
+    }
+
+    maybeRefreshDBFromRemoteInBackground(localDB);
+    return normalizeDBSchema(localDB);
 }
 
 async function saveDB(inputDB) {
@@ -1207,64 +1406,99 @@ async function saveDB(inputDB) {
     const nowISO = new Date().toISOString();
     db.sync.updatedAt = nowISO;
 
-    try {
-        if (masterKey && firestoreDB) {
-            const vaultId = await getVaultId(masterKey);
-            const ref = firestoreDB.collection('vaults').doc(vaultId);
-            const remoteDoc = await ref.get();
-            const remoteDB = remoteDoc.exists ? normalizeDBSchema(remoteDoc.data().vaultData || getDefaultDB()) : null;
-
-            if (remoteDB) {
-                const remoteRev = remoteDB.sync?.revision || null;
-                const knownRemoteRev = db.sync?.lastKnownRemoteRevision || null;
-                const localRev = db.sync?.revision || null;
-                const strategy = db.sync?.conflictStrategy || 'local_wins';
-                const conflictDetected = !!(
-                    remoteRev &&
-                    ((knownRemoteRev && remoteRev !== knownRemoteRev) ||
-                        (!knownRemoteRev && localRev && remoteRev !== localRev))
-                );
-
-                if (conflictDetected) {
-                    if (strategy === 'remote_wins') {
-                        db = remoteDB;
-                    } else if (strategy === 'merge_safe_lists') {
-                        db = mergeSafeDB(db, remoteDB);
-                    }
-                }
-            }
-
-            // Keep market prices local-only, regardless of conflict strategy.
-            db.crypto_prices = localCryptoPrices;
-
-            const newRevision = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-            db.sync.revision = newRevision;
-            db.sync.lastKnownRemoteRevision = newRevision;
-            db.sync.updatedAt = nowISO;
-
-            await persistLocalDBSnapshot(db);
-
-            await ref.set({
-                vaultData: buildRemoteVaultPayload(db),
-                kdfMeta: kdfMeta || null,
-                kdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                lastModified: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            console.log('✅ Synced to Firebase');
-            return db;
-        }
-    } catch (error) {
-        console.error('❌ Firebase sync failed:', error);
-    }
-
-    // Local-only fallback
-    const localRevision = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // Save locally first so the UI can resume before remote sync completes.
+    const localRevision = `rev_local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    db.crypto_prices = localCryptoPrices;
     db.sync.revision = localRevision;
-    db.sync.lastKnownRemoteRevision = localRevision;
+    if (!hasRemoteSyncSession()) {
+        db.sync.lastKnownRemoteRevision = localRevision;
+    } else {
+        db.sync.lastKnownRemoteRevision = db.sync.lastKnownRemoteRevision || null;
+    }
     db.sync.updatedAt = nowISO;
     await persistLocalDBSnapshot(db);
+
+    if (hasRemoteSyncSession()) {
+        queueRemoteDBSync().catch((error) => {
+            console.error('❌ Firebase sync enqueue failed:', error);
+        });
+    }
+
     return db;
 }
+
+const financePendingActionPromises = new Map();
+
+function setFinanceActionButtonPending(button, pendingLabel = 'Saving...') {
+    if (!(button instanceof HTMLElement)) {
+        return () => { };
+    }
+
+    const originalHtml = button.innerHTML;
+    const originalDisabled = button.disabled;
+    const originalAriaBusy = button.getAttribute('aria-busy');
+    const originalMinWidth = button.style.minWidth;
+    const buttonWidth = button.getBoundingClientRect().width;
+
+    if (buttonWidth > 0) {
+        button.style.minWidth = `${Math.ceil(buttonWidth)}px`;
+    }
+
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.classList.add('finance-action-pending');
+    button.textContent = pendingLabel;
+
+    return () => {
+        button.innerHTML = originalHtml;
+        button.disabled = originalDisabled;
+        if (originalAriaBusy == null) {
+            button.removeAttribute('aria-busy');
+        } else {
+            button.setAttribute('aria-busy', originalAriaBusy);
+        }
+        button.classList.remove('finance-action-pending');
+        button.style.minWidth = originalMinWidth;
+    };
+}
+
+function runFinancePendingAction(actionKey, button, actionFn, pendingLabel = '') {
+    const normalizedKey = String(actionKey || '').trim();
+    if (!normalizedKey || typeof actionFn !== 'function') {
+        return Promise.resolve();
+    }
+
+    const existingPromise = financePendingActionPromises.get(normalizedKey);
+    if (existingPromise) {
+        return existingPromise;
+    }
+
+    const resolvedLabel = String(
+        pendingLabel
+        || button?.dataset?.pendingLabel
+        || button?.getAttribute?.('data-pending-label')
+        || 'Saving...'
+    ).trim() || 'Saving...';
+    const restoreButton = setFinanceActionButtonPending(button, resolvedLabel);
+
+    let trackedPromise;
+    try {
+        trackedPromise = Promise.resolve(actionFn());
+    } catch (error) {
+        restoreButton();
+        throw error;
+    }
+
+    trackedPromise = trackedPromise.finally(() => {
+        financePendingActionPromises.delete(normalizedKey);
+        restoreButton();
+    });
+
+    financePendingActionPromises.set(normalizedKey, trackedPromise);
+    return trackedPromise;
+}
+
+window.runFinancePendingAction = runFinancePendingAction;
 
 function normalizeBridgeAmountToPHP(amount, currency) {
     const parsedAmount = Number(amount);

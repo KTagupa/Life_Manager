@@ -148,7 +148,8 @@
 
             <div class="finance-quick-link-window-actions">
                 <button type="button" class="finance-quick-link-secondary-btn" onclick="closeFinanceQuickLinkModal()">Cancel</button>
-                <button type="button" class="finance-quick-link-primary-btn" onclick="saveFinanceQuickLink()">Save Link</button>
+                <button type="button" class="finance-quick-link-primary-btn"
+                    onclick="runFinancePendingAction('saveFinanceQuickLink', this, saveFinanceQuickLink)">Save Link</button>
             </div>
         </div>
     </div>
@@ -216,7 +217,7 @@
                 <div class="flex flex-wrap items-center gap-2">
                     <input id="firebase-api-key-input" type="password" placeholder="AIza..."
                         class="flex-1 min-w-[220px] p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-700 outline-none focus:border-indigo-500">
-                    <button onclick="saveFirebaseApiKeyFromModal()"
+                    <button onclick="runFinancePendingAction('saveFirebaseApiKeyFromModal', this, saveFirebaseApiKeyFromModal)"
                         class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 rounded-xl text-xs font-bold text-white">
                         Save Key & Reload
                     </button>
@@ -238,7 +239,7 @@
                     class="px-4 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl text-xs font-bold text-rose-700">
                     Clear
                 </button>
-                <button onclick="saveFirebaseConfigFromModal()"
+                <button onclick="runFinancePendingAction('saveFirebaseConfigFromModal', this, saveFirebaseConfigFromModal)"
                     class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 rounded-xl text-xs font-bold text-white">
                     Save & Reload
                 </button>
@@ -955,7 +956,7 @@
             <div class="transaction-modal-footer flex gap-3 pt-4 mt-4 border-t shrink-0">
                 <button onclick="closeTransactionModal()"
                     class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                <button onclick="saveTransaction()"
+                <button onclick="runFinancePendingAction('saveTransaction', this, saveTransaction)"
                     id="transaction-save-button"
                     class="transaction-save-btn flex-1 py-4 text-white rounded-2xl font-bold">Save</button>
             </div>
@@ -1011,7 +1012,7 @@
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('wishlist-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveWishlistItem()"
+                    <button onclick="runFinancePendingAction('saveWishlistItem', this, saveWishlistItem)"
                         class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200">Save</button>
                 </div>
             </div>
@@ -1047,7 +1048,7 @@
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('asset-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveAsset()"
+                    <button onclick="runFinancePendingAction('saveAsset', this, saveAsset)"
                         class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">Save
                         Asset</button>
                 </div>
@@ -1153,7 +1154,7 @@
                 <div class="flex gap-3 pt-4 border-t border-slate-100">
                     <button onclick="toggleModal('agm-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Close</button>
-                    <button onclick="saveAGMData()"
+                    <button onclick="runFinancePendingAction('saveAGMData', this, saveAGMData)"
                         class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">Save
                         Strategy</button>
                 </div>
@@ -1261,7 +1262,7 @@
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('debt-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveDebt()"
+                    <button onclick="runFinancePendingAction('saveDebt', this, saveDebt)"
                         class="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-200">Track
                         Debt</button>
                 </div>
@@ -1310,7 +1311,7 @@
                         class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500">
                 </div>
 
-                <button onclick="saveDebtTransaction()"
+                <button onclick="runFinancePendingAction('saveDebtTransaction', this, saveDebtTransaction)"
                     class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 mt-2">
                     Save Transaction
                 </button>
@@ -1356,7 +1357,7 @@
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('credit-card-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveCreditCard()"
+                    <button onclick="runFinancePendingAction('saveCreditCard', this, saveCreditCard)"
                         class="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200">Save Card</button>
                 </div>
             </div>
@@ -1388,7 +1389,7 @@
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('credit-card-payment-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveCreditCardPayment()"
+                    <button onclick="runFinancePendingAction('saveCreditCardPayment', this, saveCreditCardPayment)"
                         class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save Payment</button>
                 </div>
             </div>
@@ -1415,7 +1416,7 @@
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('lent-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveLent()"
+                    <button onclick="runFinancePendingAction('saveLent', this, saveLent)"
                         class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Start
                         Tracking</button>
                 </div>
@@ -1448,7 +1449,7 @@
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('bill-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="saveBill()"
+                    <button onclick="runFinancePendingAction('saveBill', this, saveBill)"
                         class="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200">Set
                         Reminder</button>
                 </div>
@@ -1775,7 +1776,7 @@
                 <input type="text" id="c-notes" placeholder="Additional notes..."
                     class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-xs">
 
-                <button onclick="saveCryptoTransaction()"
+                <button onclick="runFinancePendingAction('saveCryptoTransaction', this, saveCryptoTransaction)"
                     class="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 mt-2">Record
                     Transaction</button>
             </div>
@@ -1809,7 +1810,7 @@
                         class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold text-slate-600">
                 </div>
 
-                <button onclick="saveInvestmentGoal()"
+                <button onclick="runFinancePendingAction('saveInvestmentGoal', this, saveInvestmentGoal)"
                     class="w-full py-4 bg-amber-500 text-white rounded-2xl font-bold hover:bg-amber-600 shadow-lg shadow-amber-200 mt-2">Save
                     Goal</button>
             </div>
@@ -1864,7 +1865,7 @@
             <div class="flex gap-3 pt-6">
                 <button onclick="toggleModal('backup-settings-modal')"
                     class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Close</button>
-                <button onclick="saveBackupSettingsModal()"
+                <button onclick="runFinancePendingAction('saveBackupSettingsModal', this, saveBackupSettingsModal)"
                     class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">Save
                     Settings</button>
             </div>
@@ -1989,7 +1990,7 @@
                 <button onclick="clearAllBudgets()"
                     class="px-6 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200 text-slate-600">Clear
                     All</button>
-                <button onclick="saveBudgets()"
+                <button onclick="runFinancePendingAction('saveBudgets', this, saveBudgets)"
                     class="flex-1 py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-2xl font-bold hover:from-emerald-700 hover:to-emerald-600 shadow-lg shadow-emerald-200">
                     Save Budget Plan
                 </button>
@@ -2277,7 +2278,7 @@
                         <input id="rule-active" type="checkbox" checked>
                         Active
                     </label>
-                    <button onclick="saveCategorizationRule()"
+                    <button onclick="runFinancePendingAction('saveCategorizationRule', this, saveCategorizationRule)"
                         class="px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600">
                         Save Rule
                     </button>
@@ -2329,7 +2330,7 @@
                         </div>
                         <input id="pg-linked-category" type="text" placeholder="Linked category (optional)"
                             class="w-full mb-3 p-2 bg-white border rounded-lg text-sm">
-                        <button onclick="saveFinancialGoal()"
+                        <button onclick="runFinancePendingAction('saveFinancialGoal', this, saveFinancialGoal)"
                             class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700">
                             Save Goal
                         </button>
@@ -2555,7 +2556,7 @@
                         </div>
 
                         <div class="flex flex-wrap gap-2 mt-3">
-                            <button onclick="saveOperationsGuardrails()"
+                            <button onclick="runFinancePendingAction('saveOperationsGuardrails', this, saveOperationsGuardrails)"
                                 class="px-3 py-2 bg-cyan-600 text-white rounded-lg text-xs font-bold hover:bg-cyan-700">
                                 Save Guardrails
                             </button>
@@ -2645,7 +2646,8 @@
                         <textarea id="mc-notes" rows="5"
                             placeholder="What changed this month? Any decisions or anomalies?"
                             class="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-cyan-500 resize-none"></textarea>
-                        <button onclick="saveMonthlyClose()"
+                        <button onclick="runFinancePendingAction('saveMonthlyClose', this, saveMonthlyClose)"
+                            data-pending-label="Closing..."
                             class="w-full mt-3 py-3 bg-cyan-600 text-white rounded-xl text-sm font-bold hover:bg-cyan-700 shadow-lg shadow-cyan-200"
                             id="mc-save-btn">Close Month</button>
                         <button onclick="exportMonthlyCloseSummaryPDF()"

@@ -240,7 +240,7 @@
                     <input id="mc-target-overbudget" type="number" min="0" step="1" value="${targets.maxOverBudgetCategories}"
                         class="mt-1 w-full p-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-cyan-500">
                 </label>
-                <button onclick="saveKpiTargets()"
+                <button onclick="runFinancePendingAction('saveKpiTargets', this, saveKpiTargets)"
                     class="w-full mt-2 py-2 bg-cyan-600 text-white rounded-lg text-xs font-bold hover:bg-cyan-700">
                     Save Targets
                 </button>
