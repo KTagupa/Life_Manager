@@ -100,6 +100,9 @@
 
             const txs = window.allDecryptedTransactions || [];
             const debtCategories = forecastGetDebtCategorySet();
+            const isAutoCryptoExpense = typeof isAutoCryptoBuyExpenseTx === 'function'
+                ? isAutoCryptoBuyExpenseTx
+                : () => false;
             const recurringFixed = typeof computeRecurringMonthlyExpenseEstimate === 'function'
                 ? Number(computeRecurringMonthlyExpenseEstimate() || 0)
                 : 0;
@@ -122,7 +125,7 @@
                     .filter(tx => tx.type === 'income')
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
                 const expense = monthTx
-                    .filter(tx => tx.type === 'expense' && !isCreditCardCharge(tx))
+                    .filter(tx => tx.type === 'expense' && !isCreditCardCharge(tx) && !isAutoCryptoExpense(tx))
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
                 const debtService = monthTx
                     .filter(tx => {

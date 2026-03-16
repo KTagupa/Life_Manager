@@ -524,7 +524,18 @@ async function unlockApp() {
 }  // ← Make sure this closing brace is here!
 
 async function loadFromStorage() {
-    const db = await getDB();
+    let db = await getDB();
+
+    if (typeof syncCryptoBuyExpensesInDB === 'function') {
+        try {
+            const syncResult = await syncCryptoBuyExpensesInDB(db);
+            if (syncResult?.changed) {
+                db = await saveDB(syncResult.db || db);
+            }
+        } catch (error) {
+            console.error('Crypto buy expense sync failed during load.', error);
+        }
+    }
 
     const runLoadStep = async (label, fn) => {
         try {

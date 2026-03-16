@@ -131,13 +131,16 @@ function statementsBuildDebtAndLentAggregates(transactions) {
 }
 
 function statementsComputeCashBalanceAsOf(endTs, transactions) {
+    const isAutoCryptoExpense = typeof isAutoCryptoBuyExpenseTx === 'function'
+        ? isAutoCryptoBuyExpenseTx
+        : () => false;
     return (transactions || []).reduce((sum, tx) => {
         const ts = getTxTimestamp(tx);
         if (!Number.isFinite(ts) || ts > endTs) return sum;
         const amount = Number(tx.amt || 0);
         if (!Number.isFinite(amount) || amount <= 0) return sum;
         if (tx.type === 'income' || tx.type === 'debt_increase') return sum + amount;
-        if (tx.type === 'expense') return isCreditCardCharge(tx) ? sum : sum - amount;
+        if (tx.type === 'expense') return (isCreditCardCharge(tx) || isAutoCryptoExpense(tx)) ? sum : sum - amount;
         if (isCreditCardPayment(tx)) return sum - amount;
         return sum;
     }, 0);
@@ -525,6 +528,9 @@ async function computeStatementForMonth(monthKey) {
     const allTransactions = window.allDecryptedTransactions || [];
     const monthTransactions = statementsGetTransactionsForMonth(normalizedMonth, allTransactions);
     const debtNames = new Set((window.allDecryptedDebts || []).map(d => String(d?.name || '').trim()).filter(Boolean));
+    const isAutoCryptoExpense = typeof isAutoCryptoBuyExpenseTx === 'function'
+        ? isAutoCryptoBuyExpenseTx
+        : () => false;
 
     // COGS categories: expenses directly tied to earning income
     const cogsKeywords = ['transport', 'commute', 'tools', 'work', 'equipment', 'office', 'uniform', 'professional', 'license', 'certification', 'internet'];
@@ -560,6 +566,8 @@ async function computeStatementForMonth(monthKey) {
         }
 
         if (tx.type !== 'expense') return;
+
+        if (isAutoCryptoExpense(tx)) return;
 
         if (isCreditCardCharge(tx)) {
             creditCardBorrowing += amount;

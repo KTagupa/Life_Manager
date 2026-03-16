@@ -1515,8 +1515,8 @@
             await loadFromStorage();
         }
 
-        async function deleteItem(col, id) {
-            if (!confirm("Are you sure?")) return;
+        async function deleteItem(col, id, confirmMessage) {
+            if (!confirm(confirmMessage || "Are you sure?")) return;
             const db = await getDB();
             const key = collectionKeyFromDeleteType(col);
             if (!key) return;
@@ -1549,6 +1549,9 @@
             }
 
             db[key] = targetCollection;
+            if (col === 'crypto' && typeof syncCryptoBuyExpensesInDB === 'function') {
+                await syncCryptoBuyExpensesInDB(db);
+            }
             db.undo_log = db.undo_log || [];
             db.undo_log.push(undoEntry);
             const persistedDB = await saveDB(db);
@@ -1584,14 +1587,7 @@
                     refreshStatements: true
                 });
             } else if (col === 'crypto') {
-                rawCrypto = (persistedDB.crypto || []).filter(c => !c.deletedAt);
-                await renderCryptoPortfolio();
-                await renderCryptoWidget();
-                await refreshLinkedPanels({
-                    refreshKPI: true,
-                    refreshForecast: true,
-                    refreshStatements: true
-                });
+                await loadFromStorage();
             } else if (col === 'wishlist') {
                 rawWishlist = (persistedDB.wishlist || []).filter(w => !w.deletedAt);
                 await loadAndRenderWishlist();
