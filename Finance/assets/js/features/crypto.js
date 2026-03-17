@@ -357,6 +357,273 @@
             return { db, changed, added, restored, removed };
         }
 
+        let cryptoDuplicateReviewState = {
+            issues: [],
+            signature: '',
+            checkedAt: 0,
+            autoExpenseCount: 0,
+            scannedExpenseCount: 0
+        };
+        let lastCryptoDuplicateReviewToastSignature = '';
+
+        function normalizeCryptoDuplicateReviewText(input) {
+            return String(input || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[^\w\s]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function getCryptoDuplicateReviewDateKey(tx) {
+            if (typeof getTxAssignedDateKey === 'function') {
+                return getTxAssignedDateKey(tx);
+            }
+            const rawDate = String(tx?.date || '').trim();
+            const matchedDate = rawDate.match(/^\d{4}-\d{2}-\d{2}/);
+            return matchedDate ? matchedDate[0] : '';
+        }
+
+        function parseCryptoDuplicateReviewDateKey(dateKey) {
+            const match = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return NaN;
+            return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getTime();
+        }
+
+        function getCryptoDuplicateReviewDayGap(autoTx, manualTx) {
+            const autoTs = parseCryptoDuplicateReviewDateKey(getCryptoDuplicateReviewDateKey(autoTx));
+            const manualTs = parseCryptoDuplicateReviewDateKey(getCryptoDuplicateReviewDateKey(manualTx));
+            if (!Number.isFinite(autoTs) || !Number.isFinite(manualTs)) return Number.POSITIVE_INFINITY;
+            return Math.round(Math.abs(autoTs - manualTs) / (24 * 60 * 60 * 1000));
+        }
+
+        function buildCryptoDuplicateReviewText(tx) {
+            return normalizeCryptoDuplicateReviewText([
+                tx?.desc,
+                tx?.category,
+                tx?.notes,
+                tx?.merchant,
+                tx?.creditCardName
+            ].filter(Boolean).join(' '));
+        }
+
+        function buildCryptoDuplicateReviewHintTokens(autoTx) {
+            const stopWords = new Set([
+                'auto', 'created', 'from', 'quantity', 'token', 'tokens', 'notes', 'strategy',
+                'exchange', 'cash', 'bank', 'payment', 'with', 'the', 'and', 'for', 'buy'
+            ]);
+            return Array.from(new Set(
+                buildCryptoDuplicateReviewText(autoTx)
+                    .split(' ')
+                    .map(token => token.trim())
+                    .filter(token => token.length >= 2 && !stopWords.has(token) && !/^\d+$/.test(token))
+            ));
+        }
+
+        function buildCryptoDuplicateReviewCandidate(autoTx, manualTx) {
+            if (!autoTx || !manualTx) return null;
+            if (String(autoTx.id || '').trim() === String(manualTx.id || '').trim()) return null;
+            if (manualTx.type !== 'expense' || isAutoCryptoBuyExpenseTx(manualTx)) return null;
+
+            const autoAmount = Number(autoTx.amt || 0);
+            const manualAmount = Number(manualTx.amt || 0);
+            if (!Number.isFinite(autoAmount) || !Number.isFinite(manualAmount)) return null;
+
+            const amountDiff = Math.abs(autoAmount - manualAmount);
+            if (amountDiff > 0.01) return null;
+
+            const autoDateKey = getCryptoDuplicateReviewDateKey(autoTx);
+            const manualDateKey = getCryptoDuplicateReviewDateKey(manualTx);
+            const sameDay = !!autoDateKey && autoDateKey === manualDateKey;
+            const dayGap = sameDay ? 0 : getCryptoDuplicateReviewDayGap(autoTx, manualTx);
+            if (!sameDay && dayGap > 1) return null;
+
+            const manualText = buildCryptoDuplicateReviewText(manualTx);
+            const manualCategory = normalizeCryptoDuplicateReviewText(manualTx?.category);
+            const hintTokens = buildCryptoDuplicateReviewHintTokens(autoTx);
+            const matchedHints = hintTokens.filter(token => manualText.includes(token)).slice(0, 3);
+            const hasCryptoWord = /\bcrypto\b/.test(manualText);
+            const investmentCategory = manualCategory === 'investment';
+
+            if (!sameDay && !investmentCategory && !hasCryptoWord && matchedHints.length === 0) {
+                return null;
+            }
+
+            let score = 0;
+            if (sameDay) score += 4;
+            else score += 2;
+            if (investmentCategory) score += 3;
+            if (hasCryptoWord) score += 2;
+            score += Math.min(2, matchedHints.length);
+
+            let confidence = 'low';
+            if (score >= 7) confidence = 'high';
+            else if (score >= 4) confidence = 'medium';
+
+            const reasons = [`Same amount ${fmt(autoAmount)}`];
+            if (sameDay) reasons.push(`Same date ${autoDateKey}`);
+            else reasons.push(`${dayGap}-day date gap`);
+            if (investmentCategory) reasons.push('Manual category is Investment');
+            if (hasCryptoWord) reasons.push('Manual text mentions crypto');
+            if (matchedHints.length) reasons.push(`Matched ${matchedHints.join(', ')}`);
+
+            return {
+                autoTx,
+                manualTx,
+                autoDateKey,
+                manualDateKey,
+                sameDay,
+                dayGap,
+                amountDiff,
+                confidence,
+                score,
+                reasons
+            };
+        }
+
+        function scanCryptoExpenseDuplicateReview(transactions = []) {
+            const activeExpenses = (transactions || []).filter(tx => tx && tx.type === 'expense');
+            const autoExpenses = activeExpenses.filter(isAutoCryptoBuyExpenseTx);
+            const manualExpenses = activeExpenses.filter(tx => !isAutoCryptoBuyExpenseTx(tx));
+            const candidateMatches = [];
+
+            manualExpenses.forEach(manualTx => {
+                autoExpenses.forEach(autoTx => {
+                    const candidate = buildCryptoDuplicateReviewCandidate(autoTx, manualTx);
+                    if (candidate) candidateMatches.push(candidate);
+                });
+            });
+
+            candidateMatches.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                if (a.dayGap !== b.dayGap) return a.dayGap - b.dayGap;
+                return getTxTimestamp(b.autoTx) - getTxTimestamp(a.autoTx);
+            });
+
+            const usedManualIds = new Set();
+            const issues = [];
+            candidateMatches.forEach(candidate => {
+                const manualId = String(candidate.manualTx?.id || '').trim();
+                if (!manualId || usedManualIds.has(manualId)) return;
+                usedManualIds.add(manualId);
+                issues.push(candidate);
+            });
+
+            const signature = issues
+                .map(issue => `${issue.autoTx.id}:${issue.manualTx.id}:${issue.confidence}`)
+                .sort()
+                .join('|');
+
+            return {
+                issues,
+                signature,
+                checkedAt: Date.now(),
+                autoExpenseCount: autoExpenses.length,
+                scannedExpenseCount: manualExpenses.length
+            };
+        }
+
+        function renderCryptoExpenseDuplicateReviewPanel() {
+            const panel = document.getElementById('crypto-duplicate-review-panel');
+            const eyebrowEl = document.getElementById('crypto-duplicate-review-eyebrow');
+            const titleEl = document.getElementById('crypto-duplicate-review-title');
+            const summaryEl = document.getElementById('crypto-duplicate-review-summary');
+            const listEl = document.getElementById('crypto-duplicate-review-list');
+            if (!panel || !eyebrowEl || !titleEl || !summaryEl || !listEl) return;
+
+            const issues = cryptoDuplicateReviewState.issues || [];
+            const autoCount = Number(cryptoDuplicateReviewState.autoExpenseCount || 0);
+            const manualCount = Number(cryptoDuplicateReviewState.scannedExpenseCount || 0);
+
+            if (autoCount <= 0) {
+                panel.classList.add('hidden');
+                listEl.innerHTML = '';
+                return;
+            }
+
+            panel.classList.remove('hidden');
+
+            if (issues.length > 0) {
+                panel.className = 'finance-glass-panel rounded-3xl border border-amber-200 bg-amber-50/90 shadow-sm p-4 md:p-5';
+                eyebrowEl.className = 'text-[11px] font-black uppercase tracking-[0.18em] text-amber-700';
+                titleEl.className = 'text-lg font-bold text-amber-950 mt-1';
+                summaryEl.className = 'text-sm text-amber-900/80 mt-1';
+                titleEl.innerText = `${issues.length} likely duplicate crypto expense${issues.length === 1 ? '' : 's'} found`;
+                summaryEl.innerText = `Matched ${issues.length} manual expense${issues.length === 1 ? '' : 's'} against ${autoCount} auto-created crypto-buy expense${autoCount === 1 ? '' : 's'}. Review before deleting anything.`;
+                listEl.classList.remove('hidden');
+                listEl.innerHTML = issues.map(issue => {
+                    const autoDesc = escapeHTML(issue.autoTx?.desc || 'Auto crypto expense');
+                    const manualDesc = escapeHTML(issue.manualTx?.desc || 'Manual expense');
+                    const manualCategory = escapeHTML(issue.manualTx?.category || 'Uncategorized');
+                    const confidenceTone = issue.confidence === 'high'
+                        ? 'bg-rose-100 text-rose-700'
+                        : (issue.confidence === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-700');
+                    const reasonText = escapeHTML(issue.reasons.join(' • '));
+                    const manualId = escapeAttr(issue.manualTx?.id || '');
+                    const autoId = escapeAttr(issue.autoTx?.id || '');
+                    return `
+                        <div class="rounded-2xl border border-amber-200 bg-white/90 p-3">
+                            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="text-sm font-bold text-slate-800">${manualDesc}</p>
+                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${confidenceTone}">${escapeHTML(issue.confidence)}</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 mt-1">Manual expense • ${manualCategory} • ${issue.manualDateKey || 'Unknown date'} • ${fmt(issue.manualTx?.amt || 0)}</p>
+                                    <p class="text-[11px] text-slate-500 mt-1">Auto crypto expense • ${autoDesc} • ${issue.autoDateKey || 'Unknown date'} • ${fmt(issue.autoTx?.amt || 0)}</p>
+                                    <p class="text-[11px] text-amber-800 mt-2">${reasonText}</p>
+                                </div>
+                                <div class="flex flex-wrap gap-2 shrink-0">
+                                    <button type="button" onclick="openTransactionModal('${manualId}')"
+                                        class="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700">
+                                        Open Manual
+                                    </button>
+                                    <button type="button" onclick="openTransactionModal('${autoId}')"
+                                        class="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700">
+                                        Open Auto
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                return;
+            }
+
+            panel.className = 'finance-glass-panel rounded-3xl border border-emerald-200 bg-emerald-50/80 shadow-sm p-4 md:p-5';
+            eyebrowEl.className = 'text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700';
+            titleEl.className = 'text-lg font-bold text-emerald-950 mt-1';
+            summaryEl.className = 'text-sm text-emerald-900/80 mt-1';
+            titleEl.innerText = 'No likely duplicate crypto expenses found';
+            summaryEl.innerText = `Checked ${autoCount} auto-created crypto-buy expense${autoCount === 1 ? '' : 's'} against ${manualCount} other expense${manualCount === 1 ? '' : 's'}. Total Balance can still be lower now because crypto buys are counted as cash outflows by design.`;
+            listEl.classList.add('hidden');
+            listEl.innerHTML = '';
+        }
+
+        async function refreshCryptoExpenseDuplicateReview(options = {}) {
+            const { notify = false, forceToast = false } = options || {};
+            cryptoDuplicateReviewState = scanCryptoExpenseDuplicateReview(window.allDecryptedTransactions || []);
+            renderCryptoExpenseDuplicateReviewPanel();
+
+            if (typeof showToast === 'function' && notify) {
+                const issueCount = cryptoDuplicateReviewState.issues.length;
+                if (issueCount > 0) {
+                    if (forceToast || cryptoDuplicateReviewState.signature !== lastCryptoDuplicateReviewToastSignature) {
+                        showToast(`Review ${issueCount} likely duplicate crypto expense${issueCount === 1 ? '' : 's'}`);
+                        lastCryptoDuplicateReviewToastSignature = cryptoDuplicateReviewState.signature;
+                    }
+                } else if (forceToast) {
+                    showToast(
+                        cryptoDuplicateReviewState.autoExpenseCount > 0
+                            ? 'No likely duplicate crypto expenses found'
+                            : 'No auto crypto-buy expenses to review'
+                    );
+                }
+            }
+
+            return cryptoDuplicateReviewState;
+        }
+
         async function saveCryptoTransaction() {
             const tokenId = document.getElementById('c-token-id').value;
             const tokenSymbol = document.getElementById('c-token-symbol').value;

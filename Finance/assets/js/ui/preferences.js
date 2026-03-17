@@ -14,8 +14,7 @@
         }
 
         function focusTransactionSearch() {
-            const searchInput = document.querySelector('[data-finance-toolbar="hero"] [data-filter-search]')
-                || document.querySelector('[data-filter-search]');
+            const searchInput = document.querySelector('[data-filter-search]');
             if (!searchInput) return;
 
             searchInput.focus();

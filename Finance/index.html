@@ -272,12 +272,29 @@
         </div>
 
         <!-- Summary Dashboard -->
-        <div class="finance-summary-grid grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="finance-summary-grid grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
             <div
                 class="finance-summary-card finance-summary-card--primary bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-100 text-white relative overflow-hidden card-hover">
-                <p class="text-indigo-100 text-sm font-medium mb-1">Total Balance</p>
-                <h3 class="text-3xl font-bold" id="balance-display">₱0.00</h3>
-                <p class="text-xs text-indigo-200 mt-2" id="balance-trend">—</p>
+                <div class="finance-summary-card__content finance-summary-card__content--primary">
+                    <div class="finance-summary-card__metric">
+                        <p class="text-indigo-100 text-sm font-medium mb-1">Total Balance</p>
+                        <h3 class="text-3xl font-bold" id="balance-display">₱0.00</h3>
+                        <p class="text-xs text-indigo-200 mt-2" id="balance-trend">—</p>
+                    </div>
+                    <div class="finance-summary-card__scope">
+                        <div class="finance-scope-slider finance-scope-slider--summary" data-scope-slider
+                            data-active-scope="selected_period" role="tablist" aria-label="Transaction filter scope">
+                            <span class="finance-scope-indicator" aria-hidden="true"></span>
+                            <button type="button"
+                                class="finance-scope-button finance-scope-button--selected is-active"
+                                data-scope-option="selected_period" aria-pressed="true">Selected</button>
+                            <button type="button" class="finance-scope-button finance-scope-button--current"
+                                data-scope-option="current_month" aria-pressed="false">Current</button>
+                            <button type="button" class="finance-scope-button finance-scope-button--all"
+                                data-scope-option="all_time" aria-pressed="false">All-Time</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="finance-summary-card bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
                 <p class="text-slate-400 text-sm font-medium mb-1">Income</p>
@@ -296,23 +313,23 @@
             </div>
         </div>
 
-        <div class="finance-filter-toolbar finance-filter-toolbar--hero-slider finance-glass-panel" data-finance-toolbar="hero">
-            <div class="finance-filter-toolbar__controls">
-                <div class="finance-filter-field finance-filter-field--scope finance-filter-field--hero-scope">
-                    <span class="finance-filter-label">Filter Slider</span>
-                    <div class="finance-scope-slider" data-scope-slider data-active-scope="selected_period" role="tablist"
-                        aria-label="Transaction filter scope">
-                        <span class="finance-scope-indicator" aria-hidden="true"></span>
-                        <button type="button"
-                            class="finance-scope-button finance-scope-button--selected is-active"
-                            data-scope-option="selected_period" aria-pressed="true">Selected</button>
-                        <button type="button" class="finance-scope-button finance-scope-button--current"
-                            data-scope-option="current_month" aria-pressed="false">Current</button>
-                        <button type="button" class="finance-scope-button finance-scope-button--all"
-                            data-scope-option="all_time" aria-pressed="false">All-Time</button>
-                    </div>
+        <div id="crypto-duplicate-review-panel"
+            class="hidden finance-glass-panel rounded-3xl border shadow-sm p-4 md:p-5">
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                <div>
+                    <p id="crypto-duplicate-review-eyebrow"
+                        class="text-[11px] font-black uppercase tracking-[0.18em] text-amber-700">Crypto Expense Review</p>
+                    <h3 id="crypto-duplicate-review-title" class="text-lg font-bold text-slate-900 mt-1">Review unavailable</h3>
+                    <p id="crypto-duplicate-review-summary" class="text-sm text-slate-600 mt-1">Unlock your vault to scan for likely duplicates.</p>
+                    <p class="text-[11px] text-slate-500 mt-2">Review only. No transactions are deleted automatically.</p>
                 </div>
+                <button type="button"
+                    onclick="refreshCryptoExpenseDuplicateReview({ notify: true, forceToast: true })"
+                    class="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700">
+                    Refresh Scan
+                </button>
             </div>
+            <div id="crypto-duplicate-review-list" class="hidden mt-4 space-y-3"></div>
         </div>
 
         <div id="business-kpi-panel" class="finance-glass-panel bg-white rounded-3xl border border-slate-200 shadow-sm p-4 md:p-5">
@@ -322,6 +339,11 @@
                     <p id="business-kpi-period" class="text-xs text-slate-500">Scope: selected period</p>
                 </div>
                 <div class="flex items-center gap-2">
+                    <button onclick="refreshCryptoExpenseDuplicateReview({ notify: true, forceToast: true })"
+                        class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-bold border border-amber-200 flex items-center gap-2">
+                        <i data-lucide="search" class="w-3 h-3"></i>
+                        Crypto Review
+                    </button>
                     <button onclick="openROIModal()"
                         class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold border border-rose-200 flex items-center gap-2">
                         <i data-lucide="calculator" class="w-3 h-3"></i>
@@ -482,62 +504,23 @@
             <!-- Left: Transactions & Tools -->
             <div class="lg:col-span-8 space-y-6">
                 <!-- Filters -->
-                <div class="finance-filter-toolbar finance-glass-panel" data-finance-toolbar="ledger">
-                    <div class="finance-filter-toolbar__intro">
-                        <div class="finance-filter-toolbar__badge">
-                            <i data-lucide="sliders-horizontal" class="w-5 h-5"></i>
-                        </div>
-                        <div>
-                            <p class="finance-filter-toolbar__eyebrow">Transaction Controls</p>
-                            <h3 class="finance-filter-toolbar__title">Search and filter transactions</h3>
-                        </div>
-                    </div>
-                    <div class="finance-filter-toolbar__controls">
-                        <label class="finance-filter-field">
-                            <span class="finance-filter-label">Month</span>
-                            <select id="filter-month" data-filter-month
-                                class="finance-filter-select bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none shrink-0">
-                                <!-- Populated by JS -->
-                            </select>
-                        </label>
-                        <label class="finance-filter-field">
-                            <span class="finance-filter-label">Year</span>
-                            <select id="filter-year" data-filter-year
-                                class="finance-filter-select bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none shrink-0">
-                                <!-- Populated by JS -->
-                            </select>
-                        </label>
-                        <div class="finance-filter-field finance-filter-field--scope">
-                            <span class="finance-filter-label">Filter Slider</span>
-                            <div class="finance-scope-slider" data-scope-slider data-active-scope="selected_period"
-                                role="tablist" aria-label="Transaction filter scope">
-                                <span class="finance-scope-indicator" aria-hidden="true"></span>
-                                <button type="button"
-                                    class="finance-scope-button finance-scope-button--selected is-active"
-                                    data-scope-option="selected_period" aria-pressed="true">Selected</button>
-                                <button type="button" class="finance-scope-button finance-scope-button--current"
-                                    data-scope-option="current_month" aria-pressed="false">Current</button>
-                                <button type="button" class="finance-scope-button finance-scope-button--all"
-                                    data-scope-option="all_time" aria-pressed="false">All-Time</button>
-                            </div>
-                            <select id="metric-scope" class="hidden" tabindex="-1" aria-hidden="true">
-                                <option value="selected_period">Scope: Selected</option>
-                                <option value="current_month">Scope: Current Month</option>
-                                <option value="all_time">Scope: All-Time</option>
-                            </select>
-                        </div>
-                        <label class="finance-search-field">
-                            <span class="finance-filter-label">Search</span>
-                            <span class="finance-search-wrap">
-                                <i data-lucide="search" class="w-4 h-4 text-slate-400"></i>
-                                <input type="text" id="search-transactions" data-filter-search
-                                    placeholder="Search transactions" title="Option + Space"
-                                    aria-keyshortcuts="Alt+Space"
-                                    class="finance-search-input bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none w-full">
-                            </span>
-                        </label>
-                        <button type="button" class="finance-filter-reset" data-filter-reset>Reset</button>
-                    </div>
+                <div class="finance-filter-toolbar finance-filter-toolbar--ledger-shell" data-finance-toolbar="ledger">
+                    <label class="finance-search-field finance-search-field--ledger">
+                        <span class="sr-only">Search transactions</span>
+                        <span class="finance-search-wrap">
+                            <i data-lucide="search" class="w-4 h-4 text-slate-400"></i>
+                            <input type="text" id="search-transactions" data-filter-search
+                                placeholder="Search transactions" title="Option + Space"
+                                aria-keyshortcuts="Alt+Space"
+                                class="finance-search-input bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none w-full">
+                        </span>
+                    </label>
+                    <button type="button" class="finance-filter-reset finance-filter-reset--panel" data-filter-reset>Reset</button>
+                    <select id="metric-scope" class="hidden" tabindex="-1" aria-hidden="true">
+                        <option value="selected_period">Scope: Selected</option>
+                        <option value="current_month">Scope: Current Month</option>
+                        <option value="all_time">Scope: All-Time</option>
+                    </select>
                 </div>
 
                 <!-- Recurring Reminders Banner -->
@@ -568,11 +551,20 @@
                     <div class="p-4 sm:p-6 border-b border-slate-100 flex flex-wrap items-center gap-3">
                         <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                             <h2 class="text-xl font-bold text-slate-800 shrink-0">Recent Movements</h2>
-                            <select id="report-scope"
-                                class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none shrink-0">
-                                <option value="selected_period">Report: Selected</option>
-                                <option value="all_records">Report: All records</option>
-                            </select>
+                            <div class="finance-inline-filter-group">
+                                <select id="report-scope" aria-label="Report filter" class="finance-inline-filter-select shrink-0">
+                                    <option value="selected_period">Report: Selected</option>
+                                    <option value="all_records">Report: All records</option>
+                                </select>
+                                <select id="filter-month" data-filter-month aria-label="Filter month"
+                                    class="finance-inline-filter-select shrink-0">
+                                    <!-- Populated by JS -->
+                                </select>
+                                <select id="filter-year" data-filter-year aria-label="Filter year"
+                                    class="finance-inline-filter-select shrink-0">
+                                    <!-- Populated by JS -->
+                                </select>
+                            </div>
                             <button onclick="exportToCSV()"
                                 class="text-xs font-bold text-indigo-500 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
                                 <i data-lucide="download" class="w-3 h-3 inline mr-1"></i> Export CSV
