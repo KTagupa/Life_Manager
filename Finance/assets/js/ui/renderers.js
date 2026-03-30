@@ -119,6 +119,15 @@
             };
         }
 
+        function formatElectricityRate(rateInPhp, unit, decimals = 2) {
+            const converted = convertToDisplayCurrency(Math.max(0, Number(rateInPhp) || 0), 'PHP', activeCurrency);
+            const symbols = { PHP: '₱', USD: '$', JPY: '¥' };
+            return `${symbols[activeCurrency] || ''}${converted.toLocaleString(undefined, {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            })}/${unit}`;
+        }
+
         async function renderDebts(items) {
             const list = document.getElementById('debt-list');
             list.innerHTML = '';
@@ -312,8 +321,9 @@
             list.innerHTML = '';
             const decrypted = (await Promise.all(items.map(async i => {
                 const d = await decryptData(i.data);
-                return d ? { ...d, id: i.id } : null;
+                return d ? { ...normalizeBillDataShape(d), id: i.id } : null;
             }))).filter(x => x);
+            window.allDecryptedBills = decrypted;
 
             if (decrypted.length === 0) {
                 list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No bills set.</div>';
@@ -325,19 +335,89 @@
                 const safeBillName = escapeHTML(b.name || 'Bill');
                 const safeBillDay = Number.isFinite(Number(b.day)) ? Number(b.day) : 1;
                 const isPaused = !!b.paused;
+                const isElectricity = b.billType === 'electricity';
+                const latestCycle = isElectricity ? getLatestElectricityBillCycle(b) : null;
+                const statusLabel = latestCycle
+                    ? (latestCycle.status === 'paid'
+                        ? (latestCycle.paidBy === 'family_other' ? 'Paid by Family' : 'Paid by Me')
+                        : 'Unpaid')
+                    : 'No cycles yet';
+                const statusClasses = latestCycle
+                    ? (latestCycle.status === 'paid'
+                        ? (latestCycle.paidBy === 'family_other'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-emerald-100 text-emerald-700')
+                        : 'bg-amber-100 text-amber-700')
+                    : 'bg-slate-100 text-slate-500';
+                const typeBadge = isElectricity
+                    ? '<span class="text-[10px] align-middle bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">Electricity</span>'
+                    : '';
+                const amountLabel = isElectricity && latestCycle ? fmt(latestCycle.amount) : fmt(b.amt);
                 const div = document.createElement('div');
-                div.className = `p-3 bg-slate-50 rounded-2xl flex justify-between border items-center group cursor-pointer transition-colors ${isPaused ? 'border-amber-300 hover:border-amber-400' : 'hover:border-indigo-300'}`;
+                div.className = `p-3 bg-slate-50 rounded-2xl border group cursor-pointer transition-colors ${isPaused ? 'border-amber-300 hover:border-amber-400' : isElectricity ? 'border-amber-200 hover:border-amber-300' : 'hover:border-indigo-300'}`;
                 div.onclick = (e) => { if (!e.target.closest('button')) openBillModal(b.id); };
 
+                if (isElectricity) {
+                    div.innerHTML = `
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold text-slate-400 uppercase">Day ${safeBillDay}</p>
+                                <div class="mt-1 flex flex-wrap items-center gap-2">
+                                    <p class="font-bold ${isPaused ? 'text-amber-700' : 'text-slate-800'} text-base leading-tight break-words">${safeBillName}</p>
+                                    <span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide whitespace-nowrap">Electricity</span>
+                                    ${isPaused ? '<span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide whitespace-nowrap">Paused</span>' : ''}
+                                </div>
+                            </div>
+                            <div class="shrink-0 text-right">
+                                <p class="text-xs font-bold text-slate-400 uppercase">Latest</p>
+                                <p class="font-black text-slate-700 text-lg leading-none mt-1">${amountLabel}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 rounded-2xl border border-amber-100 bg-white/80 p-3">
+                            ${latestCycle ? `
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="text-[10px] font-black uppercase tracking-wider text-amber-700">${escapeHTML(formatBillingMonthLabel(latestCycle.billingMonth))}</span>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${statusClasses} whitespace-nowrap">${escapeHTML(statusLabel)}</span>
+                                </div>
+                                <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div class="rounded-xl bg-slate-50 px-3 py-2">
+                                        <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Usage</p>
+                                        <p class="text-sm font-bold text-slate-700 mt-1">${latestCycle.kwhUsed.toLocaleString(undefined, { maximumFractionDigits: 2 })} kWh</p>
+                                    </div>
+                                    <div class="rounded-xl bg-slate-50 px-3 py-2">
+                                        <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Rate</p>
+                                        <p class="text-sm font-bold text-slate-700 mt-1">${formatElectricityRate(latestCycle.ratePerKwh, 'kWh', 2)}</p>
+                                        <p class="text-[11px] text-slate-400 mt-1">${formatElectricityRate(latestCycle.ratePerWh, 'Wh', 4)}</p>
+                                    </div>
+                                </div>
+                            ` : `
+                                <p class="text-[11px] text-slate-400">No electricity bill cycles recorded yet.</p>
+                            `}
+                        </div>
+
+                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                            <button onclick="openElectricityCycleModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 whitespace-nowrap">${latestCycle ? 'Record Bill' : 'Add Cycle'}</button>
+                            <button onclick="openElectricityHistoryModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap">History</button>
+                            <button onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'} whitespace-nowrap">${isPaused ? 'Resume' : 'Pause'}</button>
+                            <button onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="ml-auto text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                    return;
+                }
+
                 div.innerHTML = `
-                    <div>
+                    <div class="min-w-0 flex-1 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
                         <p class="text-xs font-bold text-slate-400 uppercase">Day ${safeBillDay}</p>
-                        <p class="font-bold ${isPaused ? 'text-amber-700' : 'text-slate-800'}">${safeBillName}${isPaused ? ' <span class="text-[10px] align-middle bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">PAUSED</span>' : ''}</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span class="font-bold text-slate-500">${fmt(b.amt)}</span>
-                        <button onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}">${isPaused ? 'Resume' : 'Pause'}</button>
-                        <button onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                        <p class="font-bold ${isPaused ? 'text-amber-700' : 'text-slate-800'} break-words">${safeBillName} ${typeBadge}${isPaused ? ' <span class="text-[10px] align-middle bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">PAUSED</span>' : ''}</p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="font-bold text-slate-500">${amountLabel}</span>
+                            <button onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'} whitespace-nowrap">${isPaused ? 'Resume' : 'Pause'}</button>
+                            <button onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                        </div>
                     </div>
                 `;
                 list.appendChild(div);

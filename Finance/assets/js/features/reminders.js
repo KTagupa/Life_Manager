@@ -119,7 +119,7 @@
 
             const decryptedBills = await Promise.all(rawBills.map(async b => {
                 const data = await decryptData(b.data);
-                return data ? { ...data, id: b.id } : null;
+                return data ? { ...normalizeBillDataShape(data), id: b.id } : null;
             }));
 
             let hasChanges = false;

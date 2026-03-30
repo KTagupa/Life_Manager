@@ -3,6 +3,12 @@
         // =============================================
         let wishlistConvertId = null;
         const pendingBillPauseToggles = new Set();
+        let electricityHistoryChart = null;
+        const electricityHistoryModalState = {
+            billId: '',
+            bill: null,
+            view: 'list'
+        };
 
         function getUniqueCategoryList(items = []) {
             const seen = new Set();
@@ -639,6 +645,422 @@
             toggleModal('transaction-modal');
         }
 
+        function generateFinanceRecordId(prefix = '') {
+            return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+        }
+
+        async function getNormalizedBillPayloadById(billId) {
+            const raw = rawBills.find(b => b.id === billId);
+            if (!raw) return null;
+            const decrypted = await decryptData(raw.data);
+            if (!decrypted) return null;
+            return {
+                raw,
+                bill: normalizeBillDataShape(decrypted)
+            };
+        }
+
+        function setBillTypeUIState(billData = null) {
+            const billTypeInput = document.getElementById('b-bill-type');
+            const helpPanel = document.getElementById('b-electricity-help');
+            const summary = document.getElementById('b-electricity-summary');
+            const amountLabel = document.getElementById('b-amount-label');
+
+            if (!billTypeInput || !helpPanel || !summary || !amountLabel) return;
+
+            const billType = billTypeInput.value === 'electricity' ? 'electricity' : 'standard';
+            helpPanel.classList.toggle('hidden', billType !== 'electricity');
+            amountLabel.innerText = billType === 'electricity' ? 'Fallback estimate (optional)' : 'Estimate (PHP)';
+
+            if (billType !== 'electricity') {
+                summary.innerHTML = '<p class="text-[11px] text-slate-500">Standard recurring bills only use the monthly reminder and estimate.</p>';
+                return;
+            }
+
+            const normalizedBill = normalizeBillDataShape(billData);
+            const latestCycle = getLatestElectricityBillCycle(normalizedBill);
+            if (!latestCycle) {
+                summary.innerHTML = '<p class="text-[11px] text-amber-700">Save the electricity bill first, then use the card-level action to record each month\'s amount, kWh, rate, and payment status.</p>';
+                return;
+            }
+
+            const statusLabel = latestCycle.status === 'paid'
+                ? (latestCycle.paidBy === 'family_other' ? 'Paid by family' : 'Paid by me')
+                : 'Unpaid';
+            summary.innerHTML = `
+                <div class="space-y-1">
+                    <p class="text-[11px] font-black uppercase tracking-wider text-amber-700">Latest cycle: ${escapeHTML(formatBillingMonthLabel(latestCycle.billingMonth))}</p>
+                    <p class="text-[11px] text-slate-600">${latestCycle.kwhUsed.toLocaleString(undefined, { maximumFractionDigits: 2 })} kWh • ${fmt(latestCycle.amount)}</p>
+                    <p class="text-[11px] text-slate-500">${statusLabel}</p>
+                </div>
+            `;
+        }
+
+        function onBillTypeChange() {
+            const billId = document.getElementById('b-id')?.value;
+            const existingBill = billId
+                ? (window.allDecryptedBills || []).find(entry => entry && entry.id === billId) || null
+                : null;
+            setBillTypeUIState(existingBill);
+        }
+
+        function onElectricityCycleStatusChange() {
+            const status = document.getElementById('electricity-cycle-status')?.value || 'unpaid';
+            const paidFields = document.getElementById('electricity-cycle-paid-fields');
+            if (!paidFields) return;
+            paidFields.classList.toggle('hidden', status !== 'paid');
+        }
+
+        function destroyElectricityHistoryChart() {
+            if (electricityHistoryChart) {
+                electricityHistoryChart.destroy();
+                electricityHistoryChart = null;
+            }
+        }
+
+        function renderElectricityCycleHistoryList(billId, billData, activeCycleId = '') {
+            const container = document.getElementById('electricity-history-list');
+            if (!container) return;
+
+            const normalizedBill = normalizeBillDataShape(billData);
+            const history = normalizedBill.electricityHistory || [];
+            if (!history.length) {
+                container.innerHTML = '<p class="text-xs text-slate-400">No monthly cycles yet. Your first saved cycle will appear here.</p>';
+                return;
+            }
+
+            const encodedBillId = encodeInlineArg(billId);
+            container.innerHTML = history.map(cycle => {
+                const encodedCycleId = encodeInlineArg(cycle.id);
+                const isActive = cycle.id === activeCycleId;
+                const statusLabel = cycle.status === 'paid'
+                    ? (cycle.paidBy === 'family_other' ? 'Paid by family' : 'Paid by me')
+                    : 'Unpaid';
+                const statusClasses = cycle.status === 'paid'
+                    ? (cycle.paidBy === 'family_other'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-emerald-100 text-emerald-700')
+                    : 'bg-amber-100 text-amber-700';
+
+                return `
+                    <div class="p-3 rounded-2xl border ${isActive ? 'border-amber-300 bg-amber-50/60' : 'border-slate-200 bg-white'}">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-black uppercase tracking-wider text-slate-500">${escapeHTML(formatBillingMonthLabel(cycle.billingMonth))}</p>
+                                <p class="text-sm font-bold text-slate-800 mt-1">${fmt(cycle.amount)} • ${cycle.kwhUsed.toLocaleString(undefined, { maximumFractionDigits: 2 })} kWh</p>
+                                <p class="text-[11px] text-slate-500 mt-1">${statusLabel} • ${formatElectricityRate(cycle.ratePerKwh, 'kWh', 2)} • ${formatElectricityRate(cycle.ratePerWh, 'Wh', 4)}</p>
+                            </div>
+                            <div class="flex flex-col items-end gap-2">
+                                <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${statusClasses}">${escapeHTML(statusLabel)}</span>
+                                <button onclick="openElectricityCycleModalFromHistory(decodeURIComponent('${encodedBillId}'), decodeURIComponent('${encodedCycleId}'))" class="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200">Edit</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openElectricityCycleModalFromHistory(billId, cycleId = null) {
+            closeElectricityHistoryModal();
+            return openElectricityCycleModal(billId, cycleId);
+        }
+
+        function syncElectricityHistoryViewButtons() {
+            const listBtn = document.getElementById('electricity-history-view-list');
+            const graphBtn = document.getElementById('electricity-history-view-graph');
+            if (!listBtn || !graphBtn) return;
+
+            const isList = electricityHistoryModalState.view !== 'graph';
+            listBtn.className = isList
+                ? 'px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-200'
+                : 'px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200';
+            graphBtn.className = !isList
+                ? 'px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-200'
+                : 'px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold hover:bg-slate-200';
+        }
+
+        function renderElectricityHistoryGraph(billData) {
+            const emptyState = document.getElementById('electricity-history-empty');
+            const graphWrap = document.getElementById('electricity-history-graph-wrap');
+            const canvas = document.getElementById('electricity-history-chart');
+            if (!graphWrap || !canvas) return;
+
+            const normalizedBill = normalizeBillDataShape(billData);
+            const history = [...(normalizedBill.electricityHistory || [])].sort((a, b) => String(a.billingMonth || '').localeCompare(String(b.billingMonth || '')));
+            if (!history.length) {
+                destroyElectricityHistoryChart();
+                if (emptyState) emptyState.classList.remove('hidden');
+                graphWrap.classList.add('hidden');
+                return;
+            }
+
+            if (emptyState) emptyState.classList.add('hidden');
+            graphWrap.classList.remove('hidden');
+            destroyElectricityHistoryChart();
+
+            const labels = history.map(cycle => formatBillingMonthLabel(cycle.billingMonth));
+            const amountData = history.map(cycle => Number(cycle.amount || 0));
+            const ratePerKwhData = history.map(cycle => Number(cycle.ratePerKwh || 0));
+            const ratePerWhData = history.map(cycle => Number(cycle.ratePerWh || 0));
+
+            electricityHistoryChart = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Bill Amount',
+                            data: amountData,
+                            borderColor: '#4f46e5',
+                            backgroundColor: 'rgba(79, 70, 229, 0.16)',
+                            pointBackgroundColor: '#4f46e5',
+                            yAxisID: 'amount',
+                            tension: 0.3,
+                            fill: false
+                        },
+                        {
+                            label: 'Rate per kWh',
+                            data: ratePerKwhData,
+                            borderColor: '#d97706',
+                            backgroundColor: 'rgba(217, 119, 6, 0.16)',
+                            pointBackgroundColor: '#d97706',
+                            yAxisID: 'rateKwh',
+                            tension: 0.3,
+                            fill: false
+                        },
+                        {
+                            label: 'Rate per Wh',
+                            data: ratePerWhData,
+                            borderColor: '#059669',
+                            backgroundColor: 'rgba(5, 150, 105, 0.16)',
+                            pointBackgroundColor: '#059669',
+                            yAxisID: 'rateWh',
+                            tension: 0.3,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 10,
+                                font: { size: 11 }
+                            }
+                        }
+                    },
+                    scales: {
+                        amount: {
+                            type: 'linear',
+                            position: 'left',
+                            ticks: {
+                                callback: (value) => fmt(Number(value || 0))
+                            },
+                            grid: {
+                                color: 'rgba(148, 163, 184, 0.16)'
+                            }
+                        },
+                        rateKwh: {
+                            type: 'linear',
+                            position: 'right',
+                            ticks: {
+                                callback: (value) => formatElectricityRate(Number(value || 0), 'kWh', 2)
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        },
+                        rateWh: {
+                            type: 'linear',
+                            position: 'right',
+                            offset: true,
+                            ticks: {
+                                callback: (value) => formatElectricityRate(Number(value || 0), 'Wh', 4)
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderElectricityHistoryModalContent() {
+            const listWrap = document.getElementById('electricity-history-list-wrap');
+            const graphWrap = document.getElementById('electricity-history-graph-wrap');
+            const emptyState = document.getElementById('electricity-history-empty');
+            const bill = electricityHistoryModalState.bill;
+            if (!listWrap || !graphWrap || !bill) return;
+
+            syncElectricityHistoryViewButtons();
+            const showGraph = electricityHistoryModalState.view === 'graph';
+            listWrap.classList.toggle('hidden', showGraph);
+            graphWrap.classList.toggle('hidden', !showGraph);
+
+            const history = bill.electricityHistory || [];
+            if (!history.length) {
+                listWrap.classList.add('hidden');
+                graphWrap.classList.add('hidden');
+                if (emptyState) emptyState.classList.remove('hidden');
+                destroyElectricityHistoryChart();
+                return;
+            }
+
+            if (emptyState) emptyState.classList.add('hidden');
+            if (showGraph) {
+                renderElectricityHistoryGraph(bill);
+            } else {
+                destroyElectricityHistoryChart();
+                renderElectricityCycleHistoryList(electricityHistoryModalState.billId, bill);
+            }
+        }
+
+        function setElectricityHistoryView(view) {
+            electricityHistoryModalState.view = view === 'graph' ? 'graph' : 'list';
+            renderElectricityHistoryModalContent();
+        }
+
+        async function openElectricityHistoryModal(billId, preferredView = 'list') {
+            const resolved = await getNormalizedBillPayloadById(billId);
+            if (!resolved) {
+                alert('Could not load this electricity bill history.');
+                return;
+            }
+
+            const { bill } = resolved;
+            if (bill.billType !== 'electricity') {
+                alert('This bill is not configured as an electricity bill.');
+                return;
+            }
+
+            electricityHistoryModalState.billId = billId;
+            electricityHistoryModalState.bill = bill;
+            electricityHistoryModalState.view = preferredView === 'graph' ? 'graph' : 'list';
+            document.getElementById('electricity-history-bill-name').innerText = bill.name || 'Electricity bill';
+            document.getElementById('electricity-history-modal').classList.remove('hidden');
+            renderElectricityHistoryModalContent();
+        }
+
+        function closeElectricityHistoryModal() {
+            destroyElectricityHistoryChart();
+            electricityHistoryModalState.billId = '';
+            electricityHistoryModalState.bill = null;
+            electricityHistoryModalState.view = 'list';
+            document.getElementById('electricity-history-modal')?.classList.add('hidden');
+        }
+
+        async function openElectricityCycleModal(billId, cycleId = null) {
+            const resolved = await getNormalizedBillPayloadById(billId);
+            if (!resolved) {
+                alert('Could not load this electricity bill.');
+                return;
+            }
+
+            const { bill } = resolved;
+            if (bill.billType !== 'electricity') {
+                alert('This bill is not configured as an electricity bill.');
+                return;
+            }
+
+            const cycle = (bill.electricityHistory || []).find(entry => entry.id === cycleId) || null;
+            const modal = document.getElementById('electricity-cycle-modal');
+            document.getElementById('electricity-cycle-bill-id').value = billId;
+            document.getElementById('electricity-cycle-id').value = cycle ? cycle.id : '';
+            document.getElementById('electricity-cycle-title').innerText = cycle ? 'Edit Electricity Bill' : 'Record Electricity Bill';
+            document.getElementById('electricity-cycle-bill-name').innerText = bill.name || 'Electricity bill';
+            document.getElementById('electricity-cycle-month').value = cycle?.billingMonth || new Date().toISOString().slice(0, 7);
+            document.getElementById('electricity-cycle-amount').value = Number.isFinite(Number(cycle?.amount))
+                ? Number(cycle.amount).toFixed(2)
+                : (Number.isFinite(Number(bill.amt)) && Number(bill.amt) > 0 ? Number(bill.amt).toFixed(2) : '');
+            document.getElementById('electricity-cycle-kwh').value = Number.isFinite(Number(cycle?.kwhUsed))
+                ? Number(cycle.kwhUsed)
+                : '';
+            document.getElementById('electricity-cycle-status').value = cycle?.status || 'unpaid';
+            document.getElementById('electricity-cycle-paid-by').value = cycle?.paidBy || 'me';
+            document.getElementById('electricity-cycle-paid-at').value = cycle?.paidAt
+                ? String(cycle.paidAt).slice(0, 10)
+                : new Date().toISOString().slice(0, 10);
+            document.getElementById('electricity-cycle-notes').value = cycle?.notes || '';
+            onElectricityCycleStatusChange();
+            modal.classList.remove('hidden');
+        }
+
+        async function upsertElectricityBillPaymentTransaction(db, billId, billName, cycle) {
+            const safeBillName = String(billName || 'Electricity Bill').trim() || 'Electricity Bill';
+            const billingLabel = formatBillingMonthLabel(cycle.billingMonth);
+            const desc = `${safeBillName} Electricity • ${billingLabel}`;
+            const encrypted = await encryptData({
+                desc,
+                merchant: null,
+                tags: [],
+                amt: cycle.amount,
+                originalAmt: cycle.amount,
+                originalCurrency: 'PHP',
+                quantity: 1,
+                notes: cycle.notes || '',
+                type: 'expense',
+                category: 'Bills',
+                paymentSource: 'cash',
+                creditCardId: null,
+                creditCardName: null,
+                date: cycle.paidAt || new Date().toISOString(),
+                importId: null,
+                dedupeHash: null,
+                deletedAt: null,
+                linkedBillId: billId,
+                linkedBillCycleId: cycle.id,
+                billName: safeBillName,
+                paidBy: 'me'
+            });
+
+            const targetId = String(cycle.linkedTransactionId || '').trim();
+            const existingIdx = targetId
+                ? db.transactions.findIndex(tx => tx && tx.id === targetId)
+                : -1;
+
+            if (existingIdx >= 0) {
+                const existing = db.transactions[existingIdx] || {};
+                db.transactions[existingIdx] = {
+                    ...existing,
+                    id: existing.id || targetId,
+                    data: encrypted,
+                    lastModified: Date.now(),
+                    deletedAt: null
+                };
+                return db.transactions[existingIdx].id;
+            }
+
+            const newTransactionId = generateFinanceRecordId('tx_');
+            db.transactions.push({
+                id: newTransactionId,
+                data: encrypted,
+                createdAt: Date.now(),
+                deletedAt: null
+            });
+            return newTransactionId;
+        }
+
+        function removeLinkedElectricityBillPaymentTransaction(db, transactionId) {
+            const targetId = String(transactionId || '').trim();
+            if (!targetId) return false;
+            const idx = db.transactions.findIndex(tx => tx && tx.id === targetId && !tx.deletedAt);
+            if (idx === -1) return false;
+            db.transactions[idx] = {
+                ...db.transactions[idx],
+                deletedAt: new Date().toISOString(),
+                lastModified: Date.now()
+            };
+            return true;
+        }
+
         async function openBillModal(id = null) {
             const modal = document.getElementById('bill-modal');
             const title = document.getElementById('b-modal-title');
@@ -647,18 +1069,21 @@
             const day = document.getElementById('b-day');
             const amt = document.getElementById('b-amount');
             const paused = document.getElementById('b-paused');
+            const billType = document.getElementById('b-bill-type');
 
             if (id) {
-                const raw = rawBills.find(b => b.id === id);
-                if (raw) {
-                    const d = await decryptData(raw.data);
+                const resolved = await getNormalizedBillPayloadById(id);
+                if (resolved) {
+                    const d = resolved.bill;
                     if (d) {
                         title.innerText = "Edit Bill";
                         bId.value = id;
                         name.value = d.name;
                         day.value = d.day;
-                        amt.value = d.amt;
+                        amt.value = Number.isFinite(Number(d.amt)) && Number(d.amt) > 0 ? Number(d.amt).toFixed(2) : '';
                         paused.checked = !!d.paused;
+                        billType.value = d.billType;
+                        setBillTypeUIState(d);
                         modal.classList.remove('hidden');
                         return;
                     }
@@ -671,6 +1096,8 @@
             day.value = "";
             amt.value = "";
             paused.checked = false;
+            billType.value = 'standard';
+            setBillTypeUIState(null);
             modal.classList.remove('hidden');
         }
 
@@ -967,16 +1394,40 @@
 
         async function saveBill() {
             const id = document.getElementById('b-id').value;
-            const name = document.getElementById('b-name').value;
-            const day = parseInt(document.getElementById('b-day').value);
-            const amt = parseFloat(document.getElementById('b-amount').value);
+            const name = document.getElementById('b-name').value.trim();
+            const day = parseInt(document.getElementById('b-day').value, 10);
+            const parsedAmount = parseFloat(document.getElementById('b-amount').value);
             const paused = document.getElementById('b-paused').checked;
-            if (!name || isNaN(day)) return;
-
-            const encrypted = await encryptData({ name, day, amt, paused });
+            const billType = document.getElementById('b-bill-type').value === 'electricity' ? 'electricity' : 'standard';
+            if (!name || isNaN(day)) {
+                alert('Please enter a bill name and due day.');
+                return;
+            }
 
             const db = await getDB();
             let billId = id;
+            let existingBill = normalizeBillDataShape(null);
+
+            if (id) {
+                const resolved = await getNormalizedBillPayloadById(id);
+                existingBill = resolved?.bill || existingBill;
+            }
+
+            if (existingBill.electricityHistory.length > 0 && billType !== 'electricity') {
+                alert('This bill already has electricity usage history. Keep it as an electricity bill to preserve that history.');
+                return;
+            }
+
+            const nextBill = normalizeBillDataShape({
+                ...existingBill,
+                name,
+                day,
+                amt: Number.isFinite(parsedAmount) ? Math.max(0, parsedAmount) : 0,
+                paused,
+                billType,
+                electricityHistory: billType === 'electricity' ? existingBill.electricityHistory : []
+            });
+            const encrypted = await encryptData(nextBill);
 
             if (id) {
                 const idx = db.bills.findIndex(b => b.id === id);
@@ -994,16 +1445,129 @@
             }
 
             // AUTO-SYNC: Create or update corresponding reminder
-            await syncBillToReminder(billId, name, day, amt, { paused });
+            await syncBillToReminder(billId, nextBill.name, nextBill.day, nextBill.amt, { paused: nextBill.paused });
             db.recurring_transactions = recurringTransactions;
 
-            await saveDB(db);
+            const persistedDB = await saveDB(db);
 
-            rawBills = db.bills.filter(b => !b.deletedAt);
+            rawBills = (persistedDB.bills || []).filter(b => !b.deletedAt);
+            recurringTransactions = persistedDB.recurring_transactions || recurringTransactions;
             toggleModal('bill-modal');
             await renderBills(rawBills);
-            checkRecurringReminders(); // Check if any reminders are due now
+            if (typeof renderRecurringList === 'function') {
+                renderRecurringList();
+            }
+            checkRecurringReminders();
             await refreshLinkedPanels({ refreshMonthlyClose: true });
+            showToast(id ? '✅ Bill updated' : '✅ Bill added');
+        }
+
+        async function saveElectricityBillCycle() {
+            const billId = document.getElementById('electricity-cycle-bill-id').value;
+            const cycleId = document.getElementById('electricity-cycle-id').value;
+            const billingMonth = normalizeMonthKey(document.getElementById('electricity-cycle-month').value);
+            const amount = parseFloat(document.getElementById('electricity-cycle-amount').value);
+            const kwhUsed = parseFloat(document.getElementById('electricity-cycle-kwh').value);
+            const status = document.getElementById('electricity-cycle-status').value === 'paid' ? 'paid' : 'unpaid';
+            const paidBy = document.getElementById('electricity-cycle-paid-by').value === 'family_other' ? 'family_other' : 'me';
+            const paidAtInput = document.getElementById('electricity-cycle-paid-at').value;
+            const notes = document.getElementById('electricity-cycle-notes').value.trim();
+
+            if (!billId || !billingMonth) {
+                alert('Choose a billing month.');
+                return;
+            }
+            if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(kwhUsed) || kwhUsed <= 0) {
+                alert('Enter a valid bill amount and kWh used.');
+                return;
+            }
+
+            const db = await getDB();
+            const billIndex = (db.bills || []).findIndex(entry => entry && entry.id === billId && !entry.deletedAt);
+            if (billIndex === -1) {
+                alert('Could not find this electricity bill.');
+                return;
+            }
+
+            const decryptedBill = await decryptData(db.bills[billIndex].data);
+            const bill = normalizeBillDataShape(decryptedBill);
+            if (bill.billType !== 'electricity') {
+                alert('This bill is not configured as electricity.');
+                return;
+            }
+
+            const existingCycle = (bill.electricityHistory || []).find(entry => entry.id === cycleId) || null;
+            const duplicateMonthCycle = (bill.electricityHistory || []).find(entry => entry.billingMonth === billingMonth && entry.id !== cycleId);
+            if (duplicateMonthCycle) {
+                alert('A cycle for that billing month already exists. Edit it from the history list instead.');
+                return;
+            }
+
+            const rates = computeElectricityRateMetrics(amount, kwhUsed);
+            const nowIso = new Date().toISOString();
+            const nextCycle = normalizeElectricityBillCycleEntry({
+                id: existingCycle?.id || generateFinanceRecordId('ecycle_'),
+                billingMonth,
+                amount,
+                kwhUsed,
+                ratePerKwh: rates.ratePerKwh,
+                ratePerWh: rates.ratePerWh,
+                status,
+                paidBy: status === 'paid' ? paidBy : 'me',
+                paidAt: status === 'paid'
+                    ? (paidAtInput ? new Date(paidAtInput).toISOString() : nowIso)
+                    : null,
+                linkedTransactionId: existingCycle?.linkedTransactionId || null,
+                notes,
+                createdAt: existingCycle?.createdAt || nowIso,
+                lastModified: Date.now()
+            });
+
+            if (nextCycle.status === 'paid' && nextCycle.paidBy === 'me') {
+                nextCycle.linkedTransactionId = await upsertElectricityBillPaymentTransaction(db, billId, bill.name, nextCycle);
+            } else if (nextCycle.linkedTransactionId) {
+                removeLinkedElectricityBillPaymentTransaction(db, nextCycle.linkedTransactionId);
+                nextCycle.linkedTransactionId = null;
+            }
+
+            const nextHistory = (bill.electricityHistory || [])
+                .filter(entry => entry.id !== nextCycle.id)
+                .concat(nextCycle)
+                .sort(compareElectricityCyclesDesc);
+            const latestCycle = nextHistory[0] || nextCycle;
+            const nextBill = normalizeBillDataShape({
+                ...bill,
+                billType: 'electricity',
+                amt: latestCycle.amount,
+                electricityHistory: nextHistory
+            });
+            const encrypted = await encryptData(nextBill);
+
+            db.bills[billIndex] = {
+                ...db.bills[billIndex],
+                id: billId,
+                data: encrypted,
+                lastModified: Date.now(),
+                deletedAt: null
+            };
+
+            await syncBillToReminder(billId, nextBill.name, nextBill.day, nextBill.amt, { paused: nextBill.paused });
+            db.recurring_transactions = recurringTransactions;
+
+            const persistedDB = await saveDB(db);
+            rawBills = (persistedDB.bills || []).filter(entry => !entry.deletedAt);
+            rawTransactions = (persistedDB.transactions || []).filter(entry => !entry.deletedAt);
+            recurringTransactions = persistedDB.recurring_transactions || recurringTransactions;
+
+            document.getElementById('electricity-cycle-modal').classList.add('hidden');
+            await loadAndRender();
+            await renderBills(rawBills);
+            if (typeof renderRecurringList === 'function') {
+                renderRecurringList();
+            }
+            checkRecurringReminders();
+            await refreshLinkedPanels({ refreshMonthlyClose: true });
+            showToast(existingCycle ? '✅ Electricity bill updated' : '✅ Electricity bill recorded');
         }
 
         async function toggleBillPaused(id) {
@@ -1021,8 +1585,12 @@
                 const data = await decryptData(raw.data);
                 if (!data) return;
 
-                const nextPaused = !data.paused;
-                const encrypted = await encryptData({ ...data, paused: nextPaused });
+                const normalizedBill = normalizeBillDataShape(data);
+                const nextPaused = !normalizedBill.paused;
+                const encrypted = await encryptData({
+                    ...normalizedBill,
+                    paused: nextPaused
+                });
                 const previousRawBills = rawBills;
                 const previousRecurringTransactions = Array.isArray(recurringTransactions)
                     ? recurringTransactions.map(reminder => ({ ...reminder }))
@@ -1035,7 +1603,7 @@
                     deletedAt: raw.deletedAt || null
                 };
 
-                await syncBillToReminder(id, data.name, data.day, data.amt, { paused: nextPaused });
+                await syncBillToReminder(id, normalizedBill.name, normalizedBill.day, normalizedBill.amt, { paused: nextPaused });
                 db.recurring_transactions = recurringTransactions;
 
                 // Render the new state immediately so pause/resume feels instant.

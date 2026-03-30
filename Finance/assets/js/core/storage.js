@@ -649,6 +649,102 @@ function normalizeCollectionEntries(entries) {
     }).filter(Boolean);
 }
 
+function compareElectricityCyclesDesc(a, b) {
+    const monthDiff = String(b?.billingMonth || '').localeCompare(String(a?.billingMonth || ''));
+    if (monthDiff !== 0) return monthDiff;
+    return Math.max(0, Number(b?.lastModified || 0)) - Math.max(0, Number(a?.lastModified || 0));
+}
+
+function computeElectricityRateMetrics(amount, kwhUsed) {
+    const normalizedAmount = Math.max(0, toFiniteNumber(amount, 0));
+    const normalizedKwh = Math.max(0, toFiniteNumber(kwhUsed, 0));
+    if (normalizedKwh <= 0) {
+        return { ratePerKwh: 0, ratePerWh: 0 };
+    }
+
+    const ratePerKwh = normalizedAmount / normalizedKwh;
+    return {
+        ratePerKwh,
+        ratePerWh: ratePerKwh / 1000
+    };
+}
+
+function normalizeElectricityBillCycleEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+
+    const billingMonth = normalizeMonthKey(entry.billingMonth || entry.month);
+    if (!billingMonth) return null;
+
+    const amount = Math.max(0, toFiniteNumber(entry.amount, 0));
+    const kwhUsed = Math.max(0, toFiniteNumber(entry.kwhUsed, 0));
+    const computedRates = computeElectricityRateMetrics(amount, kwhUsed);
+    const status = entry.status === 'paid' ? 'paid' : 'unpaid';
+    const paidBy = entry.paidBy === 'family_other' ? 'family_other' : 'me';
+    const paidAt = status === 'paid'
+        ? normalizeISOString(entry.paidAt || entry.paymentDate)
+        : null;
+    const fallbackCreatedAt = `${billingMonth}-01T00:00:00.000Z`;
+    const createdAt = normalizeISOString(entry.createdAt) || fallbackCreatedAt;
+    const lastModified = Math.max(
+        0,
+        toFiniteNumber(entry.lastModified, new Date(createdAt).getTime())
+    );
+    const stableFallbackId = `electricity_${billingMonth.replace('-', '')}_${Math.round(amount * 100)}_${Math.round(kwhUsed * 1000)}`;
+
+    return {
+        id: String(entry.id || stableFallbackId),
+        billingMonth,
+        amount,
+        kwhUsed,
+        ratePerKwh: computedRates.ratePerKwh,
+        ratePerWh: computedRates.ratePerWh,
+        status,
+        paidBy,
+        paidAt,
+        linkedTransactionId: String(entry.linkedTransactionId || '').trim() || null,
+        notes: String(entry.notes || ''),
+        createdAt,
+        lastModified
+    };
+}
+
+function normalizeBillDataShape(rawBill) {
+    const source = rawBill && typeof rawBill === 'object' ? rawBill : {};
+    const parsedDay = parseInt(source.day, 10);
+    const electricityHistory = (Array.isArray(source.electricityHistory) ? source.electricityHistory : [])
+        .map(normalizeElectricityBillCycleEntry)
+        .filter(Boolean)
+        .sort(compareElectricityCyclesDesc);
+    const inferredBillType = source.billType === 'electricity' || electricityHistory.length > 0
+        ? 'electricity'
+        : 'standard';
+    const latestCycle = electricityHistory[0] || null;
+
+    return {
+        name: String(source.name || ''),
+        day: Number.isInteger(parsedDay) ? Math.max(1, Math.min(31, parsedDay)) : 1,
+        amt: latestCycle ? latestCycle.amount : Math.max(0, toFiniteNumber(source.amt, 0)),
+        paused: source.paused === true,
+        billType: inferredBillType,
+        electricityHistory
+    };
+}
+
+function getLatestElectricityBillCycle(billData) {
+    const normalizedBill = normalizeBillDataShape(billData);
+    return normalizedBill.electricityHistory[0] || null;
+}
+
+function formatBillingMonthLabel(billingMonth) {
+    const normalized = normalizeMonthKey(billingMonth);
+    if (!normalized) return 'Unknown month';
+    const [year, month] = normalized.split('-').map(Number);
+    return new Date(year, month - 1, 1).toLocaleString('en', {
+        month: 'long',
+        year: 'numeric'
+    });
+}
+
 function normalizeCryptoInterestShape(rawMap) {
     if (!rawMap || typeof rawMap !== 'object' || Array.isArray(rawMap)) return {};
     const out = {};
