@@ -1164,6 +1164,10 @@ function openFinanceSubpage() {
     window.location.href = 'Finance/index.html';
 }
 
+function openFlockTrackSubpage() {
+    window.location.href = 'flocktrack/index.html';
+}
+
 function isProjectDetailsModalOpen() {
     const modal = document.getElementById('project-details-modal');
     return !!(modal && modal.classList.contains('visible'));

@@ -7,6 +7,7 @@ function ensureToolbarSubpageButtons() {
     if (!toolbarActions) return;
 
     const dashboardBtn = document.getElementById('btn-dashboard');
+    const financeBtn = document.getElementById('btn-finance-subpage');
     const legacyProjectBtn = document.getElementById('btn-project-dashboard-subpage');
     if (legacyProjectBtn) legacyProjectBtn.remove();
 
@@ -37,12 +38,23 @@ function ensureToolbarSubpageButtons() {
         }
     });
 
+    const flockTrackSubpageBtn = upsertToolbarButton({
+        id: 'btn-flocktrack-subpage',
+        title: 'Open FlockTrack',
+        label: '🐓',
+        handler: () => {
+            window.location.href = 'flocktrack/index.html';
+        }
+    });
+
     if (dashboardBtn && dashboardBtn.parentElement === toolbarActions) {
         toolbarActions.insertBefore(financeSubpageBtn, dashboardBtn.nextSibling);
+        toolbarActions.insertBefore(flockTrackSubpageBtn, (financeBtn && financeBtn.parentElement === toolbarActions ? financeBtn : financeSubpageBtn).nextSibling);
         return;
     }
 
     toolbarActions.appendChild(financeSubpageBtn);
+    toolbarActions.appendChild(flockTrackSubpageBtn);
 }
 
 function toggleMenu() {
