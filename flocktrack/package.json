@@ -1,0 +1,8 @@
+{
+  "name": "flocktrack-offline",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "test": "node scripts/check-bundle-parse.js && node tests/logic.test.js && node tests/sync-merge.test.js"
+  }
+}

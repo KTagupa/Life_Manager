@@ -1,0 +1,110 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f7f9f5;background-image:radial-gradient(#dce6d5 1px,transparent 1px);background-size:20px 20px;font-family:'Trebuchet MS','Avenir Next','Segoe UI',sans-serif;font-size:16px;line-height:1.45;color:#1f2937}
+#root{min-height:100dvh}
+input,select,textarea{font-family:inherit}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#ffffff}
+::-webkit-scrollbar-thumb{background:#c4d0df;border-radius:4px}
+
+:root{--farm-green:#4f772d;--farm-brown:#936639;--farm-light:#f2e8cf;--farm-wood:#bc8a5f;--farm-soft:#f8fbf3}
+
+.pens-farm-shell{padding-bottom:18px;max-width:min(100%,1280px);margin:0 auto}
+.pens-farm-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 0 14px}
+.pens-farm-header-title{display:flex;align-items:center;gap:12px;min-width:0}
+.pens-farm-header-icon{width:48px;height:48px;border-radius:999px;display:grid;place-items:center;background:#bc8a5f;color:#fff;font-size:22px;box-shadow:0 10px 22px -12px #000000aa;flex-shrink:0;overflow:hidden}
+.pens-farm-header-icon-img{width:48px;height:48px;object-fit:cover;image-rendering:pixelated;transform:scale(1.5);transform-origin:center center}
+.pens-farm-header-copy h1{font-size:29px;font-weight:800;color:#1f2937;line-height:1.1}
+.pens-farm-header-copy h1 span{color:#4f772d}
+.pens-farm-header-copy div{margin-top:2px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.08em}
+.pens-farm-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.pens-farm-add-btn{border:none;border-radius:15px;padding:12px 16px;background:var(--farm-brown);color:#fff;font-size:15px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 12px 24px -16px #00000099;white-space:nowrap;transition:transform .2s ease,background-color .2s ease}
+.pens-farm-add-btn:hover{background:#7a5430;transform:translateY(-1px)}
+.pens-farm-primary-btn{flex:1 1 auto;min-width:0}
+.pens-farm-compact-btn{flex:0 0 auto;padding-inline:12px}
+.pens-farm-assign-btn-icon{font-size:16px;line-height:1}
+
+.pens-farm-tabs{background:#fff;padding:7px;border-radius:18px;display:flex;gap:8px;margin-bottom:16px;border:1px solid #e2e8f0;box-shadow:0 6px 18px -15px #00000088}
+.pens-farm-tab{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;border:none;border-radius:12px;padding:11px 8px;background:transparent;color:#5b6472;font-size:14px;font-weight:700;cursor:pointer;transition:background-color .2s ease,color .2s ease}
+.pens-farm-tab:hover{background:#f8faf5}
+.pens-farm-tab.is-active{background:var(--farm-green);color:#fff}
+.pens-farm-tab-icon{font-size:15px;line-height:1;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;overflow:hidden}
+.pens-farm-tab-icon-img{width:20px;height:20px;object-fit:cover;image-rendering:pixelated;display:block;transform:scale(1.45);transform-origin:center center}
+
+.pens-farm-pen-card{--pen-wood-a:#bc8a5f;--pen-wood-b:#b98253;--pen-wood-c:#c29167;--pen-badge-birds:#ecfeff;--pen-badge-logs:#ffedd5;--pen-latest-bg:#fff7ec;--pen-latest-border:#f5d7b0;--pen-latest-kicker:#9a3412;--pen-quick-color:#c2410c;--pen-quick-border:#fdba74;--pen-grass:#7fb069;--pen-fence-line:#d0dae5;background:#fff;border-radius:24px;box-shadow:0 16px 30px -24px #00000088;border:4px solid #fff;margin-bottom:16px;overflow:hidden;cursor:pointer}
+.pens-farm-pen-card:focus-visible{outline:2px solid #4f772d;outline-offset:2px}
+.pens-farm-pen-header{padding:14px 16px;color:#fff;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;background-image:linear-gradient(#00000012,#0000002e),repeating-linear-gradient(90deg,var(--pen-wood-a) 0 12px,var(--pen-wood-b) 12px 24px,var(--pen-wood-c) 24px 36px);cursor:pointer}
+.pens-farm-pen-header h2{font-size:25px;line-height:1.1;font-weight:800;word-break:break-word}
+.pens-farm-pen-meta{min-width:0;flex:1}
+.pens-farm-pen-name-btn{padding:0;margin:0;border:none;background:transparent;color:#fff;font-size:23px;line-height:1.1;font-weight:800;word-break:break-word;text-align:left;cursor:pointer;display:block;max-width:100%;overflow-wrap:anywhere}
+.pens-farm-pen-header p{margin-top:4px;font-size:12px;opacity:.92}
+.pens-farm-pen-badges{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.pens-farm-bookmark-btn{border:1px solid #ffffff4d;background:#ffffff2b;color:#ffffff;border-radius:999px;padding:0;font-size:16px;font-weight:800;letter-spacing:.03em;cursor:pointer;backdrop-filter:blur(4px);width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.pens-farm-bookmark-btn:hover{background:#ffffff42}
+.pens-farm-visual-toggle{border:1px solid #ffffff4d;background:#ffffff2b;color:#ffffff;border-radius:999px;padding:0;font-size:16px;font-weight:800;letter-spacing:.03em;cursor:pointer;backdrop-filter:blur(4px);width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.pens-farm-visual-toggle:hover{background:#ffffff42}
+.pens-farm-badge{font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:none;border-radius:999px;padding:3px 9px;border:1px solid #ffffff3d;background:#ffffff2e;backdrop-filter:blur(4px);white-space:nowrap;min-height:28px;display:inline-flex;align-items:center;justify-content:center}
+.pens-farm-badge.birds{color:var(--pen-badge-birds)}
+.pens-farm-badge.logs{color:var(--pen-badge-logs)}
+
+.pens-farm-pen-content{padding:16px;position:relative;padding-bottom:62px}
+.pens-farm-bird-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:8px}
+.pens-farm-bird-stall{border:2px dashed #e2e8f0 !important;background:#fff !important;border-radius:16px !important}
+.pens-farm-bird-stall.is-emphasized{border-color:#f1c995 !important;background:#fff8ec !important}
+.pens-farm-bird-visual{min-height:78px;display:flex;align-items:center;justify-content:center;width:100%}
+.pens-farm-bird-photo{width:100%;height:78px;object-fit:contain;border-radius:10px;border:1px solid #dce6f2;background:#f8fafc}
+.pens-farm-birds-expand-btn{width:100%;border:1px dashed #c4d0df;background:#f8fafc;color:#475569;border-radius:12px;padding:7px 10px;margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.pens-farm-double-v{font-size:14px;font-weight:900;line-height:1}
+.pens-farm-birds-expand-copy{font-size:12px;font-weight:800;letter-spacing:.02em}
+.pens-farm-pen-delete-btn{position:absolute;right:16px;bottom:14px;width:36px;height:36px;border-radius:999px;border:1px solid #fecaca;background:#fff1f2;color:#b91c1c;display:grid;place-items:center;cursor:pointer;font-size:17px}
+.pens-farm-pen-delete-btn:hover{background:#b91c1c;color:#fff}
+
+.pens-farm-latest-feed{background:var(--pen-latest-bg);border:1px solid var(--pen-latest-border);border-radius:16px;padding:14px;position:relative}
+.pens-farm-latest-kicker{font-size:10px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;color:var(--pen-latest-kicker)}
+.pens-farm-latest-main{margin-top:4px;font-size:22px;font-weight:800;color:#1f2937}
+.pens-farm-latest-sub{font-size:14px;color:#57534e;margin-top:1px}
+.pens-farm-latest-meta{margin-top:4px;font-size:12px;color:#6b7280;line-height:1.35;padding-right:54px}
+.pens-farm-quick-add{position:absolute;right:12px;bottom:12px;width:52px;height:52px;border-radius:999px;border:1px solid var(--pen-quick-border);background:#fff;color:var(--pen-quick-color);font-size:30px;font-weight:700;cursor:pointer;display:grid;place-items:center;transition:all .2s ease}
+.pens-farm-quick-add:hover{background:var(--pen-quick-color);color:#fff}
+.pens-farm-quick-add:disabled{opacity:.4;cursor:not-allowed}
+
+.pens-farm-theme-dots{display:flex;gap:6px;flex-wrap:wrap}
+.pens-farm-theme-dot{width:18px;height:18px;border-radius:999px;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}
+.pens-farm-theme-dot:hover{transform:scale(1.08)}
+.pens-farm-theme-dot.is-active{box-shadow:0 0 0 2px #0f172a66}
+.pens-farm-theme-modal-wrap{position:fixed;inset:0;z-index:210;background:#0f172a99;display:flex;justify-content:center;align-items:flex-start;padding:70px 14px 20px}
+.pens-farm-theme-modal-card{width:min(360px,100%);background:#fff;border:1px solid #d9e3ef;border-radius:16px;padding:14px 14px 12px;box-shadow:0 22px 38px -24px #000000a8}
+.pens-farm-theme-modal-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pens-farm-theme-modal-title{font-size:17px;font-weight:900;color:#0f172a}
+.pens-farm-theme-modal-copy{margin-top:6px;font-size:13px;color:#475569;font-weight:700}
+.pens-farm-theme-modal-card .pens-farm-theme-dots{margin-top:10px}
+
+.pens-farm-fence-row{display:flex;align-items:flex-end;gap:6px;padding:0 16px;opacity:.45;margin-top:-2px}
+.pens-farm-fence-post{width:12px;height:28px;background:#f1f5f9;border:1px solid #dbe3ec;border-radius:2px 2px 0 0;clip-path:polygon(50% 0,100% 24%,100% 100%,0 100%,0 24%)}
+.pens-farm-fence-line{height:2px;background:var(--pen-fence-line);flex:1;margin-bottom:2px}
+.pens-farm-grass-footer{height:12px;background:var(--pen-grass);position:relative}
+.pens-farm-grass-blade{position:absolute;bottom:0;width:8px;height:15px;background:var(--pen-grass);clip-path:polygon(50% 0,0 100%,100% 100%)}
+
+.pens-farm-empty-pen-card{background:#fbfcf8;border:2px dashed #d6decc;border-radius:24px;padding:18px;margin-bottom:16px}
+.pens-farm-empty-title{font-size:20px;font-weight:800;color:#9ca3af}
+.pens-farm-empty-sub{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#a1a1aa;margin-top:2px}
+.pens-farm-empty-body{margin-top:14px;padding:34px 16px;border:2px dashed #dce4d3;border-radius:20px;background:#ffffffbe;text-align:center}
+.pens-farm-empty-icon{font-size:28px;opacity:.28}
+.pens-farm-empty-body p{margin-top:8px;font-size:15px;color:#6b7280;font-style:italic}
+.pens-farm-empty-body button{margin-top:12px;border:none;background:transparent;color:#4f772d;font-size:13px;font-weight:800;cursor:pointer}
+
+.pens-farm-footer{margin:14px 0 8px;text-align:center}
+.pens-farm-footer p{font-size:12px;color:#94a3b8}
+
+@media (max-width:820px){
+  body{font-size:18px}
+  .pens-farm-header{flex-direction:column;align-items:stretch}
+  .pens-farm-add-btn{width:100%;justify-content:center}
+  .pens-farm-header-actions{width:100%}
+  .pens-farm-header-actions .pens-farm-primary-btn{width:auto;flex:1 1 auto;min-width:0}
+  .pens-farm-header-actions .pens-farm-compact-btn{width:auto;flex:0 0 auto}
+}
+@media (max-width:640px){
+  .pens-farm-pen-header{flex-direction:column;align-items:stretch;gap:8px}
+  .pens-farm-pen-meta{width:100%}
+  .pens-farm-pen-badges{width:100%;justify-content:flex-start}
+}

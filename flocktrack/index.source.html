@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>FlockTrack</title>
+<meta name="application-name" content="FlockTrack"/>
+<meta name="theme-color" content="#0f172a"/>
+<link rel="manifest" href="manifest.webmanifest"/>
+<link rel="icon" type="image/png" sizes="192x192" href="assets/pwa/icon-192.png"/>
+<link rel="apple-touch-icon" href="assets/pwa/icon-192.png"/>
+<link rel="stylesheet" href="src/styles.css"/>
+</head>
+<body>
+<div id="root"></div>
+<script data-flocktrack-runtime="react" src="src/vendor/react.production.min.js"></script>
+<script data-flocktrack-runtime="react-dom" src="src/vendor/react-dom.production.min.js"></script>
+<script src="src/core/runtime.js"></script>
+<script src="src/core/logic.shared.js"></script>
+<script src="src/core/db.js"></script>
+<script src="src/core/data-layer.js"></script>
+<script src="src/core/ui-core.js"></script>
+<script src="src/components/primitives.js"></script>
+<script src="src/screens/dashboard.js"></script>
+<script src="src/screens/batches.js"></script>
+<script src="src/components/bird-ui.js"></script>
+<script src="src/screens/pens.js"></script>
+<script src="src/screens/birds.js"></script>
+<script src="src/screens/reminders.js"></script>
+<script src="src/screens/export.js"></script>
+<script src="src/screens/stats.js"></script>
+<script src="src/screens/settings.js"></script>
+<script src="src/core/pwa.js"></script>
+<script data-flocktrack-app="1" src="src/app-shell.js"></script>
+</body>
+</html>
