@@ -146,7 +146,8 @@ function Dashboard({
   onAddPenFeedLog,
   onPushToGist,
   photoCache,
-  ensureBirdPhotos
+  ensureBirdPhotos,
+  isPhoneUi = false
 }) {
   const HATCH_ALERT_WINDOW_DAYS = globalThis.FlockTrackLogic?.HATCH_ALERT_WINDOW_DAYS || 2;
   const INCUBATION_REMINDER_WINDOW_DAYS = globalThis.FlockTrackLogic?.INCUBATION_REMINDER_WINDOW_DAYS || 1;
@@ -155,6 +156,19 @@ function Dashboard({
   const todayDay = today();
   const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const active = birds.filter(bird => bird.status === "active");
+  const dashboardStatsGridColumns = isPhoneUi ? "1fr" : "1fr 1fr";
+  const dashboardQueueFieldColumns = isPhoneUi ? "1fr" : "2fr 1fr";
+  const dashboardFeedQueueColumns = isPhoneUi ? "1fr" : "1.4fr 1fr";
+  const dashboardQueueActionsStyle = isPhoneUi ? {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: 10,
+    marginTop: 18
+  } : {
+    display: "flex",
+    gap: 10,
+    marginTop: 18
+  };
   photoCache = photoCache && typeof photoCache === "object" ? photoCache : {};
 
   const batchById = useMemo(() => new Map(batches.map(batch => [batch.id, batch])), [batches]);
@@ -991,6 +1005,8 @@ function Dashboard({
         textAlign: "left",
         display: "flex",
         justifyContent: "space-between",
+        flexDirection: isPhoneUi ? "column" : "row",
+        alignItems: isPhoneUi ? "flex-start" : "stretch",
         gap: 12,
         cursor: "pointer",
         marginBottom: 10
@@ -1018,7 +1034,7 @@ function Dashboard({
   })), React.createElement("div", {
     style: {
       display: "grid",
-      gridTemplateColumns: "1fr 1fr",
+      gridTemplateColumns: dashboardStatsGridColumns,
       gap: 12,
       marginBottom: 16
     }
@@ -1396,6 +1412,7 @@ function Dashboard({
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
+      flexWrap: isPhoneUi ? "wrap" : "nowrap",
       gap: 10
     }
   }, React.createElement("div", {
@@ -1451,7 +1468,7 @@ function Dashboard({
   }, isCurrentWeightQueuePhotoLoaded ? "No bird photo available yet" : "Loading latest photo..."))), React.createElement("div", {
     style: {
       display: "grid",
-      gridTemplateColumns: "2fr 1fr",
+      gridTemplateColumns: dashboardQueueFieldColumns,
       gap: 10
     }
   }, React.createElement(FL, {
@@ -1498,11 +1515,7 @@ function Dashboard({
       measuredAt: e.target.value
     }))
   })), React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      marginTop: 18
-    }
+    style: dashboardQueueActionsStyle
   }, React.createElement("button", {
     style: {
       ...C.sec,
@@ -1593,6 +1606,7 @@ function Dashboard({
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
+      flexWrap: isPhoneUi ? "wrap" : "nowrap",
       gap: 10
     }
   }, React.createElement("div", {
@@ -1619,7 +1633,7 @@ function Dashboard({
   }, "Latest feed: ", feedTypeById.get(currentFeedQueueLatestLog.feedTypeId)?.name || "Feed", " · ", fmtNum(currentFeedQueueLatestLog.amount), " ", currentFeedQueueLatestLog.unit, currentFeedQueueLatestLog.unit === "sack" && Number(currentFeedQueueLatestLog.sackKg) > 0 ? ` (${fmtNum(currentFeedQueueLatestLog.sackKg)} kg/sack)` : "", " on ", dashboardFmtFeedLoggedAt(currentFeedQueueLatestLog.loggedAt))), React.createElement("div", {
     style: {
       display: "grid",
-      gridTemplateColumns: "1.4fr 1fr",
+      gridTemplateColumns: dashboardFeedQueueColumns,
       gap: 10
     }
   }, React.createElement(FL, {
@@ -1698,11 +1712,7 @@ function Dashboard({
       lineHeight: 1.45
     }
   }, currentFeedQueueRemainingLogs > 1 ? "This pen still needs two logs for the selected day. The first queued save will be stamped 7:00 AM, then the second 5:00 PM." : currentFeedQueueRemainingLogs === 1 && currentFeedQueueLogCount === 1 ? "One more log completes this pen for the selected day. It will be stamped as the afternoon feed." : currentFeedQueueRequiredLogs === 1 ? "Before noon the queue expects one log per pen, then advances to the next pen." : "This save completes the pen for the selected day and advances to the next pen."), React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 10,
-      marginTop: 18
-    }
+    style: dashboardQueueActionsStyle
   }, React.createElement("button", {
     style: {
       ...C.sec,

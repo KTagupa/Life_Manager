@@ -518,6 +518,8 @@ function WorkspacesTab({
   }, (_, i) => {
     const code = eggCode(activeBatch.code, i);
     const state = eggStateById.get(code) || null;
+    const breedLabel = String(state?.breed || "").trim();
+    const noteMeta = eggCardNoteMeta(state);
     const photoLoaded = Object.prototype.hasOwnProperty.call(eggPhotoCache, code);
     const photoForToday = photoLoaded ? findEggPhotoForDay(eggPhotoCache[code] || [], captureDayNumber, activeIncubation?.totalDays || EGG_PROGRESS_TOTAL_DAYS) : null;
     const isSelected = i === focusedEggIndex;
@@ -546,11 +548,29 @@ function WorkspacesTab({
         justifyContent: "space-between",
         alignItems: "center"
       }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4
+      }
     }, React.createElement("span", {
       style: {
         fontSize: 18
       }
-    }, isHatched ? "\uD83D\uDC23" : isFailed ? "\uD83D\uDC80" : photoForToday ? "\uD83D\uDCF7" : "\uD83E\uDD5A"), React.createElement("span", {
+    }, isHatched ? "\uD83D\uDC23" : isFailed ? "\uD83D\uDC80" : photoForToday ? "\uD83D\uDCF7" : "\uD83E\uDD5A"), noteMeta.hasNote && React.createElement("span", {
+      title: noteMeta.label,
+      ariaLabel: noteMeta.label,
+      style: {
+        fontSize: 10,
+        lineHeight: 1,
+        padding: "3px 4px",
+        borderRadius: 999,
+        background: "#ffffffcc",
+        border: "1px solid #cbd5e1",
+        color: "#475569"
+      }
+    }, "\uD83D\uDCDD")), React.createElement("span", {
       style: {
         fontSize: 10,
         fontWeight: 800,
@@ -563,7 +583,19 @@ function WorkspacesTab({
         color: "#0f172a",
         wordBreak: "break-all"
       }
-    }, code.split("-").slice(1).join("-")), React.createElement("div", {
+    }, code.split("-").slice(1).join("-")), !!breedLabel && React.createElement("div", {
+      title: breedLabel,
+      style: {
+        maxWidth: "100%",
+        fontSize: 9,
+        fontWeight: 700,
+        color: "#7c2d12",
+        lineHeight: 1.2,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis"
+      }
+    }, breedLabel), React.createElement("div", {
       style: {
         fontSize: 10,
         fontWeight: 800,

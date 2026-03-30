@@ -33,6 +33,26 @@ const eggPhotoLongDate = ts => {
     minute: "2-digit"
   });
 };
+const eggCardNoteMeta = state => {
+  const breed = String(state?.breed || "").trim();
+  const notes = String(state?.notes || "").trim();
+  if (breed && notes) return {
+    hasNote: true,
+    label: "Breed and notes saved"
+  };
+  if (breed) return {
+    hasNote: true,
+    label: "Breed saved"
+  };
+  if (notes) return {
+    hasNote: true,
+    label: "Notes saved"
+  };
+  return {
+    hasNote: false,
+    label: ""
+  };
+};
 function Batches({
   batches,
   eggStates,
@@ -148,6 +168,7 @@ function Batches({
   } : null;
   const gridIncubation = gridB?.id ? batchIncubationById.get(gridB.id) || null : null;
   const activeEggState = eggAct?.code ? eggStateById.get(eggAct.code) || null : null;
+  const activeEggOutcomeState = activeEggState?.status === "hatched" || activeEggState?.status === "failed" ? activeEggState : null;
   const activeEggIncubation = eggAct?.batchId ? batchIncubationById.get(eggAct.batchId) || null : null;
   const activeEggPhotos = useMemo(() => eggAct?.code ? sortEggProgressPhotos(eggPhotoCache[eggAct.code] || []) : [], [eggAct?.code, eggPhotoCache]);
   const selectedEggPhoto = useMemo(() => {
@@ -451,16 +472,16 @@ function Batches({
       code,
       batchId,
       idx,
-      mode: existingState ? "details" : null,
+      mode: existingState?.status === "hatched" || existingState?.status === "failed" ? "details" : null,
       selectedPhotoId: ""
     });
     setHf({
-      breed: "",
+      breed: existingState?.breed || "",
       sex: "unknown",
       hatchDate: today(),
-      notes: ""
+      notes: existingState?.notes || ""
     });
-    setFailNote("");
+    setFailNote(existingState?.status === "failed" ? existingState.note || "" : "");
   }
   function cycleEggPhoto(direction) {
     if (!selectedEggPhoto || activeEggPhotos.length < 2) return;
@@ -550,6 +571,24 @@ function Batches({
       setEggPhotoBusy(false);
     }
   }
+  function savePendingEggProfile() {
+    if (!eggAct) return;
+    const nowIso = new Date().toISOString();
+    onSaveEgg({
+      ...(activeEggState || {}),
+      id: eggAct.code,
+      batchId: eggAct.batchId,
+      idx: eggAct.idx,
+      status: "pending",
+      birdId: null,
+      date: activeEggState?.date || "",
+      note: activeEggState?.note || "",
+      breed: String(hf.breed || "").trim(),
+      notes: String(hf.notes || "").trim(),
+      updatedAt: nowIso,
+      createdAt: activeEggState?.createdAt || nowIso
+    });
+  }
   function doHatch() {
     const bird = {
       id: uid(),
@@ -571,7 +610,9 @@ function Batches({
       status: "hatched",
       birdId: bird.id,
       date: hf.hatchDate,
-      note: ""
+      note: "",
+      breed: String(hf.breed || "").trim(),
+      notes: String(hf.notes || "").trim()
     });
     closeEggModal();
   }
@@ -583,7 +624,9 @@ function Batches({
       status: "failed",
       birdId: null,
       date: today(),
-      note: failNote
+      note: failNote,
+      breed: String(hf.breed || "").trim(),
+      notes: String(hf.notes || "").trim()
     });
     closeEggModal();
   }
@@ -709,6 +752,8 @@ function Batches({
     const st = eggStateById.get(code) || null;
     const isH = st?.status === "hatched";
     const isF = st?.status === "failed";
+    const breedLabel = String(st?.breed || "").trim();
+    const noteMeta = eggCardNoteMeta(st);
     return React.createElement("div", {
       key: code,
       onClick: () => tapEgg(code, gridB.id, i),
@@ -724,11 +769,32 @@ function Batches({
         cursor: "pointer",
         userSelect: "none"
       }
+    }, React.createElement("div", {
+      style: {
+        width: "100%",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 4
+      }
     }, React.createElement("span", {
       style: {
         fontSize: 24
       }
-    }, isH ? "🐣" : isF ? "💀" : "🥚"), React.createElement("span", {
+    }, isH ? "🐣" : isF ? "💀" : "🥚"), noteMeta.hasNote && React.createElement("span", {
+      title: noteMeta.label,
+      ariaLabel: noteMeta.label,
+      style: {
+        fontSize: 12,
+        lineHeight: 1,
+        padding: "4px 5px",
+        borderRadius: 999,
+        background: "#ffffffcc",
+        border: "1px solid #cbd5e1",
+        color: "#475569",
+        boxShadow: "0 4px 10px -8px #0f172a80"
+      }
+    }, "\uD83D\uDCDD")), React.createElement("span", {
       style: {
         fontSize: 9,
         color: isH ? "#15803d" : isF ? "#b91c1c" : "#475569",
@@ -736,7 +802,19 @@ function Batches({
         textAlign: "center",
         wordBreak: "break-all"
       }
-    }, code.split("-").slice(1).join("-")));
+    }, code.split("-").slice(1).join("-")), !!breedLabel && React.createElement("span", {
+      title: breedLabel,
+      style: {
+        maxWidth: "100%",
+        fontSize: 9,
+        color: "#7c2d12",
+        fontWeight: 700,
+        lineHeight: 1.2,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis"
+      }
+    }, breedLabel));
   }) : [];
   const gridIncubationHeaderEl = gridIncubation ? React.createElement("div", {
     style: {
@@ -953,11 +1031,14 @@ function Batches({
       gap: 8
     }
   }, gridEggCells))) : null;
-  const eggStatusTone = activeEggState?.status === "hatched" ? "#15803d" : activeEggState?.status === "failed" ? "#b91c1c" : "#b45309";
-  const eggStatusIcon = activeEggState?.status === "hatched" ? "\uD83D\uDC23" : activeEggState?.status === "failed" ? "\uD83D\uDC80" : "\uD83E\uDD5A";
-  const eggStatusLabel = activeEggState?.status === "hatched" ? "Hatched" : activeEggState?.status === "failed" ? "Failed" : "Pending";
-  const eggStatusDetail = activeEggState ? activeEggState.status === "hatched" ? `Hatched on ${fmtDate(activeEggState.date)}` : `Marked failed on ${fmtDate(activeEggState.date)}` : activeEggIncubation ? activeEggIncubation.isScheduled ? `Incubation starts ${fmtDate(activeEggIncubation.incubationStartDate)}` : `${eggPhotoDayLabel(activeEggIncubation.dayNumber, activeEggIncubation.totalDays)} of ${activeEggIncubation.totalDays}` : "No final outcome yet";
-  const eggStatusNote = activeEggState?.status === "failed" ? activeEggState.note || "No failure note saved." : activeEggState?.status === "hatched" ? activeEggState.birdId ? "Chick record linked to this egg." : "Chick record saved." : activeEggIncubation?.currentStage ? `${activeEggIncubation.currentStage.label} \u00B7 ${activeEggIncubation.currentStage.humidity}` : "Add progress photos during candling, then edit the day if the upload was late.";
+  const eggProfileBreed = String(activeEggState?.breed || "").trim();
+  const eggProfileNotes = String(activeEggState?.notes || "").trim();
+  const eggPendingGuidance = activeEggIncubation?.currentStage ? `${activeEggIncubation.currentStage.label} \u00B7 ${activeEggIncubation.currentStage.humidity}` : "Add progress photos during candling, then edit the day if the upload was late.";
+  const eggStatusTone = activeEggOutcomeState?.status === "hatched" ? "#15803d" : activeEggOutcomeState?.status === "failed" ? "#b91c1c" : "#b45309";
+  const eggStatusIcon = activeEggOutcomeState?.status === "hatched" ? "\uD83D\uDC23" : activeEggOutcomeState?.status === "failed" ? "\uD83D\uDC80" : "\uD83E\uDD5A";
+  const eggStatusLabel = activeEggOutcomeState?.status === "hatched" ? "Hatched" : activeEggOutcomeState?.status === "failed" ? "Failed" : "Pending";
+  const eggStatusDetail = activeEggOutcomeState ? activeEggOutcomeState.status === "hatched" ? `Hatched on ${fmtDate(activeEggOutcomeState.date)}` : `Marked failed on ${fmtDate(activeEggOutcomeState.date)}` : eggProfileBreed ? `Breed saved: ${eggProfileBreed}` : activeEggIncubation ? activeEggIncubation.isScheduled ? `Incubation starts ${fmtDate(activeEggIncubation.incubationStartDate)}` : `${eggPhotoDayLabel(activeEggIncubation.dayNumber, activeEggIncubation.totalDays)} of ${activeEggIncubation.totalDays}` : "No final outcome yet";
+  const eggStatusNote = activeEggOutcomeState?.status === "failed" ? activeEggOutcomeState.note || eggProfileNotes || "No failure note saved." : activeEggOutcomeState?.status === "hatched" ? [activeEggOutcomeState.birdId ? "Chick record linked to this egg." : "Chick record saved.", eggProfileNotes].filter(Boolean).join(" \u00B7 ") : [eggProfileBreed ? `Breed: ${eggProfileBreed}` : "", eggProfileNotes, eggPendingGuidance].filter(Boolean).join(" \u00B7 ");
   const selectedEggPhotoIndex = selectedEggPhoto ? activeEggPhotos.findIndex(photo => photo.id === selectedEggPhoto.id) : -1;
   const eggSummaryCardEl = eggAct ? React.createElement("div", {
     style: {
@@ -965,7 +1046,7 @@ function Batches({
       padding: 14,
       borderRadius: 16,
       border: `1px solid ${eggStatusTone}33`,
-      background: activeEggState?.status === "hatched" ? "#f0fdf4" : activeEggState?.status === "failed" ? "#fef2f2" : "#fff7ed"
+      background: activeEggOutcomeState?.status === "hatched" ? "#f0fdf4" : activeEggOutcomeState?.status === "failed" ? "#fef2f2" : "#fff7ed"
     }
   }, React.createElement("div", {
     style: {
@@ -1257,7 +1338,54 @@ function Batches({
       fontWeight: eggPhotoStatus.kind === "busy" ? 700 : 600
     }
   }, eggPhotoStatus.msg)) : null;
-  const eggModePickerEl = !activeEggState && eggAct?.mode === null ? React.createElement("div", {
+  const eggPendingDetailsEl = !activeEggOutcomeState && eggAct?.mode === null ? React.createElement("div", {
+    style: {
+      marginTop: 14,
+      padding: 14,
+      borderRadius: 16,
+      border: "1px solid #fde68a",
+      background: "#fffbeb"
+    }
+  }, React.createElement("div", {
+    style: {
+      fontSize: 12,
+      fontWeight: 800,
+      letterSpacing: ".05em",
+      textTransform: "uppercase",
+      color: "#a16207"
+    }
+  }, "Egg profile"), React.createElement(FL, {
+    lbl: "Breed"
+  }, React.createElement("input", {
+    style: C.inp,
+    value: hf.breed,
+    onChange: e => setHf({
+      ...hf,
+      breed: e.target.value
+    }),
+    placeholder: "Optional breed while still incubating"
+  })), React.createElement(FL, {
+    lbl: "Egg Notes"
+  }, React.createElement("textarea", {
+    style: C.ta,
+    value: hf.notes,
+    onChange: e => setHf({
+      ...hf,
+      notes: e.target.value
+    }),
+    placeholder: "Observations, markings, concerns, breeder notes..."
+  })), React.createElement("button", {
+    style: {
+      ...C.sec,
+      width: "100%",
+      marginTop: 18,
+      borderColor: "#fcd34d",
+      color: "#92400e",
+      background: "#ffffff"
+    },
+    onClick: savePendingEggProfile
+  }, "Save Egg Profile")) : null;
+  const eggModePickerEl = !activeEggOutcomeState && eggAct?.mode === null ? React.createElement("div", {
     style: {
       marginTop: 14,
       display: "grid",
@@ -1317,7 +1445,7 @@ function Batches({
       color: "#b91c1c"
     }
   }, "Failed \u2717"))) : null;
-  const eggHatchFormEl = !activeEggState && eggAct?.mode === "hatch" ? React.createElement("div", {
+  const eggHatchFormEl = !activeEggOutcomeState && eggAct?.mode === "hatch" ? React.createElement("div", {
     style: {
       marginTop: 14,
       padding: 14,
@@ -1389,7 +1517,7 @@ function Batches({
     },
     onClick: doHatch
   }, "\uD83D\uDC23 Confirm"))) : null;
-  const eggFailFormEl = !activeEggState && eggAct?.mode === "fail" ? React.createElement("div", {
+  const eggFailFormEl = !activeEggOutcomeState && eggAct?.mode === "fail" ? React.createElement("div", {
     style: {
       marginTop: 14,
       padding: 14,
@@ -1430,7 +1558,7 @@ function Batches({
     },
     onClick: doFail
   }, "\uD83D\uDC80 Mark Failed"))) : null;
-  const eggModalSubtitle = activeEggState ? "Outcome saved. Progress photos stay editable." : eggAct?.mode === "hatch" ? "Save the chick details for this egg." : eggAct?.mode === "fail" ? "Save why this egg failed." : "Track photos now, then mark hatch or fail when ready.";
+  const eggModalSubtitle = activeEggOutcomeState ? "Outcome saved. Progress photos stay editable." : eggAct?.mode === "hatch" ? "Save the chick details for this egg." : eggAct?.mode === "fail" ? "Save why this egg failed." : "Track photos now, save breed and egg notes, then mark hatch or fail when ready.";
   const eggActionModalEl = eggAct ? React.createElement("div", {
     style: {
       position: "fixed",
@@ -1490,7 +1618,7 @@ function Batches({
       ...C.sec,
       marginTop: 0
     }
-  }, "\u2715")), eggSummaryCardEl, eggPhotoViewerEl, eggModePickerEl, eggHatchFormEl, eggFailFormEl, React.createElement("button", {
+  }, "\u2715")), eggSummaryCardEl, eggPhotoViewerEl, eggPendingDetailsEl, eggModePickerEl, eggHatchFormEl, eggFailFormEl, React.createElement("button", {
     onClick: closeEggModal,
     style: {
       ...C.sec,
@@ -1979,6 +2107,8 @@ function Batches({
     const isSelected = i === workspaceEggIndex;
     const isHatched = state?.status === "hatched";
     const isFailed = state?.status === "failed";
+    const breedLabel = String(state?.breed || "").trim();
+    const noteMeta = eggCardNoteMeta(state);
     return React.createElement("button", {
       key: code,
       onClick: () => openWorkspaceEggCapture(i),
@@ -2002,11 +2132,29 @@ function Batches({
         justifyContent: "space-between",
         alignItems: "center"
       }
+    }, React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4
+      }
     }, React.createElement("span", {
       style: {
         fontSize: 18
       }
-    }, isHatched ? "\uD83D\uDC23" : isFailed ? "\uD83D\uDC80" : todayPhoto ? "\uD83D\uDCF7" : "\uD83E\uDD5A"), React.createElement("span", {
+    }, isHatched ? "\uD83D\uDC23" : isFailed ? "\uD83D\uDC80" : todayPhoto ? "\uD83D\uDCF7" : "\uD83E\uDD5A"), noteMeta.hasNote && React.createElement("span", {
+      title: noteMeta.label,
+      ariaLabel: noteMeta.label,
+      style: {
+        fontSize: 10,
+        lineHeight: 1,
+        padding: "3px 4px",
+        borderRadius: 999,
+        background: "#ffffffcc",
+        border: "1px solid #cbd5e1",
+        color: "#475569"
+      }
+    }, "\uD83D\uDCDD")), React.createElement("span", {
       style: {
         fontSize: 10,
         fontWeight: 800,
@@ -2019,7 +2167,19 @@ function Batches({
         color: "#0f172a",
         wordBreak: "break-all"
       }
-    }, code.split("-").slice(1).join("-")), React.createElement("div", {
+    }, code.split("-").slice(1).join("-")), !!breedLabel && React.createElement("div", {
+      title: breedLabel,
+      style: {
+        maxWidth: "100%",
+        fontSize: 9,
+        fontWeight: 700,
+        color: "#7c2d12",
+        lineHeight: 1.2,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis"
+      }
+    }, breedLabel), React.createElement("div", {
       style: {
         fontSize: 10,
         fontWeight: 800,

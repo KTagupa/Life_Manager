@@ -116,6 +116,7 @@ const LAZY_SCREEN_DEFS = {
 const DEFERRED_DATA_TABS = new Set(["flock", "search", "stats"]);
 const DEFERRED_SETTINGS_SECTIONS = new Set(["tasks", "reports"]);
 const DESKTOP_SHELL_MEDIA_QUERY = "(min-width: 1100px)";
+const PHONE_SHELL_MEDIA_QUERY = "(max-width: 767px)";
 const TAB_VISIBILITY_STORAGE_KEY = "flocktrack-tab-visibility-v1";
 const GIST_SYNC_STORAGE_KEY = "flocktrack-gist-sync-v1";
 const GIST_DEVICE_ID_STORAGE_KEY = "flocktrack-gist-device-id-v1";
@@ -1027,8 +1028,44 @@ function calendarMonthGrid(monthDate) {
   return cells;
 }
 function desktopShellMatches() {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-  return window.matchMedia(DESKTOP_SHELL_MEDIA_QUERY).matches;
+  if (typeof window === "undefined") return false;
+  if (typeof window.matchMedia === "function") return window.matchMedia(DESKTOP_SHELL_MEDIA_QUERY).matches;
+  return readShellProfile().isDesktop;
+}
+function mobileBrowserLikely() {
+  if (typeof navigator === "undefined") return false;
+  if (typeof navigator.userAgentData?.mobile === "boolean") return navigator.userAgentData.mobile;
+  const ua = String(navigator.userAgent || "");
+  return /Android.+Mobile|iPhone|iPod|Windows Phone|webOS|BlackBerry|Opera Mini|IEMobile/i.test(ua);
+}
+function shellViewportWidth() {
+  if (typeof window === "undefined") return 1440;
+  const visualWidth = Number(window.visualViewport?.width);
+  if (Number.isFinite(visualWidth) && visualWidth > 0) return visualWidth;
+  const innerWidth = Number(window.innerWidth);
+  if (Number.isFinite(innerWidth) && innerWidth > 0) return innerWidth;
+  const screenWidth = Number(window.screen?.width);
+  if (Number.isFinite(screenWidth) && screenWidth > 0) return screenWidth;
+  return 1440;
+}
+function readShellProfile() {
+  const width = shellViewportWidth();
+  const canMatch = typeof window !== "undefined" && typeof window.matchMedia === "function";
+  const isDesktop = canMatch ? window.matchMedia(DESKTOP_SHELL_MEDIA_QUERY).matches : width >= 1100;
+  const phoneViewport = canMatch ? window.matchMedia(PHONE_SHELL_MEDIA_QUERY).matches : width <= 767;
+  const coarsePointer = canMatch && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(any-pointer: coarse)").matches);
+  const touchCapable = typeof navigator !== "undefined" && Number(navigator.maxTouchPoints || 0) > 0;
+  const mobileBrowser = mobileBrowserLikely();
+  const isPhone = !isDesktop && (phoneViewport || mobileBrowser && width <= 900 || mobileBrowser && coarsePointer || touchCapable && width <= 640);
+  return {
+    width,
+    isDesktop,
+    isPhone,
+    isTablet: !isDesktop && !isPhone,
+    isTouch: coarsePointer || touchCapable,
+    isMobileBrowser: mobileBrowser,
+    mode: isDesktop ? "desktop" : isPhone ? "phone" : "tablet"
+  };
 }
 function App() {
   const [tab, setTab] = useState("overview");
@@ -1083,7 +1120,7 @@ function App() {
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => calendarMonthStart(new Date()));
   const [calendarSelectedDay, setCalendarSelectedDay] = useState(() => today());
-  const [isDesktopShell, setIsDesktopShell] = useState(() => desktopShellMatches());
+  const [shellProfile, setShellProfile] = useState(() => readShellProfile());
   const photoCacheRef = useRef(photoCache);
   const eggPhotoCacheRef = useRef(eggPhotoCache);
   const gistSyncRef = useRef(gistSyncConfig);
@@ -1093,6 +1130,8 @@ function App() {
   const idleDeferredTaskRef = useRef(null);
   const dataLoadVersionRef = useRef(0);
   const birdsLive = useMemo(() => birds.filter(b => !b.archivedAt), [birds]);
+  const isDesktopShell = shellProfile.isDesktop;
+  const isPhoneShell = shellProfile.isPhone;
   const birdById = useMemo(() => new Map(birds.map(bird => [bird.id, bird])), [birds]);
   const hideableTabs = useMemo(() => HIDEABLE_TAB_ORDER.map(id => TABS.find(tabDef => tabDef.id === id)).filter(Boolean), []);
   const visibleNavTabs = useMemo(() => TABS.filter(tabDef => !HIDEABLE_TAB_IDS.has(tabDef.id) || tabVisibility[tabDef.id] !== false), [tabVisibility]);
@@ -1102,14 +1141,23 @@ function App() {
       paddingBottom: 24,
       paddingLeft: 292,
       background: "linear-gradient(180deg, #eef4fb 0%, #f8fafc 100%)"
-    } : C.page,
+    } : {
+      ...C.page,
+      paddingBottom: isPhoneShell ? "calc(104px + env(safe-area-inset-bottom, 0px))" : C.page.paddingBottom
+    },
     bar: isDesktopShell ? {
       ...C.bar,
-      padding: "18px 28px",
+      padding: "calc(18px + env(safe-area-inset-top, 0px)) 28px 18px",
       background: "rgba(248, 250, 252, 0.9)",
       backdropFilter: "blur(12px)",
       WebkitBackdropFilter: "blur(12px)"
-    } : C.bar,
+    } : {
+      ...C.bar,
+      padding: isPhoneShell ? "calc(12px + env(safe-area-inset-top, 0px)) 14px 12px" : C.bar.padding,
+      gap: isPhoneShell ? 10 : C.bar.gap,
+      flexWrap: isPhoneShell ? "wrap" : "nowrap",
+      alignItems: isPhoneShell ? "flex-start" : C.bar.alignItems
+    },
     sidebar: {
       position: "fixed",
       top: 0,
@@ -1150,8 +1198,12 @@ function App() {
       border: "1px solid #d9e3ef",
       background: "#ffffffcc",
       boxShadow: "0 14px 28px -26px #0f172a55"
+    },
+    mobileNav: {
+      ...C.nav,
+      boxShadow: "0 -12px 28px -24px #0f172a55"
     }
-  }), [isDesktopShell]);
+  }), [isDesktopShell, isPhoneShell]);
   const autoIncubationReminders = useMemo(() => buildAutomaticIncubationReminders({
     batches,
     eggStates
@@ -1380,16 +1432,18 @@ function App() {
     cancelIdleTask(idleDeferredTaskRef.current);
   }, []);
   useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    const mediaQuery = window.matchMedia(DESKTOP_SHELL_MEDIA_QUERY);
-    const handleChange = event => setIsDesktopShell(!!event.matches);
-    setIsDesktopShell(mediaQuery.matches);
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", handleChange);
-      return () => mediaQuery.removeEventListener("change", handleChange);
-    }
-    mediaQuery.addListener(handleChange);
-    return () => mediaQuery.removeListener(handleChange);
+    if (typeof window === "undefined") return undefined;
+    const syncShellProfile = () => setShellProfile(readShellProfile());
+    const visualViewport = window.visualViewport;
+    syncShellProfile();
+    window.addEventListener("resize", syncShellProfile);
+    window.addEventListener("orientationchange", syncShellProfile);
+    if (visualViewport?.addEventListener) visualViewport.addEventListener("resize", syncShellProfile);
+    return () => {
+      window.removeEventListener("resize", syncShellProfile);
+      window.removeEventListener("orientationchange", syncShellProfile);
+      if (visualViewport?.removeEventListener) visualViewport.removeEventListener("resize", syncShellProfile);
+    };
   }, []);
   useEffect(() => {
     scrollViewportTop();
@@ -2401,15 +2455,19 @@ function App() {
       fontSize: 14,
       fontWeight: tab === t.id ? 800 : 700,
       textAlign: "left"
-    } : C.navB(tab === t.id),
+    } : {
+      ...C.navB(tab === t.id),
+      padding: isPhoneShell ? "8px 2px 7px" : C.navB(tab === t.id).padding,
+      fontSize: isPhoneShell ? 9 : C.navB(tab === t.id).fontSize
+    },
     onClick: () => setTab(t.id)
   }, React.createElement("span", {
     style: {
-      fontSize: isDesktopShell ? 18 : 20,
+      fontSize: isDesktopShell ? 18 : isPhoneShell ? 18 : 20,
       display: "inline-flex",
       alignItems: "center",
       justifyContent: "center",
-      width: isDesktopShell ? 24 : 28,
+      width: isDesktopShell ? 24 : isPhoneShell ? 24 : 28,
       height: 24,
       overflow: "hidden",
       flexShrink: 0
@@ -2418,7 +2476,7 @@ function App() {
     src: t.iconSrc,
     alt: "",
     style: {
-      width: isDesktopShell ? 24 : 28,
+      width: isDesktopShell ? 24 : isPhoneShell ? 24 : 28,
       height: 24,
       objectFit: "cover",
       imageRendering: "pixelated",
@@ -2564,20 +2622,38 @@ function App() {
     }
   }, "Desktop-first shell on wide screens, with mobile navigation preserved below tablet widths."))), React.createElement("div", {
     style: shellStyles.bar
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: isPhoneShell ? 10 : 12,
+      minWidth: 0,
+      flex: isPhoneShell ? "1 1 auto" : 1
+    }
   }, React.createElement("span", {
     style: {
-      fontSize: 26
+      fontSize: isPhoneShell ? 22 : 26
     }
   }, "\uD83D\uDC14"), React.createElement("span", {
     style: {
-      fontSize: 22,
+      fontSize: isPhoneShell ? 19 : 22,
       fontWeight: 800,
       color: "#b45309",
-      flex: 1,
-      letterSpacing: "-0.5px"
+      letterSpacing: "-0.5px",
+      minWidth: 0
     }
-  }, "FlockTrack"), React.createElement("div", {
-    style: {
+  }, "FlockTrack")), React.createElement("div", {
+    style: isPhoneShell ? {
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      padding: "8px 10px",
+      borderRadius: 14,
+      border: "1px solid #d9e3ef",
+      background: "#f8fafc"
+    } : {
       display: "flex",
       flexDirection: "column",
       alignItems: "flex-end",
@@ -2591,15 +2667,15 @@ function App() {
       background: "#ffffff",
       color: "#1d4ed8",
       borderRadius: 999,
-      padding: "2px 10px",
-      fontSize: 12,
+      padding: isPhoneShell ? "4px 10px" : "2px 10px",
+      fontSize: isPhoneShell ? 11 : 12,
       fontWeight: 800,
       cursor: "pointer",
       lineHeight: 1.4
     }
   }, headerDateLabel), React.createElement("span", {
     style: {
-      fontSize: 13,
+      fontSize: isPhoneShell ? 12 : 13,
       color: "#475569"
     }
   }, activeBirdCount, " \uD83D\uDC14 \xB7 ", pendingEggCount, " \uD83E\uDD5A"))), tab === "overview" && React.createElement(Dashboard, {
@@ -2621,7 +2697,8 @@ function App() {
     onAddPenFeedLog: addPenFeedLog,
     onPushToGist: pushToGist,
     photoCache: photoCache,
-    ensureBirdPhotos: ensureBirdPhotos
+    ensureBirdPhotos: ensureBirdPhotos,
+    isPhoneUi: isPhoneShell
   }), tab === "workspace" && renderLazyScreenView("workspace", {
     batches: batches,
     eggStates: eggStates,
@@ -2900,17 +2977,17 @@ function App() {
       display: "flex",
       alignItems: "flex-start",
       justifyContent: "center",
-      padding: "18px 12px 96px",
+      padding: isPhoneShell ? "12px 10px calc(110px + env(safe-area-inset-bottom, 0px))" : "18px 12px 96px",
       overflowY: "auto"
     },
     onClick: closeCalendarModal
   }, React.createElement("div", {
     style: {
-      width: "min(560px, 100%)",
+      width: isPhoneShell ? "100%" : "min(560px, 100%)",
       background: "#ffffff",
       border: "1px solid #cbd5e1",
-      borderRadius: 16,
-      padding: 14,
+      borderRadius: isPhoneShell ? 18 : 16,
+      padding: isPhoneShell ? 12 : 14,
       boxShadow: "0 18px 42px #00000033"
     },
     onClick: event => event.stopPropagation()
@@ -2920,6 +2997,7 @@ function App() {
       justifyContent: "space-between",
       alignItems: "center",
       gap: 10,
+      flexWrap: isPhoneShell ? "wrap" : "nowrap",
       marginBottom: 10
     }
   }, React.createElement("div", {
@@ -2947,6 +3025,7 @@ function App() {
       display: "flex",
       alignItems: "center",
       gap: 8,
+      flexWrap: isPhoneShell ? "wrap" : "nowrap",
       marginBottom: 10
     }
   }, React.createElement("button", {
@@ -3030,7 +3109,7 @@ function App() {
         border: isSelected ? "2px solid #1d4ed8" : "1px solid #dbe4ef",
         background: isSelected ? "#eff6ff" : cell.inMonth ? "#ffffff" : "#f8fafc",
         borderRadius: 10,
-        minHeight: 48,
+        minHeight: isPhoneShell ? 42 : 48,
         padding: "4px 4px",
         textAlign: "left",
         cursor: "pointer",
@@ -3157,7 +3236,7 @@ function App() {
       position: "fixed",
       left: isDesktopShell ? 312 : 12,
       right: 12,
-      bottom: isDesktopShell ? 24 : 72,
+      bottom: isDesktopShell ? 24 : isPhoneShell ? "calc(76px + env(safe-area-inset-bottom, 0px))" : 72,
       background: "#0f172a",
       color: "#eef3f9",
       borderRadius: 14,
@@ -3196,7 +3275,7 @@ function App() {
     },
     onClick: undoDeleteBird
   }, "Undo")), !isDesktopShell && React.createElement("nav", {
-    style: C.nav
+    style: shellStyles.mobileNav
   }, navButtons));
 }
 if (typeof module !== "undefined" && module.exports) {

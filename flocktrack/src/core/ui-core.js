@@ -433,12 +433,12 @@ const C = {
   page: {
     minHeight: "100dvh",
     background: "#eef3f9",
-    paddingBottom: 92
+    paddingBottom: "calc(92px + env(safe-area-inset-bottom, 0px))"
   },
   bar: {
     background: "#ffffff",
     borderBottom: "1px solid #d9e3ef",
-    padding: "14px 18px",
+    padding: "calc(14px + env(safe-area-inset-top, 0px)) 18px 14px",
     display: "flex",
     alignItems: "center",
     gap: 12,
@@ -455,6 +455,7 @@ const C = {
     borderTop: "1px solid #d9e3ef",
     display: "flex",
     alignItems: "stretch",
+    paddingBottom: "env(safe-area-inset-bottom, 0px)",
     zIndex: 50
   },
   card: {
