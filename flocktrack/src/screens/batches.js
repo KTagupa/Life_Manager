@@ -57,9 +57,11 @@ function Batches({
   batches,
   eggStates,
   eggPhotoCache = {},
+  birds = [],
   onAdd,
   onUpdate,
   onHatch,
+  onUpdateBird,
   onDelete,
   onSaveEgg,
   ensureEggPhotos,
@@ -70,6 +72,7 @@ function Batches({
   openBatchId = "",
   onOpenBatchHandled
 }) {
+  birds = Array.isArray(birds) ? birds : [];
   eggPhotoCache = eggPhotoCache && typeof eggPhotoCache === "object" ? eggPhotoCache : {};
   const [showNew, setShowNew] = useState(false);
   const [editB, setEditB] = useState(null);
@@ -143,6 +146,7 @@ function Batches({
       pending: Math.max(0, totalEggs - hatched - failed)
     };
   }, [batchStatsById, batches]);
+  const birdById = useMemo(() => new Map(birds.map(bird => [bird.id, bird])), [birds]);
   const batchIncubationById = useMemo(() => {
     const map = new Map();
     batches.forEach(batch => {
@@ -478,7 +482,7 @@ function Batches({
     setHf({
       breed: existingState?.breed || "",
       sex: "unknown",
-      hatchDate: today(),
+      hatchDate: existingState?.date || today(),
       notes: existingState?.notes || ""
     });
     setFailNote(existingState?.status === "failed" ? existingState.note || "" : "");
@@ -629,6 +633,36 @@ function Batches({
       notes: String(hf.notes || "").trim()
     });
     closeEggModal();
+  }
+  function saveHatchDateCorrection() {
+    if (!eggAct || activeEggOutcomeState?.status !== "hatched" || !hf.hatchDate) return;
+    const nextHatchDate = String(hf.hatchDate || "").trim();
+    const nowIso = new Date().toISOString();
+    onSaveEgg({
+      ...activeEggOutcomeState,
+      id: eggAct.code,
+      batchId: eggAct.batchId,
+      idx: eggAct.idx,
+      status: "hatched",
+      date: nextHatchDate,
+      note: activeEggOutcomeState.note || "",
+      breed: String(activeEggOutcomeState.breed || hf.breed || "").trim(),
+      notes: String(activeEggOutcomeState.notes || hf.notes || "").trim(),
+      updatedAt: nowIso,
+      createdAt: activeEggOutcomeState.createdAt || nowIso
+    });
+    const linkedBird = activeEggOutcomeState.birdId ? birdById.get(activeEggOutcomeState.birdId) || null : null;
+    if (linkedBird && typeof onUpdateBird === "function") {
+      onUpdateBird({
+        ...linkedBird,
+        hatchDate: nextHatchDate,
+        updatedAt: nowIso
+      });
+    }
+    setEggAct(prev => prev ? {
+      ...prev,
+      mode: "details"
+    } : prev);
   }
   const newBatchModal = showNew ? React.createElement(Modal, {
     title: "New Batch · " + newCode,
@@ -1558,7 +1592,72 @@ function Batches({
     },
     onClick: doFail
   }, "\uD83D\uDC80 Mark Failed"))) : null;
-  const eggModalSubtitle = activeEggOutcomeState ? "Outcome saved. Progress photos stay editable." : eggAct?.mode === "hatch" ? "Save the chick details for this egg." : eggAct?.mode === "fail" ? "Save why this egg failed." : "Track photos now, save breed and egg notes, then mark hatch or fail when ready.";
+  const eggSavedOutcomeActionsEl = activeEggOutcomeState?.status === "hatched" && eggAct?.mode === "details" ? React.createElement("div", {
+    style: {
+      marginTop: 14,
+      display: "flex",
+      justifyContent: "flex-start"
+    }
+  }, React.createElement("button", {
+    style: {
+      ...C.sec,
+      marginTop: 0,
+      borderColor: "#86efac",
+      color: "#166534",
+      background: "#f0fdf4"
+    },
+    onClick: () => setEggAct({
+      ...eggAct,
+      mode: "edit_hatch"
+    })
+  }, "\u270F\uFE0F Edit Hatch Date")) : null;
+  const eggEditHatchFormEl = activeEggOutcomeState?.status === "hatched" && eggAct?.mode === "edit_hatch" ? React.createElement("div", {
+    style: {
+      marginTop: 14,
+      padding: 14,
+      borderRadius: 16,
+      border: "1px solid #bbf7d0",
+      background: "#f0fdf4"
+    }
+  }, React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: "#166534",
+      fontWeight: 700,
+      lineHeight: 1.45,
+      marginBottom: 4
+    }
+  }, "Correct the saved hatch date here. If this egg already created a chick record, that chick's hatch date will be updated too."), React.createElement(FL, {
+    lbl: "Hatch Date"
+  }, React.createElement("input", {
+    style: C.inp,
+    type: "date",
+    value: hf.hatchDate,
+    onChange: e => setHf({
+      ...hf,
+      hatchDate: e.target.value
+    })
+  })), React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 10,
+      marginTop: 18
+    }
+  }, React.createElement("button", {
+    style: C.sec,
+    onClick: () => setEggAct({
+      ...eggAct,
+      mode: "details"
+    })
+  }, "\u2190 Cancel"), React.createElement("button", {
+    style: {
+      ...C.btn,
+      marginTop: 0
+    },
+    onClick: saveHatchDateCorrection
+  }, "Save Hatch Date"))) : null;
+  const eggModalSubtitle = activeEggOutcomeState?.status === "hatched" && eggAct?.mode === "edit_hatch" ? "Correct the saved hatch date for this egg." : activeEggOutcomeState ? "Outcome saved. Progress photos stay editable." : eggAct?.mode === "hatch" ? "Save the chick details for this egg." : eggAct?.mode === "fail" ? "Save why this egg failed." : "Track photos now, save breed and egg notes, then mark hatch or fail when ready.";
   const eggActionModalEl = eggAct ? React.createElement("div", {
     style: {
       position: "fixed",
@@ -1618,7 +1717,7 @@ function Batches({
       ...C.sec,
       marginTop: 0
     }
-  }, "\u2715")), eggSummaryCardEl, eggPhotoViewerEl, eggPendingDetailsEl, eggModePickerEl, eggHatchFormEl, eggFailFormEl, React.createElement("button", {
+  }, "\u2715")), eggSummaryCardEl, eggPhotoViewerEl, eggPendingDetailsEl, eggModePickerEl, eggHatchFormEl, eggFailFormEl, eggSavedOutcomeActionsEl, eggEditHatchFormEl, React.createElement("button", {
     onClick: closeEggModal,
     style: {
       ...C.sec,
