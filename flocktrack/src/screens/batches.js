@@ -1067,11 +1067,13 @@ function Batches({
   }, gridEggCells))) : null;
   const eggProfileBreed = String(activeEggState?.breed || "").trim();
   const eggProfileNotes = String(activeEggState?.notes || "").trim();
+  const activeEggLinkedBird = activeEggOutcomeState?.birdId ? birdById.get(activeEggOutcomeState.birdId) || null : null;
+  const activeEggOutcomeDate = activeEggOutcomeState?.status === "hatched" ? activeEggLinkedBird?.hatchDate || activeEggOutcomeState?.date || "" : activeEggOutcomeState?.date || "";
   const eggPendingGuidance = activeEggIncubation?.currentStage ? `${activeEggIncubation.currentStage.label} \u00B7 ${activeEggIncubation.currentStage.humidity}` : "Add progress photos during candling, then edit the day if the upload was late.";
   const eggStatusTone = activeEggOutcomeState?.status === "hatched" ? "#15803d" : activeEggOutcomeState?.status === "failed" ? "#b91c1c" : "#b45309";
   const eggStatusIcon = activeEggOutcomeState?.status === "hatched" ? "\uD83D\uDC23" : activeEggOutcomeState?.status === "failed" ? "\uD83D\uDC80" : "\uD83E\uDD5A";
   const eggStatusLabel = activeEggOutcomeState?.status === "hatched" ? "Hatched" : activeEggOutcomeState?.status === "failed" ? "Failed" : "Pending";
-  const eggStatusDetail = activeEggOutcomeState ? activeEggOutcomeState.status === "hatched" ? `Hatched on ${fmtDate(activeEggOutcomeState.date)}` : `Marked failed on ${fmtDate(activeEggOutcomeState.date)}` : eggProfileBreed ? `Breed saved: ${eggProfileBreed}` : activeEggIncubation ? activeEggIncubation.isScheduled ? `Incubation starts ${fmtDate(activeEggIncubation.incubationStartDate)}` : `${eggPhotoDayLabel(activeEggIncubation.dayNumber, activeEggIncubation.totalDays)} of ${activeEggIncubation.totalDays}` : "No final outcome yet";
+  const eggStatusDetail = activeEggOutcomeState ? activeEggOutcomeState.status === "hatched" ? `Hatched on ${fmtDate(activeEggOutcomeDate)}` : `Marked failed on ${fmtDate(activeEggOutcomeDate)}` : eggProfileBreed ? `Breed saved: ${eggProfileBreed}` : activeEggIncubation ? activeEggIncubation.isScheduled ? `Incubation starts ${fmtDate(activeEggIncubation.incubationStartDate)}` : `${eggPhotoDayLabel(activeEggIncubation.dayNumber, activeEggIncubation.totalDays)} of ${activeEggIncubation.totalDays}` : "No final outcome yet";
   const eggStatusNote = activeEggOutcomeState?.status === "failed" ? activeEggOutcomeState.note || eggProfileNotes || "No failure note saved." : activeEggOutcomeState?.status === "hatched" ? [activeEggOutcomeState.birdId ? "Chick record linked to this egg." : "Chick record saved.", eggProfileNotes].filter(Boolean).join(" \u00B7 ") : [eggProfileBreed ? `Breed: ${eggProfileBreed}` : "", eggProfileNotes, eggPendingGuidance].filter(Boolean).join(" \u00B7 ");
   const selectedEggPhotoIndex = selectedEggPhoto ? activeEggPhotos.findIndex(photo => photo.id === selectedEggPhoto.id) : -1;
   const eggSummaryCardEl = eggAct ? React.createElement("div", {

@@ -223,6 +223,14 @@ const parseDateMs = value => {
   const ms = new Date(value).getTime();
   return Number.isFinite(ms) ? ms : 0;
 };
+const appNormalizeStoredDay = value => {
+  const raw = String(value == null ? "" : value).trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const ms = parseDateMs(raw);
+  if (!Number.isFinite(ms) || ms <= 0) return raw.slice(0, 10);
+  return new Date(ms).toISOString().slice(0, 10);
+};
 const appMeasurementDayKey = value => {
   const raw = String(value == null ? "" : value).trim();
   if (!raw) return "";
@@ -234,6 +242,56 @@ const appMeasurementDayKey = value => {
   const month = String(dt.getMonth() + 1).padStart(2, "0");
   const day = String(dt.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+};
+const appHatchDateRevisionScore = row => Math.max(parseDateMs(row?.updatedAt), parseDateMs(row?.modifiedAt), parseDateMs(row?.createdAt), parseDateMs(row?.date), parseDateMs(row?.hatchDate));
+const reconcileLinkedHatchDates = core => {
+  const birds = Array.isArray(core?.birds) ? core.birds.filter(row => row && typeof row === "object") : [];
+  const eggStates = Array.isArray(core?.eggStates) ? core.eggStates.filter(row => row && typeof row === "object") : [];
+  if (!birds.length || !eggStates.length) return {
+    birds,
+    eggStates,
+    birdsChanged: false,
+    eggStatesChanged: false
+  };
+  const nowIso = new Date().toISOString();
+  const birdById = new Map(birds.map(bird => [bird.id, bird]));
+  let birdsChanged = false;
+  let eggStatesChanged = false;
+  const nextEggStates = eggStates.map(state => {
+    if (state?.status !== "hatched" || !state?.birdId) return state;
+    const linkedBird = birdById.get(state.birdId);
+    if (!linkedBird) return state;
+    const eggDay = appNormalizeStoredDay(state.date);
+    const birdDay = appNormalizeStoredDay(linkedBird.hatchDate);
+    if (!eggDay && !birdDay) return state;
+    const eggScore = appHatchDateRevisionScore(state);
+    const birdScore = appHatchDateRevisionScore(linkedBird);
+    const preferredDay = birdDay && (!eggDay || birdScore >= eggScore) ? birdDay : eggDay || birdDay;
+    let nextState = state;
+    if (preferredDay && preferredDay !== eggDay) {
+      eggStatesChanged = true;
+      nextState = {
+        ...state,
+        date: preferredDay,
+        updatedAt: nowIso
+      };
+    }
+    if (preferredDay && preferredDay !== birdDay) {
+      birdsChanged = true;
+      birdById.set(linkedBird.id, {
+        ...linkedBird,
+        hatchDate: preferredDay,
+        updatedAt: nowIso
+      });
+    }
+    return nextState;
+  });
+  return {
+    birds: birdsChanged ? birds.map(bird => birdById.get(bird.id) || bird) : birds,
+    eggStates: eggStatesChanged ? nextEggStates : eggStates,
+    birdsChanged,
+    eggStatesChanged
+  };
 };
 const appMeasurementRowScore = row => Math.max(parseDateMs(row?.modifiedAt), parseDateMs(row?.measuredAt), parseDateMs(row?.createdAt), parseDateMs(row?.updatedAt));
 const appNormalizeMeasurements = rows => {
@@ -1283,17 +1341,24 @@ function App() {
   }, []);
   const applyOverviewData = useCallback(core => {
     const normalizedMeasurements = appNormalizeMeasurements(core?.measurements);
+    const reconciledHatchDates = reconcileLinkedHatchDates(core);
     setBatches(core?.eggBatches || []);
-    setBirds(core?.birds || []);
+    setBirds(reconciledHatchDates.birds);
     setMeasurements(normalizedMeasurements.rows);
     setInstances(core?.reminderInstances || []);
-    setEggStates(core?.eggStates || []);
+    setEggStates(reconciledHatchDates.eggStates);
     setPens(core?.pens || []);
     setFeedTypes(core?.feedTypes || []);
     setPenFeedLogs(core?.penFeedLogs || []);
     setFinanceEntries(core?.financeEntries || []);
     if (normalizedMeasurements.changed) {
       dbReplace("measurements", normalizedMeasurements.rows).catch(console.error);
+    }
+    if (reconciledHatchDates.birdsChanged) {
+      dbReplace("birds", reconciledHatchDates.birds).catch(console.error);
+    }
+    if (reconciledHatchDates.eggStatesChanged) {
+      dbReplace("eggStates", reconciledHatchDates.eggStates).catch(console.error);
     }
   }, []);
   const applyDeferredData = useCallback(data => {
