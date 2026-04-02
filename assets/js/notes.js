@@ -911,6 +911,12 @@ function createNewNote(taskId = null) {
 
     const newNote = createNoteObject(noteTitle, "", safeTaskId);
     notes.push(newNote);
+    if (safeTaskId) {
+        const task = nodes.find(n => n.id === safeTaskId) || archivedNodes.find(n => n.id === safeTaskId);
+        if (task && typeof logTaskChange === 'function') {
+            logTaskChange(task, `Created linked note: ${newNote.title || 'Untitled Note'}`, { type: 'note' });
+        }
+    }
     persistCreatedNote(newNote).then(() => {
         syncNotesFromRepository({ render: true, preserveSelection: true });
     });
@@ -1187,9 +1193,13 @@ function linkTaskToNote(taskId) {
     if (!taskId || !currentEditingNoteId) return;
     const note = notes.find(n => n.id === currentEditingNoteId);
     if (!note) return;
+    const task = nodes.find(n => n.id === taskId) || archivedNodes.find(n => n.id === taskId);
     if (!note.taskIds) note.taskIds = [];
     if (!note.taskIds.includes(taskId)) {
         note.taskIds.push(taskId);
+        if (task && typeof logTaskChange === 'function') {
+            logTaskChange(task, `Linked note: ${note.title || 'Untitled Note'}`, { type: 'note' });
+        }
         persistUpdatedNote(note.id, { taskIds: [...note.taskIds] });
         broadcastNotesChange('update', note.id);
         saveToStorage();
@@ -1202,7 +1212,11 @@ function unlinkTaskFromNote(taskId) {
     if (!currentEditingNoteId) return;
     const note = notes.find(n => n.id === currentEditingNoteId);
     if (!note) return;
+    const task = nodes.find(n => n.id === taskId) || archivedNodes.find(n => n.id === taskId);
     note.taskIds = (note.taskIds || []).filter(id => id !== taskId);
+    if (task && typeof logTaskChange === 'function') {
+        logTaskChange(task, `Unlinked note: ${note.title || 'Untitled Note'}`, { type: 'note' });
+    }
     persistUpdatedNote(note.id, { taskIds: [...note.taskIds] });
     broadcastNotesChange('update', note.id);
     saveToStorage();
@@ -1214,10 +1228,14 @@ function linkNoteToTask(noteId, taskId) {
     if (!noteId || !taskId) return;
     const note = notes.find(n => n.id === noteId);
     if (!note) return;
+    const task = nodes.find(n => n.id === taskId) || archivedNodes.find(n => n.id === taskId);
 
     if (!note.taskIds) note.taskIds = [];
     if (!note.taskIds.includes(taskId)) {
         note.taskIds.push(taskId);
+        if (task && typeof logTaskChange === 'function') {
+            logTaskChange(task, `Linked note: ${note.title || 'Untitled Note'}`, { type: 'note' });
+        }
         persistUpdatedNote(note.id, { taskIds: [...note.taskIds] });
         broadcastNotesChange('update', note.id);
         saveToStorage();
@@ -1264,6 +1282,9 @@ function linkTaskToGoal(taskId, goalId, applyToDownstream = null) {
     if (!taskId || !goalId) return;
     const normalizedGoalId = String(goalId || '').trim();
     if (!normalizedGoalId) return;
+    const goalText = (typeof getGoalTextById === 'function')
+        ? String(getGoalTextById(normalizedGoalId) || '').trim()
+        : normalizedGoalId;
 
     const node = (typeof getTaskById === 'function')
         ? getTaskById(taskId)
@@ -1314,6 +1335,9 @@ function linkTaskToGoal(taskId, goalId, applyToDownstream = null) {
     if (!node.goalIds) node.goalIds = [];
     if (!node.goalIds.includes(normalizedGoalId)) {
         node.goalIds.push(normalizedGoalId);
+        if (typeof logTaskChange === 'function') {
+            logTaskChange(node, `Linked goal: ${goalText || normalizedGoalId}`, { type: 'goal' });
+        }
         showNotification("Goal Linked to Task");
     }
 
@@ -1328,6 +1352,9 @@ function linkTaskToGoal(taskId, goalId, applyToDownstream = null) {
                 if (!downNode.goalIds) downNode.goalIds = [];
                 if (!downNode.goalIds.includes(normalizedGoalId)) {
                     downNode.goalIds.push(normalizedGoalId);
+                    if (typeof logTaskChange === 'function') {
+                        logTaskChange(downNode, `Inherited goal: ${goalText || normalizedGoalId}`, { type: 'goal' });
+                    }
                 }
                 // Recursively apply to their downstream tasks too
                 linkDownstream(downNode.id);
@@ -1398,6 +1425,12 @@ function unlinkTaskFromGoal(taskId, goalId) {
 
     if (!node.goalIds) node.goalIds = [];
     node.goalIds = node.goalIds.filter(id => id !== normalizedGoalId);
+    if (typeof logTaskChange === 'function') {
+        const goalText = (typeof getGoalTextById === 'function')
+            ? String(getGoalTextById(normalizedGoalId) || '').trim()
+            : normalizedGoalId;
+        logTaskChange(node, `Removed goal: ${goalText || normalizedGoalId}`, { type: 'goal' });
+    }
     saveToStorage();
     updateInspector();
     showNotification("Task Unlinked from Goal");

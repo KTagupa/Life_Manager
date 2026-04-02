@@ -5,6 +5,12 @@
             const activeNodes = [];
             nodes.forEach(n => {
                 if (n.completed && n.completedDate && (now - n.completedDate > ARCHIVE_THRESHOLD_MS)) {
+                    if (typeof logTaskChange === 'function') {
+                        logTaskChange(n, 'Auto-archived after staying completed for 24 hours', {
+                            type: 'archive',
+                            timestamp: now
+                        });
+                    }
                     archivedNodes.push(n);
                     changed = true;
                 } else {
@@ -43,6 +49,12 @@
                         // Task has expired - mark as completed and archive
                         n.completed = true;
                         n.completedDate = now;
+                        if (typeof logTaskChange === 'function') {
+                            logTaskChange(n, 'Expired on due date and auto-archived', {
+                                type: 'archive',
+                                timestamp: now
+                            });
+                        }
                         archivedNodes.push(n);
                         expiredCount++;
 
@@ -135,7 +147,8 @@
 
             if (!node.checkIns) node.checkIns = [];
             node.checkIns.push(Date.now());
-            if (typeof touchTask === 'function') touchTask(node);
+            if (typeof logTaskChange === 'function') logTaskChange(node, 'Checked in today', { type: 'checkin' });
+            else if (typeof touchTask === 'function') touchTask(node);
 
             // Glow effect
             if (e && e.target) {
@@ -213,6 +226,56 @@
             harder: { label: 'Harder', emoji: '⚠️', color: '#ea580c' },
             easier: { label: 'Easier', emoji: '🌱', color: '#fbbf24' }
         };
+
+        function formatTaskChangeLogTimestamp(timestamp) {
+            const ts = Number(timestamp) || 0;
+            if (!ts) return 'Unknown time';
+
+            const diff = Date.now() - ts;
+            if (diff >= 0 && diff < 60000) return 'Just now';
+            if (diff >= 0 && diff < 3600000) return `${Math.max(1, Math.round(diff / 60000))}m ago`;
+            if (diff >= 0 && diff < 86400000) return `${Math.max(1, Math.round(diff / 3600000))}h ago`;
+
+            return new Date(ts).toLocaleString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+
+        function buildTaskContextLogHtml(node) {
+            const changeLog = (typeof ensureTaskChangeLog === 'function')
+                ? ensureTaskChangeLog(node)
+                : (Array.isArray(node && node.changeLog) ? node.changeLog : []);
+            const entries = Array.isArray(changeLog) ? changeLog.slice(0, 10) : [];
+
+            return `
+                <div class="inspector-section inspector-section-context-log inspector-meta-card" style="margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;">
+                        <label class="field-label" style="margin:0;">🕘 TASK LOG</label>
+                        <span style="font-size:10px; color:#64748b;">${entries.length} recent</span>
+                    </div>
+                    ${entries.length > 0 ? `
+                        <div class="task-context-log-list">
+                            ${entries.map((entry) => `
+                                <div class="task-context-log-entry">
+                                    <div class="task-context-log-dot" aria-hidden="true"></div>
+                                    <div class="task-context-log-content">
+                                        <div class="task-context-log-message">${escapeHtml(entry.message || 'Updated')}</div>
+                                        <div class="task-context-log-time">${escapeHtml(formatTaskChangeLogTimestamp(entry.timestamp))}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <div style="text-align:center; padding:12px; border:1px dashed #334155; border-radius:8px; color:#475569; font-size:11px;">
+                            No task activity logged yet.
+                        </div>
+                    `}
+                </div>
+            `;
+        }
 
         const INSPECTOR_DETAIL_GROUP_META = {
             plan: {
@@ -725,7 +788,7 @@
 
                     ${linkedProjectPillHtml}
                     <div class="inspector-title-wrapper">
-                        <input type="text" class="inspector-title-input" value="${node.title}" placeholder="Task Title..." oninput="updateNodeField('title', this.value)">
+                        <input type="text" class="inspector-title-input" value="${node.title}" placeholder="Task Title..." onfocus="this.dataset.initialValue=this.value" oninput="updateNodeField('title', this.value, { skipLog: true })" onchange="updateNodeField('title', this.value, { previousValue: this.dataset.initialValue || '' }); this.dataset.initialValue=this.value;">
                     </div>
                     ${renderCheckInGrid(node)}
                     ${detailGroupSwitchHtml}
@@ -1201,6 +1264,7 @@
                           </div>` : ''}
                     </div>
                 </div>`;
+            const contextLogHtml = buildTaskContextLogHtml(node);
 
             // --- FOOTER ---
             const footerHtml = `
@@ -1259,6 +1323,7 @@
                     ${linkedNotesHtml}
                     ${externalLinkHtml}
                     ${linkedGoalsHtml}
+                    ${contextLogHtml}
                 </div>
             `;
             const detailGroupHtml = activeDetailGroup === 'work'
@@ -1294,10 +1359,15 @@
         function setUrgencyMode(mode) {
             const node = nodes.find(n => n.id === selectedNodeId);
             if (node) {
+                const previousMode = node.isManualUrgent ? 'urgent' : (node.isManualNotUrgent ? 'not-urgent' : 'standard');
                 const nextMode = mode === 'urgent' || mode === 'not-urgent' ? mode : 'standard';
+                if (previousMode === nextMode) return;
                 node.isManualUrgent = nextMode === 'urgent';
                 node.isManualNotUrgent = nextMode === 'not-urgent';
-                if (typeof touchTask === 'function') touchTask(node);
+                if (typeof logTaskChange === 'function') {
+                    const labels = { standard: 'Standard', urgent: 'Urgent', 'not-urgent': 'Not Urgent' };
+                    logTaskChange(node, `Priority changed from ${labels[previousMode]} to ${labels[nextMode]}`, { type: 'priority' });
+                } else if (typeof touchTask === 'function') touchTask(node);
                 updateCalculations();
                 render();
                 updateInspector();
@@ -1309,9 +1379,10 @@
             setUrgencyMode(urgent ? 'urgent' : 'standard');
         }
 
-        function updateNodeField(field, value) {
+        function updateNodeField(field, value, options = {}) {
             let node = getSelectedNode();
             if (node) {
+                const safeOptions = options && typeof options === 'object' ? options : {};
                 const getDueDateFromDuration = (daysValue) => {
                     const days = parseInt(daysValue, 10);
                     if (Number.isNaN(days) || days <= 0) return '';
@@ -1324,6 +1395,8 @@
                     const dd = String(due.getDate()).padStart(2, '0');
                     return `${yyyy}-${mm}-${dd}`;
                 };
+                const previousValue = safeOptions.previousValue !== undefined ? safeOptions.previousValue : node[field];
+                let changeMessage = '';
 
                 if (field === 'noDueDate') {
                     node.noDueDate = Boolean(value);
@@ -1332,6 +1405,9 @@
                         node.expiresOnDue = false;
                     } else if (node.syncDurationDate && !node.dueDate) {
                         node.dueDate = getDueDateFromDuration(node.duration);
+                    }
+                    if (Boolean(previousValue) !== node.noDueDate) {
+                        changeMessage = node.noDueDate ? 'Removed due date' : 'Restored due date tracking';
                     }
                 } else {
                     node[field] = value;
@@ -1360,7 +1436,48 @@
                     }
                 }
                 if (field === 'duration' || field === 'dueDate' || field === 'syncDurationDate' || field === 'noDueDate') updateCalculations();
-                if (typeof touchTask === 'function') touchTask(node);
+                if (!changeMessage && safeOptions.skipLog !== true) {
+                    if (field === 'title') {
+                        const previousTitle = String(previousValue || '').trim();
+                        const nextTitle = String(node.title || '').trim();
+                        if (previousTitle !== nextTitle && nextTitle) {
+                            changeMessage = previousTitle
+                                ? `Renamed task from "${previousTitle}" to "${nextTitle}"`
+                                : `Named task "${nextTitle}"`;
+                        }
+                    } else if (field === 'duration') {
+                        const before = Number(previousValue);
+                        const after = Number(node.duration);
+                        if (before !== after && Number.isFinite(after)) {
+                            changeMessage = `Duration updated to ${after} day${after === 1 ? '' : 's'}`;
+                        }
+                    } else if (field === 'dueDate') {
+                        const before = String(previousValue || '');
+                        const after = String(node.dueDate || '');
+                        if (before !== after) {
+                            changeMessage = after ? `Due date set to ${after}` : 'Cleared due date';
+                        }
+                    } else if (field === 'expiresOnDue') {
+                        if (Boolean(previousValue) !== Boolean(node.expiresOnDue)) {
+                            changeMessage = node.expiresOnDue ? 'Enabled auto-archive on due date' : 'Disabled auto-archive on due date';
+                        }
+                    } else if (field === 'externalLink') {
+                        const before = String(previousValue || '').trim();
+                        const after = String(node.externalLink || '').trim();
+                        if (before !== after) {
+                            changeMessage = after ? 'Updated external link' : 'Removed external link';
+                        }
+                    } else if (field === 'syncDurationDate') {
+                        if (Boolean(previousValue) !== Boolean(node.syncDurationDate)) {
+                            changeMessage = node.syncDurationDate ? 'Linked duration and due date' : 'Unlinked duration and due date';
+                        }
+                    }
+                }
+                if (safeOptions.skipLog === true || !changeMessage) {
+                    if (typeof touchTask === 'function') touchTask(node);
+                } else if (typeof logTaskChange === 'function') {
+                    logTaskChange(node, changeMessage, { type: 'update' });
+                } else if (typeof touchTask === 'function') touchTask(node);
                 render(); saveToStorage();
             }
         }
@@ -1379,7 +1496,12 @@
                         renderArchiveList();
                     }
                 }
-                if (typeof touchTask === 'function') touchTask(node);
+                if (typeof logTaskChange === 'function') {
+                    logTaskChange(node, node.completed ? 'Marked task complete' : 'Reopened task', {
+                        type: node.completed ? 'complete' : 'reopen',
+                        timestamp: Number(node.completedDate) || Date.now()
+                    });
+                } else if (typeof touchTask === 'function') touchTask(node);
                 updateCalculations();
                 render();
                 updateInspector();
@@ -1454,8 +1576,16 @@
             } else {
                 const task = nodes.find(n => n.id === taskId) || archivedNodes.find(n => n.id === taskId);
                 if (!task) return;
+                const previousProjectId = String(task.projectId || '').trim();
                 task.projectId = normalizedProjectId;
-                if (typeof touchTask === 'function') touchTask(task);
+                if (typeof logTaskChange === 'function' && previousProjectId !== normalizedProjectId) {
+                    const project = normalizedProjectId && Array.isArray(projects)
+                        ? projects.find(item => item && item.id === normalizedProjectId)
+                        : null;
+                    logTaskChange(task, normalizedProjectId
+                        ? `Linked to project "${project && project.name ? project.name : normalizedProjectId}"`
+                        : 'Removed project link', { type: 'project' });
+                } else if (typeof touchTask === 'function') touchTask(task);
                 saveToStorage();
                 render();
                 updateInspector();
@@ -1480,20 +1610,24 @@
                 inheritTaskGoalsFromParent(parentNode, node);
             }
 
-            if (typeof touchTask === 'function') touchTask(node);
+            if (typeof logTaskChange === 'function') {
+                logTaskChange(node, `Added dependency: ${parentNode.title || 'Untitled Task'}`, { type: 'dependency' });
+            } else if (typeof touchTask === 'function') touchTask(node);
             updateCalculations();
             render();
             updateInspector();
             saveToStorage();
         }
-        function removeDependency(parentId, event) { if (event) event.stopPropagation(); const node = nodes.find(n => n.id === selectedNodeId); if (node) { node.dependencies = node.dependencies.filter(d => d.id !== parentId); if (typeof touchTask === 'function') touchTask(node); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
-        function toggleDepType(parentId, event) { if (event) event.stopPropagation(); const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); dep.type = dep.type === 'hard' ? 'soft' : 'hard'; if (typeof touchTask === 'function') touchTask(node); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
-        function addSubtask() { const node = getSelectedNode(); if (node) { node.subtasks.push(typeof createSubtask === 'function' ? createSubtask('New Step') : { text: 'New Step', done: false }); if (typeof touchTask === 'function') touchTask(node); render(); updateInspector(); saveToStorage(); } }
+        function removeDependency(parentId, event) { if (event) event.stopPropagation(); const node = nodes.find(n => n.id === selectedNodeId); if (node) { const parentNode = nodes.find(n => n.id === parentId) || archivedNodes.find(n => n.id === parentId); node.dependencies = node.dependencies.filter(d => d.id !== parentId); if (typeof logTaskChange === 'function') logTaskChange(node, `Removed dependency: ${parentNode && parentNode.title ? parentNode.title : 'Untitled Task'}`, { type: 'dependency' }); else if (typeof touchTask === 'function') touchTask(node); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+        function toggleDepType(parentId, event) { if (event) event.stopPropagation(); const node = nodes.find(n => n.id === selectedNodeId); if (node) { const dep = node.dependencies.find(d => d.id === parentId); if (!dep) return; dep.type = dep.type === 'hard' ? 'soft' : 'hard'; const parentNode = nodes.find(n => n.id === parentId) || archivedNodes.find(n => n.id === parentId); if (typeof logTaskChange === 'function') logTaskChange(node, `Changed dependency "${parentNode && parentNode.title ? parentNode.title : 'Untitled Task'}" to ${dep.type}`, { type: 'dependency' }); else if (typeof touchTask === 'function') touchTask(node); updateCalculations(); render(); updateInspector(); saveToStorage(); } }
+        function addSubtask() { const node = getSelectedNode(); if (node) { const newSubtask = typeof createSubtask === 'function' ? createSubtask('New Step') : { text: 'New Step', done: false }; node.subtasks.push(newSubtask); if (typeof logTaskChange === 'function') logTaskChange(node, `Added subtask: ${newSubtask.text || 'New Step'}`, { type: 'subtask' }); else if (typeof touchTask === 'function') touchTask(node); render(); updateInspector(); saveToStorage(); } }
         function toggleSubtask(index) {
             const node = getSelectedNode();
             if (node) {
                 node.subtasks[index].done = !node.subtasks[index].done;
-                if (typeof touchTask === 'function') touchTask(node);
+                if (typeof logTaskChange === 'function') {
+                    logTaskChange(node, `${node.subtasks[index].done ? 'Completed' : 'Reopened'} subtask: ${node.subtasks[index].text || `Step ${index + 1}`}`, { type: 'subtask' });
+                } else if (typeof touchTask === 'function') touchTask(node);
                 render();
                 updateInspector();
                 saveToStorage();
@@ -1590,8 +1724,8 @@
             document.getElementById('inspector').classList.add('hidden');
             render();
         }
-        function updateSubtaskText(index, val) { const node = getSelectedNode(); const subtask = node && Array.isArray(node.subtasks) ? node.subtasks[index] : null; if (!subtask) return; subtask.text = val; if (typeof touchTask === 'function') touchTask(node); saveToStorage(); }
-        function removeSubtask(index) { const node = getSelectedNode(); if (!node || !Array.isArray(node.subtasks)) return; node.subtasks.splice(index, 1); if (typeof touchTask === 'function') touchTask(node); if (typeof cleanupOrphanReminders === 'function') cleanupOrphanReminders({ persist: false, render: true, refreshInspector: false }); render(); updateInspector(); saveToStorage(); }
+        function updateSubtaskText(index, val) { const node = getSelectedNode(); const subtask = node && Array.isArray(node.subtasks) ? node.subtasks[index] : null; if (!subtask) return; const previousText = String(subtask.text || '').trim(); subtask.text = val; const nextText = String(subtask.text || '').trim(); if (typeof logTaskChange === 'function' && previousText !== nextText) logTaskChange(node, previousText ? `Renamed subtask from "${previousText}" to "${nextText || 'Untitled'}"` : `Named subtask "${nextText || 'Untitled'}"`, { type: 'subtask' }); else if (typeof touchTask === 'function') touchTask(node); saveToStorage(); }
+        function removeSubtask(index) { const node = getSelectedNode(); if (!node || !Array.isArray(node.subtasks)) return; const removedSubtask = node.subtasks[index]; node.subtasks.splice(index, 1); if (typeof logTaskChange === 'function') logTaskChange(node, `Removed subtask: ${removedSubtask && removedSubtask.text ? removedSubtask.text : `Step ${index + 1}`}`, { type: 'subtask' }); else if (typeof touchTask === 'function') touchTask(node); if (typeof cleanupOrphanReminders === 'function') cleanupOrphanReminders({ persist: false, render: true, refreshInspector: false }); render(); updateInspector(); saveToStorage(); }
 
         function promoteSubtaskToNode(index) {
             const parentNode = getSelectedNode();
@@ -1599,10 +1733,14 @@
             const subtask = parentNode.subtasks[index];
             if (!subtask) return;
             parentNode.subtasks.splice(index, 1);
-            if (typeof touchTask === 'function') touchTask(parentNode);
+            if (typeof logTaskChange === 'function') logTaskChange(parentNode, `Promoted subtask to task: ${subtask.text || `Step ${index + 1}`}`, { type: 'subtask' });
+            else if (typeof touchTask === 'function') touchTask(parentNode);
             const newNode = createNode(parentNode.x + 220, parentNode.y, subtask.text);
             newNode.completed = subtask.done;
             if (newNode.completed) newNode.completedDate = Date.now();
+            if (typeof logTaskChange === 'function') {
+                logTaskChange(newNode, `Created from subtask in "${parentNode.title || 'Untitled Task'}"`, { type: 'create' });
+            }
             nodes.push(newNode);
             if (subtask.id && typeof transferReminderAssignment === 'function') {
                 transferReminderAssignment('subtask', subtask.id, 'task', newNode.id, newNode.title);
@@ -1629,7 +1767,8 @@
                 ? createSubtask(targetNode.title, { done: targetNode.completed })
                 : { text: targetNode.title, done: targetNode.completed };
             parentNode.subtasks.push(newSubtask);
-            if (typeof touchTask === 'function') touchTask(parentNode);
+            if (typeof logTaskChange === 'function') logTaskChange(parentNode, `Absorbed task as subtask: ${targetNode.title || 'Untitled Task'}`, { type: 'subtask' });
+            else if (typeof touchTask === 'function') touchTask(parentNode);
             if (typeof transferReminderAssignment === 'function' && newSubtask.id) {
                 transferReminderAssignment('task', targetId, 'subtask', newSubtask.id, newSubtask.text || targetNode.title);
             }

@@ -443,10 +443,17 @@ function toggleTimer(id = null) {
         const dur = now - node.activeTimerStart;
         node.timeLogs.push({ start: node.activeTimerStart, end: now, duration: dur });
         node.activeTimerStart = null;
+        if (typeof logTaskChange === 'function') {
+            const minutes = Math.max(1, Math.round(dur / 60000));
+            logTaskChange(node, `Stopped focus session (${minutes}m)`, { type: 'session', timestamp: now });
+        }
         playAudioFeedback('timer-stop'); // <--- SOUND
     } else {
         // STARTING
         node.activeTimerStart = Date.now();
+        if (typeof logTaskChange === 'function') {
+            logTaskChange(node, 'Started focus session', { type: 'session', timestamp: node.activeTimerStart });
+        }
         playAudioFeedback('timer-start'); // <--- SOUND
         handleCheckIn(null, targetId); // <--- Auto Check-in
     }
@@ -1585,11 +1592,15 @@ function nudgeSelectedNodesByKeyboard(dx, dy) {
 
 function bulkComplete() {
     let count = 0;
+    const now = Date.now();
     selectedIds.forEach(id => {
         const node = nodes.find(n => n.id === id);
         if (node && !node.completed) {
             node.completed = true;
-            node.completedDate = Date.now();
+            node.completedDate = now;
+            if (typeof logTaskChange === 'function') {
+                logTaskChange(node, 'Marked task complete from multi-select', { type: 'complete', timestamp: now });
+            }
             count++;
         }
     });
@@ -1608,6 +1619,9 @@ function bulkArchive() {
         if (node) {
             node.completed = true;
             node.completedDate = now;
+            if (typeof logTaskChange === 'function') {
+                logTaskChange(node, 'Archived from multi-select', { type: 'archive', timestamp: now });
+            }
             archivedNodes.push(node);
             count++;
         }

@@ -604,6 +604,9 @@ function demoteToInbox() {
 
     const newInboxId = 'inbox_' + Date.now();
     inbox.push({ id: newInboxId, title: node.title });
+    if (typeof logTaskChange === 'function') {
+        logTaskChange(node, 'Moved out of tasks and back to Inbox', { type: 'inbox' });
+    }
     transferReminderAssignment('task', node.id, 'inbox', newInboxId, node.title);
     nodes = nodes.filter(n => n.id !== selectedNodeId);
     nodes.forEach(n => { n.dependencies = n.dependencies.filter(d => d.id !== selectedNodeId); });

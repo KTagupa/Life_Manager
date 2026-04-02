@@ -270,6 +270,71 @@ function normalizeAiUrgencyRecord(raw, kind = 'task') {
     return normalized;
 }
 
+const TASK_CHANGE_LOG_LIMIT = 40;
+
+function createTaskChangeEntry(message, options = {}) {
+    const safeOptions = options && typeof options === 'object' ? options : {};
+    const timestamp = Number.isFinite(Number(safeOptions.timestamp)) ? Number(safeOptions.timestamp) : Date.now();
+    const normalizedMessage = String(message || '').trim();
+    if (!normalizedMessage) return null;
+
+    return {
+        id: `task_log_${timestamp}_${Math.random().toString(36).slice(2, 8)}`,
+        type: String(safeOptions.type || 'update').trim() || 'update',
+        message: normalizedMessage,
+        timestamp
+    };
+}
+
+function normalizeTaskChangeLog(changeLog) {
+    const source = Array.isArray(changeLog) ? changeLog : [];
+    return source
+        .map((entry) => {
+            if (typeof entry === 'string') {
+                return createTaskChangeEntry(entry);
+            }
+            if (!entry || typeof entry !== 'object') return null;
+            return createTaskChangeEntry(entry.message || entry.label || entry.text, {
+                type: entry.type,
+                timestamp: entry.timestamp || entry.createdAt || entry.updatedAt
+            });
+        })
+        .filter(Boolean)
+        .sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))
+        .slice(0, TASK_CHANGE_LOG_LIMIT);
+}
+
+function ensureTaskChangeLog(task) {
+    if (!task || typeof task !== 'object') return [];
+    task.changeLog = normalizeTaskChangeLog(task.changeLog);
+    return task.changeLog;
+}
+
+function logTaskChange(task, message, options = {}) {
+    if (!task || typeof task !== 'object') return null;
+    const safeOptions = options && typeof options === 'object' ? options : {};
+    const entry = createTaskChangeEntry(message, safeOptions);
+    if (!entry) return null;
+
+    const changeLog = ensureTaskChangeLog(task);
+    const latestEntry = changeLog[0];
+    if (latestEntry
+        && latestEntry.message === entry.message
+        && latestEntry.type === entry.type
+        && Math.abs((Number(latestEntry.timestamp) || 0) - entry.timestamp) < 1000) {
+        if (safeOptions.touch !== false) touchTask(task, entry.timestamp);
+        return latestEntry;
+    }
+
+    changeLog.unshift(entry);
+    if (changeLog.length > TASK_CHANGE_LOG_LIMIT) {
+        changeLog.length = TASK_CHANGE_LOG_LIMIT;
+    }
+
+    if (safeOptions.touch !== false) touchTask(task, entry.timestamp);
+    return entry;
+}
+
 function touchTask(task, timestamp = Date.now()) {
     if (!task || typeof task !== 'object') return;
     if (!Number.isFinite(Number(task.createdAt))) task.createdAt = Number(timestamp) || Date.now();
@@ -554,6 +619,7 @@ function createNode(x, y, title = 'New Task') {
         projectId: null,
         createdAt: now,
         updatedAt: now,
+        changeLog: [createTaskChangeEntry('Task created', { type: 'create', timestamp: now })],
         aiUrgency: createDefaultAiUrgency('task'),
         selfAssessment: createDefaultTaskSelfAssessment()
     };
@@ -665,6 +731,13 @@ function migrateStateData(rawState) {
         const fallbackCreatedAt = Number(task.completedDate) || Number(task.updatedAt) || Date.now();
         task.createdAt = Number.isFinite(Number(task.createdAt)) ? Number(task.createdAt) : fallbackCreatedAt;
         task.updatedAt = Number.isFinite(Number(task.updatedAt)) ? Number(task.updatedAt) : task.createdAt;
+        task.changeLog = normalizeTaskChangeLog(task.changeLog);
+        if (task.changeLog.length === 0) {
+            task.changeLog = [createTaskChangeEntry('Task imported into history', {
+                type: 'create',
+                timestamp: task.createdAt
+            })];
+        }
         task.aiUrgency = normalizeAiUrgencyRecord(task.aiUrgency, 'task');
         task.selfAssessment = normalizeTaskSelfAssessment(task.selfAssessment);
     };
@@ -693,6 +766,7 @@ function initDemoData() {
             dependencies: [], subtasks: [createSubtask('Brainstorm', { done: true })],
             activeTimerStart: null, timeLogs: [], projectId: null,
             createdAt: now, updatedAt: now,
+            changeLog: [createTaskChangeEntry('Task created', { type: 'create', timestamp: now })],
             aiUrgency: createDefaultAiUrgency('task'),
             selfAssessment: createDefaultTaskSelfAssessment()
         }
@@ -1041,6 +1115,13 @@ function sanitizeLoadedData() {
         const fallbackCreatedAt = Number(n.completedDate) || Number(n.updatedAt) || Date.now();
         n.createdAt = Number.isFinite(Number(n.createdAt)) ? Number(n.createdAt) : fallbackCreatedAt;
         n.updatedAt = Number.isFinite(Number(n.updatedAt)) ? Number(n.updatedAt) : n.createdAt;
+        n.changeLog = normalizeTaskChangeLog(n.changeLog);
+        if (n.changeLog.length === 0) {
+            n.changeLog = [createTaskChangeEntry('Task imported into history', {
+                type: 'create',
+                timestamp: n.createdAt
+            })];
+        }
         n.aiUrgency = normalizeAiUrgencyRecord(n.aiUrgency, 'task');
         n.selfAssessment = normalizeTaskSelfAssessment(n.selfAssessment);
         const normalizedProjectId = String(n.projectId || '').trim();

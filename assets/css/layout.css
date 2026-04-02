@@ -1226,6 +1226,52 @@
             gap: 16px;
         }
 
+        .task-context-log-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .task-context-log-entry {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 0;
+            border-top: 1px solid rgba(51, 65, 85, 0.6);
+        }
+
+        .task-context-log-entry:first-child {
+            border-top: none;
+            padding-top: 0;
+        }
+
+        .task-context-log-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #60a5fa, #22c55e);
+            box-shadow: 0 0 12px rgba(96, 165, 250, 0.28);
+            margin-top: 5px;
+            flex-shrink: 0;
+        }
+
+        .task-context-log-content {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .task-context-log-message {
+            font-size: 12px;
+            color: #e2e8f0;
+            line-height: 1.45;
+        }
+
+        .task-context-log-time {
+            font-size: 10px;
+            color: #64748b;
+            margin-top: 3px;
+        }
+
         .task-calibration-card {
             --task-calibration-glow-x: 44%;
             --task-calibration-glow-opacity: 0.14;

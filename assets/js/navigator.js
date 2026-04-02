@@ -1878,13 +1878,18 @@ function applyProjectGoalMutation(projectId, goalId, options = {}) {
         ...archivedNodes.filter(task => task && String(task.projectId || '').trim() === normalizedProjectId)
     ];
     let taskCount = 0;
+    const goalTitle = (typeof getGoalTextById === 'function')
+        ? String(getGoalTextById(normalizedGoalId) || '').trim()
+        : normalizedGoalId;
     linkedTasks.forEach((task) => {
         const taskGoalIds = normalizeProjectGoalIds(task.goalIds);
         const taskHasGoal = taskGoalIds.includes(normalizedGoalId);
         if (remove) {
             if (taskHasGoal) {
                 task.goalIds = taskGoalIds.filter(existingGoalId => existingGoalId !== normalizedGoalId);
-                if (typeof touchTask === 'function') touchTask(task);
+                if (typeof logTaskChange === 'function') {
+                    logTaskChange(task, `Removed project goal: ${goalTitle || normalizedGoalId}`, { type: 'goal' });
+                } else if (typeof touchTask === 'function') touchTask(task);
                 taskCount++;
             } else if (!Array.isArray(task.goalIds)) {
                 task.goalIds = taskGoalIds;
@@ -1897,7 +1902,9 @@ function applyProjectGoalMutation(projectId, goalId, options = {}) {
             return;
         }
         task.goalIds = [...taskGoalIds, normalizedGoalId];
-        if (typeof touchTask === 'function') touchTask(task);
+        if (typeof logTaskChange === 'function') {
+            logTaskChange(task, `Linked project goal: ${goalTitle || normalizedGoalId}`, { type: 'goal' });
+        } else if (typeof touchTask === 'function') touchTask(task);
         taskCount++;
     });
 
@@ -2397,7 +2404,12 @@ function assignTaskToProject(taskId, projectId = null, options = {}) {
 
     task.projectId = resolvedProjectId;
     const now = Date.now();
-    if (typeof touchTask === 'function') touchTask(task, now);
+    if (typeof logTaskChange === 'function') {
+        const nextProject = resolvedProjectId ? getProjectById(resolvedProjectId) : null;
+        logTaskChange(task, resolvedProjectId
+            ? `Linked to project "${nextProject && nextProject.name ? nextProject.name : resolvedProjectId}"`
+            : 'Removed project link', { type: 'project', timestamp: now });
+    } else if (typeof touchTask === 'function') touchTask(task, now);
     if (resolvedProjectId) {
         const linkedProject = getProjectById(resolvedProjectId);
         if (linkedProject) {
