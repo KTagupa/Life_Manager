@@ -37,6 +37,1062 @@
             return method || 'fifo';
         }
 
+        const CRYPTO_CONVERSION_LAB_STORAGE_KEY = 'finance_crypto_conversion_lab_v1';
+        let cryptoConversionLabState = null;
+
+        function makeCryptoConversionLabId(prefix = 'ccl') {
+            return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+        }
+
+        function getCryptoConversionLabSupportedCurrencies() {
+            return ['PHP', 'USD', 'JPY'];
+        }
+
+        function getCryptoConversionDefaultCurrency() {
+            const candidate = String(activeCurrency || 'PHP').trim().toUpperCase();
+            return getCryptoConversionLabSupportedCurrencies().includes(candidate) ? candidate : 'PHP';
+        }
+
+        function createCryptoConversionScenarioName(index) {
+            const safeIndex = Number(index) || 0;
+            return safeIndex < 26 ? `Route ${String.fromCharCode(65 + safeIndex)}` : `Route ${safeIndex + 1}`;
+        }
+
+        function createCryptoConversionLeg(overrides = {}) {
+            return {
+                id: overrides.id || makeCryptoConversionLabId('leg'),
+                fromTokenId: String(overrides.fromTokenId || '').trim(),
+                fromTokenSymbol: String(overrides.fromTokenSymbol || '').trim(),
+                fromTokenName: String(overrides.fromTokenName || '').trim(),
+                fromSearchText: String(overrides.fromSearchText || '').trim(),
+                fromResults: Array.isArray(overrides.fromResults) ? overrides.fromResults : [],
+                fromResultsError: String(overrides.fromResultsError || '').trim(),
+                toTokenId: String(overrides.toTokenId || '').trim(),
+                toTokenSymbol: String(overrides.toTokenSymbol || '').trim(),
+                toTokenName: String(overrides.toTokenName || '').trim(),
+                toSearchText: String(overrides.toSearchText || '').trim(),
+                toResults: Array.isArray(overrides.toResults) ? overrides.toResults : [],
+                toResultsError: String(overrides.toResultsError || '').trim(),
+                mode: String(overrides.mode || 'market').trim() === 'manual' ? 'manual' : 'market',
+                manualRate: String(overrides.manualRate || '').trim(),
+                feePct: String(overrides.feePct ?? '0').trim() || '0',
+                slippagePct: String(overrides.slippagePct ?? '0').trim() || '0'
+            };
+        }
+
+        function createCryptoConversionScenario(overrides = {}, index = 0) {
+            const providedLegs = Array.isArray(overrides.legs) ? overrides.legs : [];
+            return {
+                id: overrides.id || makeCryptoConversionLabId('scenario'),
+                name: String(overrides.name || createCryptoConversionScenarioName(index)).trim() || createCryptoConversionScenarioName(index),
+                startAmount: String(overrides.startAmount || '').trim(),
+                quoteCurrency: getCryptoConversionLabSupportedCurrencies().includes(String(overrides.quoteCurrency || '').trim().toUpperCase())
+                    ? String(overrides.quoteCurrency).trim().toUpperCase()
+                    : getCryptoConversionDefaultCurrency(),
+                legs: providedLegs.length
+                    ? providedLegs.map((leg, legIndex) => createCryptoConversionLeg(leg, legIndex))
+                    : [createCryptoConversionLeg()]
+            };
+        }
+
+        function buildDefaultCryptoConversionLabState() {
+            return {
+                scenarios: [
+                    createCryptoConversionScenario({ name: 'Route A' }, 0),
+                    createCryptoConversionScenario({ name: 'Route B' }, 1)
+                ]
+            };
+        }
+
+        function sanitizeCryptoConversionLabState(rawState) {
+            const source = rawState && typeof rawState === 'object' ? rawState : {};
+            const scenarios = Array.isArray(source.scenarios)
+                ? source.scenarios.map((scenario, index) => createCryptoConversionScenario({
+                    ...scenario,
+                    legs: Array.isArray(scenario?.legs)
+                        ? scenario.legs.map(leg => createCryptoConversionLeg(leg))
+                        : []
+                }, index))
+                : [];
+            return {
+                scenarios: scenarios.length ? scenarios : buildDefaultCryptoConversionLabState().scenarios
+            };
+        }
+
+        function serializeCryptoConversionLabState() {
+            const state = cryptoConversionLabState || buildDefaultCryptoConversionLabState();
+            return {
+                scenarios: (state.scenarios || []).map((scenario, index) => ({
+                    id: scenario.id || makeCryptoConversionLabId('scenario'),
+                    name: String(scenario.name || createCryptoConversionScenarioName(index)).trim(),
+                    startAmount: String(scenario.startAmount || '').trim(),
+                    quoteCurrency: getCryptoConversionLabSupportedCurrencies().includes(String(scenario.quoteCurrency || '').trim().toUpperCase())
+                        ? String(scenario.quoteCurrency).trim().toUpperCase()
+                        : getCryptoConversionDefaultCurrency(),
+                    legs: (Array.isArray(scenario.legs) ? scenario.legs : []).map(leg => ({
+                        id: leg.id || makeCryptoConversionLabId('leg'),
+                        fromTokenId: String(leg.fromTokenId || '').trim(),
+                        fromTokenSymbol: String(leg.fromTokenSymbol || '').trim(),
+                        fromTokenName: String(leg.fromTokenName || '').trim(),
+                        fromSearchText: String(leg.fromSearchText || '').trim(),
+                        toTokenId: String(leg.toTokenId || '').trim(),
+                        toTokenSymbol: String(leg.toTokenSymbol || '').trim(),
+                        toTokenName: String(leg.toTokenName || '').trim(),
+                        toSearchText: String(leg.toSearchText || '').trim(),
+                        mode: String(leg.mode || 'market').trim() === 'manual' ? 'manual' : 'market',
+                        manualRate: String(leg.manualRate || '').trim(),
+                        feePct: String(leg.feePct ?? '0').trim() || '0',
+                        slippagePct: String(leg.slippagePct ?? '0').trim() || '0'
+                    }))
+                }))
+            };
+        }
+
+        function ensureCryptoConversionLabState() {
+            if (cryptoConversionLabState) return cryptoConversionLabState;
+            try {
+                const raw = localStorage.getItem(CRYPTO_CONVERSION_LAB_STORAGE_KEY);
+                cryptoConversionLabState = sanitizeCryptoConversionLabState(raw ? JSON.parse(raw) : null);
+            } catch (error) {
+                console.warn('Failed to load crypto conversion lab state.', error);
+                cryptoConversionLabState = buildDefaultCryptoConversionLabState();
+            }
+            return cryptoConversionLabState;
+        }
+
+        function persistCryptoConversionLabState() {
+            try {
+                localStorage.setItem(CRYPTO_CONVERSION_LAB_STORAGE_KEY, JSON.stringify(serializeCryptoConversionLabState()));
+            } catch (error) {
+                console.warn('Failed to persist crypto conversion lab state.', error);
+            }
+        }
+
+        function getCryptoConversionScenarioById(scenarioId) {
+            ensureCryptoConversionLabState();
+            return (cryptoConversionLabState.scenarios || []).find(scenario => scenario.id === scenarioId) || null;
+        }
+
+        function getCryptoConversionLegById(scenarioId, legId) {
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            if (!scenario) return null;
+            return (scenario.legs || []).find(leg => leg.id === legId) || null;
+        }
+
+        function getCryptoConversionSearchInputId(scenarioId, legId, side) {
+            return `crypto-conv-${scenarioId}-${legId}-${side}-search`;
+        }
+
+        function getCryptoConversionFieldId(scenarioId, field, legId = '') {
+            return `crypto-conv-${scenarioId}-${legId || 'scenario'}-${field}`;
+        }
+
+        function getCryptoConversionTrackedTokenIds() {
+            ensureCryptoConversionLabState();
+            const tracked = new Set();
+            (cryptoConversionLabState?.scenarios || []).forEach(scenario => {
+                (scenario?.legs || []).forEach(leg => {
+                    const fromTokenId = String(leg?.fromTokenId || '').trim();
+                    const toTokenId = String(leg?.toTokenId || '').trim();
+                    if (fromTokenId) tracked.add(fromTokenId);
+                    if (toTokenId) tracked.add(toTokenId);
+                });
+            });
+            return tracked;
+        }
+
+        function captureCryptoConversionLabViewState(mount) {
+            const activeEl = document.activeElement;
+            const activeInsideLab = !!(activeEl && mount && mount.contains(activeEl));
+            let selectionStart = null;
+            let selectionEnd = null;
+
+            if (activeInsideLab) {
+                try {
+                    if (typeof activeEl.selectionStart === 'number') selectionStart = activeEl.selectionStart;
+                    if (typeof activeEl.selectionEnd === 'number') selectionEnd = activeEl.selectionEnd;
+                } catch (_error) {
+                    selectionStart = null;
+                    selectionEnd = null;
+                }
+            }
+
+            return {
+                scrollTop: mount ? mount.scrollTop : 0,
+                activeId: activeInsideLab ? String(activeEl.id || '').trim() : '',
+                selectionStart,
+                selectionEnd
+            };
+        }
+
+        function restoreCryptoConversionLabViewState(mount, viewState) {
+            if (!mount || !viewState) return;
+            mount.scrollTop = Number(viewState.scrollTop || 0);
+
+            if (!viewState.activeId) return;
+            const nextActiveEl = document.getElementById(viewState.activeId);
+            if (!nextActiveEl) return;
+
+            try {
+                nextActiveEl.focus({ preventScroll: true });
+            } catch (_error) {
+                nextActiveEl.focus();
+            }
+
+            try {
+                if (typeof viewState.selectionStart === 'number' && typeof viewState.selectionEnd === 'number' && typeof nextActiveEl.setSelectionRange === 'function') {
+                    nextActiveEl.setSelectionRange(viewState.selectionStart, viewState.selectionEnd);
+                }
+            } catch (_error) {
+                // Number inputs do not always support selection ranges; focus restoration is enough.
+            }
+        }
+
+        function getCryptoPriceValueInCurrency(cacheEntry, fromCurrency, toCurrency) {
+            const normalizedFrom = String(fromCurrency || '').trim().toUpperCase();
+            const normalizedTo = String(toCurrency || '').trim().toUpperCase();
+            const raw = Number(cacheEntry?.[normalizedFrom.toLowerCase()]);
+            if (!Number.isFinite(raw) || raw <= 0) return 0;
+            if (normalizedFrom === normalizedTo) return raw;
+            return convertToDisplayCurrency(raw, normalizedFrom, normalizedTo);
+        }
+
+        function getCryptoConversionQuotePrice(tokenId, currency) {
+            const normalizedTokenId = String(tokenId || '').trim();
+            if (!normalizedTokenId) return 0;
+
+            const normalizedCurrency = getCryptoConversionLabSupportedCurrencies().includes(String(currency || '').trim().toUpperCase())
+                ? String(currency).trim().toUpperCase()
+                : 'PHP';
+            const cache = cryptoPrices?.[normalizedTokenId];
+            if (!cache || typeof cache !== 'object') return 0;
+
+            const direct = Number(cache[normalizedCurrency.toLowerCase()]);
+            if (Number.isFinite(direct) && direct > 0) return direct;
+
+            const fallbacks = ['USD', 'PHP', 'JPY'];
+            for (const fallbackCurrency of fallbacks) {
+                const converted = getCryptoPriceValueInCurrency(cache, fallbackCurrency, normalizedCurrency);
+                if (Number.isFinite(converted) && converted > 0) return converted;
+            }
+
+            const fallbackPhp = Number(cache.price || cache.php);
+            if (!Number.isFinite(fallbackPhp) || fallbackPhp <= 0) return 0;
+
+            return normalizedCurrency === 'PHP'
+                ? fallbackPhp
+                : convertToDisplayCurrency(fallbackPhp, 'PHP', normalizedCurrency);
+        }
+
+        function getCryptoConversionTokenLabel(tokenId, symbol, name, fallbackText = '') {
+            const safeSymbol = String(symbol || '').trim().toUpperCase();
+            if (safeSymbol) return safeSymbol;
+            const safeName = String(name || '').trim();
+            if (safeName) return safeName;
+            const safeTokenId = String(tokenId || '').trim();
+            if (safeTokenId) return safeTokenId;
+            return String(fallbackText || '').trim() || 'Token';
+        }
+
+        function formatCryptoConversionTokenAmount(amount) {
+            const numeric = Number(amount);
+            if (!Number.isFinite(numeric)) return '--';
+            return numeric.toLocaleString(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 8
+            });
+        }
+
+        function formatCryptoConversionQuote(amount, currency) {
+            const numeric = Number(amount);
+            if (!Number.isFinite(numeric)) return '--';
+            return formatCurrency(numeric, currency);
+        }
+
+        function buildCryptoConversionScenarioRouteText(scenario) {
+            const legs = Array.isArray(scenario?.legs) ? scenario.legs : [];
+            const labels = [];
+            legs.forEach((leg, index) => {
+                const fromLabel = getCryptoConversionTokenLabel(leg.fromTokenId, leg.fromTokenSymbol, leg.fromTokenName, leg.fromSearchText);
+                const toLabel = getCryptoConversionTokenLabel(leg.toTokenId, leg.toTokenSymbol, leg.toTokenName, leg.toSearchText);
+                if (index === 0 && leg.fromTokenId) labels.push(fromLabel);
+                if (leg.toTokenId) labels.push(toLabel);
+            });
+            return labels.length ? labels.join(' -> ') : 'Set tokens to build a route';
+        }
+
+        function calculateCryptoConversionScenario(scenario) {
+            const quoteCurrency = getCryptoConversionLabSupportedCurrencies().includes(String(scenario?.quoteCurrency || '').trim().toUpperCase())
+                ? String(scenario.quoteCurrency).trim().toUpperCase()
+                : getCryptoConversionDefaultCurrency();
+            const startAmount = Number(scenario?.startAmount);
+            const legs = Array.isArray(scenario?.legs) ? scenario.legs : [];
+
+            if (!Number.isFinite(startAmount) || startAmount <= 0) {
+                return {
+                    valid: false,
+                    quoteCurrency,
+                    routeText: buildCryptoConversionScenarioRouteText(scenario),
+                    message: 'Enter a starting token amount to simulate this route.'
+                };
+            }
+
+            if (!legs.length) {
+                return {
+                    valid: false,
+                    quoteCurrency,
+                    routeText: buildCryptoConversionScenarioRouteText(scenario),
+                    message: 'Add at least one conversion leg.'
+                };
+            }
+
+            const legResults = [];
+            const warnings = [];
+            let currentAmount = startAmount;
+            let currentTokenId = '';
+            let currentTokenLabel = '';
+            let initialTokenId = '';
+            let initialTokenLabel = '';
+
+            for (let index = 0; index < legs.length; index += 1) {
+                const leg = legs[index];
+                const fromTokenId = String(leg?.fromTokenId || '').trim();
+                const toTokenId = String(leg?.toTokenId || '').trim();
+                const fromLabel = getCryptoConversionTokenLabel(fromTokenId, leg?.fromTokenSymbol, leg?.fromTokenName, leg?.fromSearchText);
+                const toLabel = getCryptoConversionTokenLabel(toTokenId, leg?.toTokenSymbol, leg?.toTokenName, leg?.toSearchText);
+
+                if (!fromTokenId || !toTokenId) {
+                    return {
+                        valid: false,
+                        quoteCurrency,
+                        routeText: buildCryptoConversionScenarioRouteText(scenario),
+                        message: `Leg ${index + 1} needs both a source token and a destination token.`
+                    };
+                }
+
+                if (index === 0) {
+                    initialTokenId = fromTokenId;
+                    initialTokenLabel = fromLabel;
+                    currentTokenId = fromTokenId;
+                    currentTokenLabel = fromLabel;
+                } else if (fromTokenId !== currentTokenId) {
+                    return {
+                        valid: false,
+                        quoteCurrency,
+                        routeText: buildCryptoConversionScenarioRouteText(scenario),
+                        message: `Leg ${index + 1} should start from ${currentTokenLabel}, the output of leg ${index}.`
+                    };
+                }
+
+                const feePct = Math.max(0, Number(leg?.feePct || 0));
+                const slippagePct = Math.max(0, Number(leg?.slippagePct || 0));
+                const mode = String(leg?.mode || 'market').trim() === 'manual' ? 'manual' : 'market';
+
+                let rate = 0;
+                let fromPrice = null;
+                let toPrice = null;
+
+                if (mode === 'manual') {
+                    rate = Number(leg?.manualRate);
+                    if (!Number.isFinite(rate) || rate <= 0) {
+                        return {
+                            valid: false,
+                            quoteCurrency,
+                            routeText: buildCryptoConversionScenarioRouteText(scenario),
+                            message: `Leg ${index + 1} needs a valid manual rate.`
+                        };
+                    }
+                    fromPrice = getCryptoConversionQuotePrice(fromTokenId, quoteCurrency);
+                    toPrice = getCryptoConversionQuotePrice(toTokenId, quoteCurrency);
+                    if (Number.isFinite(fromPrice) && fromPrice > 0 && (!Number.isFinite(toPrice) || toPrice <= 0)) {
+                        warnings.push(`Leg ${index + 1}: ${toLabel} has no cached ${quoteCurrency} price, so end value is partial.`);
+                    }
+                } else {
+                    fromPrice = getCryptoConversionQuotePrice(fromTokenId, quoteCurrency);
+                    toPrice = getCryptoConversionQuotePrice(toTokenId, quoteCurrency);
+                    if (!Number.isFinite(fromPrice) || fromPrice <= 0 || !Number.isFinite(toPrice) || toPrice <= 0) {
+                        return {
+                            valid: false,
+                            quoteCurrency,
+                            routeText: buildCryptoConversionScenarioRouteText(scenario),
+                            message: `Leg ${index + 1} needs cached ${quoteCurrency} prices for both ${fromLabel} and ${toLabel}.`
+                        };
+                    }
+                    rate = fromPrice / toPrice;
+                }
+
+                const grossOutput = currentAmount * rate;
+                const feeMultiplier = Math.max(0, 1 - (feePct / 100));
+                const slippageMultiplier = Math.max(0, 1 - (slippagePct / 100));
+                const netOutput = grossOutput * feeMultiplier * slippageMultiplier;
+                const dragAmount = grossOutput - netOutput;
+                const toPriceForQuote = Number.isFinite(toPrice) && toPrice > 0 ? toPrice : getCryptoConversionQuotePrice(toTokenId, quoteCurrency);
+                const estimatedDragQuote = Number.isFinite(toPriceForQuote) && toPriceForQuote > 0 ? dragAmount * toPriceForQuote : null;
+
+                if (!Number.isFinite(netOutput) || netOutput < 0) {
+                    return {
+                        valid: false,
+                        quoteCurrency,
+                        routeText: buildCryptoConversionScenarioRouteText(scenario),
+                        message: `Leg ${index + 1} could not be computed with the current values.`
+                    };
+                }
+
+                legResults.push({
+                    index,
+                    fromTokenId,
+                    toTokenId,
+                    fromLabel,
+                    toLabel,
+                    inputAmount: currentAmount,
+                    mode,
+                    rate,
+                    fromPrice,
+                    toPrice,
+                    grossOutput,
+                    outputAmount: netOutput,
+                    feePct,
+                    slippagePct,
+                    dragAmount,
+                    estimatedDragQuote
+                });
+
+                currentAmount = netOutput;
+                currentTokenId = toTokenId;
+                currentTokenLabel = toLabel;
+            }
+
+            const finalTokenId = currentTokenId;
+            const finalTokenLabel = currentTokenLabel;
+            const finalPrice = getCryptoConversionQuotePrice(finalTokenId, quoteCurrency);
+            const estimatedFinalValue = Number.isFinite(finalPrice) && finalPrice > 0 ? currentAmount * finalPrice : null;
+            const startPrice = getCryptoConversionQuotePrice(initialTokenId, quoteCurrency);
+            const estimatedStartValue = Number.isFinite(startPrice) && startPrice > 0 ? startAmount * startPrice : null;
+            const totalDragQuote = legResults.reduce((sum, leg) => {
+                return sum + (Number.isFinite(leg.estimatedDragQuote) ? leg.estimatedDragQuote : 0);
+            }, 0);
+
+            return {
+                valid: true,
+                quoteCurrency,
+                routeText: buildCryptoConversionScenarioRouteText(scenario),
+                initialTokenId,
+                initialTokenLabel,
+                startAmount,
+                finalTokenId,
+                finalTokenLabel,
+                finalAmount: currentAmount,
+                effectiveRate: startAmount > 0 ? currentAmount / startAmount : 0,
+                estimatedStartValue,
+                estimatedFinalValue,
+                totalDragQuote,
+                legResults,
+                warnings
+            };
+        }
+
+        function summarizeCryptoConversionComparisons(results) {
+            const validResults = (results || []).filter(result => result && result.valid);
+            const invalidResults = (results || []).filter(result => result && !result.valid);
+            if (!validResults.length) {
+                return {
+                    mode: 'empty',
+                    title: 'No comparable routes yet',
+                    body: 'Set a start token amount plus at least one valid leg in any scenario to compare outcomes.',
+                    rows: [],
+                    blockedRows: invalidResults
+                };
+            }
+
+            const sameFinalToken = validResults.every(result => result.finalTokenId && result.finalTokenId === validResults[0].finalTokenId);
+            if (sameFinalToken) {
+                const rankedRows = [...validResults].sort((a, b) => (Number(b.finalAmount) || 0) - (Number(a.finalAmount) || 0));
+                const best = rankedRows.reduce((winner, result) => {
+                    return !winner || result.finalAmount > winner.finalAmount ? result : winner;
+                }, null);
+                return {
+                    mode: 'token',
+                    title: `Best output: ${best?.scenarioName || 'Route'} (${formatCryptoConversionTokenAmount(best?.finalAmount || 0)} ${best?.finalTokenLabel || ''})`,
+                    body: `All valid scenarios end in ${best?.finalTokenLabel || 'the same token'}, so comparison is based on final token amount.`,
+                    rows: rankedRows,
+                    blockedRows: invalidResults,
+                    bestScenarioId: best?.scenarioId || ''
+                };
+            }
+
+            const everyScenarioValued = validResults.every(result => Number.isFinite(result.estimatedFinalValue));
+            if (everyScenarioValued) {
+                const rankedRows = [...validResults].sort((a, b) => (Number(b.estimatedFinalValue) || 0) - (Number(a.estimatedFinalValue) || 0));
+                const best = rankedRows.reduce((winner, result) => {
+                    return !winner || result.estimatedFinalValue > winner.estimatedFinalValue ? result : winner;
+                }, null);
+                return {
+                    mode: 'quote',
+                    title: `Best estimated value: ${best?.scenarioName || 'Route'} (${formatCryptoConversionQuote(best?.estimatedFinalValue || 0, best?.quoteCurrency || 'PHP')})`,
+                    body: `Scenarios end in different tokens, so comparison uses estimated ending value in ${best?.quoteCurrency || 'PHP'}.`,
+                    rows: rankedRows,
+                    blockedRows: invalidResults,
+                    bestScenarioId: best?.scenarioId || ''
+                };
+            }
+
+            const rankedRows = [...validResults].sort((a, b) => {
+                const aValue = Number.isFinite(a.estimatedFinalValue) ? Number(a.estimatedFinalValue) : Number(a.finalAmount) || 0;
+                const bValue = Number.isFinite(b.estimatedFinalValue) ? Number(b.estimatedFinalValue) : Number(b.finalAmount) || 0;
+                return bValue - aValue;
+            });
+            return {
+                mode: 'mixed',
+                title: 'Per-route results only',
+                body: 'Some scenarios end in different tokens and are missing cached prices, so they cannot be ranked fairly yet.',
+                rows: rankedRows,
+                blockedRows: invalidResults,
+                bestScenarioId: rankedRows[0]?.scenarioId || ''
+            };
+        }
+
+        function openCryptoConversionLab() {
+            ensureCryptoConversionLabState();
+            document.getElementById('crypto-conversion-lab-modal').classList.remove('hidden');
+            renderCryptoConversionLab();
+        }
+
+        async function openCryptoConversionLabFromLock() {
+            try {
+                if (typeof updateExchangeRates === 'function') {
+                    await updateExchangeRates();
+                }
+            } catch (error) {
+                console.warn('Could not refresh exchange rates before opening conversion lab.', error);
+            }
+            openCryptoConversionLab();
+        }
+
+        function resetCryptoConversionLab() {
+            cryptoConversionLabState = buildDefaultCryptoConversionLabState();
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+            if (typeof showToast === 'function') showToast('Conversion lab reset');
+        }
+
+        function updateCryptoConversionScenarioField(scenarioId, field, value) {
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            if (!scenario) return;
+            if (field === 'quoteCurrency') {
+                scenario.quoteCurrency = getCryptoConversionLabSupportedCurrencies().includes(String(value || '').trim().toUpperCase())
+                    ? String(value).trim().toUpperCase()
+                    : getCryptoConversionDefaultCurrency();
+            } else if (field === 'startAmount') {
+                scenario.startAmount = String(value || '').trim();
+            }
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function updateCryptoConversionLegField(scenarioId, legId, field, value) {
+            const leg = getCryptoConversionLegById(scenarioId, legId);
+            if (!leg) return;
+            if (field === 'mode') {
+                leg.mode = String(value || '').trim() === 'manual' ? 'manual' : 'market';
+            } else if (['manualRate', 'feePct', 'slippagePct'].includes(field)) {
+                leg[field] = String(value || '').trim();
+            }
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function addCryptoConversionScenario() {
+            const state = ensureCryptoConversionLabState();
+            state.scenarios.push(createCryptoConversionScenario({}, state.scenarios.length));
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function duplicateCryptoConversionScenario(scenarioId) {
+            const state = ensureCryptoConversionLabState();
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            if (!scenario) return;
+            const copy = createCryptoConversionScenario({
+                ...scenario,
+                id: null,
+                name: `${scenario.name || 'Route'} Copy`,
+                legs: (scenario.legs || []).map(leg => ({
+                    ...leg,
+                    id: null,
+                    fromResults: [],
+                    toResults: [],
+                    fromResultsError: '',
+                    toResultsError: ''
+                }))
+            }, state.scenarios.length);
+            state.scenarios.push(copy);
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function removeCryptoConversionScenario(scenarioId) {
+            const state = ensureCryptoConversionLabState();
+            if ((state.scenarios || []).length <= 1) {
+                if (typeof showToast === 'function') showToast('Keep at least one route in the lab');
+                return;
+            }
+            state.scenarios = state.scenarios.filter(scenario => scenario.id !== scenarioId);
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function addCryptoConversionLeg(scenarioId) {
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            if (!scenario) return;
+            const lastLeg = (scenario.legs || [])[scenario.legs.length - 1] || null;
+            scenario.legs.push(createCryptoConversionLeg({
+                fromTokenId: String(lastLeg?.toTokenId || '').trim(),
+                fromTokenSymbol: String(lastLeg?.toTokenSymbol || '').trim(),
+                fromTokenName: String(lastLeg?.toTokenName || '').trim(),
+                fromSearchText: String(lastLeg?.toTokenName || lastLeg?.toTokenSymbol || lastLeg?.toTokenId || '').trim()
+            }));
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function removeCryptoConversionLeg(scenarioId, legId) {
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            if (!scenario) return;
+            if ((scenario.legs || []).length <= 1) {
+                if (typeof showToast === 'function') showToast('Each route needs at least one leg');
+                return;
+            }
+            scenario.legs = scenario.legs.filter(leg => leg.id !== legId);
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        async function searchCryptoConversionToken(scenarioId, legId, side) {
+            const leg = getCryptoConversionLegById(scenarioId, legId);
+            if (!leg) return;
+
+            const input = document.getElementById(getCryptoConversionSearchInputId(scenarioId, legId, side));
+            const query = String(input?.value || '').trim();
+            if (!query) {
+                if (typeof showToast === 'function') showToast('Type a token name or id first');
+                return;
+            }
+
+            const resultsKey = side === 'to' ? 'toResults' : 'fromResults';
+            const errorKey = side === 'to' ? 'toResultsError' : 'fromResultsError';
+            const textKey = side === 'to' ? 'toSearchText' : 'fromSearchText';
+
+            leg[textKey] = query;
+            leg[resultsKey] = [{ loading: true }];
+            leg[errorKey] = '';
+            renderCryptoConversionLab();
+
+            try {
+                const response = await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error('Search failed');
+                const data = await response.json();
+                leg[resultsKey] = Array.isArray(data?.coins)
+                    ? data.coins.slice(0, 8).map(coin => ({
+                        id: String(coin.id || '').trim(),
+                        symbol: String(coin.symbol || '').trim(),
+                        name: String(coin.name || '').trim(),
+                        image: String(coin.large || coin.thumb || '').trim()
+                    }))
+                    : [];
+                leg[errorKey] = leg[resultsKey].length ? '' : 'No tokens found.';
+            } catch (error) {
+                console.error('Crypto conversion lab token search failed.', error);
+                leg[resultsKey] = [];
+                leg[errorKey] = 'Search failed. Try again.';
+            }
+
+            renderCryptoConversionLab();
+        }
+
+        function selectCryptoConversionToken(scenarioId, legId, side, tokenIdEncoded, symbolEncoded, nameEncoded) {
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            const leg = getCryptoConversionLegById(scenarioId, legId);
+            if (!scenario || !leg) return;
+
+            const tokenId = decodeURIComponent(tokenIdEncoded);
+            const symbol = decodeURIComponent(symbolEncoded);
+            const name = decodeURIComponent(nameEncoded);
+            const isTo = side === 'to';
+            const prefix = isTo ? 'to' : 'from';
+
+            const previousToTokenId = leg.toTokenId;
+            leg[`${prefix}TokenId`] = tokenId;
+            leg[`${prefix}TokenSymbol`] = symbol;
+            leg[`${prefix}TokenName`] = name;
+            leg[`${prefix}SearchText`] = name || symbol || tokenId;
+            leg[`${prefix}Results`] = [];
+            leg[`${prefix}ResultsError`] = '';
+
+            if (isTo) {
+                const legIndex = (scenario.legs || []).findIndex(candidate => candidate.id === legId);
+                const nextLeg = legIndex >= 0 ? scenario.legs[legIndex + 1] : null;
+                if (nextLeg && (!nextLeg.fromTokenId || nextLeg.fromTokenId === previousToTokenId)) {
+                    nextLeg.fromTokenId = tokenId;
+                    nextLeg.fromTokenSymbol = symbol;
+                    nextLeg.fromTokenName = name;
+                    nextLeg.fromSearchText = name || symbol || tokenId;
+                }
+            }
+
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function renderCryptoConversionTokenResults(scenarioId, leg, side) {
+            const results = side === 'to' ? leg.toResults : leg.fromResults;
+            const errorText = side === 'to' ? leg.toResultsError : leg.fromResultsError;
+            if (!Array.isArray(results) || (!results.length && !errorText)) return '';
+
+            if (results[0]?.loading) {
+                return '<div class="mt-2 rounded-2xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-slate-500">Searching CoinGecko...</div>';
+            }
+
+            if (!results.length) {
+                return `<div class="mt-2 rounded-2xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-rose-300">${escapeHTML(errorText || 'No results.')}</div>`;
+            }
+
+            return `
+                <div class="mt-2 rounded-2xl border border-slate-800 bg-slate-950/95 overflow-hidden">
+                    ${results.map(result => {
+                        const tokenIdEncoded = encodeInlineArg(result.id);
+                        const symbolEncoded = encodeInlineArg(result.symbol);
+                        const nameEncoded = encodeInlineArg(result.name);
+                        const imageMarkup = result.image
+                            ? `<img src="${escapeAttr(result.image)}" alt="" class="w-6 h-6 rounded-full border border-slate-700 object-cover">`
+                            : '<div class="w-6 h-6 rounded-full border border-slate-700 bg-slate-800"></div>';
+                        return `
+                            <button type="button"
+                                onclick="selectCryptoConversionToken('${scenarioId}', '${leg.id}', '${side}', '${tokenIdEncoded}', '${symbolEncoded}', '${nameEncoded}')"
+                                class="w-full px-3 py-2.5 flex items-center gap-3 text-left hover:bg-slate-900 transition-colors border-b border-slate-900 last:border-b-0">
+                                ${imageMarkup}
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-200">${escapeHTML(result.name || result.id)}</p>
+                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">${escapeHTML(result.symbol || result.id)}</p>
+                                </div>
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function renderCryptoConversionLab() {
+            const mount = document.getElementById('crypto-conversion-lab-body');
+            if (!mount) return;
+            const viewState = captureCryptoConversionLabViewState(mount);
+
+            const state = ensureCryptoConversionLabState();
+            const scenarioResults = (state.scenarios || []).map((scenario, index) => ({
+                scenarioId: scenario.id,
+                scenarioName: scenario.name || createCryptoConversionScenarioName(index),
+                ...calculateCryptoConversionScenario(scenario)
+            }));
+            const comparison = summarizeCryptoConversionComparisons(scenarioResults);
+
+            mount.innerHTML = `
+                <div class="space-y-5">
+                    <div class="grid gap-4 xl:grid-cols-[1.1fr,0.9fr]">
+                        <div class="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
+                            <p class="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">How To Use</p>
+                            <div class="mt-3 grid gap-3 md:grid-cols-3">
+                                <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                                    <p class="text-xs font-bold text-slate-200">1. Set route</p>
+                                    <p class="text-xs text-slate-500 mt-2">Choose a starting token amount, then build one or more conversion legs.</p>
+                                </div>
+                                <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                                    <p class="text-xs font-bold text-slate-200">2. Pick pricing</p>
+                                    <p class="text-xs text-slate-500 mt-2">Use cached market prices or override a leg with your own manual pair rate.</p>
+                                </div>
+                                <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                                    <p class="text-xs font-bold text-slate-200">3. Compare outcomes</p>
+                                    <p class="text-xs text-slate-500 mt-2">See which route leaves you with the best final amount or estimated ending value.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="rounded-3xl border border-cyan-900/70 bg-cyan-950/40 p-5">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-cyan-300">Comparison</p>
+                                    <h4 class="text-lg font-bold text-white mt-2">${escapeHTML(comparison.title)}</h4>
+                                    <p class="text-sm text-cyan-100/75 mt-2">${escapeHTML(comparison.body)}</p>
+                                </div>
+                                <button type="button" onclick="addCryptoConversionScenario()"
+                                    class="shrink-0 px-3 py-2 rounded-xl bg-cyan-400/10 hover:bg-cyan-400/20 border border-cyan-400/20 text-xs font-bold text-cyan-200">
+                                    + Add Route
+                                </button>
+                            </div>
+                            <div class="mt-4 space-y-2">
+                                ${comparison.rows.length ? comparison.rows.map(result => {
+                                    const isBestRow = comparison.bestScenarioId && result.scenarioId === comparison.bestScenarioId;
+                                    const valueText = comparison.mode === 'quote' && Number.isFinite(result.estimatedFinalValue)
+                                        ? formatCryptoConversionQuote(result.estimatedFinalValue, result.quoteCurrency)
+                                        : `${formatCryptoConversionTokenAmount(result.finalAmount)} ${escapeHTML(result.finalTokenLabel || '')}`;
+                                    const helperText = comparison.mode === 'quote'
+                                        ? escapeHTML(result.routeText || '')
+                                        : `Ends with ${escapeHTML(result.finalTokenLabel || 'token')}`;
+                                    const rowClass = isBestRow
+                                        ? 'border-yellow-500/40 bg-yellow-500/10'
+                                        : 'border-cyan-900/70 bg-slate-950/50';
+                                    const titleClass = isBestRow ? 'text-yellow-100' : 'text-white';
+                                    const helperClass = isBestRow ? 'text-yellow-200/80' : 'text-slate-400';
+                                    const valueClass = isBestRow ? 'text-yellow-200' : 'text-cyan-200';
+                                    return `
+                                        <div class="rounded-2xl border ${rowClass} px-4 py-3 flex items-center justify-between gap-3">
+                                            <div>
+                                                <p class="text-sm font-semibold ${titleClass}">${escapeHTML(result.scenarioName || 'Route')}${isBestRow ? ' • Ideal' : ''}</p>
+                                                <p class="text-[11px] ${helperClass} mt-1">${helperText}</p>
+                                            </div>
+                                            <p class="text-sm font-bold ${valueClass}">${valueText}</p>
+                                        </div>
+                                    `;
+                                }).join('') : `
+                                    <div class="rounded-2xl border border-dashed border-cyan-900/70 bg-slate-950/40 px-4 py-5 text-sm text-slate-400">
+                                        Add a valid route below to see comparison results here.
+                                    </div>
+                                `}
+                                ${comparison.blockedRows?.length ? `
+                                    <div class="pt-2 space-y-2">
+                                        ${comparison.blockedRows.map(result => `
+                                            <div class="rounded-2xl border border-amber-900/60 bg-amber-950/20 px-4 py-3">
+                                                <p class="text-sm font-semibold text-amber-100">${escapeHTML(result.scenarioName || 'Route')} not compared yet</p>
+                                                <p class="text-[11px] text-amber-200/80 mt-1">${escapeHTML(result.message || 'This route still needs more input.')}</p>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    ${(state.scenarios || []).map((scenario, scenarioIndex) => {
+                        const result = scenarioResults[scenarioIndex];
+                        const routeText = result?.routeText || buildCryptoConversionScenarioRouteText(scenario);
+                        const statusTone = result?.valid ? 'border-slate-800 bg-slate-900/65' : 'border-amber-900/50 bg-amber-950/20';
+                        const summaryTitle = result?.valid
+                            ? `${formatCryptoConversionTokenAmount(result.finalAmount)} ${escapeHTML(result.finalTokenLabel || '')}`
+                            : 'Incomplete route';
+                        const summaryBody = result?.valid
+                            ? `Effective rate: 1 ${escapeHTML(result.initialTokenLabel || '')} = ${formatCryptoConversionTokenAmount(result.effectiveRate)} ${escapeHTML(result.finalTokenLabel || '')}`
+                            : escapeHTML(result?.message || 'Complete the route to simulate it.');
+                        return `
+                            <div class="rounded-3xl border ${statusTone} p-5">
+                                <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                    <div>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <span class="inline-flex items-center rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">${escapeHTML(scenario.name || createCryptoConversionScenarioName(scenarioIndex))}</span>
+                                            <span class="inline-flex items-center rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-[11px] font-semibold text-slate-400">${escapeHTML(routeText)}</span>
+                                        </div>
+                                        <h4 class="text-xl font-bold text-white mt-3">${summaryTitle}</h4>
+                                        <p class="text-sm text-slate-400 mt-2">${summaryBody}</p>
+                                        ${result?.valid && Number.isFinite(result?.estimatedFinalValue) ? `
+                                            <p class="text-xs text-cyan-300 mt-2">Estimated ending value: ${formatCryptoConversionQuote(result.estimatedFinalValue, result.quoteCurrency)}</p>
+                                        ` : ''}
+                                        ${Array.isArray(result?.warnings) && result.warnings.length ? `
+                                            <div class="mt-3 space-y-1">
+                                                ${result.warnings.map(warning => `<p class="text-xs text-amber-300">${escapeHTML(warning)}</p>`).join('')}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" onclick="duplicateCryptoConversionScenario('${scenario.id}')"
+                                            class="px-3 py-2 rounded-xl bg-slate-950/80 hover:bg-slate-950 border border-slate-800 text-xs font-bold text-slate-300">
+                                            Duplicate
+                                        </button>
+                                        <button type="button" onclick="removeCryptoConversionScenario('${scenario.id}')"
+                                            class="px-3 py-2 rounded-xl bg-slate-950/80 hover:bg-slate-950 border border-slate-800 text-xs font-bold text-rose-300">
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="grid gap-4 lg:grid-cols-[280px,1fr] mt-5">
+                                    <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-4">
+                                        <div>
+                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Start Token Amount</label>
+                                            <input id="${getCryptoConversionFieldId(scenario.id, 'start-amount')}" type="text" inputmode="decimal" value="${escapeAttr(scenario.startAmount || '')}"
+                                                oninput="updateCryptoConversionScenarioField('${scenario.id}', 'startAmount', this.value)"
+                                                class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500">
+                                            <p class="text-[11px] text-slate-500 mt-2">This is the amount of the first token in the route, not a fiat amount.</p>
+                                        </div>
+                                        <div>
+                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Compare In</label>
+                                            <select id="${getCryptoConversionFieldId(scenario.id, 'quote-currency')}" onchange="updateCryptoConversionScenarioField('${scenario.id}', 'quoteCurrency', this.value)"
+                                                class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500">
+                                                ${getCryptoConversionLabSupportedCurrencies().map(currency => `
+                                                    <option value="${currency}" ${scenario.quoteCurrency === currency ? 'selected' : ''}>${currency}</option>
+                                                `).join('')}
+                                            </select>
+                                            <p class="text-[11px] text-slate-500 mt-2">Used only to value and compare routes when market prices are available.</p>
+                                        </div>
+                                        <div class="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
+                                            <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Quick Read</p>
+                                            ${result?.valid ? `
+                                                <div class="mt-3 space-y-2 text-sm">
+                                                    <div class="flex items-center justify-between gap-3">
+                                                        <span class="text-slate-400">Start</span>
+                                                        <span class="font-semibold text-slate-200">${formatCryptoConversionTokenAmount(result.startAmount)} ${escapeHTML(result.initialTokenLabel || '')}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-between gap-3">
+                                                        <span class="text-slate-400">Finish</span>
+                                                        <span class="font-semibold text-white">${formatCryptoConversionTokenAmount(result.finalAmount)} ${escapeHTML(result.finalTokenLabel || '')}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-between gap-3">
+                                                        <span class="text-slate-400">Drag</span>
+                                                        <span class="font-semibold text-amber-300">${Number.isFinite(result.totalDragQuote) ? formatCryptoConversionQuote(result.totalDragQuote, result.quoteCurrency) : '--'}</span>
+                                                    </div>
+                                                </div>
+                                            ` : `
+                                                <p class="text-sm text-slate-400 mt-3">${escapeHTML(result?.message || 'Fill in the route details to calculate.')}</p>
+                                            `}
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-3">
+                                        ${(scenario.legs || []).map((leg, legIndex) => {
+                                            const fromLabel = getCryptoConversionTokenLabel(leg.fromTokenId, leg.fromTokenSymbol, leg.fromTokenName, leg.fromSearchText);
+                                            const toLabel = getCryptoConversionTokenLabel(leg.toTokenId, leg.toTokenSymbol, leg.toTokenName, leg.toSearchText);
+                                            const legResult = Array.isArray(result?.legResults) ? result.legResults[legIndex] : null;
+                                            const manualRateLabel = `1 ${fromLabel} =`;
+                                            const manualRateSuffix = toLabel;
+                                            const marketRateText = legResult?.mode === 'market'
+                                                ? `Implied rate: 1 ${escapeHTML(fromLabel)} = ${formatCryptoConversionTokenAmount(legResult.rate)} ${escapeHTML(toLabel)}`
+                                                : '';
+                                            return `
+                                                <div class="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
+                                                    <div class="flex items-center justify-between gap-3 mb-4">
+                                                        <div>
+                                                            <p class="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Leg ${legIndex + 1}</p>
+                                                            <p class="text-sm font-semibold text-white mt-1">${escapeHTML(fromLabel)} -> ${escapeHTML(toLabel)}</p>
+                                                        </div>
+                                                        <button type="button" onclick="removeCryptoConversionLeg('${scenario.id}', '${leg.id}')"
+                                                            class="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-[11px] font-bold text-rose-300">
+                                                            Remove
+                                                        </button>
+                                                    </div>
+
+                                                    <div class="grid gap-4 xl:grid-cols-2">
+                                                        <div class="relative">
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">From Token</label>
+                                                            <div class="flex gap-2">
+                                                                <input id="${getCryptoConversionSearchInputId(scenario.id, leg.id, 'from')}" type="text"
+                                                                    value="${escapeAttr(leg.fromSearchText || leg.fromTokenName || leg.fromTokenSymbol || leg.fromTokenId || '')}"
+                                                                    class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500"
+                                                                    placeholder="Search token">
+                                                                <button type="button" onclick="searchCryptoConversionToken('${scenario.id}', '${leg.id}', 'from')"
+                                                                    class="px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold text-slate-300">
+                                                                    Search
+                                                                </button>
+                                                            </div>
+                                                            ${renderCryptoConversionTokenResults(scenario.id, leg, 'from')}
+                                                        </div>
+                                                        <div class="relative">
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">To Token</label>
+                                                            <div class="flex gap-2">
+                                                                <input id="${getCryptoConversionSearchInputId(scenario.id, leg.id, 'to')}" type="text"
+                                                                    value="${escapeAttr(leg.toSearchText || leg.toTokenName || leg.toTokenSymbol || leg.toTokenId || '')}"
+                                                                    class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500"
+                                                                    placeholder="Search token">
+                                                                <button type="button" onclick="searchCryptoConversionToken('${scenario.id}', '${leg.id}', 'to')"
+                                                                    class="px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold text-slate-300">
+                                                                    Search
+                                                                </button>
+                                                            </div>
+                                                            ${renderCryptoConversionTokenResults(scenario.id, leg, 'to')}
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="grid gap-4 lg:grid-cols-[190px,1fr,120px,120px] mt-4">
+                                                        <div>
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Pricing Mode</label>
+                                                            <select onchange="updateCryptoConversionLegField('${scenario.id}', '${leg.id}', 'mode', this.value)"
+                                                                class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500">
+                                                                <option value="market" ${leg.mode !== 'manual' ? 'selected' : ''}>Cached Market</option>
+                                                                <option value="manual" ${leg.mode === 'manual' ? 'selected' : ''}>Manual Rate</option>
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">${leg.mode === 'manual' ? escapeHTML(manualRateLabel) : 'Market Inputs'}</label>
+                                                            ${leg.mode === 'manual' ? `
+                                                                <div class="flex items-center gap-2">
+                                                                    <input id="${getCryptoConversionFieldId(scenario.id, 'manual-rate', leg.id)}" type="text" inputmode="decimal" value="${escapeAttr(leg.manualRate || '')}"
+                                                                        oninput="updateCryptoConversionLegField('${scenario.id}', '${leg.id}', 'manualRate', this.value)"
+                                                                        class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500"
+                                                                        placeholder="0.00">
+                                                                    <span class="text-xs font-semibold text-slate-400">${escapeHTML(manualRateSuffix)}</span>
+                                                                </div>
+                                                            ` : `
+                                                                <div class="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 h-full">
+                                                                    <p class="text-sm font-semibold text-white">${marketRateText || 'Uses cached token prices in the selected valuation currency.'}</p>
+                                                                    <p class="text-xs text-slate-500 mt-2">
+                                                                        ${legResult?.mode === 'market'
+                                                                            ? `${escapeHTML(fromLabel)}: ${formatCryptoConversionQuote(legResult.fromPrice, scenario.quoteCurrency)} • ${escapeHTML(toLabel)}: ${formatCryptoConversionQuote(legResult.toPrice, scenario.quoteCurrency)}`
+                                                                            : 'Refresh market prices if a token is missing.'}
+                                                                    </p>
+                                                                </div>
+                                                            `}
+                                                        </div>
+                                                        <div>
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Fee %</label>
+                                                            <input id="${getCryptoConversionFieldId(scenario.id, 'fee-pct', leg.id)}" type="text" inputmode="decimal" value="${escapeAttr(leg.feePct || '0')}"
+                                                                oninput="updateCryptoConversionLegField('${scenario.id}', '${leg.id}', 'feePct', this.value)"
+                                                                class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500">
+                                                        </div>
+                                                        <div>
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Slippage %</label>
+                                                            <input id="${getCryptoConversionFieldId(scenario.id, 'slippage-pct', leg.id)}" type="text" inputmode="decimal" value="${escapeAttr(leg.slippagePct || '0')}"
+                                                                oninput="updateCryptoConversionLegField('${scenario.id}', '${leg.id}', 'slippagePct', this.value)"
+                                                                class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500">
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
+                                                        ${legResult ? `
+                                                            <div class="grid gap-3 md:grid-cols-4">
+                                                                <div>
+                                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Input</p>
+                                                                    <p class="text-sm font-semibold text-slate-200 mt-1">${formatCryptoConversionTokenAmount(legResult.inputAmount)} ${escapeHTML(legResult.fromLabel)}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Gross Output</p>
+                                                                    <p class="text-sm font-semibold text-slate-200 mt-1">${formatCryptoConversionTokenAmount(legResult.grossOutput)} ${escapeHTML(legResult.toLabel)}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Net Output</p>
+                                                                    <p class="text-sm font-semibold text-white mt-1">${formatCryptoConversionTokenAmount(legResult.outputAmount)} ${escapeHTML(legResult.toLabel)}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Estimated Drag</p>
+                                                                    <p class="text-sm font-semibold text-amber-300 mt-1">${Number.isFinite(legResult.estimatedDragQuote) ? formatCryptoConversionQuote(legResult.estimatedDragQuote, scenario.quoteCurrency) : '--'}</p>
+                                                                </div>
+                                                            </div>
+                                                        ` : `
+                                                            <p class="text-sm text-slate-500">This leg will populate once its tokens and pricing inputs are valid.</p>
+                                                        `}
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('')}
+
+                                        <button type="button" onclick="addCryptoConversionLeg('${scenario.id}')"
+                                            class="w-full rounded-2xl border border-dashed border-slate-700 bg-slate-950/30 px-4 py-3 text-sm font-bold text-slate-300 hover:bg-slate-950/50">
+                                            + Add Another Leg
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+
+            if (window.lucide) window.lucide.createIcons();
+            restoreCryptoConversionLabViewState(mount, viewState);
+        }
+
 
         function openCryptoPortfolio() {
             document.getElementById('crypto-portfolio-modal').classList.remove('hidden');
@@ -1214,7 +2270,25 @@
         }
 
 	        async function fetchCryptoPrices() {
-            const holdings = await calculateHoldings();
+            let holdings = {};
+            const canReadVaultHoldings = !!cryptoKey || !!previewMode;
+            if (canReadVaultHoldings) {
+                try {
+                    holdings = await calculateHoldings();
+                } catch (error) {
+                    console.warn('Could not calculate holdings for crypto price refresh.', error);
+                    holdings = {};
+                }
+            }
+
+            try {
+                if (typeof updateExchangeRates === 'function') {
+                    await updateExchangeRates();
+                }
+            } catch (error) {
+                console.warn('Exchange rate refresh failed before crypto price fetch.', error);
+            }
+
             const trackedIds = new Set(Object.keys(holdings).filter(k => holdings[k].amount > 0.000001));
             Object.values(cryptoInterestByToken || {}).forEach(entry => {
                 if (!entry?.enabled) return;
@@ -1223,11 +2297,12 @@
                     if (rewardTokenId) trackedIds.add(rewardTokenId);
                 });
             });
+            getCryptoConversionTrackedTokenIds().forEach(tokenId => trackedIds.add(tokenId));
             const ids = Array.from(trackedIds);
             const statusEl = document.getElementById('crypto-last-updated');
 
             if (ids.length === 0) {
-                if (statusEl) statusEl.innerText = "No assets or rewards to track";
+                if (statusEl) statusEl.innerText = "No assets, rewards, or route tokens to track";
                 return;
             }
 
@@ -1235,8 +2310,8 @@
             const btn = document.getElementById('btn-refresh-crypto');
             const icon = btn ? btn.querySelector('svg') : null;
 
-            if (icon) icon.classList.add('animate-spin');
-            if (statusEl) statusEl.innerText = "Updating prices...";
+	            if (icon) icon.classList.add('animate-spin');
+	            if (statusEl) statusEl.innerText = canReadVaultHoldings ? "Updating prices..." : "Updating route prices...";
 
 	            try {
 	                // Using PHP as base currency since app is PHP-centric
@@ -1256,10 +2331,13 @@
 	                        updated: now
 	                    };
 	                });
-	                await persistLocalDBSnapshot(db);
-	                cryptoPrices = db.crypto_prices || {};
-	                renderCryptoPortfolio();
-	            } catch (e) {
+		                await persistLocalDBSnapshot(db);
+		                cryptoPrices = db.crypto_prices || {};
+		                renderCryptoPortfolio();
+                        if (!document.getElementById('crypto-conversion-lab-modal')?.classList.contains('hidden')) {
+                            renderCryptoConversionLab();
+                        }
+		            } catch (e) {
 	                console.error(e);
 	                if (statusEl) statusEl.innerText = "Update Failed (Rate Limit?)";
 	                alert("Could not fetch prices. The free API might be rate-limited. Please try again in a minute.");
