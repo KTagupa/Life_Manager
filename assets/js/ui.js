@@ -218,6 +218,9 @@ window.syncAllSegmentedSliders = syncAllSegmentedSliders;
 
 let currentWorkspaceSection = getSavedWorkspaceSection();
 let viewportOriginGuardActive = false;
+const PANEL_ONLY_LAYOUT_GUTTER = 72;
+let responsivePanelOnlyObserver = null;
+let responsivePanelOnlySyncQueued = false;
 
 const RIGHT_DOCK_PANEL_IDS = [
     'notes-panel',
@@ -320,7 +323,85 @@ function syncRightRailTabs() {
         btn.classList.toggle('active', btn.dataset.panelId === activePanelId);
     });
     document.body.classList.toggle('right-rail-open', !!activePanelId);
+    if (typeof scheduleResponsivePanelOnlyLayoutSync === 'function') scheduleResponsivePanelOnlyLayoutSync();
     resetViewportOrigin();
+}
+
+function getResponsivePanelOnlyCandidates() {
+    const candidateIds = [...RIGHT_DOCK_PANEL_IDS, 'inspector'];
+    return candidateIds
+        .map((id) => document.getElementById(id))
+        .filter((panel) => {
+            if (!panel) return false;
+            if (panel.id === 'notes-panel' && panel.classList.contains('floating')) return false;
+            return !panel.classList.contains('hidden');
+        });
+}
+
+function syncResponsivePanelOnlyLayout() {
+    responsivePanelOnlySyncQueued = false;
+
+    const body = document.body;
+    if (!body) return false;
+
+    const visiblePanels = getResponsivePanelOnlyCandidates().filter((panel) => {
+        const styles = window.getComputedStyle(panel);
+        return styles.display !== 'none' && styles.visibility !== 'hidden';
+    });
+
+    let shouldPanelOnlyView = false;
+    if (visiblePanels.length > 0) {
+        const activePanelWidth = visiblePanels.reduce((max, panel) => {
+            const rectWidth = Math.round(panel.getBoundingClientRect().width || 0);
+            const fallbackWidth = Math.round(panel.offsetWidth || 0);
+            return Math.max(max, rectWidth || fallbackWidth);
+        }, 0);
+        const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement ? document.documentElement.clientWidth || 0 : 0);
+        shouldPanelOnlyView = viewportWidth > 0 && activePanelWidth > 0 && viewportWidth <= (activePanelWidth + PANEL_ONLY_LAYOUT_GUTTER);
+    }
+
+    const wasActive = body.classList.contains('panel-only-view');
+    body.classList.toggle('panel-only-view', shouldPanelOnlyView);
+
+    if (wasActive !== shouldPanelOnlyView) {
+        if (typeof render === 'function') requestAnimationFrame(() => render());
+        if (typeof renderAgenda === 'function') requestAnimationFrame(() => renderAgenda());
+    }
+
+    return shouldPanelOnlyView;
+}
+
+function scheduleResponsivePanelOnlyLayoutSync() {
+    if (responsivePanelOnlySyncQueued) return;
+    responsivePanelOnlySyncQueued = true;
+    requestAnimationFrame(() => {
+        syncResponsivePanelOnlyLayout();
+    });
+}
+
+function setupResponsivePanelOnlyMode() {
+    if (responsivePanelOnlyObserver || typeof MutationObserver !== 'function') {
+        scheduleResponsivePanelOnlyLayoutSync();
+        return;
+    }
+
+    const observerTargets = [...RIGHT_DOCK_PANEL_IDS, 'inspector']
+        .map((id) => document.getElementById(id))
+        .filter(Boolean);
+
+    responsivePanelOnlyObserver = new MutationObserver(() => {
+        scheduleResponsivePanelOnlyLayoutSync();
+    });
+
+    observerTargets.forEach((panel) => {
+        responsivePanelOnlyObserver.observe(panel, {
+            attributes: true,
+            attributeFilter: ['class', 'style']
+        });
+    });
+
+    window.addEventListener('resize', scheduleResponsivePanelOnlyLayoutSync, { passive: true });
+    scheduleResponsivePanelOnlyLayoutSync();
 }
 
 function openRightDockPanel(panelId, onOpen = null) {

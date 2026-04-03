@@ -102,6 +102,7 @@
             setupPanelDrag();
             setupContextualMenu();
             if (typeof setupToolbarActionTooltips === 'function') setupToolbarActionTooltips();
+            if (typeof setupResponsivePanelOnlyMode === 'function') setupResponsivePanelOnlyMode();
             renderPinnedWindow();
             renderQuickLinks();
             if (typeof setNavigatorTab === 'function' && typeof getSavedNavigatorTab === 'function') {
