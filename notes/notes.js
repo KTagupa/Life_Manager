@@ -634,6 +634,132 @@
         return esc(source || '_Empty_').replace(/\n/g, '<br>');
     }
 
+    let notesImageLightboxLastFocus = null;
+
+    function ensureNotesImageLightboxBindings() {
+        const overlay = document.getElementById('notes-image-lightbox');
+        const dialog = document.getElementById('notes-image-lightbox-dialog');
+        const closeBtn = document.getElementById('notes-image-lightbox-close');
+        if (!overlay || !dialog || !closeBtn) return;
+        if (overlay.dataset.bound === '1') return;
+        overlay.dataset.bound = '1';
+
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) closeNotesImageLightbox();
+        });
+        dialog.addEventListener('click', (event) => event.stopPropagation());
+        closeBtn.addEventListener('click', () => closeNotesImageLightbox());
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') closeNotesImageLightbox();
+        });
+    }
+
+    function enhanceRenderedMarkdown(container) {
+        if (!container) return;
+        ensureNotesImageLightboxBindings();
+
+        container.querySelectorAll('img').forEach((img) => {
+            img.title = 'Click image to expand';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.style.setProperty('display', 'block', 'important');
+            img.style.setProperty('width', 'auto', 'important');
+            img.style.setProperty('height', 'auto', 'important');
+            img.style.setProperty('max-width', 'min(100%, 320px)', 'important');
+            img.style.setProperty('max-height', '200px', 'important');
+            img.style.setProperty('margin', '0 auto', 'important');
+            img.style.setProperty('object-fit', 'contain', 'important');
+            img.style.setProperty('cursor', 'zoom-in', 'important');
+
+            if (!img.parentElement || !img.parentElement.classList.contains('note-image-inline-frame')) {
+                const frame = document.createElement('span');
+                frame.className = 'note-image-inline-frame';
+                img.parentNode.insertBefore(frame, img);
+                frame.appendChild(img);
+
+                const hint = document.createElement('span');
+                hint.className = 'note-image-inline-hint';
+                hint.textContent = 'Click image to expand';
+                frame.appendChild(hint);
+            }
+
+            if (img.dataset.notesLightboxBound === '1') return;
+            img.dataset.notesLightboxBound = '1';
+            img.tabIndex = 0;
+            img.setAttribute('role', 'button');
+
+            const openImage = (event) => {
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                openNotesImageLightbox(img.currentSrc || img.src, img.alt || '');
+            };
+
+            img.addEventListener('click', openImage);
+            img.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openImage(event);
+                }
+            });
+
+            const parentLink = img.closest('a');
+            if (parentLink && parentLink.dataset.notesLightboxBound !== '1') {
+                parentLink.dataset.notesLightboxBound = '1';
+                parentLink.addEventListener('click', openImage);
+            }
+        });
+    }
+
+    function openNotesImageLightbox(src, alt) {
+        if (!src) return;
+        ensureNotesImageLightboxBindings();
+
+        const overlay = document.getElementById('notes-image-lightbox');
+        const image = document.getElementById('notes-image-lightbox-img');
+        const caption = document.getElementById('notes-image-lightbox-caption');
+        const closeBtn = document.getElementById('notes-image-lightbox-close');
+        if (!overlay || !image || !caption || !closeBtn) return;
+
+        notesImageLightboxLastFocus = document.activeElement;
+        image.src = src;
+        image.alt = alt || 'Expanded note image';
+        caption.textContent = alt || '';
+        caption.hidden = !alt;
+
+        overlay.hidden = false;
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('notes-image-lightbox-open');
+        closeBtn.focus();
+    }
+
+    function closeNotesImageLightbox() {
+        const overlay = document.getElementById('notes-image-lightbox');
+        const image = document.getElementById('notes-image-lightbox-img');
+        const caption = document.getElementById('notes-image-lightbox-caption');
+        if (!overlay || overlay.hidden) return;
+
+        overlay.classList.remove('visible');
+        overlay.hidden = true;
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('notes-image-lightbox-open');
+
+        if (image) {
+            image.removeAttribute('src');
+            image.alt = '';
+        }
+        if (caption) {
+            caption.textContent = '';
+            caption.hidden = true;
+        }
+        if (notesImageLightboxLastFocus && typeof notesImageLightboxLastFocus.focus === 'function') {
+            notesImageLightboxLastFocus.focus();
+        }
+        notesImageLightboxLastFocus = null;
+    }
+
     // autoResizeTextarea() is now in utils.js
     function syncSplitPaneHeights(textarea, preview) {
         if (!textarea || !preview) return;
@@ -1652,6 +1778,7 @@
                 const preview = document.createElement('div');
                 preview.className = 'note-block-preview';
                 preview.innerHTML = renderMarkdown(block.text);
+                enhanceRenderedMarkdown(preview);
                 return preview;
             };
 
@@ -1672,6 +1799,7 @@
                 textarea.addEventListener('input', () => {
                     block.text = textarea.value;
                     preview.innerHTML = renderMarkdown(block.text);
+                    enhanceRenderedMarkdown(preview);
                     syncSplitPaneHeights(textarea, preview);
                     queueAutoSave();
                 });

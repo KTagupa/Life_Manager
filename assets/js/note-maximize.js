@@ -30,6 +30,7 @@ function maximizeBlock(blockId) {
     // Set content
     textarea.value = block.text || '';
     preview.innerHTML = renderMarkdown(block.text || '_Empty_');
+    if (typeof enhanceRenderedMarkdown === 'function') enhanceRenderedMarkdown(preview);
 
     // Show edit mode by default
     textarea.style.display = 'block';
@@ -87,6 +88,7 @@ function toggleMaxBlockMode(isView) {
         textarea.style.display = 'none';
         preview.style.display = 'block';
         preview.innerHTML = renderMarkdown(textarea.value || '_Empty_');
+        if (typeof enhanceRenderedMarkdown === 'function') enhanceRenderedMarkdown(preview);
         editBtn.classList.remove('active-mode');
         viewBtn.classList.add('active-mode');
         editTools.style.display = 'none';
@@ -256,7 +258,9 @@ function updateMaxBlockText() {
 
         // Update preview if in view mode
         if (maxBlockIsViewMode) {
-            document.getElementById('max-block-preview').innerHTML = renderMarkdown(textarea.value || '_Empty_');
+            const preview = document.getElementById('max-block-preview');
+            preview.innerHTML = renderMarkdown(textarea.value || '_Empty_');
+            if (typeof enhanceRenderedMarkdown === 'function') enhanceRenderedMarkdown(preview);
         }
     }
 }
@@ -388,4 +392,3 @@ document.addEventListener('keydown', (e) => {
         closeMaximizedBlock();
     }
 });
-

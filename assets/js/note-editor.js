@@ -124,6 +124,11 @@ function renderNoteBlocks() {
                         <div id="preview-${block.id}" class="block-preview-area" style="display:${isCurrentBlockEditing ? 'none' : 'block'}">${renderMarkdown(block.text || '_Empty_')}</div>
                     `;
             list.appendChild(blockDiv);
+
+            const preview = document.getElementById(`preview-${block.id}`);
+            if (typeof enhanceRenderedMarkdown === 'function') {
+                enhanceRenderedMarkdown(preview);
+            }
     
             // Auto-resize if in editing mode
             if (isCurrentBlockEditing) {

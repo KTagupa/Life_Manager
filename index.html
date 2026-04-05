@@ -1780,6 +1780,17 @@
         </div>
     </div>
 
+    <div id="note-image-lightbox" class="note-image-lightbox" hidden aria-hidden="true"
+        onclick="if (event.target === this) closeNoteImageLightbox()">
+        <div class="note-image-lightbox-dialog" role="dialog" aria-modal="true" aria-label="Expanded note image"
+            onclick="event.stopPropagation()">
+            <button id="note-image-lightbox-close" class="note-image-lightbox-close"
+                onclick="closeNoteImageLightbox()" aria-label="Close image preview">×</button>
+            <img id="note-image-lightbox-img" class="note-image-lightbox-image" alt="">
+            <div id="note-image-lightbox-caption" class="note-image-lightbox-caption" style="display:none;"></div>
+        </div>
+    </div>
+
     <div id="notification">State Saved</div>
     <script defer src="assets/js/db.js"></script>
     <script defer src="assets/js/notesRepository.js"></script>

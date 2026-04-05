@@ -583,6 +583,250 @@ function renderMarkdown(text) {
     return html;
 }
 
+let noteImageLightboxLastFocus = null;
+
+function applyNoteImageLightboxPresentation() {
+    const overlay = document.getElementById('note-image-lightbox');
+    const dialog = document.getElementById('note-image-lightbox-dialog');
+    const image = document.getElementById('note-image-lightbox-img');
+    const caption = document.getElementById('note-image-lightbox-caption');
+    const closeBtn = document.getElementById('note-image-lightbox-close');
+    if (!overlay || !dialog || !image || !caption || !closeBtn) return;
+
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.padding = '0';
+    overlay.style.background = 'rgba(2, 6, 23, 0.92)';
+    overlay.style.backdropFilter = 'blur(10px)';
+    overlay.style.overflow = 'hidden';
+    overlay.style.zIndex = '12000';
+
+    dialog.style.position = 'fixed';
+    dialog.style.inset = '0';
+    dialog.style.width = '100vw';
+    dialog.style.height = '100vh';
+    dialog.style.display = 'block';
+    dialog.style.pointerEvents = 'none';
+    dialog.style.padding = '0';
+
+    closeBtn.style.position = 'fixed';
+    closeBtn.style.top = '12px';
+    closeBtn.style.right = '12px';
+    closeBtn.style.width = '44px';
+    closeBtn.style.height = '44px';
+    closeBtn.style.zIndex = '2';
+    closeBtn.style.pointerEvents = 'auto';
+
+    image.style.position = 'fixed';
+    image.style.left = '50%';
+    image.style.top = '50%';
+    image.style.transform = 'translate(-50%, -50%)';
+    image.style.margin = '0';
+    image.style.width = 'auto';
+    image.style.height = 'auto';
+    image.style.maxWidth = 'none';
+    image.style.maxHeight = 'none';
+    image.style.objectFit = 'contain';
+    image.style.borderRadius = '18px';
+    image.style.background = '#ffffff';
+    image.style.boxShadow = '0 40px 120px rgba(2, 6, 23, 0.48), 0 14px 36px rgba(15, 23, 42, 0.32), 0 0 0 1px rgba(255,255,255,0.32), 0 0 56px rgba(255,255,255,0.12)';
+    image.style.filter = 'drop-shadow(0 32px 80px rgba(0,0,0,0.42)) drop-shadow(0 10px 24px rgba(15,23,42,0.28))';
+
+    caption.style.position = 'fixed';
+    caption.style.left = '50%';
+    caption.style.bottom = '10px';
+    caption.style.transform = 'translateX(-50%)';
+    caption.style.maxWidth = 'min(90vw, 960px)';
+    caption.style.padding = '8px 12px';
+    caption.style.borderRadius = '12px';
+    caption.style.background = 'rgba(15, 23, 42, 0.76)';
+    caption.style.color = '#e2e8f0';
+    caption.style.pointerEvents = 'none';
+}
+
+function enhanceRenderedMarkdown(container) {
+    if (!container) return;
+
+    container.querySelectorAll('img').forEach((img) => {
+        const isMaximizedPreview = !!img.closest('.maximized-block-preview');
+
+        img.classList.add('note-markdown-image');
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.title = 'Click image to expand';
+        img.style.setProperty('display', 'block', 'important');
+        img.style.setProperty('width', 'auto', 'important');
+        img.style.setProperty('height', 'auto', 'important');
+        img.style.setProperty('max-width', isMaximizedPreview ? 'min(100%, 520px)' : 'min(100%, 360px)', 'important');
+        img.style.setProperty('max-height', isMaximizedPreview ? '38vh' : '220px', 'important');
+        img.style.setProperty('margin', '0 auto', 'important');
+        img.style.setProperty('object-fit', 'contain', 'important');
+        img.style.setProperty('cursor', 'zoom-in', 'important');
+
+        if (!img.parentElement || !img.parentElement.classList.contains('note-image-inline-frame')) {
+            const frame = document.createElement('span');
+            frame.className = 'note-image-inline-frame';
+            img.parentNode.insertBefore(frame, img);
+            frame.appendChild(img);
+
+            const hint = document.createElement('span');
+            hint.className = 'note-image-inline-hint';
+            hint.textContent = 'Click image to expand';
+            frame.appendChild(hint);
+        } else {
+            const hint = img.parentElement.querySelector('.note-image-inline-hint');
+            if (hint) hint.textContent = 'Click image to expand';
+        }
+
+        if (img.dataset.noteLightboxBound === '1') return;
+        img.dataset.noteLightboxBound = '1';
+        img.tabIndex = 0;
+        img.setAttribute('role', 'button');
+        img.setAttribute('aria-label', img.alt ? `Open image: ${img.alt}` : 'Open image');
+    });
+}
+
+function updateNoteImageLightboxLayout() {
+    const overlay = document.getElementById('note-image-lightbox');
+    const image = document.getElementById('note-image-lightbox-img');
+    if (!overlay || !image || overlay.hidden) return;
+
+    applyNoteImageLightboxPresentation();
+
+    const naturalWidth = Number(image.naturalWidth) || 0;
+    const naturalHeight = Number(image.naturalHeight) || 0;
+    if (naturalWidth <= 0 || naturalHeight <= 0) return;
+
+    const maxWidth = Math.max(120, window.innerWidth - 44);
+    const maxHeight = Math.max(120, window.innerHeight - 86);
+    const scale = Math.min(maxWidth / naturalWidth, maxHeight / naturalHeight, 1);
+
+    image.style.width = `${Math.round(naturalWidth * scale)}px`;
+    image.style.height = `${Math.round(naturalHeight * scale)}px`;
+}
+
+function bindNoteImageLightboxDelegation() {
+    if (document.body && document.body.dataset.noteImageDelegationBound === '1') return;
+    if (document.body) document.body.dataset.noteImageDelegationBound = '1';
+
+    document.addEventListener('click', (event) => {
+        const img = event.target && typeof event.target.closest === 'function'
+            ? event.target.closest('.block-preview-area img, .maximized-block-preview img')
+            : null;
+        if (!img || img.closest('#note-image-lightbox')) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        openNoteImageLightbox(img.currentSrc || img.src, img.alt || '');
+    }, true);
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const img = event.target && typeof event.target.closest === 'function'
+            ? event.target.closest('.block-preview-area img, .maximized-block-preview img')
+            : null;
+        if (!img || img.closest('#note-image-lightbox')) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        openNoteImageLightbox(img.currentSrc || img.src, img.alt || '');
+    }, true);
+
+    window.addEventListener('resize', () => updateNoteImageLightboxLayout());
+}
+
+function openNoteImageLightbox(src, alt) {
+    if (!src) return;
+
+    const overlay = document.getElementById('note-image-lightbox');
+    const image = document.getElementById('note-image-lightbox-img');
+    const caption = document.getElementById('note-image-lightbox-caption');
+    const closeBtn = document.getElementById('note-image-lightbox-close');
+
+    if (!overlay || !image || !caption || !closeBtn) return;
+
+    noteImageLightboxLastFocus = document.activeElement;
+    image.src = src;
+    image.alt = alt || 'Expanded note image';
+    caption.textContent = alt || '';
+    caption.style.display = alt ? 'block' : 'none';
+    image.style.width = '';
+    image.style.height = '';
+    image.onload = () => updateNoteImageLightboxLayout();
+
+    if (overlay.parentElement !== document.body) {
+        document.body.appendChild(overlay);
+    }
+
+    overlay.hidden = false;
+    overlay.classList.add('visible');
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.style.zIndex = '12000';
+    applyNoteImageLightboxPresentation();
+    document.body.classList.add('note-image-lightbox-open');
+    const noteEditor = document.getElementById('note-editor');
+    const maximizedWindow = document.getElementById('maximized-block-window');
+    if (noteEditor) {
+        noteEditor.dataset.preLightboxVisibility = noteEditor.style.visibility || '';
+        noteEditor.style.visibility = 'hidden';
+    }
+    if (maximizedWindow) {
+        maximizedWindow.dataset.preLightboxVisibility = maximizedWindow.style.visibility || '';
+        maximizedWindow.style.visibility = 'hidden';
+    }
+    updateNoteImageLightboxLayout();
+    closeBtn.focus();
+}
+
+function closeNoteImageLightbox() {
+    const overlay = document.getElementById('note-image-lightbox');
+    const image = document.getElementById('note-image-lightbox-img');
+    const caption = document.getElementById('note-image-lightbox-caption');
+
+    if (!overlay || overlay.hidden) return;
+
+    overlay.classList.remove('visible');
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('note-image-lightbox-open');
+    const noteEditor = document.getElementById('note-editor');
+    const maximizedWindow = document.getElementById('maximized-block-window');
+    if (noteEditor) {
+        noteEditor.style.visibility = noteEditor.dataset.preLightboxVisibility || '';
+        delete noteEditor.dataset.preLightboxVisibility;
+    }
+    if (maximizedWindow) {
+        maximizedWindow.style.visibility = maximizedWindow.dataset.preLightboxVisibility || '';
+        delete maximizedWindow.dataset.preLightboxVisibility;
+    }
+
+    if (image) {
+        image.onload = null;
+        image.removeAttribute('src');
+        image.alt = '';
+        image.style.width = '';
+        image.style.height = '';
+    }
+    if (caption) {
+        caption.textContent = '';
+        caption.style.display = 'none';
+    }
+
+    if (noteImageLightboxLastFocus && typeof noteImageLightboxLastFocus.focus === 'function') {
+        noteImageLightboxLastFocus.focus();
+    }
+    noteImageLightboxLastFocus = null;
+}
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeNoteImageLightbox();
+});
+
+bindNoteImageLightboxDelegation();
+
 // Logic to find bi-directional links
 function getBacklinks(noteId) {
     if (!noteId) return [];
@@ -943,6 +1187,8 @@ function openNoteEditor(noteId) {
     const note = notes.find(n => n.id === noteId);
     if (!note) return;
 
+    closeNoteImageLightbox();
+
     currentEditingNoteId = noteId;
 
     // Populate title
@@ -997,6 +1243,7 @@ function openNoteEditor(noteId) {
 // Simply hides the modal and refreshes the list
 function closeNoteEditor() {
     const editor = document.getElementById('note-editor');
+    closeNoteImageLightbox();
     editor.classList.add('hidden');
 
     // Save before closing
