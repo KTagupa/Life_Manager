@@ -97,7 +97,10 @@ function computeDebtOutstandingAsOf(endTs, transactions) {
     return (window.allDecryptedDebts || []).reduce((sum, debt) => {
         const name = String(debt.name || '').trim();
         if (!name) return sum;
-        const base = Number(debt.amount) || 0;
+        const borrowDateTs = debt?.borrowDate ? Date.parse(debt.borrowDate) : NaN;
+        const base = Number.isFinite(borrowDateTs) && borrowDateTs > endTs
+            ? 0
+            : (Number(debt.amount) || 0);
         const borrowed = Number(aggregates.debtBorrowedByCategory?.[name] || 0);
         const paid = Number(aggregates.debtPaidByCategory?.[name] || 0);
         const outstanding = Math.max(0, base + borrowed - paid);

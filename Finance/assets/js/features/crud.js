@@ -649,6 +649,86 @@
             return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
         }
 
+        function toISODateFromInputValue(dateValue) {
+            if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue.trim())) {
+                return `${dateValue.trim()}T12:00:00.000Z`;
+            }
+            return new Date().toISOString();
+        }
+
+        function refreshDebtBorrowDateUI() {
+            const toggle = document.getElementById('d-track-borrow-date');
+            const wrap = document.getElementById('d-borrow-date-wrap');
+            const dateInput = document.getElementById('d-borrow-date');
+            const enabled = !!toggle?.checked;
+
+            if (wrap) {
+                wrap.classList.toggle('hidden', !enabled);
+            }
+            if (dateInput) {
+                dateInput.disabled = !enabled;
+            }
+        }
+
+        function refreshDebtTransactionBorrowUI() {
+            const type = document.getElementById('ud-type')?.value;
+            const wrap = document.getElementById('ud-track-income-wrap');
+            const toggle = document.getElementById('ud-track-income');
+
+            if (!wrap || !toggle) return;
+
+            const isLoan = type === 'loan';
+            wrap.classList.toggle('hidden', !isLoan);
+            wrap.classList.toggle('flex', isLoan);
+
+            if (!isLoan) {
+                toggle.checked = false;
+            }
+        }
+
+        async function createDebtBorrowTransaction({
+            db,
+            debtId = '',
+            category,
+            amount,
+            dateISO,
+            desc,
+            notes = '',
+            countAsIncome = false,
+            isInitialPrincipal = false
+        }) {
+            if (!db || !category || !Number.isFinite(Number(amount)) || Number(amount) <= 0) return;
+
+            const encrypted = await encryptData({
+                desc,
+                merchant: null,
+                tags: [],
+                amt: Number(amount),
+                quantity: 1,
+                type: countAsIncome ? 'income' : 'debt_increase',
+                category,
+                paymentSource: 'cash',
+                creditCardId: null,
+                creditCardName: null,
+                date: dateISO,
+                notes,
+                debtId: debtId || null,
+                debtBorrowTracked: countAsIncome,
+                debtPrincipalSeed: isInitialPrincipal,
+                importId: null,
+                dedupeHash: null,
+                deletedAt: null
+            });
+
+            db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
+            db.transactions.push({
+                id: generateFinanceRecordId('tx_'),
+                data: encrypted,
+                createdAt: Date.now(),
+                deletedAt: null
+            });
+        }
+
         async function getNormalizedBillPayloadById(billId) {
             const raw = rawBills.find(b => b.id === billId);
             if (!raw) return null;
@@ -1104,6 +1184,9 @@
         function openDebtModal() {
             document.getElementById('d-name').value = '';
             document.getElementById('d-amount').value = '';
+            document.getElementById('d-track-borrow-date').checked = false;
+            document.getElementById('d-borrow-date').value = new Date().toISOString().split('T')[0];
+            refreshDebtBorrowDateUI();
             document.getElementById('debt-modal').classList.remove('hidden');
         }
 
@@ -1632,31 +1715,53 @@
 
 
         async function saveDebt() {
-            const name = document.getElementById('d-name').value;
+            const name = document.getElementById('d-name').value.trim();
             const amount = parseFloat(document.getElementById('d-amount').value);
+            const shouldTrackBorrowDate = document.getElementById('d-track-borrow-date')?.checked === true;
+            const borrowDateValue = document.getElementById('d-borrow-date')?.value || '';
             if (!name || isNaN(amount)) return;
+            if (shouldTrackBorrowDate && !borrowDateValue) {
+                alert('Pick the borrowed date to count this debt as income.');
+                return;
+            }
 
-            const encrypted = await encryptData({ name, amount });
             const db = await getDB();
             db.debts = db.debts || [];
+            const debtId = generateFinanceRecordId('debt_');
+            const borrowDateISO = shouldTrackBorrowDate ? toISODateFromInputValue(borrowDateValue) : null;
+            const encrypted = await encryptData({
+                name,
+                amount,
+                borrowDate: borrowDateISO,
+                borrowTrackedAsIncome: shouldTrackBorrowDate
+            });
             db.debts.push({
-                id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                id: debtId,
                 data: encrypted,
                 deletedAt: null
             });
+
+            if (shouldTrackBorrowDate) {
+                await createDebtBorrowTransaction({
+                    db,
+                    debtId,
+                    category: name,
+                    amount,
+                    dateISO: borrowDateISO,
+                    desc: `Borrowed for ${name}`,
+                    notes: '',
+                    countAsIncome: true,
+                    isInitialPrincipal: true
+                });
+            }
             await saveDB(db);
 
             rawDebts = db.debts.filter(d => !d.deletedAt);
+            rawTransactions = (db.transactions || []).filter(t => !t.deletedAt);
             toggleModal('debt-modal');
+            await loadAndRender();
             await renderDebts(rawDebts);
-            // Refresh budget inputs to include new debt category
-            populateBudgetInputs();
-            refreshTransactionCategorySelect();
-            await refreshLinkedPanels({
-                refreshKPI: true,
-                refreshForecast: true,
-                refreshStatements: true
-            });
+            refreshTransactionCategorySelect(name);
         }
 
         // New Logic for Update Debt Modal
@@ -1670,8 +1775,10 @@
             document.getElementById('ud-amount').value = '';
             document.getElementById('ud-desc').value = '';
             document.getElementById('ud-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('ud-track-income').checked = false;
 
             setUDType('repayment'); // Default
+            refreshDebtTransactionBorrowUI();
             document.getElementById('update-debt-modal').classList.remove('hidden');
         }
 
@@ -1687,6 +1794,8 @@
                 btnRepay.className = "py-2 rounded-xl font-bold text-slate-400";
                 btnLoan.className = "py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm";
             }
+
+            refreshDebtTransactionBorrowUI();
         }
 
         async function saveDebtTransaction() {
@@ -1694,20 +1803,27 @@
             const amount = parseFloat(document.getElementById('ud-amount').value);
             const typeKey = document.getElementById('ud-type').value; // 'repayment' or 'loan'
             const dateVal = document.getElementById('ud-date').value;
+            const countLoanAsIncome = typeKey === 'loan' && document.getElementById('ud-track-income')?.checked === true;
             let desc = document.getElementById('ud-desc').value;
 
             if (isNaN(amount) || amount <= 0) { alert("Invalid amount"); return; }
 
             // Map to Transaction Type
             // Repayment -> Expense (Reduces debt remaining)
-            // Loan -> Debt Increase (Increases debt remaining, adds to balance, but NOT income)
-            const type = typeKey === 'repayment' ? 'expense' : 'debt_increase';
+            // Loan -> Income or Debt Increase depending on whether the borrowed date toggle is enabled
+            const type = typeKey === 'repayment'
+                ? 'expense'
+                : (countLoanAsIncome ? 'income' : 'debt_increase');
 
             if (!desc) {
-                desc = typeKey === 'repayment' ? `Repayment for ${category}` : `Added loan for ${category}`;
+                if (typeKey === 'repayment') {
+                    desc = `Repayment for ${category}`;
+                } else {
+                    desc = countLoanAsIncome ? `Borrowed for ${category}` : `Added loan for ${category}`;
+                }
             }
 
-            const date = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
+            const date = toISODateFromInputValue(dateVal);
 
             // Reuse generic save logic via manual construction
             const encrypted = await encryptData({
@@ -1718,15 +1834,22 @@
                 quantity: 1,
                 type,
                 category,
+                paymentSource: 'cash',
+                creditCardId: null,
+                creditCardName: null,
                 date,
+                notes: '',
+                debtBorrowTracked: countLoanAsIncome,
+                debtPrincipalSeed: false,
                 importId: null,
                 dedupeHash: null,
                 deletedAt: null
             });
 
             const db = await getDB();
+            db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
             db.transactions.push({
-                id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                id: generateFinanceRecordId('tx_'),
                 data: encrypted,
                 createdAt: Date.now(),
                 deletedAt: null

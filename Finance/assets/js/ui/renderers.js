@@ -104,7 +104,9 @@
                 }
 
                 if (t.type === 'income' || t.type === 'debt_increase') {
-                    debtBorrowedByCategory[category] = (debtBorrowedByCategory[category] || 0) + amt;
+                    if (t.debtPrincipalSeed !== true) {
+                        debtBorrowedByCategory[category] = (debtBorrowedByCategory[category] || 0) + amt;
+                    }
                     if (t.type === 'income' && category.startsWith('Lent: ')) {
                         lentIncomeByCategory[category] = (lentIncomeByCategory[category] || 0) + amt;
                     }

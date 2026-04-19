@@ -1257,6 +1257,21 @@
                 <input type="number" id="d-amount" placeholder="Total Amount Owed (₱)"
                     class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-rose-500">
 
+                <label class="flex items-start gap-3 p-4 bg-slate-50 border rounded-2xl cursor-pointer">
+                    <input type="checkbox" id="d-track-borrow-date" onchange="refreshDebtBorrowDateUI()"
+                        class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                    <span>
+                        <span class="block text-sm font-bold text-slate-700">Date borrowed</span>
+                        <span class="block text-xs text-slate-500">Turn this on if you want the borrowed amount counted as income on a specific date.</span>
+                    </span>
+                </label>
+
+                <div id="d-borrow-date-wrap" class="hidden">
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Borrowed on</label>
+                    <input type="date" id="d-borrow-date"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500 text-slate-700 font-bold">
+                </div>
+
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('debt-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
@@ -1302,6 +1317,16 @@
                     <input type="date" id="ud-date"
                         class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-indigo-500 text-slate-700 font-bold">
                 </div>
+
+                <label id="ud-track-income-wrap"
+                    class="hidden items-start gap-3 p-4 bg-slate-50 border rounded-2xl cursor-pointer">
+                    <input type="checkbox" id="ud-track-income"
+                        class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                    <span>
+                        <span class="block text-sm font-bold text-slate-700">Count as income</span>
+                        <span class="block text-xs text-slate-500">Use the date above to count this borrowed amount as income. Leave it off to keep the current debt-only behavior.</span>
+                    </span>
+                </label>
 
                 <div>
                     <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Notes</label>
