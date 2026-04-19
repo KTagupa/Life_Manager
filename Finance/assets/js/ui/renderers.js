@@ -3,6 +3,7 @@
         // =============================================
         function renderTransactions(items) {
             const list = document.getElementById('transaction-list');
+            const debtNames = new Set((window.allDecryptedDebts || []).map(d => String(d?.name || '').trim()).filter(Boolean));
 
             list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No transactions found.</div>';
 
@@ -11,6 +12,7 @@
                 const isDebtInc = i.type === 'debt_increase';
                 const isCardPayment = i.type === 'credit_card_payment';
                 const isCardCharge = typeof isCreditCardCharge === 'function' ? isCreditCardCharge(i) : false;
+                const isDebtPayment = i.type === 'expense' && debtNames.has(String(i.category || '').trim());
                 const isToday = isTxAssignedToToday(i);
                 const encodedTxId = encodeInlineArg(i.id);
                 const safeDesc = escapeHTML(i.desc || 'Untitled');
@@ -34,6 +36,9 @@
                     : isCardPayment && safeCardName
                         ? `<span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">PAYMENT • ${safeCardName}</span>`
                         : '';
+                const debtPaymentBadge = isDebtPayment
+                    ? '<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">DEBT PAYMENT</span>'
+                    : '';
 
                 // Icon & Color Logic
                 let iconBg, iconText, amountColor, sign, amountText;
@@ -58,7 +63,7 @@
                             ${initials}
                         </div>
                         <div>
-                            <p class="font-bold text-slate-800">${safeDesc} ${currencyBadge} ${creditCardBadge}</p>
+                            <p class="font-bold text-slate-800">${safeDesc} ${currencyBadge} ${creditCardBadge} ${debtPaymentBadge}</p>
                             <p class="recent-movement-meta text-[10px] uppercase font-bold text-slate-400 tracking-widest">${displayDate} • ${safeCategory}</p>
                         </div>
                     </div>

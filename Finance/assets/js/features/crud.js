@@ -670,6 +670,27 @@
             }
         }
 
+        function getDateInputValue(value) {
+            const raw = String(value || '').trim();
+            const matched = raw.match(/^\d{4}-\d{2}-\d{2}/);
+            if (matched) return matched[0];
+            return new Date().toISOString().split('T')[0];
+        }
+
+        function refreshUpdateDebtBorrowDateUI() {
+            const toggle = document.getElementById('ud-edit-track-borrow-date');
+            const wrap = document.getElementById('ud-edit-borrow-date-wrap');
+            const dateInput = document.getElementById('ud-edit-borrow-date');
+            const enabled = !!toggle?.checked;
+
+            if (wrap) {
+                wrap.classList.toggle('hidden', !enabled);
+            }
+            if (dateInput) {
+                dateInput.disabled = !enabled;
+            }
+        }
+
         function refreshDebtTransactionBorrowUI() {
             const type = document.getElementById('ud-type')?.value;
             const wrap = document.getElementById('ud-track-income-wrap');
@@ -727,6 +748,65 @@
                 createdAt: Date.now(),
                 deletedAt: null
             });
+        }
+
+        function isDebtLedgerTransaction(tx) {
+            return tx?.type === 'expense' || tx?.type === 'income' || tx?.type === 'debt_increase';
+        }
+
+        function getDebtActivityTransactions(debtId, debtName) {
+            const normalizedName = String(debtName || '').trim();
+            const normalizedDebtId = String(debtId || '').trim();
+            return (window.allDecryptedTransactions || []).filter(tx => {
+                if (!tx || !isDebtLedgerTransaction(tx)) return false;
+                const txDebtId = String(tx.debtId || '').trim();
+                const txCategory = String(tx.category || '').trim();
+                return (normalizedDebtId && txDebtId === normalizedDebtId) || (normalizedName && txCategory === normalizedName);
+            });
+        }
+
+        function renderDebtPaymentHistory(debt) {
+            const summaryEl = document.getElementById('ud-summary');
+            const metaEl = document.getElementById('ud-payment-history-meta');
+            const listEl = document.getElementById('ud-payment-history');
+            if (!summaryEl || !metaEl || !listEl || !debt) return;
+
+            const activityTransactions = getDebtActivityTransactions(debt.id, debt.name);
+            const aggregates = typeof buildDebtAndLentAggregates === 'function'
+                ? buildDebtAndLentAggregates(activityTransactions)
+                : { debtPaidByCategory: {}, debtBorrowedByCategory: {} };
+            const debtName = String(debt.name || '').trim();
+            const paid = Number(aggregates.debtPaidByCategory?.[debtName] || 0);
+            const borrowedMore = Number(aggregates.debtBorrowedByCategory?.[debtName] || 0);
+            const totalDebt = Math.max(0, Number(debt.amount) || 0) + borrowedMore;
+            const remaining = Math.max(0, totalDebt - paid);
+            const paymentRows = activityTransactions
+                .filter(tx => tx.type === 'expense')
+                .sort(compareRecentMovementTransactions);
+
+            summaryEl.textContent = `Paid ${fmt(paid)} of ${fmt(totalDebt)} • ${fmt(remaining)} left`;
+            metaEl.textContent = paymentRows.length
+                ? `${paymentRows.length} payment${paymentRows.length === 1 ? '' : 's'} recorded`
+                : 'No payments yet.';
+
+            if (!paymentRows.length) {
+                listEl.innerHTML = '<div class="text-sm text-slate-400 text-center py-6">No debt payments recorded yet.</div>';
+                return;
+            }
+
+            listEl.innerHTML = paymentRows.map(tx => {
+                const safeDesc = escapeHTML(tx.desc || `Repayment for ${debtName}`);
+                const safeDate = escapeHTML(new Date(tx.date).toLocaleDateString());
+                return `
+                    <div class="flex items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-2xl">
+                        <div>
+                            <p class="text-sm font-bold text-slate-700">${safeDesc}</p>
+                            <p class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Paid ${safeDate}</p>
+                        </div>
+                        <p class="text-sm font-black text-rose-600">-${fmt(tx.amt)}</p>
+                    </div>
+                `;
+            }).join('');
         }
 
         async function getNormalizedBillPayloadById(billId) {
@@ -1765,21 +1845,207 @@
         }
 
         // New Logic for Update Debt Modal
-        function openUpdateDebtModal(id) {
+        async function openUpdateDebtModal(id) {
             const debt = window.allDecryptedDebts.find(d => d.id === id);
             if (!debt) return;
 
             document.getElementById('ud-title').innerText = debt.name;
             document.getElementById('ud-debt-id').value = id;
             document.getElementById('ud-category').value = debt.name; // Category matches debt name
+            document.getElementById('ud-original-category').value = debt.name;
+            document.getElementById('ud-name').value = debt.name || '';
+            document.getElementById('ud-base-amount').value = Number(debt.amount) || '';
+            document.getElementById('ud-edit-track-borrow-date').checked = debt.borrowTrackedAsIncome === true;
+            document.getElementById('ud-edit-borrow-date').value = getDateInputValue(debt.borrowDate);
             document.getElementById('ud-amount').value = '';
             document.getElementById('ud-desc').value = '';
             document.getElementById('ud-date').value = new Date().toISOString().split('T')[0];
             document.getElementById('ud-track-income').checked = false;
 
             setUDType('repayment'); // Default
+            refreshUpdateDebtBorrowDateUI();
             refreshDebtTransactionBorrowUI();
+            renderDebtPaymentHistory(debt);
             document.getElementById('update-debt-modal').classList.remove('hidden');
+        }
+
+        async function saveDebtDetails() {
+            const debtId = document.getElementById('ud-debt-id').value;
+            const oldName = document.getElementById('ud-original-category').value.trim();
+            const newName = document.getElementById('ud-name').value.trim();
+            const amount = parseFloat(document.getElementById('ud-base-amount').value);
+            const trackBorrowDate = document.getElementById('ud-edit-track-borrow-date')?.checked === true;
+            const borrowDateValue = document.getElementById('ud-edit-borrow-date')?.value || '';
+
+            if (!debtId || !newName || isNaN(amount) || amount <= 0) {
+                alert('Please enter a valid debt name and amount.');
+                return;
+            }
+            if (trackBorrowDate && !borrowDateValue) {
+                alert('Pick the borrowed date to count this debt as income.');
+                return;
+            }
+
+            const normalizedNewName = newName.toLowerCase();
+            const nameTaken = (window.allDecryptedDebts || []).some(debt => {
+                if (!debt || debt.id === debtId) return false;
+                return String(debt.name || '').trim().toLowerCase() === normalizedNewName;
+            });
+            if (nameTaken) {
+                alert('Another debt already uses that name.');
+                return;
+            }
+
+            const db = await getDB();
+            db.debts = Array.isArray(db.debts) ? db.debts : [];
+            const debtIndex = db.debts.findIndex(entry => entry && entry.id === debtId && !entry.deletedAt);
+            if (debtIndex === -1) {
+                alert('Debt not found.');
+                return;
+            }
+
+            const existingDebt = await decryptData(db.debts[debtIndex].data);
+            if (!existingDebt) {
+                alert('Debt details could not be loaded.');
+                return;
+            }
+
+            const borrowDateISO = trackBorrowDate ? toISODateFromInputValue(borrowDateValue) : null;
+            const nextDebt = {
+                ...existingDebt,
+                name: newName,
+                amount,
+                borrowTrackedAsIncome: trackBorrowDate,
+                borrowDate: borrowDateISO
+            };
+            db.debts[debtIndex] = {
+                ...db.debts[debtIndex],
+                data: await encryptData(nextDebt),
+                lastModified: Date.now(),
+                deletedAt: db.debts[debtIndex].deletedAt || null
+            };
+
+            db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
+            let seedTransactionFound = false;
+
+            for (let i = 0; i < db.transactions.length; i++) {
+                const rawTx = db.transactions[i];
+                if (!rawTx || rawTx.deletedAt) continue;
+
+                const decrypted = await decryptData(rawTx.data);
+                if (!decrypted || !isDebtLedgerTransaction(decrypted)) continue;
+
+                const matchesDebtId = String(decrypted.debtId || '').trim() === debtId;
+                const matchesName = String(decrypted.category || '').trim() === oldName;
+                if (!matchesDebtId && !matchesName) continue;
+
+                if (decrypted.debtPrincipalSeed === true) {
+                    seedTransactionFound = true;
+                    if (!trackBorrowDate) {
+                        db.transactions[i] = {
+                            ...rawTx,
+                            deletedAt: new Date().toISOString(),
+                            lastModified: Date.now()
+                        };
+                        continue;
+                    }
+
+                    const updatedSeed = {
+                        ...decrypted,
+                        desc: `Borrowed for ${newName}`,
+                        amt: amount,
+                        type: 'income',
+                        category: newName,
+                        date: borrowDateISO,
+                        debtId,
+                        debtBorrowTracked: true
+                    };
+                    db.transactions[i] = {
+                        ...rawTx,
+                        data: await encryptData(updatedSeed),
+                        lastModified: Date.now(),
+                        deletedAt: null
+                    };
+                    continue;
+                }
+
+                if (matchesName || matchesDebtId) {
+                    const updatedTx = {
+                        ...decrypted,
+                        category: newName,
+                        debtId: debtId || null
+                    };
+                    db.transactions[i] = {
+                        ...rawTx,
+                        data: await encryptData(updatedTx),
+                        lastModified: Date.now(),
+                        deletedAt: rawTx.deletedAt || null
+                    };
+                }
+            }
+
+            if (trackBorrowDate && !seedTransactionFound) {
+                await createDebtBorrowTransaction({
+                    db,
+                    debtId,
+                    category: newName,
+                    amount,
+                    dateISO: borrowDateISO,
+                    desc: `Borrowed for ${newName}`,
+                    notes: '',
+                    countAsIncome: true,
+                    isInitialPrincipal: true
+                });
+            }
+
+            db.wishlist = Array.isArray(db.wishlist) ? db.wishlist : [];
+            for (let i = 0; i < db.wishlist.length; i++) {
+                const rawWish = db.wishlist[i];
+                if (!rawWish || rawWish.deletedAt) continue;
+                const decrypted = await decryptData(rawWish.data);
+                if (!decrypted || decrypted.category !== oldName) continue;
+                db.wishlist[i] = {
+                    ...rawWish,
+                    data: await encryptData({
+                        ...decrypted,
+                        category: newName
+                    }),
+                    lastModified: Date.now(),
+                    deletedAt: rawWish.deletedAt || null
+                };
+            }
+
+            if (budgets[oldName] != null && oldName !== newName) {
+                budgets[newName] = budgets[oldName];
+                delete budgets[oldName];
+                db.budgets = { data: await encryptData(budgets) };
+            }
+
+            recurringTransactions = (recurringTransactions || []).map(reminder => {
+                if (!reminder || reminder.category !== oldName) return reminder;
+                return { ...reminder, category: newName };
+            });
+            categorizationRules = (categorizationRules || []).map(rule => {
+                if (!rule || rule.category !== oldName) return rule;
+                return { ...rule, category: newName, lastModified: Date.now() };
+            });
+            financialGoals = (financialGoals || []).map(goal => {
+                if (!goal || goal.linkedCategory !== oldName) return goal;
+                return { ...goal, linkedCategory: newName, lastModified: Date.now() };
+            });
+            db.recurring_transactions = recurringTransactions;
+            db.categorization_rules = categorizationRules;
+            db.goals = financialGoals;
+
+            const persistedDB = await saveDB(db);
+            rawDebts = (persistedDB.debts || []).filter(entry => !entry.deletedAt);
+            rawTransactions = (persistedDB.transactions || []).filter(entry => !entry.deletedAt);
+
+            await loadAndRender();
+            await renderDebts(rawDebts);
+            refreshTransactionCategorySelect(newName);
+            await openUpdateDebtModal(debtId);
+            showToast('✅ Debt updated');
         }
 
         function setUDType(type) {
@@ -1861,6 +2127,7 @@
             toggleModal('update-debt-modal');
             await loadAndRender(); // Updates transaction list
             await renderDebts(rawDebts); // Update debt progress
+            showToast(typeKey === 'repayment' ? '✅ Debt payment recorded' : '✅ Debt activity recorded');
         }
 
         async function saveLent() {
