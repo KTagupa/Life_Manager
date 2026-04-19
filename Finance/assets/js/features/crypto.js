@@ -1122,18 +1122,22 @@
             const bB = document.getElementById('btn-c-buy');
             const bS = document.getElementById('btn-c-sell');
             const bW = document.getElementById('btn-c-swap');
+            const bA = document.getElementById('btn-c-airdrop');
 
             // Reset classes
             bB.className = "py-2 rounded-xl font-bold text-slate-400";
             bS.className = "py-2 rounded-xl font-bold text-slate-400";
             bW.className = "py-2 rounded-xl font-bold text-slate-400";
+            bA.className = "py-2 rounded-xl font-bold text-slate-400";
 
             if (t === 'buy') bB.className = "py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm";
             else if (t === 'sell') bS.className = "py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm";
             else if (t === 'swap') bW.className = "py-2 rounded-xl font-bold bg-white text-blue-600 shadow-sm";
+            else if (t === 'airdrop') bA.className = "py-2 rounded-xl font-bold bg-white text-amber-600 shadow-sm";
 
             // Visibility Toggles
             const isSwap = t === 'swap';
+            const isAirdrop = t === 'airdrop';
             const priceContainer = document.getElementById('c-price-container');
             const targetContainer = document.getElementById('c-swap-target-container');
             const targetAmtContainer = document.getElementById('c-target-amount-container');
@@ -1151,7 +1155,14 @@
                 // Adjust Grid to fit target amount
                 targetAmtContainer.parentElement.classList.remove('grid-cols-2');
                 targetAmtContainer.parentElement.classList.add('grid-cols-2');
+            } else if (isAirdrop) {
+                priceContainer.classList.add('hidden');
+                totalContainer.classList.add('hidden');
+                targetContainer.classList.add('hidden');
+                targetAmtContainer.classList.add('hidden');
 
+                document.getElementById('lbl-c-token').innerText = 'Token Name / ID';
+                document.getElementById('lbl-c-amount').innerText = 'Quantity';
             } else {
                 priceContainer.classList.remove('hidden');
                 totalContainer.classList.remove('hidden');
@@ -1740,15 +1751,15 @@
                 db.crypto.push({ id: swapId + '_in', data: await encryptData(txIn), deletedAt: null });
 
             } else {
-                // Regular Buy/Sell
-                const price = parseFloat(document.getElementById('c-price').value);
-                const currency = document.getElementById('c-currency').value;
+                const isAirdrop = type === 'airdrop';
+                const price = isAirdrop ? 0 : parseFloat(document.getElementById('c-price').value);
+                const currency = isAirdrop ? 'PHP' : document.getElementById('c-currency').value;
 
-                if (!tokenId || !amount || !price) { alert("Please fill details"); return; }
+                if (!tokenId || !amount || (!isAirdrop && !price)) { alert("Please fill details"); return; }
 
                 // Convert to PHP for base storage consistency
-                const phpPrice = convertToDisplayCurrency(price, currency, 'PHP');
-                const phpTotal = amount * phpPrice;
+                const phpPrice = isAirdrop ? 0 : convertToDisplayCurrency(price, currency, 'PHP');
+                const phpTotal = isAirdrop ? 0 : (amount * phpPrice);
 
                 // Store transaction
                 const txData = {
@@ -2164,7 +2175,8 @@
                 }
                 const h = holdings[tx.tokenId];
 
-                if (tx.type === 'buy') {
+                if (tx.type === 'buy' || tx.type === 'airdrop') {
+                    const lotSourceType = tx.type === 'airdrop' ? 'airdrop' : 'buy';
                     h.amount += tx.amount;
                     h.totalCost += tx.total;
                     h.lots.push({
@@ -2172,7 +2184,7 @@
                         price: tx.phpPrice,
                         total: tx.total,
                         date: tx.date,
-                        sourceType: 'buy',
+                        sourceType: lotSourceType,
                         sourceSymbol: tx.symbol
                     });
 
@@ -2667,6 +2679,7 @@
         function summarizeCryptoHoldingSources(lots) {
             const swapSymbols = new Set();
             let swapCost = 0;
+            let airdropAmount = 0;
 
             (lots || []).forEach(lot => {
                 if (!lot || lot.amount <= 0.000001) return;
@@ -2675,11 +2688,14 @@
                     swapCost += lotCost;
                     const sourceSymbol = String(lot.sourceSymbol || '').trim().toUpperCase();
                     if (sourceSymbol) swapSymbols.add(sourceSymbol);
+                } else if (lot.sourceType === 'airdrop') {
+                    airdropAmount += Math.max(0, Number(lot.amount) || 0);
                 }
             });
 
             return {
                 swapCost,
+                airdropAmount,
                 directCost: Math.max(0, (lots || []).reduce((sum, lot) => {
                     if (!lot || lot.amount <= 0.000001) return sum;
                     return sum + Math.max(0, (Number(lot.amount) || 0) * (Number(lot.price) || 0));
@@ -2711,6 +2727,7 @@
             let tokenTargetUI = '';
             let tokenTargetNote = '';
             let sourceNote = '';
+            const hasCostBasis = Number(h?.totalCost || 0) > 0;
 
             if (sourceSummary.swapCost > 0.01) {
                 const swapFrom = sourceSummary.swapSymbols.length > 0 ? ` from ${escapeHTML(sourceSummary.swapSymbols.join(', '))}` : '';
@@ -2719,6 +2736,10 @@
                 } else {
                     sourceNote = `<p class="text-[10px] text-sky-300 mt-0.5">Acquired via swap${swapFrom} • carrying ${fmt(sourceSummary.swapCost)} original cost basis</p>`;
                 }
+            }
+            if (sourceSummary.airdropAmount > 0.000001) {
+                const airdropNote = `<p class="text-[10px] text-amber-300 mt-0.5">Includes ${Number(sourceSummary.airdropAmount).toFixed(8)} airdropped tokens at zero cost basis</p>`;
+                sourceNote = sourceNote ? `${sourceNote}${airdropNote}` : airdropNote;
             }
 
             if (showTokenTarget) {
@@ -2736,6 +2757,8 @@
 
             if (currentPrice <= 0) {
                 tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Needs latest price to estimate target action.</p>';
+            } else if (!hasCostBasis) {
+                tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Zero-cost holding. Target calculator is unavailable without cost basis.</p>';
             } else if (!showTokenTarget && unrealized > 0) {
                 tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Enable gains in toggle above to compute sell target for this token.</p>';
             } else {
@@ -2838,8 +2861,8 @@
                 </div>
                 <div class="text-right">
                     <p class="font-bold text-white">${currentPrice > 0 ? fmt(value) : 'Needs Update'}</p>
-                    <p class="text-xs font-bold ${unrealized >= 0 ? 'text-emerald-500' : 'text-rose-500'}">
-                        ${currentPrice > 0 ? pnlPct.toFixed(1) + '%' : '--'}
+                    <p class="text-xs font-bold ${hasCostBasis ? (unrealized >= 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-500'}">
+                        ${currentPrice > 0 && hasCostBasis ? pnlPct.toFixed(1) + '%' : '--'}
                     </p>
                         <p class="text-[10px] text-slate-500">${unrealized >= 0 ? '+' : ''}${fmt(unrealized)}</p>
                 </div>
@@ -2930,8 +2953,10 @@
                     }
 
                     // Track Best/Worst
-                    if (pnlPct > bestPerf.pct) bestPerf = { symbol: h.symbol, pct: pnlPct };
-                    if (pnlPct < worstPerf.pct) worstPerf = { symbol: h.symbol, pct: pnlPct };
+                    if (h.totalCost > 0) {
+                        if (pnlPct > bestPerf.pct) bestPerf = { symbol: h.symbol, pct: pnlPct };
+                        if (pnlPct < worstPerf.pct) worstPerf = { symbol: h.symbol, pct: pnlPct };
+                    }
                 }
                 totalRealized += h.realizedPL;
 
@@ -2964,16 +2989,23 @@
                     const div = document.createElement('div');
                     div.className = "flex justify-between items-center py-2 px-2 hover:bg-slate-800 rounded-lg group";
                     const isBuy = tx.type === 'buy';
+                    const isAirdrop = tx.type === 'airdrop';
                     const isSwap = tx.type === 'swap_in' || tx.type === 'swap_out';
                     let icon = isBuy ? 'arrow-down-left' : 'arrow-up-right';
                     let colorClass = isBuy ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400';
                     let actionText = isBuy ? 'Bought' : 'Sold';
+                    let detailText = `${new Date(tx.date).toLocaleDateString()} ${!isSwap && !isAirdrop ? '• ' + formatCurrency(tx.price, tx.currency || 'PHP') + '/token' : ''}`;
+                    let totalText = !isSwap && !isAirdrop ? formatCurrency(tx.price * tx.amount, tx.currency || 'PHP') : '';
 
                     if (isSwap) {
                         icon = 'refresh-cw';
                         colorClass = 'bg-blue-900/30 text-blue-400';
                         if (tx.type === 'swap_out') actionText = `Swapped ${tx.symbol.toUpperCase()} for ${tx.linkedToken || '?'}`;
                         else actionText = `Received ${tx.symbol.toUpperCase()} (Swap)`;
+                    } else if (isAirdrop) {
+                        icon = 'gift';
+                        colorClass = 'bg-amber-900/30 text-amber-300';
+                        actionText = 'Airdropped';
                     }
 
                     const safeActionText = escapeHTML(actionText);
@@ -2987,12 +3019,12 @@
                              </div>
                              <div>
                                  <p class="text-sm font-bold text-slate-300 mobile-text-clip">${safeActionText} ${!isSwap ? safeTokenSymbol : ''}</p>
-                                 <p class="text-[10px] text-slate-500">${new Date(tx.date).toLocaleDateString()} ${!isSwap ? '• ' + formatCurrency(tx.price, tx.currency || 'PHP') + '/token' : ''}</p>
+                                 <p class="text-[10px] text-slate-500">${detailText}</p>
                              </div>
                         </div>
                          <div class="flex items-center gap-3">
                               <div class="text-right">
-                                  <p class="text-sm font-bold text-slate-300">${!isSwap ? formatCurrency(tx.price * tx.amount, tx.currency || 'PHP') : ''}</p>
+                                  <p class="text-sm font-bold text-slate-300">${totalText}</p>
                                   <p class="text-[10px] text-slate-500">${tx.amount} tokens</p>
                               </div>
                              <button onclick="deleteItem('crypto', decodeURIComponent('${encodedTxId}'), 'Delete this crypto transaction? This can be restored from Undo.')" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">

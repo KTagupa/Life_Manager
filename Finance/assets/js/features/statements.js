@@ -238,7 +238,7 @@ async function statementsComputeCryptoPositionAsOf(endTs, targetMonthKey) {
             const txTs = Date.parse(tx.date);
             const txMonthKey = statementsDateToMonthKey(new Date(txTs));
 
-            if (tx.type === 'buy') {
+            if (tx.type === 'buy' || tx.type === 'airdrop') {
                 h.amount += amount;
                 h.totalCost += total;
                 h.lots.push({
@@ -246,9 +246,11 @@ async function statementsComputeCryptoPositionAsOf(endTs, targetMonthKey) {
                     price: amount > 0 ? (total / amount) : 0
                 });
 
-                buyOutflowToDate += total;
-                if (txMonthKey === targetMonthKey) {
-                    buyOutflowInMonth += total;
+                if (tx.type === 'buy') {
+                    buyOutflowToDate += total;
+                    if (txMonthKey === targetMonthKey) {
+                        buyOutflowInMonth += total;
+                    }
                 }
                 return;
             }

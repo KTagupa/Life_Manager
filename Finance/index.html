@@ -1789,13 +1789,15 @@
             <h3 class="text-2xl font-bold text-slate-800 mb-6">Crypto Transaction</h3>
 
             <div class="space-y-4">
-                <div class="grid grid-cols-3 gap-2 p-1 bg-slate-50 rounded-2xl border">
+                <div class="grid grid-cols-4 gap-2 p-1 bg-slate-50 rounded-2xl border">
                     <button onclick="setCType('buy')" id="btn-c-buy"
                         class="py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm">Buy</button>
                     <button onclick="setCType('sell')" id="btn-c-sell"
                         class="py-2 rounded-xl font-bold text-slate-400">Sell</button>
                     <button onclick="setCType('swap')" id="btn-c-swap"
                         class="py-2 rounded-xl font-bold text-slate-400">Swap</button>
+                    <button onclick="setCType('airdrop')" id="btn-c-airdrop"
+                        class="py-2 rounded-xl font-bold text-slate-400">Airdropped</button>
                     <input type="hidden" id="c-type" value="buy">
                 </div>
 

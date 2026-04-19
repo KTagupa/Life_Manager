@@ -445,6 +445,7 @@
         const ethBuyDate = previewDateDaysAgo(38, rand);
         const ethSellDate = previewDateDaysAgo(8, rand);
         const adaBuyDate = previewDateDaysAgo(27, rand);
+        const solAirdropDate = previewDateDaysAgo(14, rand);
 
         db.crypto.push(createPreviewEncryptedEntry(makeId, 'crypto', {
             tokenId: 'bitcoin',
@@ -513,6 +514,22 @@
             notes: 'Preview swap in',
             date: swapDate
         }, swapDate));
+
+        db.crypto.push(createPreviewEncryptedEntry(makeId, 'crypto', {
+            tokenId: 'solana',
+            symbol: 'SOL',
+            amount: 1.125,
+            price: 0,
+            currency: 'PHP',
+            phpPrice: 0,
+            phpTotal: 0,
+            total: 0,
+            type: 'airdrop',
+            exchange: 'PreviewX',
+            strategy: 'Reward',
+            notes: 'Preview SOL airdrop',
+            date: solAirdropDate
+        }, solAirdropDate));
 
         db.crypto.push(createPreviewEncryptedEntry(makeId, 'crypto', {
             tokenId: 'ethereum',
