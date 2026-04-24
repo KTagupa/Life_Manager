@@ -72,11 +72,7 @@ function computeCashBalanceAsOf(endTs, transactions) {
     return (transactions || []).reduce((sum, tx) => {
         const ts = getTxTimestamp(tx);
         if (!Number.isFinite(ts) || ts > endTs) return sum;
-        const amt = Number(tx.amt) || 0;
-        if (tx.type === 'income' || tx.type === 'debt_increase') return sum + amt;
-        if (tx.type === 'expense') return isCreditCardCharge(tx) ? sum : sum - amt;
-        if (isCreditCardPayment(tx)) return sum - amt;
-        return sum;
+        return sum + getTxCashBalanceDelta(tx);
     }, 0);
 }
 

@@ -627,18 +627,18 @@
                             <div class="mt-4 grid gap-3 md:grid-cols-3">
                                 <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">Adds To Cash Now</p>
-                                    <p class="text-sm font-bold text-emerald-950 mt-2">Income entries increase Total Balance right away.</p>
-                                    <p class="text-xs text-emerald-800 mt-2">This includes normal income you add manually, imported income, and debt borrow entries that you choose to count as money received.</p>
+                                    <p class="text-sm font-bold text-emerald-950 mt-2">Cash-in entries increase Total Balance right away.</p>
+                                    <p class="text-xs text-emerald-800 mt-2">This includes normal income you add manually, imported income, and debt increases only when you explicitly mark that borrowing as cash received on a date.</p>
                                 </div>
                                 <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4">
                                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-700">Takes Cash Away Now</p>
                                     <p class="text-sm font-bold text-rose-950 mt-2">Cash expenses and credit card payments reduce Total Balance immediately.</p>
-                                    <p class="text-xs text-rose-800 mt-2">This covers regular expenses, bill payments paid by you, wishlist conversions once saved, reminder quick-adds saved as cash expenses, crypto buy expense mirrors, CSV or bridge expenses, and card payment records.</p>
+                                    <p class="text-xs text-rose-800 mt-2">This covers regular expenses, bill payments paid by you, wishlist conversions once saved, reminder quick-adds saved as cash expenses, crypto buy expense mirrors, CSV or bridge expenses, debt repayments, and credit card payment records. Card payments are cash leaving you now, even though they settle debt instead of creating a new purchase.</p>
                                 </div>
                                 <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4">
                                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Recorded, Not Cash Gone Yet</p>
                                     <p class="text-sm font-bold text-blue-950 mt-2">Credit-card charges are shown in Recent Movements, but they do not lower Total Balance until you record the card payment.</p>
-                                    <p class="text-xs text-blue-800 mt-2">Debt increase entries also show in the list as recorded borrowing increases. They are logged separately from normal earned income so you can tell borrowed money from actual earnings.</p>
+                                    <p class="text-xs text-blue-800 mt-2">Debt increase entries belong here when they are only tracking that your liability grew. If the borrowing actually gave you money in hand then, use the borrowed-date option so that debt increase also adds to cash on that date.</p>
                                 </div>
                             </div>
                             <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
@@ -1298,7 +1298,7 @@
                         class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
                     <span>
                         <span class="block text-sm font-bold text-slate-700">Date borrowed</span>
-                        <span class="block text-xs text-slate-500">Turn this on if you want the borrowed amount counted as income on a specific date.</span>
+                        <span class="block text-xs text-slate-500">Turn this on if this debt also added cash to your wallet on a specific date.</span>
                     </span>
                 </label>
 
@@ -1365,7 +1365,7 @@
                             class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
                         <span>
                             <span class="block text-sm font-bold text-slate-700">Date borrowed</span>
-                            <span class="block text-xs text-slate-500">Turn this on if the original borrowed amount should count as income on a date.</span>
+                            <span class="block text-xs text-slate-500">Turn this on if the original borrowed amount also added cash to your wallet on a date.</span>
                         </span>
                     </label>
 
@@ -1379,7 +1379,7 @@
                 <section class="space-y-4">
                     <div>
                         <h4 class="text-sm font-black uppercase tracking-wider text-slate-500">Record Activity</h4>
-                        <p class="text-xs text-slate-400 mt-1">Repayments count as expense. Borrow more can optionally count as income.</p>
+                        <p class="text-xs text-slate-400 mt-1">Repayments count as expense. Borrow more always increases debt and can optionally add cash now.</p>
                     </div>
 
                     <div class="grid grid-cols-2 gap-2 p-1 bg-slate-50 rounded-2xl border">
@@ -1409,8 +1409,8 @@
                         <input type="checkbox" id="ud-track-income"
                             class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
                         <span>
-                            <span class="block text-sm font-bold text-slate-700">Count as income</span>
-                            <span class="block text-xs text-slate-500">Use the date above to count this borrowed amount as income. Leave it off to keep the current debt-only behavior.</span>
+                            <span class="block text-sm font-bold text-slate-700">Adds cash now</span>
+                            <span class="block text-xs text-slate-500">Use the date above if this borrowed amount also added cash to your wallet then. Leave it off to keep this as debt-only.</span>
                         </span>
                     </label>
 

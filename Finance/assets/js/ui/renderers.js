@@ -8,8 +8,9 @@
             list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No transactions found.</div>';
 
             items.forEach(i => {
-                const isInc = i.type === 'income';
-                const isDebtInc = i.type === 'debt_increase';
+                const isDebtCashIn = typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(i);
+                const isDebtInc = i.type === 'debt_increase' || isDebtCashIn;
+                const isInc = i.type === 'income' && !isDebtCashIn;
                 const isCardPayment = i.type === 'credit_card_payment';
                 const isCardCharge = typeof isCreditCardCharge === 'function' ? isCreditCardCharge(i) : false;
                 const isDebtPayment = i.type === 'expense' && debtNames.has(String(i.category || '').trim());
@@ -32,13 +33,17 @@
                     ? `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold">${escapeHTML(i.originalCurrency)}</span>`
                     : '';
                 const creditCardBadge = isCardCharge && safeCardName
-                    ? `<span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">CARD • ${safeCardName}</span>`
+                    ? `<span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">CARD • ${safeCardName}</span>`
                     : isCardPayment && safeCardName
-                        ? `<span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">PAYMENT • ${safeCardName}</span>`
+                        ? `<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">PAYMENT • ${safeCardName}</span>`
                         : '';
                 const debtPaymentBadge = isDebtPayment
                     ? '<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">DEBT PAYMENT</span>'
                     : '';
+                const debtIncreaseBadge = isDebtInc
+                    ? `<span class="text-[9px] ${isDebtCashIn ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'} px-1.5 py-0.5 rounded font-bold">${isDebtCashIn ? 'DEBT + CASH' : 'DEBT ONLY'}</span>`
+                    : '';
+                const badges = [currencyBadge, creditCardBadge, debtPaymentBadge, debtIncreaseBadge].filter(Boolean).join(' ');
 
                 // Icon & Color Logic
                 let iconBg, iconText, amountColor, sign, amountText;
@@ -46,16 +51,21 @@
                     iconBg = 'bg-emerald-50'; iconText = 'text-emerald-600';
                     amountColor = 'text-emerald-600'; sign = '+';
                 } else if (isDebtInc) {
-                    iconBg = 'bg-blue-50'; iconText = 'text-blue-600';
-                    amountColor = 'text-blue-600'; sign = '+';
-                } else if (isCardPayment) {
+                    iconBg = isDebtCashIn ? 'bg-emerald-50' : 'bg-blue-50';
+                    iconText = isDebtCashIn ? 'text-emerald-600' : 'text-blue-600';
+                    amountColor = isDebtCashIn ? 'text-emerald-600' : 'text-blue-600';
+                    sign = isDebtCashIn ? '+' : '';
+                } else if (isCardCharge) {
                     iconBg = 'bg-blue-50'; iconText = 'text-blue-600';
                     amountColor = 'text-blue-600'; sign = '';
+                } else if (isCardPayment) {
+                    iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
+                    amountColor = 'text-rose-600'; sign = '-';
                 } else {
                     iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
                     amountColor = 'text-rose-600'; sign = '-';
                 }
-                amountText = isCardPayment ? fmt(i.amt) : `${sign}${fmt(i.amt)}`;
+                amountText = (isDebtInc && !isDebtCashIn) || isCardCharge ? fmt(i.amt) : `${sign}${fmt(i.amt)}`;
 
                 div.innerHTML = `
                     <div class="flex items-center gap-4">
@@ -63,7 +73,7 @@
                             ${initials}
                         </div>
                         <div>
-                            <p class="font-bold text-slate-800">${safeDesc} ${currencyBadge} ${creditCardBadge} ${debtPaymentBadge}</p>
+                            <p class="font-bold text-slate-800">${safeDesc}${badges ? ` ${badges}` : ''}</p>
                             <p class="recent-movement-meta text-[10px] uppercase font-bold text-slate-400 tracking-widest">${displayDate} • ${safeCategory}</p>
                         </div>
                     </div>
@@ -108,13 +118,16 @@
                     return;
                 }
 
-                if (t.type === 'income' || t.type === 'debt_increase') {
-                    if (t.debtPrincipalSeed !== true) {
-                        debtBorrowedByCategory[category] = (debtBorrowedByCategory[category] || 0) + amt;
-                    }
-                    if (t.type === 'income' && category.startsWith('Lent: ')) {
-                        lentIncomeByCategory[category] = (lentIncomeByCategory[category] || 0) + amt;
-                    }
+                const debtBorrowDelta = typeof getDebtBorrowLiabilityDelta === 'function'
+                    ? getDebtBorrowLiabilityDelta(t)
+                    : 0;
+
+                if (debtBorrowDelta > 0) {
+                    debtBorrowedByCategory[category] = (debtBorrowedByCategory[category] || 0) + debtBorrowDelta;
+                }
+
+                if (t.type === 'income' && category.startsWith('Lent: ')) {
+                    lentIncomeByCategory[category] = (lentIncomeByCategory[category] || 0) + amt;
                 }
             });
 

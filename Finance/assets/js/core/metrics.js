@@ -94,6 +94,67 @@
             return tx?.type === 'credit_card_payment' && !!getTxCreditCardId(tx);
         }
 
+        function isDebtBorrowCashInTx(tx) {
+            return tx?.debtBorrowTracked === true && (tx?.type === 'debt_increase' || tx?.type === 'income');
+        }
+
+        function isDebtBorrowLiabilityTx(tx) {
+            return tx?.type === 'debt_increase' || isDebtBorrowCashInTx(tx);
+        }
+
+        function getDebtBorrowLiabilityDelta(tx, { includePrincipalSeed = false } = {}) {
+            const amount = Math.max(0, Number(tx?.amt || 0));
+            if (!Number.isFinite(amount) || amount <= 0) return 0;
+            if (!isDebtBorrowLiabilityTx(tx)) return 0;
+            if (!includePrincipalSeed && tx?.debtPrincipalSeed === true) return 0;
+            return amount;
+        }
+
+        function getTxCashBalanceDelta(tx) {
+            const amount = Math.max(0, Number(tx?.amt || 0));
+            if (!Number.isFinite(amount) || amount <= 0) return 0;
+
+            if (tx?.type === 'income') {
+                return amount;
+            }
+
+            if (tx?.type === 'debt_increase') {
+                return tx?.debtBorrowTracked === true ? amount : 0;
+            }
+
+            if (tx?.type === 'expense') {
+                return isCreditCardCharge(tx) ? 0 : -amount;
+            }
+
+            if (isCreditCardPayment(tx)) {
+                return -amount;
+            }
+
+            return 0;
+        }
+
+        function getTxReportedIncomeDelta(tx) {
+            const amount = Math.max(0, Number(tx?.amt || 0));
+            if (!Number.isFinite(amount) || amount <= 0) return 0;
+            if (tx?.type !== 'income') return 0;
+            return isDebtBorrowCashInTx(tx) ? 0 : amount;
+        }
+
+        function isExpenseLikeTx(tx) {
+            return tx?.type === 'expense' || isCreditCardPayment(tx);
+        }
+
+        function getTxExpenseDelta(tx) {
+            const amount = Math.max(0, Number(tx?.amt || 0));
+            if (!Number.isFinite(amount) || amount <= 0) return 0;
+            return isExpenseLikeTx(tx) ? amount : 0;
+        }
+
+        function getTxExpenseCategory(tx) {
+            if (isCreditCardPayment(tx)) return 'Card Payments';
+            return String(tx?.category || 'Others').trim() || 'Others';
+        }
+
         function computeCreditCardOutstandingMapAsOf(endTs, transactions) {
             const cards = window.allDecryptedCreditCards || [];
             const outstanding = new Map();
@@ -255,27 +316,29 @@
 
             scopedTransactions.forEach(t => {
                 if (t.type === 'income') {
-                    income += t.amt;
-                    balance += t.amt;
+                    income += getTxReportedIncomeDelta(t);
+                    balance += getTxCashBalanceDelta(t);
                     return;
                 }
 
                 if (t.type === 'debt_increase') {
-                    balance += t.amt;
+                    balance += getTxCashBalanceDelta(t);
                     return;
                 }
 
                 if (t.type === 'expense') {
-                    expense += t.amt;
-                    if (!isCreditCardCharge(t)) {
-                        balance -= t.amt;
-                    }
-                    categoryExpenses[t.category] = (categoryExpenses[t.category] || 0) + t.amt;
+                    expense += getTxExpenseDelta(t);
+                    balance += getTxCashBalanceDelta(t);
+                    const expenseCategory = getTxExpenseCategory(t);
+                    categoryExpenses[expenseCategory] = (categoryExpenses[expenseCategory] || 0) + getTxExpenseDelta(t);
                     return;
                 }
 
                 if (isCreditCardPayment(t)) {
-                    balance -= t.amt;
+                    expense += getTxExpenseDelta(t);
+                    balance += getTxCashBalanceDelta(t);
+                    const expenseCategory = getTxExpenseCategory(t);
+                    categoryExpenses[expenseCategory] = (categoryExpenses[expenseCategory] || 0) + getTxExpenseDelta(t);
                 }
             });
 

@@ -54,10 +54,11 @@ function computeQuarterMetrics(year, quarter) {
             income += amount;
             const cat = t.category || 'Others';
             incomeSources[cat] = (incomeSources[cat] || 0) + amount;
-        } else if (t.type === 'expense') {
-            expenses += amount;
-            const cat = t.category || 'Others';
-            categoryExpenses[cat] = (categoryExpenses[cat] || 0) + amount;
+        } else if ((typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? amount : 0)) > 0) {
+            const expenseAmount = typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : amount;
+            expenses += expenseAmount;
+            const cat = typeof getTxExpenseCategory === 'function' ? getTxExpenseCategory(t) : (t.category || 'Others');
+            categoryExpenses[cat] = (categoryExpenses[cat] || 0) + expenseAmount;
         }
     });
 
@@ -80,7 +81,7 @@ function computeQuarterMetrics(year, quarter) {
             const tmk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
             if (tmk !== mk) return;
             if (t.type === 'income') mIncome += t.amt || 0;
-            else if (t.type === 'expense') mExpense += t.amt || 0;
+            else mExpense += typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0);
         });
         return { month: mk, income: mIncome, expense: mExpense, net: mIncome - mExpense };
     });

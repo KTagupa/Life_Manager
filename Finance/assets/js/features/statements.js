@@ -114,11 +114,15 @@ function statementsBuildDebtAndLentAggregates(transactions) {
             return;
         }
 
-        if (tx.type === 'income' || tx.type === 'debt_increase') {
-            debtBorrowedByCategory[category] = (debtBorrowedByCategory[category] || 0) + amount;
-            if (tx.type === 'income' && category.startsWith('Lent: ')) {
-                lentIncomeByCategory[category] = (lentIncomeByCategory[category] || 0) + amount;
-            }
+        const debtBorrowDelta = typeof getDebtBorrowLiabilityDelta === 'function'
+            ? getDebtBorrowLiabilityDelta(tx)
+            : 0;
+        if (debtBorrowDelta > 0) {
+            debtBorrowedByCategory[category] = (debtBorrowedByCategory[category] || 0) + debtBorrowDelta;
+        }
+
+        if (tx.type === 'income' && category.startsWith('Lent: ')) {
+            lentIncomeByCategory[category] = (lentIncomeByCategory[category] || 0) + amount;
         }
     });
 
@@ -139,10 +143,8 @@ function statementsComputeCashBalanceAsOf(endTs, transactions) {
         if (!Number.isFinite(ts) || ts > endTs) return sum;
         const amount = Number(tx.amt || 0);
         if (!Number.isFinite(amount) || amount <= 0) return sum;
-        if (tx.type === 'income' || tx.type === 'debt_increase') return sum + amount;
-        if (tx.type === 'expense') return (isCreditCardCharge(tx) || isAutoCryptoExpense(tx)) ? sum : sum - amount;
-        if (isCreditCardPayment(tx)) return sum - amount;
-        return sum;
+        if (tx.type === 'expense' && isAutoCryptoExpense(tx)) return sum;
+        return sum + getTxCashBalanceDelta(tx);
     }, 0);
 }
 
@@ -538,7 +540,7 @@ async function computeStatementForMonth(monthKey) {
     const cogsKeywords = ['transport', 'commute', 'tools', 'work', 'equipment', 'office', 'uniform', 'professional', 'license', 'certification', 'internet'];
 
     let income = 0;
-    let debtIncreases = 0;
+    let debtCashIn = 0;
     let costOfEarning = 0; // COGS equivalent
     let operatingExpenses = 0;
     let debtService = 0;
@@ -553,12 +555,17 @@ async function computeStatementForMonth(monthKey) {
         const categoryLower = category.toLowerCase();
 
         if (tx.type === 'income') {
-            income += amount;
+            income += typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(tx) : amount;
+            if (typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(tx)) {
+                debtCashIn += amount;
+            }
             return;
         }
 
         if (tx.type === 'debt_increase') {
-            debtIncreases += amount;
+            if (typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(tx)) {
+                debtCashIn += amount;
+            }
             return;
         }
 
@@ -609,7 +616,7 @@ async function computeStatementForMonth(monthKey) {
 
     const operatingCashFlow = income - costOfEarning - operatingExpenses;
     const investingCashFlow = -(savingsContribution + cryptoPosition.buyOutflowInMonth) + cryptoPosition.sellInflowInMonth;
-    const financingCashFlow = debtIncreases + creditCardBorrowing - debtService - creditCardPayments;
+    const financingCashFlow = debtCashIn + creditCardBorrowing - debtService - creditCardPayments;
     const freeCashFlow = operatingCashFlow + investingCashFlow;
     const netCashFlow = operatingCashFlow + investingCashFlow + financingCashFlow;
 
@@ -641,6 +648,7 @@ async function computeStatementForMonth(monthKey) {
         cashflow: {
             operatingCashFlow,
             investingCashFlow,
+            debtCashIn,
             creditCardBorrowing,
             creditCardPayments,
             financingCashFlow,
@@ -676,6 +684,7 @@ function statementsDescriptorKeyForLabel(label) {
         'operating expenses': 'operating expenses',
         'ebitda': 'ebitda',
         'debt service': 'debt service',
+        'debt cash in': 'financing cash flow',
         'card borrowing': 'financing cash flow',
         'card payments': 'financing cash flow',
         'growth/investment': 'growth investment',
@@ -764,6 +773,7 @@ function renderStatementPanels(statement, source = 'live') {
     cfEl.innerHTML = [
         statementsMetricRow('Operating CF', fmt(Number(cashflow.operatingCashFlow || 0))),
         statementsMetricRow('Investing CF', fmt(Number(cashflow.investingCashFlow || 0))),
+        statementsMetricRow('Debt Cash In', fmt(Number(cashflow.debtCashIn || 0))),
         statementsMetricRow('Card Borrowing', fmt(Number(cashflow.creditCardBorrowing || 0))),
         statementsMetricRow('Card Payments', fmt(Number(cashflow.creditCardPayments || 0))),
         statementsMetricRow('Financing CF', fmt(Number(cashflow.financingCashFlow || 0))),
@@ -916,6 +926,7 @@ async function exportStatementToPDF(statement, sourceLabel = 'Live') {
         const cashFlowRows = [
             ['Operating CF', fmt(Number(statement?.cashflow?.operatingCashFlow || 0))],
             ['Investing CF', fmt(Number(statement?.cashflow?.investingCashFlow || 0))],
+            ['Debt Cash In', fmt(Number(statement?.cashflow?.debtCashIn || 0))],
             ['Card Borrowing', fmt(Number(statement?.cashflow?.creditCardBorrowing || 0))],
             ['Card Payments', fmt(Number(statement?.cashflow?.creditCardPayments || 0))],
             ['Financing CF', fmt(Number(statement?.cashflow?.financingCashFlow || 0))],

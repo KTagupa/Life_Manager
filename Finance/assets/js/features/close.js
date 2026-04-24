@@ -68,14 +68,7 @@
 
             (window.allDecryptedTransactions || []).forEach(tx => {
                 if (getTxTimestamp(tx) > endTs) return;
-                const amt = Number(tx.amt) || 0;
-                if (tx.type === 'income' || tx.type === 'debt_increase') {
-                    balance += amt;
-                } else if (tx.type === 'expense' && !isCreditCardCharge(tx)) {
-                    balance -= amt;
-                } else if (isCreditCardPayment(tx)) {
-                    balance -= amt;
-                }
+                balance += getTxCashBalanceDelta(tx);
             });
 
             return balance;

@@ -8,10 +8,10 @@ function computeBudgetVariance(monthTransactions, currentBudgets) {
 
     const categorySpent = {};
     txList.forEach(t => {
-        if (t.type === 'expense') {
-            const cat = t.category || 'Others';
-            categorySpent[cat] = (categorySpent[cat] || 0) + (t.amt || 0);
-        }
+        const expenseAmount = typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0);
+        if (!expenseAmount) return;
+        const cat = typeof getTxExpenseCategory === 'function' ? getTxExpenseCategory(t) : (t.category || 'Others');
+        categorySpent[cat] = (categorySpent[cat] || 0) + expenseAmount;
     });
 
     const rows = [];

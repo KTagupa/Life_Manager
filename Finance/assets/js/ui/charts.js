@@ -189,7 +189,7 @@
                 const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                 if (monthlyData[key]) {
                     if (t.type === 'income') monthlyData[key].income += t.amt;
-                    else if (t.type === 'expense') monthlyData[key].expense += t.amt;
+                    else monthlyData[key].expense += typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0);
                 }
             });
 

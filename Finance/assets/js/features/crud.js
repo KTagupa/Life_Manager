@@ -811,7 +811,7 @@
             dateISO,
             desc,
             notes = '',
-            countAsIncome = false,
+            countAsCashReceived = false,
             isInitialPrincipal = false
         }) {
             if (!db || !category || !Number.isFinite(Number(amount)) || Number(amount) <= 0) return;
@@ -822,7 +822,7 @@
                 tags: [],
                 amt: Number(amount),
                 quantity: 1,
-                type: countAsIncome ? 'income' : 'debt_increase',
+                type: 'debt_increase',
                 category,
                 paymentSource: 'cash',
                 creditCardId: null,
@@ -830,7 +830,7 @@
                 date: dateISO,
                 notes,
                 debtId: debtId || null,
-                debtBorrowTracked: countAsIncome,
+                debtBorrowTracked: countAsCashReceived,
                 debtPrincipalSeed: isInitialPrincipal,
                 importId: null,
                 dedupeHash: null,
@@ -1433,11 +1433,14 @@
             const db = await getDB();
             db.credit_cards = Array.isArray(db.credit_cards) ? db.credit_cards : [];
             let cardId = id;
+            let previousCardName = '';
 
             if (id) {
                 const idx = db.credit_cards.findIndex(card => card.id === id);
                 if (idx !== -1) {
                     const existing = db.credit_cards[idx] || {};
+                    const existingData = existing?.data ? await decryptData(existing.data) : null;
+                    previousCardName = String(existingData?.name || '').trim();
                     db.credit_cards[idx] = {
                         ...existing,
                         id,
@@ -1456,6 +1459,46 @@
                 });
             }
 
+            if (id && previousCardName && previousCardName !== name) {
+                db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
+
+                for (let i = 0; i < db.transactions.length; i++) {
+                    const rawTx = db.transactions[i];
+                    if (!rawTx || rawTx.deletedAt) continue;
+
+                    const decrypted = await decryptData(rawTx.data);
+                    if (!decrypted) continue;
+
+                    const txCardId = String(decrypted.creditCardId || '').trim();
+                    const txCardName = String(decrypted.creditCardName || '').trim();
+                    const isLinkedById = txCardId && txCardId === id;
+                    const isLegacyNameMatch = !txCardId && txCardName === previousCardName;
+                    if (!isLinkedById && !isLegacyNameMatch) continue;
+
+                    const updatedTx = {
+                        ...decrypted,
+                        creditCardId: txCardId || id,
+                        creditCardName: name
+                    };
+
+                    if (decrypted.type === 'credit_card_payment') {
+                        if (String(decrypted.category || '').trim() === previousCardName) {
+                            updatedTx.category = name;
+                        }
+                        if (String(decrypted.desc || '').trim() === `Payment for ${previousCardName}`) {
+                            updatedTx.desc = `Payment for ${name}`;
+                        }
+                    }
+
+                    db.transactions[i] = {
+                        ...rawTx,
+                        data: await encryptData(updatedTx),
+                        lastModified: Date.now(),
+                        deletedAt: rawTx.deletedAt || null
+                    };
+                }
+            }
+
             if (typeof syncCreditCardToReminder === 'function') {
                 await syncCreditCardToReminder(cardId, name, paymentDueDay, {
                     persist: false,
@@ -1464,9 +1507,11 @@
                 db.recurring_transactions = recurringTransactions;
             }
 
-            await saveDB(db);
+            const persistedDB = await saveDB(db);
             rawCreditCards = (db.credit_cards || []).filter(card => !card.deletedAt);
+            rawTransactions = (persistedDB.transactions || db.transactions || []).filter(t => !t.deletedAt);
             toggleModal('credit-card-modal');
+            await loadAndRender();
             await renderCreditCards(rawCreditCards);
             populateCreditCardSelect(document.getElementById('t-credit-card'));
             refreshTransactionPaymentSourceUI();
@@ -1900,7 +1945,7 @@
             const borrowDateValue = document.getElementById('d-borrow-date')?.value || '';
             if (!name || isNaN(amount)) return;
             if (shouldTrackBorrowDate && !borrowDateValue) {
-                alert('Pick the borrowed date to count this debt as income.');
+                alert('Pick the borrowed date if this debt added cash to your wallet.');
                 return;
             }
 
@@ -1912,6 +1957,7 @@
                 name,
                 amount,
                 borrowDate: borrowDateISO,
+                borrowAddedCash: shouldTrackBorrowDate,
                 borrowTrackedAsIncome: shouldTrackBorrowDate
             });
             db.debts.push({
@@ -1929,7 +1975,7 @@
                     dateISO: borrowDateISO,
                     desc: `Borrowed for ${name}`,
                     notes: '',
-                    countAsIncome: true,
+                    countAsCashReceived: true,
                     isInitialPrincipal: true
                 });
             }
@@ -1954,7 +2000,7 @@
             document.getElementById('ud-original-category').value = debt.name;
             document.getElementById('ud-name').value = debt.name || '';
             document.getElementById('ud-base-amount').value = Number(debt.amount) || '';
-            document.getElementById('ud-edit-track-borrow-date').checked = debt.borrowTrackedAsIncome === true;
+            document.getElementById('ud-edit-track-borrow-date').checked = debt.borrowAddedCash === true || debt.borrowTrackedAsIncome === true;
             document.getElementById('ud-edit-borrow-date').value = getDateInputValue(debt.borrowDate);
             document.getElementById('ud-amount').value = '';
             document.getElementById('ud-desc').value = '';
@@ -1981,7 +2027,7 @@
                 return;
             }
             if (trackBorrowDate && !borrowDateValue) {
-                alert('Pick the borrowed date to count this debt as income.');
+                alert('Pick the borrowed date if this debt added cash to your wallet.');
                 return;
             }
 
@@ -2014,6 +2060,7 @@
                 ...existingDebt,
                 name: newName,
                 amount,
+                borrowAddedCash: trackBorrowDate,
                 borrowTrackedAsIncome: trackBorrowDate,
                 borrowDate: borrowDateISO
             };
@@ -2053,7 +2100,7 @@
                         ...decrypted,
                         desc: `Borrowed for ${newName}`,
                         amt: amount,
-                        type: 'income',
+                        type: 'debt_increase',
                         category: newName,
                         date: borrowDateISO,
                         debtId,
@@ -2092,7 +2139,7 @@
                     dateISO: borrowDateISO,
                     desc: `Borrowed for ${newName}`,
                     notes: '',
-                    countAsIncome: true,
+                    countAsCashReceived: true,
                     isInitialPrincipal: true
                 });
             }
@@ -2165,26 +2212,27 @@
 
         async function saveDebtTransaction() {
             const category = document.getElementById('ud-category').value;
+            const debtId = String(document.getElementById('ud-debt-id')?.value || '').trim();
             const amount = parseFloat(document.getElementById('ud-amount').value);
             const typeKey = document.getElementById('ud-type').value; // 'repayment' or 'loan'
             const dateVal = document.getElementById('ud-date').value;
-            const countLoanAsIncome = typeKey === 'loan' && document.getElementById('ud-track-income')?.checked === true;
+            const countLoanAsCashReceived = typeKey === 'loan' && document.getElementById('ud-track-income')?.checked === true;
             let desc = document.getElementById('ud-desc').value;
 
             if (isNaN(amount) || amount <= 0) { alert("Invalid amount"); return; }
 
             // Map to Transaction Type
             // Repayment -> Expense (Reduces debt remaining)
-            // Loan -> Income or Debt Increase depending on whether the borrowed date toggle is enabled
+            // Loan -> Debt increase, optionally adding cash to balance now
             const type = typeKey === 'repayment'
                 ? 'expense'
-                : (countLoanAsIncome ? 'income' : 'debt_increase');
+                : 'debt_increase';
 
             if (!desc) {
                 if (typeKey === 'repayment') {
                     desc = `Repayment for ${category}`;
                 } else {
-                    desc = countLoanAsIncome ? `Borrowed for ${category}` : `Added loan for ${category}`;
+                    desc = countLoanAsCashReceived ? `Borrowed for ${category}` : `Recorded debt increase for ${category}`;
                 }
             }
 
@@ -2204,7 +2252,8 @@
                 creditCardName: null,
                 date,
                 notes: '',
-                debtBorrowTracked: countLoanAsIncome,
+                debtId: debtId || null,
+                debtBorrowTracked: countLoanAsCashReceived,
                 debtPrincipalSeed: false,
                 importId: null,
                 dedupeHash: null,

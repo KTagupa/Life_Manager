@@ -28,7 +28,9 @@
         function getMonthlyMetrics(transactions, date) {
             const txs = getCurrentMonthTransactions(transactions, date);
             const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amt, 0);
-            const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amt, 0);
+            const expense = txs.reduce((sum, t) => {
+                return sum + (typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0));
+            }, 0);
             return { income, expense, txs };
         }
 
@@ -119,8 +121,11 @@
 
             // 1. Spend Velocity
             const categorySpent = {};
-            currentMonth.txs.filter(t => t.type === 'expense').forEach(t => {
-                categorySpent[t.category] = (categorySpent[t.category] || 0) + t.amt;
+            currentMonth.txs.forEach(t => {
+                const expenseAmount = typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0);
+                if (!expenseAmount) return;
+                const category = typeof getTxExpenseCategory === 'function' ? getTxExpenseCategory(t) : t.category;
+                categorySpent[category] = (categorySpent[category] || 0) + expenseAmount;
             });
             const projectedByCategory = Object.entries(categorySpent).map(([category, amount]) => ({
                 category,
@@ -159,9 +164,14 @@
                 const d = new Date(t.date);
                 const cutoff = new Date(now);
                 cutoff.setDate(cutoff.getDate() - 30);
-                return d >= cutoff && t.type === 'expense' && t.category !== 'Bills';
+                const expenseAmount = typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0);
+                if (!(d >= cutoff) || !expenseAmount) return false;
+                const category = typeof getTxExpenseCategory === 'function' ? getTxExpenseCategory(t) : t.category;
+                return category !== 'Bills';
             });
-            const discretionaryDaily = last30.reduce((s, t) => s + t.amt, 0) / 30;
+            const discretionaryDaily = last30.reduce((sum, t) => {
+                return sum + (typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.amt || 0));
+            }, 0) / 30;
             const dailyBurn = (monthlyRecurring / 30) + discretionaryDaily;
             const runwayDays = dailyBurn > 0 ? Math.floor(balance / dailyBurn) : Infinity;
 
