@@ -3,6 +3,9 @@
         // =============================================
         let wishlistConvertId = null;
         const pendingBillPauseToggles = new Set();
+        const financeConfirmState = {
+            resolve: null
+        };
         let electricityHistoryChart = null;
         const electricityHistoryModalState = {
             billId: '',
@@ -149,6 +152,99 @@
 
             paymentSourceInput.value = nextSource;
             refreshTransactionPaymentSourceUI();
+        }
+
+        function getFinanceDeleteLabel(collection) {
+            const labels = {
+                transactions: 'transaction',
+                bills: 'bill',
+                debts: 'debt',
+                credit_cards: 'credit card',
+                creditCards: 'credit card',
+                lent: 'lent record',
+                wishlist: 'wishlist item',
+                reminders: 'reminder'
+            };
+            return labels[collection] || 'item';
+        }
+
+        function setFinanceConfirmTone(button, tone = 'danger') {
+            if (!button) return;
+            const toneClassName = tone === 'neutral'
+                ? 'flex-1 py-3.5 bg-slate-700 text-white rounded-2xl font-bold hover:bg-slate-800 shadow-lg shadow-slate-200'
+                : 'flex-1 py-3.5 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-200';
+            button.className = toneClassName;
+        }
+
+        async function showFinanceConfirmModal(options = {}) {
+            const modal = document.getElementById('finance-confirm-modal');
+            const titleEl = document.getElementById('finance-confirm-title');
+            const messageEl = document.getElementById('finance-confirm-message');
+            const cancelBtn = document.getElementById('finance-confirm-cancel-btn');
+            const confirmBtn = document.getElementById('finance-confirm-accept-btn');
+            const fallbackMessage = String(options.message || options.title || 'Are you sure?').trim() || 'Are you sure?';
+
+            if (!modal || !titleEl || !messageEl || !cancelBtn || !confirmBtn) {
+                return window.confirm(fallbackMessage);
+            }
+
+            if (financeConfirmState.resolve) {
+                financeConfirmState.resolve(false);
+                financeConfirmState.resolve = null;
+            }
+
+            titleEl.textContent = String(options.title || 'Confirm Action').trim() || 'Confirm Action';
+            messageEl.textContent = fallbackMessage;
+            cancelBtn.textContent = String(options.cancelLabel || 'Cancel').trim() || 'Cancel';
+            confirmBtn.textContent = String(options.confirmLabel || 'Continue').trim() || 'Continue';
+            setFinanceConfirmTone(confirmBtn, options.tone || 'danger');
+
+            modal.classList.remove('hidden');
+            if (window.lucide) window.lucide.createIcons();
+
+            window.setTimeout(() => {
+                confirmBtn.focus();
+            }, 0);
+
+            return await new Promise(resolve => {
+                financeConfirmState.resolve = resolve;
+            });
+        }
+
+        function closeFinanceConfirmModal(confirmed = false) {
+            const modal = document.getElementById('finance-confirm-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+
+            const resolve = financeConfirmState.resolve;
+            financeConfirmState.resolve = null;
+            if (typeof resolve === 'function') {
+                resolve(confirmed === true);
+            }
+        }
+
+        function getDeleteItemConfirmOptions(collection, confirmMessage = '') {
+            const itemLabel = getFinanceDeleteLabel(collection);
+            const customMessage = String(confirmMessage || '').trim();
+
+            if (collection === 'bills') {
+                return {
+                    title: 'Delete bill?',
+                    message: customMessage || 'This bill will be removed from the Bills card.\nIts linked auto-synced reminder will be removed too.',
+                    confirmLabel: 'Delete Bill',
+                    cancelLabel: 'Keep Bill',
+                    tone: 'danger'
+                };
+            }
+
+            return {
+                title: `Delete ${itemLabel}?`,
+                message: customMessage || `This ${itemLabel} will be moved to undo history.`,
+                confirmLabel: `Delete ${itemLabel.charAt(0).toUpperCase()}${itemLabel.slice(1)}`,
+                cancelLabel: `Keep ${itemLabel.charAt(0).toUpperCase()}${itemLabel.slice(1)}`,
+                tone: 'danger'
+            };
         }
 
         async function addCategoryFromTransactionModal() {
@@ -1224,6 +1320,7 @@
         async function openBillModal(id = null) {
             const modal = document.getElementById('bill-modal');
             const title = document.getElementById('b-modal-title');
+            const saveButton = document.getElementById('b-save-btn');
             const bId = document.getElementById('b-id');
             const name = document.getElementById('b-name');
             const day = document.getElementById('b-day');
@@ -1237,6 +1334,7 @@
                     const d = resolved.bill;
                     if (d) {
                         title.innerText = "Edit Bill";
+                        if (saveButton) saveButton.innerText = 'Save Bill Changes';
                         bId.value = id;
                         name.value = d.name;
                         day.value = d.day;
@@ -1251,6 +1349,7 @@
             }
 
             title.innerText = "Add Bill";
+            if (saveButton) saveButton.innerText = 'Add Bill';
             bId.value = "";
             name.value = "";
             day.value = "";
@@ -2330,7 +2429,14 @@
         }
 
         async function deleteWishlistItem(id) {
-            if (!confirm('Delete this wishlist item?')) return;
+            const confirmed = await showFinanceConfirmModal({
+                title: 'Delete wishlist item?',
+                message: 'This wishlist entry will be removed from your planning list.',
+                confirmLabel: 'Delete Item',
+                cancelLabel: 'Keep Item',
+                tone: 'danger'
+            });
+            if (!confirmed) return;
             await removeWishlistById(id);
             showToast('🗑️ Wishlist item deleted');
         }
@@ -2474,7 +2580,8 @@
         }
 
         async function deleteItem(col, id, confirmMessage) {
-            if (!confirm(confirmMessage || "Are you sure?")) return;
+            const confirmed = await showFinanceConfirmModal(getDeleteItemConfirmOptions(col, confirmMessage));
+            if (!confirmed) return;
             const db = await getDB();
             const key = collectionKeyFromDeleteType(col);
             if (!key) return;
@@ -2631,3 +2738,5 @@
         }
 
         function toggleModal(id) { document.getElementById(id).classList.toggle('hidden'); }
+        window.showFinanceConfirmModal = showFinanceConfirmModal;
+        window.closeFinanceConfirmModal = closeFinanceConfirmModal;

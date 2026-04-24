@@ -259,7 +259,16 @@
                 return;
             }
 
-            if (!confirm('Delete this reminder?')) return;
+            const confirmed = typeof showFinanceConfirmModal === 'function'
+                ? await showFinanceConfirmModal({
+                    title: 'Delete reminder?',
+                    message: 'This recurring reminder will be removed from your reminder list.',
+                    confirmLabel: 'Delete Reminder',
+                    cancelLabel: 'Keep Reminder',
+                    tone: 'danger'
+                })
+                : confirm('Delete this reminder?');
+            if (!confirmed) return;
 
             recurringTransactions = recurringTransactions.filter(r => r.id !== id);
 
@@ -270,6 +279,25 @@
             renderRecurringList();
             checkRecurringReminders();
             showToast('🗑️ Reminder deleted');
+        }
+
+        async function openRecurringReminderSource(reminderId) {
+            const reminder = recurringTransactions.find(r => r.id === reminderId);
+            if (!reminder || !reminder.autoSynced) return;
+
+            const recurringModal = document.getElementById('recurring-modal');
+            if (recurringModal && !recurringModal.classList.contains('hidden')) {
+                recurringModal.classList.add('hidden');
+            }
+
+            if (reminder.linkedBillId && typeof openBillModal === 'function') {
+                await openBillModal(reminder.linkedBillId);
+                return;
+            }
+
+            if (reminder.linkedCreditCardId && typeof openCreditCardModal === 'function') {
+                await openCreditCardModal(reminder.linkedCreditCardId);
+            }
         }
 
         function renderRecurringList() {
@@ -313,8 +341,11 @@
                 const pausedBadge = r.paused ? '<span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">PAUSED</span>' : '';
                 const estimateAmount = getRecurringReminderEstimate(r, creditCardOutstandingMap);
                 const estimateText = estimateAmount > 0 ? ` • Est. ${fmt(estimateAmount)}` : '';
-                const deleteButton = r.autoSynced
-                    ? `<span class="text-[10px] text-slate-400 italic">${source === 'credit_card' ? 'Edit via Credit Cards' : 'Edit via Bills'}</span>`
+                const actionButton = r.autoSynced
+                    ? `<button onclick="openRecurringReminderSource(decodeURIComponent('${encodedReminderId}'))"
+                        class="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors whitespace-nowrap">
+                        ${source === 'credit_card' ? 'Edit Card' : 'Edit Bill'}
+                    </button>`
                     : `<button onclick="deleteRecurringReminder(decodeURIComponent('${encodedReminderId}'))" 
                         class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 transition-all">
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -335,7 +366,7 @@
                                 <p class="text-xs text-slate-500">${safeFreqLabel}${safeDayLabel} • ${safeCategory}${estimateText}</p>
                             </div>
                         </div>
-                        ${deleteButton}
+                        ${actionButton}
                     </div>
                 `;
             }).join('');
