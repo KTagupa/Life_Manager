@@ -1898,6 +1898,7 @@
         let cryptoInterestPersistQueued = false;
         let cryptoInterestRenderQueued = false;
         let cryptoPortfolioRenderContext = null;
+        let activeCryptoHoldingDetailTokenId = '';
         const cryptoInterestRenderTokenIds = new Set();
 
         async function persistCryptoInterestStateNow() {
@@ -2643,6 +2644,222 @@
             return { taxMethod, targetUnrealizedPct };
         }
 
+        function formatCryptoTokenAmountText(amount, digits = 8) {
+            const numericAmount = Number(amount);
+            if (!Number.isFinite(numericAmount)) {
+                return Number(0).toFixed(Math.max(0, digits));
+            }
+            return numericAmount.toLocaleString('en-US', {
+                minimumFractionDigits: Math.max(0, digits),
+                maximumFractionDigits: Math.max(0, digits)
+            });
+        }
+
+        function normalizeCryptoRunningBalance(amount) {
+            const numericAmount = Number(amount);
+            if (!Number.isFinite(numericAmount)) return 0;
+            return Math.abs(numericAmount) < 0.00000001 ? 0 : numericAmount;
+        }
+
+        function getCryptoTransactionTokenDelta(tx) {
+            const amount = Number(tx?.amount || 0);
+            if (!Number.isFinite(amount)) return 0;
+
+            if (tx?.type === 'buy' || tx?.type === 'airdrop' || tx?.type === 'swap_in') return amount;
+            if (tx?.type === 'sell' || tx?.type === 'swap_out') return -amount;
+            return 0;
+        }
+
+        function getCryptoTransactionDisplayMeta(tx) {
+            const isBuy = tx?.type === 'buy';
+            const isAirdrop = tx?.type === 'airdrop';
+            const isSwap = tx?.type === 'swap_in' || tx?.type === 'swap_out';
+
+            let icon = isBuy ? 'arrow-down-left' : 'arrow-up-right';
+            let colorClass = isBuy ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400';
+            let actionText = isBuy ? 'Bought' : 'Sold';
+            let detailText = `${new Date(tx.date).toLocaleDateString()} ${!isSwap && !isAirdrop ? '• ' + formatCurrency(tx.price, tx.currency || 'PHP') + '/token' : ''}`;
+            let totalText = !isSwap && !isAirdrop ? formatCurrency(tx.price * tx.amount, tx.currency || 'PHP') : '';
+
+            if (isSwap) {
+                icon = 'refresh-cw';
+                colorClass = 'bg-blue-900/30 text-blue-400';
+                if (tx.type === 'swap_out') actionText = `Swapped ${String(tx.symbol || tx.tokenId || '').toUpperCase()} for ${tx.linkedToken || '?'}`;
+                else actionText = `Received ${String(tx.symbol || tx.tokenId || '').toUpperCase()} (Swap)`;
+            } else if (isAirdrop) {
+                icon = 'gift';
+                colorClass = 'bg-amber-900/30 text-amber-300';
+                actionText = 'Airdropped';
+            }
+
+            return { isBuy, isAirdrop, isSwap, icon, colorClass, actionText, detailText, totalText };
+        }
+
+        function buildCryptoHoldingTransactionHistory(tokenId, txs) {
+            const relatedTxs = sortCryptoTransactionsChronologically(
+                (txs || []).filter(tx => String(tx?.tokenId || '').trim() === String(tokenId || '').trim())
+            );
+            let runningBalance = 0;
+
+            return relatedTxs.map(tx => {
+                const delta = getCryptoTransactionTokenDelta(tx);
+                runningBalance = normalizeCryptoRunningBalance(runningBalance + delta);
+                return {
+                    tx,
+                    delta,
+                    runningBalance
+                };
+            });
+        }
+
+        function closeCryptoHoldingDetail() {
+            activeCryptoHoldingDetailTokenId = '';
+            document.getElementById('crypto-holding-detail-modal')?.classList.add('hidden');
+        }
+
+        async function openCryptoHoldingDetail(tokenId) {
+            const normalizedTokenId = String(tokenId || '').trim();
+            if (!normalizedTokenId) return;
+
+            activeCryptoHoldingDetailTokenId = normalizedTokenId;
+            document.getElementById('crypto-holding-detail-modal')?.classList.remove('hidden');
+            await renderCryptoHoldingDetail();
+        }
+
+        async function renderCryptoHoldingDetail() {
+            const modal = document.getElementById('crypto-holding-detail-modal');
+            const tokenId = String(activeCryptoHoldingDetailTokenId || '').trim();
+            if (!modal || modal.classList.contains('hidden') || !tokenId) return;
+
+            const { taxMethod } = getCurrentCryptoPortfolioControls();
+            const holdings = cryptoPortfolioRenderContext?.holdings || await calculateHoldings(taxMethod);
+            const allTxs = cryptoPortfolioRenderContext?.allTxs || await getDecryptedCrypto();
+            const history = buildCryptoHoldingTransactionHistory(tokenId, allTxs);
+            const holding = holdings[tokenId] || {
+                amount: 0,
+                totalCost: 0,
+                realizedPL: 0,
+                symbol: history[history.length - 1]?.tx?.symbol || tokenId,
+                lots: []
+            };
+
+            const symbol = String(holding.symbol || history[history.length - 1]?.tx?.symbol || tokenId).toUpperCase();
+            const currentPrice = Number(cryptoPrices?.[tokenId]?.price || 0);
+            const currentValue = currentPrice > 0 ? holding.amount * currentPrice : 0;
+            const unrealized = currentPrice > 0 ? currentValue - Number(holding.totalCost || 0) : 0;
+            const avgPrice = holding.amount > 0 ? Number(holding.totalCost || 0) / holding.amount : 0;
+            const latestEntry = history[history.length - 1] || null;
+
+            const titleEl = document.getElementById('crypto-detail-title');
+            const subtitleEl = document.getElementById('crypto-detail-subtitle');
+            const balanceEl = document.getElementById('crypto-detail-balance');
+            const balanceSubEl = document.getElementById('crypto-detail-balance-sub');
+            const valueEl = document.getElementById('crypto-detail-value');
+            const valueSubEl = document.getElementById('crypto-detail-value-sub');
+            const costBasisEl = document.getElementById('crypto-detail-cost-basis');
+            const costBasisSubEl = document.getElementById('crypto-detail-cost-basis-sub');
+            const pnlEl = document.getElementById('crypto-detail-pnl');
+            const pnlSubEl = document.getElementById('crypto-detail-pnl-sub');
+            const historySummaryEl = document.getElementById('crypto-detail-history-summary');
+            const historyCountEl = document.getElementById('crypto-detail-history-count');
+            const historyList = document.getElementById('crypto-detail-history-list');
+
+            if (!titleEl || !subtitleEl || !balanceEl || !balanceSubEl || !valueEl || !valueSubEl ||
+                !costBasisEl || !costBasisSubEl || !pnlEl || !pnlSubEl || !historySummaryEl ||
+                !historyCountEl || !historyList) {
+                return;
+            }
+
+            titleEl.innerText = `${symbol} Details`;
+            subtitleEl.innerText = `${tokenId} • ${history.length} transaction${history.length === 1 ? '' : 's'}${latestEntry ? ` • Last activity ${new Date(latestEntry.tx.date).toLocaleDateString()}` : ''}`;
+
+            balanceEl.innerHTML = `${formatCryptoTokenAmountHTML(holding.amount)} <span class="text-sm font-medium text-slate-400">${escapeHTML(symbol)}</span>`;
+            balanceSubEl.innerText = `${history.length > 0 ? `Balance after latest activity: ${formatCryptoTokenAmountText(latestEntry?.runningBalance || 0)}` : 'Held now'}`;
+
+            valueEl.innerText = currentPrice > 0 ? fmt(currentValue) : 'Needs Update';
+            valueSubEl.innerText = currentPrice > 0
+                ? `${fmt(currentPrice)} per token`
+                : 'Refresh crypto prices to value this holding';
+
+            costBasisEl.innerText = fmt(Number(holding.totalCost || 0));
+            costBasisSubEl.innerText = holding.amount > 0
+                ? `Average entry ${fmt(avgPrice)}`
+                : 'No current balance left in this asset';
+
+            const pnlText = currentPrice > 0
+                ? `${unrealized >= 0 ? '+' : ''}${fmt(unrealized)}`
+                : 'Price unavailable';
+            pnlEl.innerText = pnlText;
+            pnlEl.className = `text-xl font-bold mt-1 ${currentPrice <= 0 ? 'text-slate-300' : (unrealized >= 0 ? 'text-emerald-400' : 'text-rose-400')}`;
+            pnlSubEl.innerText = `Realized ${Number(holding.realizedPL || 0) >= 0 ? '+' : ''}${fmt(Number(holding.realizedPL || 0))}`;
+
+            historySummaryEl.innerText = history.length > 0
+                ? 'Running balance is shown after each transaction so you can follow the position over time.'
+                : 'No saved transactions found for this asset.';
+            historyCountEl.innerText = `${history.length} transaction${history.length === 1 ? '' : 's'}`;
+
+            historyList.innerHTML = '';
+            if (history.length === 0) {
+                historyList.innerHTML = '<div class="text-center py-10 text-slate-600 text-sm">No transactions found for this asset.</div>';
+            } else {
+                history.forEach(entry => {
+                    const { tx, delta, runningBalance } = entry;
+                    const meta = getCryptoTransactionDisplayMeta(tx);
+                    const safeActionText = escapeHTML(meta.actionText);
+                    const safeTokenSymbol = escapeHTML(String(tx.symbol || tx.tokenId || symbol).toUpperCase());
+                    const noteBits = [
+                        tx.exchange ? `Exchange: ${tx.exchange}` : '',
+                        tx.strategy ? `Strategy: ${tx.strategy}` : '',
+                        tx.notes ? tx.notes : ''
+                    ].filter(Boolean);
+                    const noteMarkup = noteBits.length > 0
+                        ? `<p class="text-[11px] text-slate-500 mt-2">${escapeHTML(noteBits.join(' • '))}</p>`
+                        : '';
+                    const deltaTone = delta >= 0 ? 'text-emerald-300' : 'text-rose-300';
+                    const deltaPrefix = delta >= 0 ? '+' : '';
+
+                    const div = document.createElement('div');
+                    div.className = 'bg-slate-900/70 border border-slate-800 rounded-2xl p-4';
+                    div.innerHTML = `
+                        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full flex items-center justify-center ${meta.colorClass}">
+                                        <i data-lucide="${meta.icon}" class="w-4 h-4"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-bold text-slate-200 mobile-text-clip">${safeActionText} ${!meta.isSwap ? safeTokenSymbol : ''}</p>
+                                        <p class="text-[11px] text-slate-500">${meta.detailText}</p>
+                                    </div>
+                                </div>
+                                ${noteMarkup}
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:min-w-[360px]">
+                                <div class="bg-slate-950/80 rounded-xl px-3 py-2 border border-slate-800">
+                                    <p class="text-[10px] font-bold uppercase text-slate-500">Transaction Value</p>
+                                    <p class="text-sm font-bold text-slate-200 mt-1">${meta.totalText || '--'}</p>
+                                    <p class="text-[11px] text-slate-500 mt-1">${formatCryptoTokenAmountText(tx.amount)} tokens</p>
+                                </div>
+                                <div class="bg-slate-950/80 rounded-xl px-3 py-2 border border-slate-800">
+                                    <p class="text-[10px] font-bold uppercase text-slate-500">Balance Change</p>
+                                    <p class="text-sm font-bold ${deltaTone} mt-1">${deltaPrefix}${formatCryptoTokenAmountText(delta)}</p>
+                                    <p class="text-[11px] text-slate-500 mt-1">${tx.type === 'swap_out' ? 'Sent out in swap' : (tx.type === 'swap_in' ? 'Received from swap' : 'Token delta')}</p>
+                                </div>
+                                <div class="bg-slate-950/80 rounded-xl px-3 py-2 border border-slate-800">
+                                    <p class="text-[10px] font-bold uppercase text-slate-500">Balance After</p>
+                                    <p class="text-sm font-bold text-cyan-300 mt-1">${formatCryptoTokenAmountText(runningBalance)}</p>
+                                    <p class="text-[11px] text-slate-500 mt-1">${safeTokenSymbol} held after this entry</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    historyList.appendChild(div);
+                });
+            }
+
+            if (window.lucide) window.lucide.createIcons();
+        }
+
         function formatCryptoTokenAmountHTML(amount) {
             const numericAmount = Number(amount);
             if (!Number.isFinite(numericAmount)) {
@@ -2843,7 +3060,10 @@
             const div = document.createElement('div');
             div.id = getCryptoHoldingCardDomId(id);
             div.dataset.tokenId = id;
-            div.className = "bg-slate-800 p-4 rounded-2xl flex items-center justify-between border border-slate-700";
+            div.tabIndex = 0;
+            div.setAttribute('role', 'button');
+            div.setAttribute('aria-label', `Open ${safeSymbol} details`);
+            div.className = "bg-slate-800 p-4 rounded-2xl flex items-center justify-between border border-slate-700 cursor-pointer transition-colors hover:border-cyan-500/60 hover:bg-slate-800/90 focus:outline-none focus:ring-2 focus:ring-cyan-500/40";
             div.innerHTML = `
                 <div>
                     <div class="flex items-center gap-2">
@@ -2864,9 +3084,20 @@
                     <p class="text-xs font-bold ${hasCostBasis ? (unrealized >= 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-500'}">
                         ${currentPrice > 0 && hasCostBasis ? pnlPct.toFixed(1) + '%' : '--'}
                     </p>
-                        <p class="text-[10px] text-slate-500">${unrealized >= 0 ? '+' : ''}${fmt(unrealized)}</p>
+                    <p class="text-[10px] text-slate-500">${unrealized >= 0 ? '+' : ''}${fmt(unrealized)}</p>
+                    <p class="text-[10px] text-cyan-300 mt-2">Click card for details</p>
                 </div>
             `;
+            div.addEventListener('click', event => {
+                if (event.target.closest('button, input, select, textarea, label, a')) return;
+                openCryptoHoldingDetail(id);
+            });
+            div.addEventListener('keydown', event => {
+                if (event.target.closest('button, input, select, textarea, label, a')) return;
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                openCryptoHoldingDetail(id);
+            });
             return div;
         }
 
@@ -2988,43 +3219,24 @@
                 allTxs.forEach(tx => {
                     const div = document.createElement('div');
                     div.className = "flex justify-between items-center py-2 px-2 hover:bg-slate-800 rounded-lg group";
-                    const isBuy = tx.type === 'buy';
-                    const isAirdrop = tx.type === 'airdrop';
-                    const isSwap = tx.type === 'swap_in' || tx.type === 'swap_out';
-                    let icon = isBuy ? 'arrow-down-left' : 'arrow-up-right';
-                    let colorClass = isBuy ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400';
-                    let actionText = isBuy ? 'Bought' : 'Sold';
-                    let detailText = `${new Date(tx.date).toLocaleDateString()} ${!isSwap && !isAirdrop ? '• ' + formatCurrency(tx.price, tx.currency || 'PHP') + '/token' : ''}`;
-                    let totalText = !isSwap && !isAirdrop ? formatCurrency(tx.price * tx.amount, tx.currency || 'PHP') : '';
-
-                    if (isSwap) {
-                        icon = 'refresh-cw';
-                        colorClass = 'bg-blue-900/30 text-blue-400';
-                        if (tx.type === 'swap_out') actionText = `Swapped ${tx.symbol.toUpperCase()} for ${tx.linkedToken || '?'}`;
-                        else actionText = `Received ${tx.symbol.toUpperCase()} (Swap)`;
-                    } else if (isAirdrop) {
-                        icon = 'gift';
-                        colorClass = 'bg-amber-900/30 text-amber-300';
-                        actionText = 'Airdropped';
-                    }
-
-                    const safeActionText = escapeHTML(actionText);
+                    const meta = getCryptoTransactionDisplayMeta(tx);
+                    const safeActionText = escapeHTML(meta.actionText);
                     const safeTokenSymbol = escapeHTML((tx.symbol || tx.tokenId || '').toUpperCase());
                     const encodedTxId = encodeInlineArg(tx.id);
 
                     div.innerHTML = `
                         <div class="flex items-center gap-3">
-                             <div class="w-8 h-8 rounded-full flex items-center justify-center ${colorClass}">
-                                 <i data-lucide="${icon}" class="w-4 h-4"></i>
+                             <div class="w-8 h-8 rounded-full flex items-center justify-center ${meta.colorClass}">
+                                 <i data-lucide="${meta.icon}" class="w-4 h-4"></i>
                              </div>
                              <div>
-                                 <p class="text-sm font-bold text-slate-300 mobile-text-clip">${safeActionText} ${!isSwap ? safeTokenSymbol : ''}</p>
-                                 <p class="text-[10px] text-slate-500">${detailText}</p>
+                                 <p class="text-sm font-bold text-slate-300 mobile-text-clip">${safeActionText} ${!meta.isSwap ? safeTokenSymbol : ''}</p>
+                                 <p class="text-[10px] text-slate-500">${meta.detailText}</p>
                              </div>
                         </div>
                          <div class="flex items-center gap-3">
                               <div class="text-right">
-                                  <p class="text-sm font-bold text-slate-300">${totalText}</p>
+                                  <p class="text-sm font-bold text-slate-300">${meta.totalText}</p>
                                   <p class="text-[10px] text-slate-500">${tx.amount} tokens</p>
                               </div>
                              <button onclick="deleteItem('crypto', decodeURIComponent('${encodedTxId}'), 'Delete this crypto transaction? This can be restored from Undo.')" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -3034,6 +3246,10 @@
                      `;
                     historyList.appendChild(div);
                 });
+            }
+
+            if (!document.getElementById('crypto-holding-detail-modal')?.classList.contains('hidden') && activeCryptoHoldingDetailTokenId) {
+                await renderCryptoHoldingDetail();
             }
 
             if (window.lucide) window.lucide.createIcons();

@@ -1918,6 +1918,67 @@
         </div>
     </div>
 
+    <!-- Modal: Crypto Holding Detail -->
+    <div id="crypto-holding-detail-modal"
+        class="fixed inset-0 z-[125] bg-slate-950/85 backdrop-blur-lg hidden flex items-center justify-center p-4">
+        <div
+            class="bg-slate-950 border border-slate-800 rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-start gap-4 bg-slate-950/80 rounded-t-3xl">
+                <div>
+                    <p class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-400">Crypto Asset Detail</p>
+                    <h2 class="text-2xl font-bold text-white mt-1" id="crypto-detail-title">Asset Details</h2>
+                    <p class="text-slate-400 text-xs mt-1" id="crypto-detail-subtitle">Select a holding to inspect its history.</p>
+                </div>
+                <button onclick="closeCryptoHoldingDetail()"
+                    class="p-2 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-lg transition-colors border border-slate-700">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto custom-scrollbar flex-1">
+                <div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-800">
+                        <p class="text-[10px] text-slate-500 font-bold uppercase">Current Balance</p>
+                        <h3 class="text-xl font-bold text-white mt-1 font-mono tabular-nums" id="crypto-detail-balance">--</h3>
+                        <p class="text-[11px] text-slate-500 mt-1" id="crypto-detail-balance-sub">Held now</p>
+                    </div>
+                    <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-800">
+                        <p class="text-[10px] text-slate-500 font-bold uppercase">Current Value</p>
+                        <h3 class="text-xl font-bold text-white mt-1" id="crypto-detail-value">--</h3>
+                        <p class="text-[11px] text-slate-500 mt-1" id="crypto-detail-value-sub">Refresh prices to update</p>
+                    </div>
+                    <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-800">
+                        <p class="text-[10px] text-slate-500 font-bold uppercase">Cost Basis</p>
+                        <h3 class="text-xl font-bold text-slate-200 mt-1" id="crypto-detail-cost-basis">--</h3>
+                        <p class="text-[11px] text-slate-500 mt-1" id="crypto-detail-cost-basis-sub">Average entry --</p>
+                    </div>
+                    <div class="bg-slate-900/70 p-4 rounded-2xl border border-slate-800">
+                        <p class="text-[10px] text-slate-500 font-bold uppercase">P/L Snapshot</p>
+                        <h3 class="text-xl font-bold text-slate-200 mt-1" id="crypto-detail-pnl">--</h3>
+                        <p class="text-[11px] text-slate-500 mt-1" id="crypto-detail-pnl-sub">Realized --</p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/55 p-4 rounded-2xl border border-slate-800 mb-6">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                            <h3 class="font-bold text-slate-200">Transaction History</h3>
+                            <p class="text-[11px] text-slate-500 mt-1" id="crypto-detail-history-summary">Running balance is shown after each transaction.</p>
+                        </div>
+                        <div class="flex gap-4 text-[11px] text-slate-400">
+                            <span id="crypto-detail-history-count">0 transactions</span>
+                            <span id="crypto-detail-history-order">Oldest to newest</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3" id="crypto-detail-history-list">
+                    <div class="text-center py-10 text-slate-600 text-sm">No transactions found for this asset.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Crypto Transaction -->
     <div id="crypto-transaction-modal"
         class="fixed inset-0 z-[130] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
