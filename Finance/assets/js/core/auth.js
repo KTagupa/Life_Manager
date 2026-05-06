@@ -558,6 +558,7 @@ async function loadFromStorage() {
     cryptoPrices = db.crypto_prices || {};
     cryptoInterestByToken = db.crypto_interest || {};
     xrplReconcileSettings = db.xrpl_reconcile || {};
+    roninReconcileSettings = db.ronin_reconcile || {};
     if (typeof invalidateCryptoComputationCache === 'function') {
         invalidateCryptoComputationCache();
     }

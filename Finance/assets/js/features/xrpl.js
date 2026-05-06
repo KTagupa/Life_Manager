@@ -204,10 +204,10 @@ function setXrplRefreshButtonLoading(isLoading) {
 
 async function persistXrplReconcileSettings(partial = {}) {
     const current = getXrplReconcileSettingsSafe();
-    const nextAssetMappings = {
-        ...(current.assetMappings || {}),
-        ...(partial.assetMappings || {})
-    };
+    const replacesAssetMappings = Object.prototype.hasOwnProperty.call(partial, 'assetMappings');
+    const nextAssetMappings = replacesAssetMappings
+        ? { ...(partial.assetMappings || {}) }
+        : { ...(current.assetMappings || {}) };
     const nextSettings = {
         ...current,
         ...partial,
@@ -244,19 +244,24 @@ function isValidXrplClassicAddress(address) {
 }
 
 async function xrplRpc(endpoint, command, params = {}) {
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            method: command,
-            params: [{
-                ...params,
-                api_version: 2
-            }]
-        })
-    });
+    let response;
+    try {
+        response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                method: command,
+                params: [{
+                    ...params,
+                    api_version: 2
+                }]
+            })
+        });
+    } catch (error) {
+        throw new Error(getXrplFetchFailureMessage(endpoint, error));
+    }
 
     if (!response.ok) {
         throw new Error(`XRPL endpoint returned HTTP ${response.status}`);
@@ -268,6 +273,15 @@ async function xrplRpc(endpoint, command, params = {}) {
         throw new Error(result?.error_message || result?.error || payload?.error_message || payload?.error || 'XRPL request failed');
     }
     return result;
+}
+
+function getXrplFetchFailureMessage(endpoint, error) {
+    const pageProtocol = typeof window !== 'undefined' ? window.location?.protocol : '';
+    if (pageProtocol === 'file:') {
+        return `Browser blocked XRPL requests from a file:// page. Open Finance through a local http server, then try again. Endpoint: ${endpoint}`;
+    }
+    const base = error?.message ? `XRPL network request failed: ${error.message}.` : 'XRPL network request failed.';
+    return `${base} Check your internet connection, privacy extensions, CSP, or try another XRPL endpoint.`;
 }
 
 async function fetchXrplAccountLines(account, endpoint) {

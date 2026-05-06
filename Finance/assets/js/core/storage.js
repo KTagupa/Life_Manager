@@ -578,6 +578,63 @@ function normalizeXrplReconcileSettingsShape(settings) {
     };
 }
 
+function getDefaultRoninReconcileSettings() {
+    return {
+        walletAddress: '',
+        endpoint: 'https://api.roninchain.com/rpc',
+        fromBlock: '',
+        assetMappings: {
+            'native:ron': {
+                tokenId: 'ronin',
+                symbol: 'RON',
+                label: 'RON',
+                decimals: 18
+            }
+        },
+        lastRefreshAt: 0,
+        lastBlockNumber: 0,
+        lastModified: 0
+    };
+}
+
+function normalizeRoninAssetMappingsShape(assetMappings) {
+    const defaults = getDefaultRoninReconcileSettings().assetMappings;
+    const source = assetMappings && typeof assetMappings === 'object' ? assetMappings : {};
+    const normalized = { ...defaults };
+
+    Object.entries(source).forEach(([assetKey, mapping]) => {
+        const key = String(assetKey || '').trim().toLowerCase();
+        if (!key) return;
+
+        const sourceMapping = mapping && typeof mapping === 'object' ? mapping : {};
+        const contract = String(sourceMapping.contract || '').trim().toLowerCase();
+        normalized[key] = {
+            tokenId: String(sourceMapping.tokenId || '').trim().toLowerCase(),
+            symbol: String(sourceMapping.symbol || '').trim(),
+            label: String(sourceMapping.label || '').trim(),
+            contract,
+            decimals: Math.max(0, Math.round(toFiniteNumber(sourceMapping.decimals, 18)))
+        };
+    });
+
+    return normalized;
+}
+
+function normalizeRoninReconcileSettingsShape(settings) {
+    const defaults = getDefaultRoninReconcileSettings();
+    const source = settings && typeof settings === 'object' ? settings : {};
+
+    return {
+        walletAddress: String(source.walletAddress || '').trim().toLowerCase(),
+        endpoint: String(source.endpoint || defaults.endpoint).trim() || defaults.endpoint,
+        fromBlock: String(source.fromBlock || '').trim(),
+        assetMappings: normalizeRoninAssetMappingsShape(source.assetMappings),
+        lastRefreshAt: Math.max(0, toFiniteNumber(source.lastRefreshAt, 0)),
+        lastBlockNumber: Math.max(0, Math.round(toFiniteNumber(source.lastBlockNumber, 0))),
+        lastModified: Math.max(0, toFiniteNumber(source.lastModified, 0))
+    };
+}
+
 function getDefaultDB() {
     return {
         schema_version: CURRENT_SCHEMA_VERSION,
@@ -590,6 +647,7 @@ function getDefaultDB() {
         crypto_prices: {},
         crypto_interest: {},
         xrpl_reconcile: getDefaultXrplReconcileSettings(),
+        ronin_reconcile: getDefaultRoninReconcileSettings(),
         wishlist: [],
         fixed_assets: [],
         agm_records: [],
@@ -1139,6 +1197,7 @@ function normalizeDBSchema(rawDB) {
     db.crypto_prices = db.crypto_prices || {};
     db.crypto_interest = normalizeCryptoInterestShape(db.crypto_interest);
     db.xrpl_reconcile = normalizeXrplReconcileSettingsShape(db.xrpl_reconcile);
+    db.ronin_reconcile = normalizeRoninReconcileSettingsShape(db.ronin_reconcile);
     db.budgets = db.budgets && typeof db.budgets === 'object' ? db.budgets : { data: null };
     db.custom_categories = Array.isArray(db.custom_categories) ? db.custom_categories : [];
     db.investment_goals = Array.isArray(db.investment_goals) ? db.investment_goals : [];
@@ -1306,6 +1365,18 @@ function mergeSafeDB(localDB, remoteDB) {
         (localXrplSettingsTs === remoteXrplSettingsTs && localHasXrplWallet && !remoteHasXrplWallet)
     ) {
         merged.xrpl_reconcile = local.xrpl_reconcile;
+    }
+
+    const localRoninSettingsTs = getEntryTimestamp(local.ronin_reconcile);
+    const remoteRoninSettingsTs = getEntryTimestamp(merged.ronin_reconcile);
+    const localHasRoninWallet = !!String(local.ronin_reconcile?.walletAddress || '').trim();
+    const remoteHasRoninWallet = !!String(merged.ronin_reconcile?.walletAddress || '').trim();
+    if (
+        !merged.ronin_reconcile ||
+        localRoninSettingsTs > remoteRoninSettingsTs ||
+        (localRoninSettingsTs === remoteRoninSettingsTs && localHasRoninWallet && !remoteHasRoninWallet)
+    ) {
+        merged.ronin_reconcile = local.ronin_reconcile;
     }
 
     merged.budgets = local.budgets?.data ? local.budgets : merged.budgets;

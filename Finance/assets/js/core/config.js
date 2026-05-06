@@ -455,6 +455,7 @@ let scenarioChart = null;
 let investmentGoals = [];  // Array of { id, name, targetAmount, targetDate, createdAt }
 let cryptoInterestByToken = {}; // { tokenId: { enabled, rewards: [{ tokenId, symbol, amount }], lastModified } }
 let xrplReconcileSettings = {};
+let roninReconcileSettings = {};
 let filteredTransactions = [];
 
 const standardCategories = ["Food", "Transport", "Bills", "Savings", "Entertainment", "Salary", "Others"];

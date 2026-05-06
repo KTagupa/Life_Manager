@@ -12,9 +12,10 @@ Because the app uses global functions across files, keep the script order aligne
 
 1. `core/*` (except `app-init.js`)
 2. `features/xrpl.js` (read-only XRP Ledger reconciliation helpers)
-3. `features/crypto.js` (shared crypto helpers used by other modules)
-4. `ui/*`
-5. remaining `features/*`
-6. `core/app-init.js`
+3. `features/ronin.js` (read-only Ronin reconciliation helpers)
+4. `features/crypto.js` (shared crypto helpers used by other modules)
+5. `ui/*`
+6. remaining `features/*`
+7. `core/app-init.js`
 
 `core/app-init.js` is the single startup entrypoint for DOM-ready boot logic and shared event binding.

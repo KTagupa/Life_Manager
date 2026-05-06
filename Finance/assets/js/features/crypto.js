@@ -3404,6 +3404,13 @@
             } catch (error) {
                 console.error('XRPL reconciliation panel render failed:', error);
             }
+            try {
+                if (typeof renderRoninReconcilePanel === 'function') {
+                    await renderRoninReconcilePanel();
+                }
+            } catch (error) {
+                console.error('Ronin reconciliation panel render failed:', error);
+            }
 
             if (window.lucide) window.lucide.createIcons();
         }
