@@ -557,6 +557,7 @@ async function loadFromStorage() {
     rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
     cryptoPrices = db.crypto_prices || {};
     cryptoInterestByToken = db.crypto_interest || {};
+    xrplReconcileSettings = db.xrpl_reconcile || {};
     if (typeof invalidateCryptoComputationCache === 'function') {
         invalidateCryptoComputationCache();
     }

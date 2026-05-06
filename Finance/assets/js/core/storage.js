@@ -522,6 +522,62 @@ function getDefaultOperationsGuardrails() {
     };
 }
 
+function getDefaultXrplReconcileSettings() {
+    return {
+        walletAddress: '',
+        endpoint: 'https://xrplcluster.com/',
+        assetMappings: {
+            'native:XRP': {
+                tokenId: 'ripple',
+                symbol: 'XRP',
+                label: 'XRP'
+            }
+        },
+        lastRefreshAt: 0,
+        lastLedgerIndex: 0,
+        lastModified: 0
+    };
+}
+
+function normalizeXrplAssetMappingsShape(assetMappings) {
+    const defaults = getDefaultXrplReconcileSettings().assetMappings;
+    const source = assetMappings && typeof assetMappings === 'object' ? assetMappings : {};
+    const normalized = { ...defaults };
+
+    Object.entries(source).forEach(([assetKey, mapping]) => {
+        const key = String(assetKey || '').trim();
+        if (!key) return;
+
+        const sourceMapping = mapping && typeof mapping === 'object' ? mapping : {};
+        const tokenId = String(sourceMapping.tokenId || '').trim().toLowerCase();
+        const symbol = String(sourceMapping.symbol || '').trim();
+        const label = String(sourceMapping.label || '').trim();
+
+        normalized[key] = {
+            tokenId,
+            symbol,
+            label
+        };
+    });
+
+    return normalized;
+}
+
+function normalizeXrplReconcileSettingsShape(settings) {
+    const defaults = getDefaultXrplReconcileSettings();
+    const source = settings && typeof settings === 'object' ? settings : {};
+    const endpoint = String(source.endpoint || defaults.endpoint).trim() || defaults.endpoint;
+
+    return {
+        walletAddress: String(source.walletAddress || '').trim(),
+        endpoint,
+        assetMappings: normalizeXrplAssetMappingsShape(source.assetMappings),
+        lastRefreshAt: Math.max(0, toFiniteNumber(source.lastRefreshAt, 0)),
+        lastLedgerIndex: Math.max(0, Math.round(toFiniteNumber(source.lastLedgerIndex, 0))),
+        lastModified: Math.max(0, toFiniteNumber(source.lastModified, 0))
+    };
+}
+
 function getDefaultDB() {
     return {
         schema_version: CURRENT_SCHEMA_VERSION,
@@ -533,6 +589,7 @@ function getDefaultDB() {
         crypto: [],
         crypto_prices: {},
         crypto_interest: {},
+        xrpl_reconcile: getDefaultXrplReconcileSettings(),
         wishlist: [],
         fixed_assets: [],
         agm_records: [],
@@ -1081,6 +1138,7 @@ function normalizeDBSchema(rawDB) {
     db.agm_records = normalizeCollectionEntries(db.agm_records);
     db.crypto_prices = db.crypto_prices || {};
     db.crypto_interest = normalizeCryptoInterestShape(db.crypto_interest);
+    db.xrpl_reconcile = normalizeXrplReconcileSettingsShape(db.xrpl_reconcile);
     db.budgets = db.budgets && typeof db.budgets === 'object' ? db.budgets : { data: null };
     db.custom_categories = Array.isArray(db.custom_categories) ? db.custom_categories : [];
     db.investment_goals = Array.isArray(db.investment_goals) ? db.investment_goals : [];
@@ -1237,6 +1295,18 @@ function mergeSafeDB(localDB, remoteDB) {
             merged.crypto_interest[tokenId] = localCfg;
         }
     });
+
+    const localXrplSettingsTs = getEntryTimestamp(local.xrpl_reconcile);
+    const remoteXrplSettingsTs = getEntryTimestamp(merged.xrpl_reconcile);
+    const localHasXrplWallet = !!String(local.xrpl_reconcile?.walletAddress || '').trim();
+    const remoteHasXrplWallet = !!String(merged.xrpl_reconcile?.walletAddress || '').trim();
+    if (
+        !merged.xrpl_reconcile ||
+        localXrplSettingsTs > remoteXrplSettingsTs ||
+        (localXrplSettingsTs === remoteXrplSettingsTs && localHasXrplWallet && !remoteHasXrplWallet)
+    ) {
+        merged.xrpl_reconcile = local.xrpl_reconcile;
+    }
 
     merged.budgets = local.budgets?.data ? local.budgets : merged.budgets;
     merged.sync.conflictStrategy = local.sync?.conflictStrategy || merged.sync.conflictStrategy || 'merge_safe_lists';

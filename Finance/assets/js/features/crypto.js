@@ -2176,8 +2176,10 @@
                 }
                 const h = holdings[tx.tokenId];
 
-                if (tx.type === 'buy' || tx.type === 'airdrop') {
-                    const lotSourceType = tx.type === 'airdrop' ? 'airdrop' : 'buy';
+                if (tx.type === 'buy' || tx.type === 'airdrop' || tx.type === 'reconcile_in' || tx.type === 'transfer_in') {
+                    const lotSourceType = tx.type === 'airdrop'
+                        ? 'airdrop'
+                        : (tx.type === 'reconcile_in' ? 'reconcile' : (tx.type === 'transfer_in' ? 'transfer' : 'buy'));
                     h.amount += tx.amount;
                     h.totalCost += tx.total;
                     h.lots.push({
@@ -2189,7 +2191,7 @@
                         sourceSymbol: tx.symbol
                     });
 
-                } else if (tx.type === 'sell' || tx.type === 'swap_out') {
+                } else if (tx.type === 'sell' || tx.type === 'swap_out' || tx.type === 'reconcile_out' || tx.type === 'network_fee' || tx.type === 'transfer_out') {
                     // Sell or Swap Out Logic
                     let costOfSold = 0;
                     let remainingToSell = tx.amount;
@@ -2665,8 +2667,8 @@
             const amount = Number(tx?.amount || 0);
             if (!Number.isFinite(amount)) return 0;
 
-            if (tx?.type === 'buy' || tx?.type === 'airdrop' || tx?.type === 'swap_in') return amount;
-            if (tx?.type === 'sell' || tx?.type === 'swap_out') return -amount;
+            if (tx?.type === 'buy' || tx?.type === 'airdrop' || tx?.type === 'swap_in' || tx?.type === 'reconcile_in' || tx?.type === 'transfer_in') return amount;
+            if (tx?.type === 'sell' || tx?.type === 'swap_out' || tx?.type === 'reconcile_out' || tx?.type === 'network_fee' || tx?.type === 'transfer_out') return -amount;
             return 0;
         }
 
@@ -2674,25 +2676,63 @@
             const isBuy = tx?.type === 'buy';
             const isAirdrop = tx?.type === 'airdrop';
             const isSwap = tx?.type === 'swap_in' || tx?.type === 'swap_out';
+            const isAdjustment = tx?.type === 'reconcile_in' || tx?.type === 'reconcile_out' || tx?.type === 'network_fee' || tx?.type === 'transfer_in' || tx?.type === 'transfer_out';
 
             let icon = isBuy ? 'arrow-down-left' : 'arrow-up-right';
             let colorClass = isBuy ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400';
             let actionText = isBuy ? 'Bought' : 'Sold';
-            let detailText = `${new Date(tx.date).toLocaleDateString()} ${!isSwap && !isAirdrop ? '• ' + formatCurrency(tx.price, tx.currency || 'PHP') + '/token' : ''}`;
-            let totalText = !isSwap && !isAirdrop ? formatCurrency(tx.price * tx.amount, tx.currency || 'PHP') : '';
+            let balanceChangeLabel = 'Token delta';
+            let detailText = `${new Date(tx.date).toLocaleDateString()} ${!isSwap && !isAirdrop && !isAdjustment ? '- ' + formatCurrency(tx.price, tx.currency || 'PHP') + '/token' : ''}`;
+            let totalText = !isSwap && !isAirdrop && !isAdjustment ? formatCurrency(tx.price * tx.amount, tx.currency || 'PHP') : '';
 
             if (isSwap) {
                 icon = 'refresh-cw';
                 colorClass = 'bg-blue-900/30 text-blue-400';
                 if (tx.type === 'swap_out') actionText = `Swapped ${String(tx.symbol || tx.tokenId || '').toUpperCase()} for ${tx.linkedToken || '?'}`;
                 else actionText = `Received ${String(tx.symbol || tx.tokenId || '').toUpperCase()} (Swap)`;
+                balanceChangeLabel = tx.type === 'swap_out' ? 'Sent out in swap' : 'Received from swap';
             } else if (isAirdrop) {
                 icon = 'gift';
                 colorClass = 'bg-amber-900/30 text-amber-300';
                 actionText = 'Airdropped';
+            } else if (tx.type === 'network_fee') {
+                icon = 'flame';
+                colorClass = 'bg-amber-900/30 text-amber-300';
+                actionText = 'Network Fee';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - XRPL reconciliation`;
+                totalText = 'Non-tax balance adjustment';
+                balanceChangeLabel = 'Network fee deducted';
+            } else if (tx.type === 'reconcile_in') {
+                icon = 'scale';
+                colorClass = 'bg-cyan-900/30 text-cyan-300';
+                actionText = 'Reconciled In';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - XRPL balance correction`;
+                totalText = 'Zero-cost adjustment';
+                balanceChangeLabel = 'Balance correction in';
+            } else if (tx.type === 'reconcile_out') {
+                icon = 'scale';
+                colorClass = 'bg-orange-900/30 text-orange-300';
+                actionText = 'Reconciled Out';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - XRPL balance correction`;
+                totalText = 'No sale/P&L';
+                balanceChangeLabel = 'Balance correction out';
+            } else if (tx.type === 'transfer_in') {
+                icon = 'log-in';
+                colorClass = 'bg-cyan-900/30 text-cyan-300';
+                actionText = 'Transferred In';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - XRPL ledger import`;
+                totalText = 'Balance-only import';
+                balanceChangeLabel = 'Transfer in';
+            } else if (tx.type === 'transfer_out') {
+                icon = 'log-out';
+                colorClass = 'bg-orange-900/30 text-orange-300';
+                actionText = 'Transferred Out';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - XRPL ledger import`;
+                totalText = 'No sale/P&L';
+                balanceChangeLabel = 'Transfer out';
             }
 
-            return { isBuy, isAirdrop, isSwap, icon, colorClass, actionText, detailText, totalText };
+            return { isBuy, isAirdrop, isSwap, isAdjustment, icon, colorClass, actionText, detailText, totalText, balanceChangeLabel };
         }
 
         function buildCryptoHoldingTransactionHistory(tokenId, txs) {
@@ -2843,7 +2883,7 @@
                                 <div class="bg-slate-950/80 rounded-xl px-3 py-2 border border-slate-800">
                                     <p class="text-[10px] font-bold uppercase text-slate-500">Balance Change</p>
                                     <p class="text-sm font-bold ${deltaTone} mt-1">${deltaPrefix}${formatCryptoTokenAmountText(delta)}</p>
-                                    <p class="text-[11px] text-slate-500 mt-1">${tx.type === 'swap_out' ? 'Sent out in swap' : (tx.type === 'swap_in' ? 'Received from swap' : 'Token delta')}</p>
+                                    <p class="text-[11px] text-slate-500 mt-1">${escapeHTML(meta.balanceChangeLabel || 'Token delta')}</p>
                                 </div>
                                 <div class="bg-slate-950/80 rounded-xl px-3 py-2 border border-slate-800">
                                     <p class="text-[10px] font-bold uppercase text-slate-500">Balance After</p>
@@ -2897,6 +2937,8 @@
             const swapSymbols = new Set();
             let swapCost = 0;
             let airdropAmount = 0;
+            let reconcileAmount = 0;
+            let transferAmount = 0;
 
             (lots || []).forEach(lot => {
                 if (!lot || lot.amount <= 0.000001) return;
@@ -2907,12 +2949,18 @@
                     if (sourceSymbol) swapSymbols.add(sourceSymbol);
                 } else if (lot.sourceType === 'airdrop') {
                     airdropAmount += Math.max(0, Number(lot.amount) || 0);
+                } else if (lot.sourceType === 'reconcile') {
+                    reconcileAmount += Math.max(0, Number(lot.amount) || 0);
+                } else if (lot.sourceType === 'transfer') {
+                    transferAmount += Math.max(0, Number(lot.amount) || 0);
                 }
             });
 
             return {
                 swapCost,
                 airdropAmount,
+                reconcileAmount,
+                transferAmount,
                 directCost: Math.max(0, (lots || []).reduce((sum, lot) => {
                     if (!lot || lot.amount <= 0.000001) return sum;
                     return sum + Math.max(0, (Number(lot.amount) || 0) * (Number(lot.price) || 0));
@@ -2957,6 +3005,14 @@
             if (sourceSummary.airdropAmount > 0.000001) {
                 const airdropNote = `<p class="text-[10px] text-amber-300 mt-0.5">Includes ${Number(sourceSummary.airdropAmount).toFixed(8)} airdropped tokens at zero cost basis</p>`;
                 sourceNote = sourceNote ? `${sourceNote}${airdropNote}` : airdropNote;
+            }
+            if (sourceSummary.reconcileAmount > 0.000001) {
+                const reconcileNote = `<p class="text-[10px] text-cyan-300 mt-0.5">Includes ${Number(sourceSummary.reconcileAmount).toFixed(8)} reconciliation tokens at zero cost basis</p>`;
+                sourceNote = sourceNote ? `${sourceNote}${reconcileNote}` : reconcileNote;
+            }
+            if (sourceSummary.transferAmount > 0.000001) {
+                const transferNote = `<p class="text-[10px] text-cyan-300 mt-0.5">Includes ${Number(sourceSummary.transferAmount).toFixed(8)} ledger-imported transfer tokens at zero cost basis</p>`;
+                sourceNote = sourceNote ? `${sourceNote}${transferNote}` : transferNote;
             }
 
             if (showTokenTarget) {
@@ -3340,6 +3396,13 @@
                 calculateTaxSummary(holdings);
             } catch (error) {
                 console.error('Crypto tax summary render failed:', error);
+            }
+            try {
+                if (typeof renderXrplReconcilePanel === 'function') {
+                    await renderXrplReconcilePanel();
+                }
+            } catch (error) {
+                console.error('XRPL reconciliation panel render failed:', error);
             }
 
             if (window.lucide) window.lucide.createIcons();

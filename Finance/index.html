@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.exchangerate-api.com https://api.coingecko.com https://firestore.googleapis.com https://www.googleapis.com https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
+        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.exchangerate-api.com https://api.coingecko.com https://firestore.googleapis.com https://www.googleapis.com https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://xrplcluster.com https://xrpl.ws https://s1.ripple.com:51234 https://s2.ripple.com:51234 wss://xrplcluster.com wss://xrpl.ws wss://s1.ripple.com wss://s2.ripple.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
     <title>FinanceFlow | Life Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -14,6 +14,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xrpl@4.6.0/build/xrpl-latest-min.js"></script>
 
 
     <link rel="stylesheet" href="assets/css/app.css">
@@ -1729,7 +1730,7 @@
     <div id="crypto-portfolio-modal"
         class="fixed inset-0 z-[120] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
         <div
-            class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]">
+            class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[90vh]">
             <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 rounded-t-3xl">
                 <div>
                     <h2 class="text-2xl font-bold text-white flex items-center gap-2">
@@ -1828,6 +1829,87 @@
                     </div>
                 </div>
 
+                <!-- XRP Ledger Reconciliation -->
+                <div id="xrpl-reconcile-panel"
+                    class="bg-gradient-to-br from-slate-950/90 via-slate-900/90 to-cyan-950/45 p-4 rounded-2xl border border-cyan-900/60 mb-8 shadow-inner">
+                    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-4">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Read-only ledger check</p>
+                            <h3 class="font-bold text-white mt-1 flex items-center gap-2">
+                                <i data-lucide="radar" class="w-4 h-4 text-cyan-300"></i>
+                                XRP Ledger Reconcile
+                            </h3>
+                            <p class="text-xs text-slate-400 mt-2 max-w-2xl">
+                                Fetch validated XRPL balances and transaction deltas for a public wallet address. This explains swaps, trust-line token movement, and network fees without changing your saved crypto entries.
+                            </p>
+                        </div>
+                        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px_auto] xl:min-w-[620px]">
+                            <input id="xrpl-wallet-address" type="text" inputmode="text" spellcheck="false"
+                                placeholder="Classic XRP address, e.g. r..."
+                                class="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-100 outline-none focus:border-cyan-500">
+                            <select id="xrpl-endpoint" onchange="updateXrplEndpoint(this.value)"
+                                class="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-3 text-xs font-bold text-slate-200 outline-none focus:border-cyan-500">
+                                <option value="https://xrplcluster.com/">xrplcluster.com</option>
+                                <option value="https://xrpl.ws/">xrpl.ws</option>
+                                <option value="https://s2.ripple.com:51234/">s2.ripple.com</option>
+                                <option value="https://s1.ripple.com:51234/">s1.ripple.com</option>
+                            </select>
+                            <button id="xrpl-refresh-btn" type="button" onclick="refreshXrplReconciliation()"
+                                class="rounded-2xl bg-cyan-500 hover:bg-cyan-400 px-4 py-3 text-xs font-black text-slate-950 shadow-lg shadow-cyan-950/30">
+                                Fetch Ledger
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="xrpl-status"
+                        class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-xs text-slate-400">
+                        Enter a public XRP wallet address to compare ledger balances with this app.
+                    </div>
+
+                    <div id="xrpl-summary" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                            <p class="text-[10px] font-bold uppercase text-slate-500">Transactions</p>
+                            <p class="text-sm font-bold text-slate-300 mt-1">--</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                            <p class="text-[10px] font-bold uppercase text-slate-500">Network Fees</p>
+                            <p class="text-sm font-bold text-slate-300 mt-1">--</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                            <p class="text-[10px] font-bold uppercase text-slate-500">Swaps</p>
+                            <p class="text-sm font-bold text-slate-300 mt-1">--</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                            <p class="text-[10px] font-bold uppercase text-slate-500">Last Refresh</p>
+                            <p class="text-sm font-bold text-slate-300 mt-1">--</p>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-4 xl:grid-cols-[0.95fr,1.05fr] mt-4">
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                            <div class="flex items-center justify-between gap-3 mb-3">
+                                <h4 class="text-sm font-bold text-slate-200">Ledger Balance vs App Balance</h4>
+                                <span class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Review only</span>
+                            </div>
+                            <div id="xrpl-balance-comparison" class="space-y-2">
+                                <div class="text-sm text-slate-500 py-6 text-center">No ledger balances fetched yet.</div>
+                            </div>
+                        </div>
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                            <div class="flex items-center justify-between gap-3 mb-3">
+                                <h4 class="text-sm font-bold text-slate-200">Recent Ledger Activity</h4>
+                                <button id="xrpl-load-older-btn" type="button" onclick="loadOlderXrplTransactions()"
+                                    class="hidden rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-cyan-300 hover:bg-slate-800">
+                                    Load Older
+                                </button>
+                            </div>
+                            <div id="xrpl-activity-list" class="space-y-2 max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
+                                <div class="text-sm text-slate-500 py-6 text-center">No XRPL activity loaded yet.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Portfolio Allocation Chart -->
                 <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 mb-8">
                     <h3 class="font-bold text-slate-300 mb-4 flex items-center gap-2">
@@ -1913,6 +1995,143 @@
                     <div class="space-y-1" id="crypto-history-list">
                         <!-- Populated by JS -->
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: XRPL Ledger Activity Import -->
+    <div id="xrpl-import-modal"
+        class="fixed inset-0 z-[142] bg-slate-950/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
+        <div class="bg-slate-950 border border-slate-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-slate-800 flex items-start justify-between gap-4">
+                <div>
+                    <p class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-300">Ledger activity import</p>
+                    <h3 class="text-2xl font-bold text-white mt-1" id="xrpl-import-title">Review XRPL Import</h3>
+                    <p class="text-sm text-slate-400 mt-2" id="xrpl-import-subtitle">Confirm how this ledger transaction should be represented in your app.</p>
+                </div>
+                <button type="button" onclick="closeXrplImportReview()"
+                    class="p-2 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-xl transition-colors border border-slate-700">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div id="xrpl-import-ledger-summary"
+                    class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
+                    Select a ledger activity row to import.
+                </div>
+
+                <div>
+                    <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Import As</label>
+                    <select id="xrpl-import-classification" onchange="renderXrplImportModalDetails()"
+                        class="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-100 outline-none focus:border-cyan-500">
+                    </select>
+                </div>
+
+                <div id="xrpl-import-preview" class="space-y-2">
+                    <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-500">
+                        Import preview will appear here.
+                    </div>
+                </div>
+
+                <div id="xrpl-import-impact"
+                    class="rounded-2xl border border-cyan-900/60 bg-cyan-950/25 p-4 text-sm text-cyan-100/90">
+                    Ledger imports are hash-deduped and review-first.
+                </div>
+
+                <div>
+                    <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Notes</label>
+                    <textarea id="xrpl-import-notes" rows="3"
+                        class="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-500"
+                        placeholder="Optional note for the imported app entries"></textarea>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button type="button" onclick="closeXrplImportReview()"
+                        class="flex-1 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold text-slate-300 hover:bg-slate-800">
+                        Cancel
+                    </button>
+                    <button type="button" onclick="runFinancePendingAction('saveXrplImport', this, saveXrplImport)"
+                        class="flex-1 rounded-2xl bg-cyan-500 hover:bg-cyan-400 px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-950/30">
+                        Import Ledger Activity
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: XRPL Reconciliation Adjustment -->
+    <div id="xrpl-adjustment-modal"
+        class="fixed inset-0 z-[140] bg-slate-950/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
+        <div class="bg-slate-950 border border-slate-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-slate-800 flex items-start justify-between gap-4">
+                <div>
+                    <p class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-300">Review first</p>
+                    <h3 class="text-2xl font-bold text-white mt-1" id="xrpl-adjustment-title">Resolve Difference</h3>
+                    <p class="text-sm text-slate-400 mt-2" id="xrpl-adjustment-subtitle">Confirm the adjustment before saving it to your crypto history.</p>
+                </div>
+                <button type="button" onclick="closeXrplAdjustmentReview()"
+                    class="p-2 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-xl transition-colors border border-slate-700">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div id="xrpl-adjustment-summary" class="grid grid-cols-3 gap-3">
+                    <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                        <p class="text-[10px] font-bold uppercase text-slate-500">Ledger</p>
+                        <p class="text-sm font-bold text-cyan-200 mt-1">--</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                        <p class="text-[10px] font-bold uppercase text-slate-500">App</p>
+                        <p class="text-sm font-bold text-slate-200 mt-1">--</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                        <p class="text-[10px] font-bold uppercase text-slate-500">Difference</p>
+                        <p class="text-sm font-bold text-amber-300 mt-1">--</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Adjustment Type</label>
+                    <select id="xrpl-adjustment-type" onchange="renderXrplAdjustmentModalDetails()"
+                        class="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-100 outline-none focus:border-cyan-500">
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Amount</label>
+                        <input id="xrpl-adjustment-amount" type="text" readonly
+                            class="w-full rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm font-bold text-slate-200 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">App Token ID</label>
+                        <input id="xrpl-adjustment-token-id" type="text" readonly
+                            class="w-full rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm font-bold text-slate-200 outline-none">
+                    </div>
+                </div>
+
+                <div id="xrpl-adjustment-impact"
+                    class="rounded-2xl border border-cyan-900/60 bg-cyan-950/25 p-4 text-sm text-cyan-100/90">
+                    Choose an adjustment type to preview its impact.
+                </div>
+
+                <div>
+                    <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Notes</label>
+                    <textarea id="xrpl-adjustment-notes" rows="3"
+                        class="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-500"
+                        placeholder="Why this adjustment is being recorded"></textarea>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button type="button" onclick="closeXrplAdjustmentReview()"
+                        class="flex-1 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-bold text-slate-300 hover:bg-slate-800">
+                        Cancel
+                    </button>
+                    <button type="button" onclick="runFinancePendingAction('saveXrplAdjustment', this, saveXrplAdjustment)"
+                        class="flex-1 rounded-2xl bg-cyan-500 hover:bg-cyan-400 px-4 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-950/30">
+                        Record Adjustment
+                    </button>
                 </div>
             </div>
         </div>
@@ -3109,6 +3328,7 @@
     <script src="assets/js/core/preview.js?v=20260425a"></script>
 
     <!-- App Modules -->
+    <script src="assets/js/features/xrpl.js?v=20260425a"></script>
     <script src="assets/js/features/crypto.js?v=20260425a"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
     <script src="assets/js/ui/renderers.js?v=20260425a"></script>
