@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.exchangerate-api.com https://api.coingecko.com https://firestore.googleapis.com https://www.googleapis.com https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://xrplcluster.com https://xrpl.ws https://s1.ripple.com:51234 https://s2.ripple.com:51234 https://api.roninchain.com/rpc wss://xrplcluster.com wss://xrpl.ws wss://s1.ripple.com wss://s2.ripple.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
+        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.exchangerate-api.com https://api.coingecko.com https://firestore.googleapis.com https://www.googleapis.com https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://xrplcluster.com https://xrpl.ws https://s1.ripple.com:51234 https://s2.ripple.com:51234 https://api.roninchain.com/rpc wss://xrplcluster.com wss://xrpl.ws wss://s1.ripple.com wss://s2.ripple.com; frame-src 'self' file:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
     <title>FinanceFlow | Life Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -435,6 +435,84 @@
             <p id="business-kpi-updated" class="mt-3 text-[11px] text-slate-400">Waiting for KPI refresh...</p>
         </div>
 
+        <section id="crypto-toolkit-panel"
+            class="finance-glass-panel rounded-3xl border border-slate-200 bg-white shadow-sm p-4 md:p-5">
+            <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-4">
+                <div>
+                    <p class="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">Crypto Toolkit</p>
+                    <h3 class="text-lg font-black text-slate-900 mt-1">Portfolio and Rebalancing</h3>
+                    <p class="text-sm text-slate-500 mt-1">Use one place for crypto holdings, ledger reconciliation, and fee-aware rebalance planning.</p>
+                </div>
+                <span class="inline-flex w-fit items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-indigo-600">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                    Two tools
+                </span>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <button type="button" onclick="openCryptoPortfolio()"
+                    class="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-6 text-left text-white shadow-xl shadow-slate-200 transition-all hover:-translate-y-0.5 hover:shadow-2xl">
+                    <div
+                        class="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-indigo-500 blur-[60px] opacity-20 transition-opacity group-hover:opacity-35">
+                    </div>
+                    <div
+                        class="absolute -left-16 bottom-0 h-36 w-36 rounded-full bg-cyan-500 blur-[70px] opacity-10 transition-opacity group-hover:opacity-20">
+                    </div>
+                    <div class="relative z-10 flex items-start justify-between gap-4">
+                        <div class="flex items-center gap-2">
+                            <div class="rounded-xl border border-indigo-500/30 bg-indigo-500/20 p-2 text-indigo-300">
+                                <i data-lucide="bitcoin" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-black text-slate-100">Crypto Assets</h2>
+                                <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Current app card</p>
+                            </div>
+                        </div>
+                        <span
+                            class="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs font-bold text-slate-300">Live</span>
+                    </div>
+                    <div class="relative z-10 mt-6">
+                        <p class="mb-1 text-xs font-bold text-slate-400">Portfolio Value</p>
+                        <h3 class="text-3xl font-black text-white" id="crypto-total-display">₱0.00</h3>
+                        <div class="mt-2 flex items-center gap-2">
+                            <span id="crypto-pnl-display" class="text-xs font-bold text-slate-400">--</span>
+                            <span class="text-[10px] text-slate-500">Unrealized P/L</span>
+                        </div>
+                    </div>
+                </button>
+
+                <button type="button" onclick="openCryptoRebalancingCalculator()"
+                    class="group relative overflow-hidden rounded-3xl border border-blue-200 bg-gradient-to-br from-blue-50 via-slate-50 to-emerald-50 p-6 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-xl">
+                    <div
+                        class="absolute -right-10 -top-12 h-40 w-40 rounded-full bg-blue-300 blur-[60px] opacity-35 transition-opacity group-hover:opacity-55">
+                    </div>
+                    <div
+                        class="absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-emerald-300 blur-[55px] opacity-25 transition-opacity group-hover:opacity-45">
+                    </div>
+                    <div class="relative z-10 flex items-start justify-between gap-4">
+                        <div class="flex items-center gap-2">
+                            <div class="rounded-xl border border-blue-200 bg-white/70 p-2 text-blue-600 shadow-sm">
+                                <i data-lucide="scale" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-black text-slate-900">Smart Rebalancer</h2>
+                                <p class="text-[11px] font-bold uppercase tracking-wide text-blue-500">Attached HTML</p>
+                            </div>
+                        </div>
+                        <span
+                            class="rounded-full border border-blue-100 bg-white/70 px-2 py-1 text-xs font-bold text-blue-600">Open</span>
+                    </div>
+                    <p class="relative z-10 mt-6 text-sm font-semibold leading-relaxed text-slate-600">
+                        Launch the fee-aware portfolio rebalancing calculator for target allocations, friction checks, and suggested swaps.
+                    </p>
+                    <div class="relative z-10 mt-4 flex items-center gap-2 text-xs font-black text-blue-600">
+                        <span>Open calculator</span>
+                        <i data-lucide="arrow-up-right" class="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"></i>
+                    </div>
+                </button>
+            </div>
+        </section>
+
         <div id="storage-diagnostics-panel" class="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 md:p-5">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <div>
@@ -765,32 +843,6 @@
                     </div>
                     <div id="goals-summary-list" class="space-y-2">
                         <div class="text-xs text-slate-400">No goals configured.</div>
-                    </div>
-                </div>
-
-                <!-- Crypto Portfolio Widget -->
-                <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl p-6 relative overflow-hidden text-white group cursor-pointer"
-                    onclick="openCryptoPortfolio()">
-                    <div
-                        class="absolute -right-10 -top-10 w-40 h-40 bg-indigo-500 rounded-full blur-[60px] opacity-20 group-hover:opacity-30 transition-opacity">
-                    </div>
-                    <div class="flex justify-between items-start mb-4 relative z-10">
-                        <div class="flex items-center gap-2">
-                            <div class="bg-indigo-500/20 text-indigo-300 p-1.5 rounded-lg border border-indigo-500/30">
-                                <i data-lucide="bitcoin" class="w-4 h-4"></i>
-                            </div>
-                            <h2 class="font-bold text-slate-100">Crypto Assets</h2>
-                        </div>
-                        <span
-                            class="text-xs font-bold bg-slate-800 px-2 py-1 rounded-full border border-slate-700 text-slate-300">Live</span>
-                    </div>
-                    <div class="relative z-10">
-                        <p class="text-slate-400 text-xs font-bold mb-1">Portfolio Value</p>
-                        <h3 class="text-3xl font-black text-white" id="crypto-total-display">₱0.00</h3>
-                        <div class="flex items-center gap-2 mt-2">
-                            <span id="crypto-pnl-display" class="text-xs font-bold text-slate-400">--</span>
-                            <span class="text-[10px] text-slate-500">Unrealized P/L</span>
-                        </div>
                     </div>
                 </div>
 
@@ -2100,6 +2152,36 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal: Smart Crypto Rebalancer -->
+    <div id="crypto-rebalancer-modal"
+        class="fixed inset-0 z-[142] bg-slate-950/90 backdrop-blur-lg hidden flex items-center justify-center p-3 md:p-5">
+        <div class="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl">
+            <div class="flex flex-col gap-3 border-b border-slate-800 p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <p class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-300">Smart rebalancer</p>
+                    <h3 class="mt-1 text-xl font-black text-white">Fee-Aware Crypto Rebalancing Calculator</h3>
+                    <p class="mt-1 text-xs text-slate-400">This opens the attached standalone HTML calculator in an isolated frame.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a href="file:///Users/kristian/Documents/ALL%20APPS%20WORKSPACES/smart%20balancing%20UI%20fixed/smart_rebalancing_calculator-4.html"
+                        target="_blank" rel="noopener"
+                        class="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-black text-blue-200 hover:bg-slate-800">
+                        Open Standalone
+                    </a>
+                    <button type="button" onclick="closeCryptoRebalancingCalculator()"
+                        class="rounded-xl border border-slate-700 bg-slate-900 p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            <iframe id="crypto-rebalancer-frame"
+                title="Smart Portfolio Rebalancer"
+                data-src="file:///Users/kristian/Documents/ALL%20APPS%20WORKSPACES/smart%20balancing%20UI%20fixed/smart_rebalancing_calculator-4.html"
+                class="min-h-0 flex-1 border-0 bg-[#0a0e1a]"
+                loading="lazy"></iframe>
         </div>
     </div>
 

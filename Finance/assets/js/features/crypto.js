@@ -1099,6 +1099,21 @@
             renderCryptoPortfolio();
         }
 
+        function openCryptoRebalancingCalculator() {
+            const modal = document.getElementById('crypto-rebalancer-modal');
+            const frame = document.getElementById('crypto-rebalancer-frame');
+            if (frame && !frame.getAttribute('src')) {
+                frame.setAttribute('src', frame.dataset.src || '');
+            }
+            if (modal) modal.classList.remove('hidden');
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        function closeCryptoRebalancingCalculator() {
+            const modal = document.getElementById('crypto-rebalancer-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
         function openCryptoTransaction() {
             // Reset form
             document.getElementById('c-token-search').value = '';
