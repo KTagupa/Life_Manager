@@ -2176,10 +2176,10 @@
                 }
                 const h = holdings[tx.tokenId];
 
-                if (tx.type === 'buy' || tx.type === 'airdrop' || tx.type === 'reconcile_in' || tx.type === 'transfer_in') {
+                if (tx.type === 'buy' || tx.type === 'airdrop' || tx.type === 'staking_reward' || tx.type === 'reconcile_in' || tx.type === 'transfer_in') {
                     const lotSourceType = tx.type === 'airdrop'
                         ? 'airdrop'
-                        : (tx.type === 'reconcile_in' ? 'reconcile' : (tx.type === 'transfer_in' ? 'transfer' : 'buy'));
+                        : (tx.type === 'staking_reward' ? 'staking_reward' : (tx.type === 'reconcile_in' ? 'reconcile' : (tx.type === 'transfer_in' ? 'transfer' : 'buy')));
                     h.amount += tx.amount;
                     h.totalCost += tx.total;
                     h.lots.push({
@@ -2667,7 +2667,7 @@
             const amount = Number(tx?.amount || 0);
             if (!Number.isFinite(amount)) return 0;
 
-            if (tx?.type === 'buy' || tx?.type === 'airdrop' || tx?.type === 'swap_in' || tx?.type === 'reconcile_in' || tx?.type === 'transfer_in') return amount;
+            if (tx?.type === 'buy' || tx?.type === 'airdrop' || tx?.type === 'staking_reward' || tx?.type === 'swap_in' || tx?.type === 'reconcile_in' || tx?.type === 'transfer_in') return amount;
             if (tx?.type === 'sell' || tx?.type === 'swap_out' || tx?.type === 'reconcile_out' || tx?.type === 'network_fee' || tx?.type === 'transfer_out') return -amount;
             return 0;
         }
@@ -2675,8 +2675,10 @@
         function getCryptoTransactionDisplayMeta(tx) {
             const isBuy = tx?.type === 'buy';
             const isAirdrop = tx?.type === 'airdrop';
+            const isStaking = tx?.type === 'stake_out' || tx?.type === 'stake_in' || tx?.type === 'staking_reward';
             const isSwap = tx?.type === 'swap_in' || tx?.type === 'swap_out';
-            const isAdjustment = tx?.type === 'reconcile_in' || tx?.type === 'reconcile_out' || tx?.type === 'network_fee' || tx?.type === 'transfer_in' || tx?.type === 'transfer_out';
+            const isAdjustment = tx?.type === 'reconcile_in' || tx?.type === 'reconcile_out' || tx?.type === 'network_fee' || tx?.type === 'transfer_in' || tx?.type === 'transfer_out' || isStaking;
+            const roninImportClass = String(tx?.ronin?.importClassification || '').trim();
 
             let icon = isBuy ? 'arrow-down-left' : 'arrow-up-right';
             let colorClass = isBuy ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400';
@@ -2694,14 +2696,40 @@
             } else if (isAirdrop) {
                 icon = 'gift';
                 colorClass = 'bg-amber-900/30 text-amber-300';
-                actionText = 'Airdropped';
+                actionText = roninImportClass === 'staking_reward' ? 'Staking Reward' : 'Airdropped';
+                if (roninImportClass === 'staking_reward') {
+                    detailText = `${new Date(tx.date).toLocaleDateString()} - Ronin staking import`;
+                    totalText = 'Zero-cost reward import';
+                    balanceChangeLabel = 'Staking reward in';
+                }
+            } else if (tx.type === 'staking_reward') {
+                icon = 'sprout';
+                colorClass = 'bg-emerald-900/30 text-emerald-300';
+                actionText = 'Staking Reward';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - Ronin staking import`;
+                totalText = 'Zero-cost reward import';
+                balanceChangeLabel = 'Staking reward in';
+            } else if (tx.type === 'stake_out') {
+                icon = 'lock';
+                colorClass = 'bg-sky-900/30 text-sky-300';
+                actionText = 'Staked / Delegated';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - Ronin staking import`;
+                totalText = 'Moved to staking, not sold';
+                balanceChangeLabel = 'Staking movement';
+            } else if (tx.type === 'stake_in') {
+                icon = 'unlock';
+                colorClass = 'bg-cyan-900/30 text-cyan-300';
+                actionText = 'Unstaked';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - Ronin staking import`;
+                totalText = 'Moved out of staking';
+                balanceChangeLabel = 'Staking movement';
             } else if (tx.type === 'network_fee') {
                 icon = 'flame';
                 colorClass = 'bg-amber-900/30 text-amber-300';
-                actionText = 'Network Fee';
-                detailText = `${new Date(tx.date).toLocaleDateString()} - XRPL reconciliation`;
+                actionText = roninImportClass === 'staking_fee' ? 'Staking Fee' : 'Network Fee';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - ${tx?.ronin ? 'Ronin import' : 'XRPL reconciliation'}`;
                 totalText = 'Non-tax balance adjustment';
-                balanceChangeLabel = 'Network fee deducted';
+                balanceChangeLabel = roninImportClass === 'staking_fee' ? 'Staking fee deducted' : 'Network fee deducted';
             } else if (tx.type === 'reconcile_in') {
                 icon = 'scale';
                 colorClass = 'bg-cyan-900/30 text-cyan-300';
@@ -2719,17 +2747,21 @@
             } else if (tx.type === 'transfer_in') {
                 icon = 'log-in';
                 colorClass = 'bg-cyan-900/30 text-cyan-300';
-                actionText = 'Transferred In';
-                detailText = `${new Date(tx.date).toLocaleDateString()} - XRPL ledger import`;
-                totalText = 'Balance-only import';
-                balanceChangeLabel = 'Transfer in';
+                actionText = roninImportClass === 'unstake'
+                    ? 'Unstaked'
+                    : (roninImportClass === 'restake' ? 'Restaked In' : 'Transferred In');
+                detailText = `${new Date(tx.date).toLocaleDateString()} - ${tx?.ronin ? 'Ronin import' : 'XRPL ledger import'}`;
+                totalText = roninImportClass === 'unstake' ? 'Balance-only unstake' : 'Balance-only import';
+                balanceChangeLabel = roninImportClass === 'unstake' ? 'Unstake in' : 'Transfer in';
             } else if (tx.type === 'transfer_out') {
                 icon = 'log-out';
                 colorClass = 'bg-orange-900/30 text-orange-300';
-                actionText = 'Transferred Out';
-                detailText = `${new Date(tx.date).toLocaleDateString()} - XRPL ledger import`;
-                totalText = 'No sale/P&L';
-                balanceChangeLabel = 'Transfer out';
+                actionText = roninImportClass === 'stake'
+                    ? 'Staked / Delegated'
+                    : (roninImportClass === 'restake' ? 'Restaked Out' : 'Transferred Out');
+                detailText = `${new Date(tx.date).toLocaleDateString()} - ${tx?.ronin ? 'Ronin import' : 'XRPL ledger import'}`;
+                totalText = roninImportClass === 'stake' ? 'Balance-only staking outflow' : 'No sale/P&L';
+                balanceChangeLabel = roninImportClass === 'stake' ? 'Staked out' : 'Transfer out';
             }
 
             return { isBuy, isAirdrop, isSwap, isAdjustment, icon, colorClass, actionText, detailText, totalText, balanceChangeLabel };
@@ -3196,6 +3228,63 @@
             return true;
         }
 
+        const CRYPTO_NETWORK_PANEL_COLLAPSE_STORAGE_KEY = 'finance_crypto_network_panel_collapsed_v2';
+
+        function getCryptoNetworkPanelCollapseState() {
+            try {
+                const raw = localStorage.getItem(CRYPTO_NETWORK_PANEL_COLLAPSE_STORAGE_KEY);
+                const parsed = raw ? JSON.parse(raw) : {};
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (error) {
+                console.warn('Could not read crypto network panel collapse state.', error);
+                return {};
+            }
+        }
+
+        function saveCryptoNetworkPanelCollapseState(state) {
+            try {
+                localStorage.setItem(CRYPTO_NETWORK_PANEL_COLLAPSE_STORAGE_KEY, JSON.stringify(state || {}));
+            } catch (error) {
+                console.warn('Could not save crypto network panel collapse state.', error);
+            }
+        }
+
+        function applyCryptoNetworkPanelCollapseState(network, collapsed = null) {
+            const key = String(network || '').trim();
+            if (!key) return;
+            const body = document.querySelector(`[data-crypto-network-body="${key}"]`);
+            const toggle = document.querySelector(`[data-crypto-network-toggle="${key}"]`);
+            const state = getCryptoNetworkPanelCollapseState();
+            const isCollapsed = typeof collapsed === 'boolean' ? collapsed : state[key] !== false;
+
+            if (body) body.classList.toggle('hidden', isCollapsed);
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', String(!isCollapsed));
+                const label = toggle.querySelector('[data-crypto-network-toggle-label]');
+                const icon = toggle.querySelector('[data-crypto-network-toggle-icon]');
+                if (label) label.innerText = isCollapsed ? 'Expand' : 'Collapse';
+                if (icon) icon.classList.toggle('rotate-180', isCollapsed);
+            }
+        }
+
+        function toggleCryptoNetworkPanel(network) {
+            const key = String(network || '').trim();
+            if (!key) return;
+            const state = getCryptoNetworkPanelCollapseState();
+            const isCurrentlyCollapsed = state[key] !== false;
+            state[key] = !isCurrentlyCollapsed;
+            saveCryptoNetworkPanelCollapseState(state);
+            applyCryptoNetworkPanelCollapseState(key, state[key]);
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        function initializeCryptoNetworkPanels() {
+            document.querySelectorAll('[data-crypto-network-panel]').forEach(panel => {
+                const network = panel.getAttribute('data-crypto-network-panel');
+                applyCryptoNetworkPanelCollapseState(network);
+            });
+        }
+
         async function renderCryptoPortfolio() {
             const { taxMethod, targetUnrealizedPct } = getCurrentCryptoPortfolioControls();
             const lossesOnlyEl = document.getElementById('cp-target-losses-only');
@@ -3410,6 +3499,12 @@
                 }
             } catch (error) {
                 console.error('Ronin reconciliation panel render failed:', error);
+            }
+
+            try {
+                initializeCryptoNetworkPanels();
+            } catch (error) {
+                console.error('Crypto network panel collapse render failed:', error);
             }
 
             if (window.lucide) window.lucide.createIcons();

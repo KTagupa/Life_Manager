@@ -612,6 +612,7 @@ function normalizeRoninAssetMappingsShape(assetMappings) {
             tokenId: String(sourceMapping.tokenId || '').trim().toLowerCase(),
             symbol: String(sourceMapping.symbol || '').trim(),
             label: String(sourceMapping.label || '').trim(),
+            csvLabel: String(sourceMapping.csvLabel || '').trim(),
             contract,
             decimals: Math.max(0, Math.round(toFiniteNumber(sourceMapping.decimals, 18)))
         };

@@ -1831,19 +1831,25 @@
 
                 <!-- XRP Ledger Reconciliation -->
                 <div id="xrpl-reconcile-panel"
-                    class="bg-gradient-to-br from-slate-950/90 via-slate-900/90 to-cyan-950/45 p-4 rounded-2xl border border-cyan-900/60 mb-8 shadow-inner">
-                    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-4">
-                        <div>
-                            <p class="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Read-only ledger check</p>
-                            <h3 class="font-bold text-white mt-1 flex items-center gap-2">
-                                <i data-lucide="radar" class="w-4 h-4 text-cyan-300"></i>
-                                XRP Ledger Reconcile
-                            </h3>
-                            <p class="text-xs text-slate-400 mt-2 max-w-2xl">
-                                Fetch validated XRPL balances and transaction deltas for a public wallet address. This explains swaps, trust-line token movement, and network fees without changing your saved crypto entries.
-                            </p>
-                        </div>
-                        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px_auto] xl:min-w-[620px]">
+                    data-crypto-network-panel="xrpl"
+                    class="bg-gradient-to-br from-slate-950/90 via-cyan-950/35 to-slate-950/90 p-3 rounded-2xl border border-cyan-700/70 mb-4 shadow-inner shadow-cyan-950/20">
+                    <button type="button" onclick="toggleCryptoNetworkPanel('xrpl')"
+                        data-crypto-network-toggle="xrpl" aria-expanded="false"
+                        class="group flex w-full items-center justify-between gap-3 rounded-2xl border border-cyan-700/60 bg-cyan-500/10 px-4 py-4 text-left transition-colors hover:bg-cyan-500/15">
+                        <span class="flex items-center gap-3">
+                            <span class="rounded-xl bg-cyan-300/15 p-2 text-cyan-200">
+                                <i data-lucide="radar" class="w-4 h-4"></i>
+                            </span>
+                            <span class="text-base font-black text-white">XRP Ledger Reconcile</span>
+                        </span>
+                        <span class="inline-flex items-center gap-2 text-cyan-200">
+                            <span data-crypto-network-toggle-label class="sr-only">Expand</span>
+                            <i data-lucide="chevron-up" data-crypto-network-toggle-icon class="w-4 h-4 transition-transform rotate-180"></i>
+                        </span>
+                    </button>
+
+                    <div id="xrpl-network-body" data-crypto-network-body="xrpl" class="hidden pt-4">
+                        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_170px_auto] mb-4">
                             <input id="xrpl-wallet-address" type="text" inputmode="text" spellcheck="false"
                                 placeholder="Classic XRP address, e.g. r..."
                                 class="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-100 outline-none focus:border-cyan-500">
@@ -1859,52 +1865,51 @@
                                 Fetch Ledger
                             </button>
                         </div>
-                    </div>
+                        <div id="xrpl-status"
+                            class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-xs text-slate-400">
+                            Enter a public XRP wallet address to compare ledger balances with this app.
+                        </div>
 
-                    <div id="xrpl-status"
-                        class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-xs text-slate-400">
-                        Enter a public XRP wallet address to compare ledger balances with this app.
-                    </div>
-
-                    <div id="xrpl-summary" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-                        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-                            <p class="text-[10px] font-bold uppercase text-slate-500">Transactions</p>
-                            <p class="text-sm font-bold text-slate-300 mt-1">--</p>
-                        </div>
-                        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-                            <p class="text-[10px] font-bold uppercase text-slate-500">Network Fees</p>
-                            <p class="text-sm font-bold text-slate-300 mt-1">--</p>
-                        </div>
-                        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-                            <p class="text-[10px] font-bold uppercase text-slate-500">Swaps</p>
-                            <p class="text-sm font-bold text-slate-300 mt-1">--</p>
-                        </div>
-                        <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
-                            <p class="text-[10px] font-bold uppercase text-slate-500">Last Refresh</p>
-                            <p class="text-sm font-bold text-slate-300 mt-1">--</p>
-                        </div>
-                    </div>
-
-                    <div class="grid gap-4 xl:grid-cols-[0.95fr,1.05fr] mt-4">
-                        <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                            <div class="flex items-center justify-between gap-3 mb-3">
-                                <h4 class="text-sm font-bold text-slate-200">Ledger Balance vs App Balance</h4>
-                                <span class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Review only</span>
+                        <div id="xrpl-summary" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+                            <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                                <p class="text-[10px] font-bold uppercase text-slate-500">Transactions</p>
+                                <p class="text-sm font-bold text-slate-300 mt-1">--</p>
                             </div>
-                            <div id="xrpl-balance-comparison" class="space-y-2">
-                                <div class="text-sm text-slate-500 py-6 text-center">No ledger balances fetched yet.</div>
+                            <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                                <p class="text-[10px] font-bold uppercase text-slate-500">Network Fees</p>
+                                <p class="text-sm font-bold text-slate-300 mt-1">--</p>
+                            </div>
+                            <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                                <p class="text-[10px] font-bold uppercase text-slate-500">Swaps</p>
+                                <p class="text-sm font-bold text-slate-300 mt-1">--</p>
+                            </div>
+                            <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                                <p class="text-[10px] font-bold uppercase text-slate-500">Last Refresh</p>
+                                <p class="text-sm font-bold text-slate-300 mt-1">--</p>
                             </div>
                         </div>
-                        <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                            <div class="flex items-center justify-between gap-3 mb-3">
-                                <h4 class="text-sm font-bold text-slate-200">Recent Ledger Activity</h4>
-                                <button id="xrpl-load-older-btn" type="button" onclick="loadOlderXrplTransactions()"
-                                    class="hidden rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-cyan-300 hover:bg-slate-800">
-                                    Load Older
-                                </button>
+
+                        <div class="grid gap-4 xl:grid-cols-[0.95fr,1.05fr] mt-4">
+                            <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                                <div class="flex items-center justify-between gap-3 mb-3">
+                                    <h4 class="text-sm font-bold text-slate-200">Ledger Balance vs App Balance</h4>
+                                    <span class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Review only</span>
+                                </div>
+                                <div id="xrpl-balance-comparison" class="space-y-2">
+                                    <div class="text-sm text-slate-500 py-6 text-center">No ledger balances fetched yet.</div>
+                                </div>
                             </div>
-                            <div id="xrpl-activity-list" class="space-y-2 max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
-                                <div class="text-sm text-slate-500 py-6 text-center">No XRPL activity loaded yet.</div>
+                            <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                                <div class="flex items-center justify-between gap-3 mb-3">
+                                    <h4 class="text-sm font-bold text-slate-200">Recent Ledger Activity</h4>
+                                    <button id="xrpl-load-older-btn" type="button" onclick="loadOlderXrplTransactions()"
+                                        class="hidden rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-cyan-300 hover:bg-slate-800">
+                                        Load Older
+                                    </button>
+                                </div>
+                                <div id="xrpl-activity-list" class="space-y-2 max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
+                                    <div class="text-sm text-slate-500 py-6 text-center">No XRPL activity loaded yet.</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1912,19 +1917,25 @@
 
                 <!-- Ronin Reconciliation -->
                 <div id="ronin-reconcile-panel"
-                    class="bg-gradient-to-br from-slate-950/90 via-slate-900/90 to-sky-950/45 p-4 rounded-2xl border border-sky-900/60 mb-8 shadow-inner">
-                    <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-4">
-                        <div>
-                            <p class="text-[10px] font-black uppercase tracking-[0.18em] text-sky-300">Ronin v1</p>
-                            <h3 class="font-bold text-white mt-1 flex items-center gap-2">
-                                <i data-lucide="network" class="w-4 h-4 text-sky-300"></i>
-                                Ronin Reconcile
-                            </h3>
-                            <p class="text-xs text-slate-400 mt-2 max-w-2xl">
-                                Fetch RON balance and ERC-20 Transfer activity from Ronin RPC. V1 supports token transfer imports and fee detection for imported ERC-20 transactions; native RON transfer history needs an explorer/indexer later.
-                            </p>
-                        </div>
-                        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_135px_auto] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_auto] xl:min-w-[780px]">
+                    data-crypto-network-panel="ronin"
+                    class="bg-gradient-to-br from-slate-950/90 via-amber-950/30 to-sky-950/35 p-3 rounded-2xl border border-amber-700/70 mb-4 shadow-inner shadow-amber-950/20">
+                    <button type="button" onclick="toggleCryptoNetworkPanel('ronin')"
+                        data-crypto-network-toggle="ronin" aria-expanded="false"
+                        class="group flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-700/60 bg-amber-500/10 px-4 py-4 text-left transition-colors hover:bg-amber-500/15">
+                        <span class="flex items-center gap-3">
+                            <span class="rounded-xl bg-amber-300/15 p-2 text-amber-200">
+                                <i data-lucide="network" class="w-4 h-4"></i>
+                            </span>
+                            <span class="text-base font-black text-white">Ronin Reconcile</span>
+                        </span>
+                        <span class="inline-flex items-center gap-2 text-amber-200">
+                            <span data-crypto-network-toggle-label class="sr-only">Expand</span>
+                            <i data-lucide="chevron-up" data-crypto-network-toggle-icon class="w-4 h-4 transition-transform rotate-180"></i>
+                        </span>
+                    </button>
+
+                    <div id="ronin-network-body" data-crypto-network-body="ronin" class="hidden pt-4">
+                        <div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_135px_auto] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px_auto] mb-4">
                             <input id="ronin-wallet-address" type="text" inputmode="text" spellcheck="false"
                                 placeholder="ronin:... or 0x..."
                                 class="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-100 outline-none focus:border-sky-500 sm:col-span-3 xl:col-span-1">
@@ -1938,38 +1949,65 @@
                                 Fetch Ronin
                             </button>
                         </div>
-                    </div>
-
-                    <div id="ronin-status"
-                        class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-xs text-slate-400">
-                        Enter a Ronin wallet address to compare balances and load ERC-20 transfer activity.
-                    </div>
-
-                    <div class="grid gap-4 xl:grid-cols-[0.95fr,1.05fr] mt-4">
-                        <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                            <div class="flex items-center justify-between gap-3 mb-3">
-                                <h4 class="text-sm font-bold text-slate-200">Ronin Balance vs App Balance</h4>
-                                <span class="text-[10px] font-bold uppercase tracking-wide text-slate-500">V1</span>
-                            </div>
-                            <div id="ronin-balance-comparison" class="space-y-2">
-                                <div class="text-sm text-slate-500 py-6 text-center">No Ronin balances fetched yet.</div>
-                            </div>
-                            <div class="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                                <p class="text-[10px] font-bold uppercase text-slate-500 mb-2">Tracked ERC-20 Contracts</p>
-                                <div id="ronin-token-editor" class="space-y-2"></div>
-                                <button type="button" onclick="addRoninTokenMappingRow()"
-                                    class="mt-3 rounded-xl border border-sky-700/60 bg-sky-500/10 px-3 py-2 text-[11px] font-black text-sky-200 hover:bg-sky-500/20">
-                                    + Track Token Contract
-                                </button>
-                            </div>
+                        <div id="ronin-status"
+                            class="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-xs text-slate-400">
+                            Enter a Ronin wallet address to compare balances and load ERC-20 transfer activity.
                         </div>
-                        <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                            <div class="flex items-center justify-between gap-3 mb-3">
-                                <h4 class="text-sm font-bold text-slate-200">Ronin ERC-20 Activity</h4>
-                                <span id="ronin-activity-count" class="text-[10px] font-bold uppercase tracking-wide text-slate-500">0 rows</span>
+
+                        <div class="grid gap-4 xl:grid-cols-[0.95fr,1.05fr] mt-4">
+                            <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                                <div class="flex items-center justify-between gap-3 mb-3">
+                                    <h4 class="text-sm font-bold text-slate-200">Ronin Balance vs App Balance</h4>
+                                    <span class="text-[10px] font-bold uppercase tracking-wide text-slate-500">V1</span>
+                                </div>
+                                <div id="ronin-balance-comparison" class="space-y-2">
+                                    <div class="text-sm text-slate-500 py-6 text-center">No Ronin balances fetched yet.</div>
+                                </div>
+                                <div id="ronin-staking-summary" class="mt-3"></div>
+                                <div class="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                    <p class="text-[10px] font-bold uppercase text-slate-500 mb-2">Tracked ERC-20 Contracts</p>
+                                    <div id="ronin-token-editor" class="space-y-2"></div>
+                                    <button type="button" onclick="addRoninTokenMappingRow()"
+                                        class="mt-3 rounded-xl border border-sky-700/60 bg-sky-500/10 px-3 py-2 text-[11px] font-black text-sky-200 hover:bg-sky-500/20">
+                                        + Track Token Contract
+                                    </button>
+                                </div>
+                                <div class="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div>
+                                            <p class="text-[10px] font-bold uppercase text-slate-500">Explorer CSV Import</p>
+                                            <p class="text-[11px] text-slate-400 mt-1">
+                                                Upload Ronin Explorer CSV exports from Activity tabs. Duplicate files and rows are ignored before review.
+                                            </p>
+                                        </div>
+                                        <button type="button" onclick="document.getElementById('ronin-csv-file-input')?.click()"
+                                            class="rounded-xl border border-emerald-700/70 bg-emerald-500/10 px-3 py-2 text-[11px] font-black text-emerald-200 hover:bg-emerald-500/20 shrink-0">
+                                            Import CSV
+                                        </button>
+                                    </div>
+                                    <input id="ronin-csv-file-input" type="file" accept=".csv,text/csv" multiple class="hidden"
+                                        onchange="handleRoninCsvFileInput(this.files); this.value = '';">
+                                    <div id="ronin-csv-summary" class="mt-3 text-[11px] text-slate-500">
+                                        No Ronin CSV loaded yet.
+                                    </div>
+                                    <div id="ronin-csv-token-mappings" class="mt-3 space-y-2"></div>
+                                </div>
                             </div>
-                            <div id="ronin-activity-list" class="space-y-2 max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
-                                <div class="text-sm text-slate-500 py-6 text-center">No Ronin activity loaded yet.</div>
+                            <div class="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                                    <div>
+                                        <h4 class="text-sm font-bold text-slate-200">Ronin Activity</h4>
+                                        <span id="ronin-activity-count" class="text-[10px] font-bold uppercase tracking-wide text-slate-500">0 rows</span>
+                                    </div>
+                                    <button id="ronin-bulk-import-btn" type="button"
+                                        onclick="runFinancePendingAction('bulkImportRoninSafeDefaults', this, bulkImportRoninSafeDefaults)"
+                                        class="hidden rounded-xl border border-emerald-700/70 bg-emerald-500/10 px-3 py-2 text-[11px] font-black text-emerald-200 hover:bg-emerald-500/20">
+                                        Import Safe Defaults
+                                    </button>
+                                </div>
+                                <div id="ronin-activity-list" class="space-y-2 max-h-[520px] overflow-y-auto custom-scrollbar pr-1">
+                                    <div class="text-sm text-slate-500 py-6 text-center">No Ronin activity loaded yet.</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2067,9 +2105,9 @@
 
     <!-- Modal: Ronin ERC-20 Activity Import -->
     <div id="ronin-import-modal"
-        class="fixed inset-0 z-[143] bg-slate-950/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
-        <div class="bg-slate-950 border border-slate-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden">
-            <div class="p-6 border-b border-slate-800 flex items-start justify-between gap-4">
+        class="fixed inset-0 z-[143] bg-slate-950/90 backdrop-blur-lg hidden flex items-start justify-center p-4 overflow-y-auto">
+        <div class="bg-slate-950 border border-slate-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-2rem)] my-4">
+            <div class="p-6 border-b border-slate-800 flex items-start justify-between gap-4 shrink-0">
                 <div>
                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-300">Ronin import</p>
                     <h3 class="text-2xl font-bold text-white mt-1" id="ronin-import-title">Review Ronin Import</h3>
@@ -2080,7 +2118,7 @@
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div class="p-6 space-y-4">
+            <div class="p-6 space-y-4 overflow-y-auto custom-scrollbar min-h-0">
                 <div id="ronin-import-summary"
                     class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
                     Select a Ronin activity row to import.
@@ -2095,6 +2133,33 @@
                     <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-500">
                         Import preview will appear here.
                     </div>
+                </div>
+                <div id="ronin-buy-fields" class="hidden rounded-2xl border border-emerald-900/60 bg-emerald-950/20 p-4">
+                    <p class="text-[11px] font-bold uppercase tracking-wide text-emerald-300 mb-3">Buy Details</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="text-[10px] font-bold uppercase tracking-wide text-slate-500 block mb-1">Price / Token</label>
+                            <input id="ronin-buy-price" type="number" min="0" step="any" oninput="renderRoninImportModalDetails()"
+                                class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-semibold text-slate-100 outline-none focus:border-emerald-500"
+                                placeholder="Auto from total">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold uppercase tracking-wide text-slate-500 block mb-1">Currency</label>
+                            <select id="ronin-buy-currency" onchange="renderRoninImportModalDetails()"
+                                class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-semibold text-slate-100 outline-none focus:border-emerald-500">
+                                <option value="PHP">PHP</option>
+                                <option value="USD">USD</option>
+                                <option value="JPY">JPY</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold uppercase tracking-wide text-slate-500 block mb-1">Total Spent</label>
+                            <input id="ronin-buy-total" type="number" min="0" step="any" oninput="renderRoninImportModalDetails()"
+                                class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-semibold text-slate-100 outline-none focus:border-emerald-500"
+                                placeholder="Computes price">
+                        </div>
+                    </div>
+                    <p id="ronin-buy-total-preview" class="mt-3 text-xs text-emerald-100/90"></p>
                 </div>
                 <div id="ronin-import-impact"
                     class="rounded-2xl border border-sky-900/60 bg-sky-950/25 p-4 text-sm text-sky-100/90">
@@ -2122,9 +2187,9 @@
 
     <!-- Modal: XRPL Ledger Activity Import -->
     <div id="xrpl-import-modal"
-        class="fixed inset-0 z-[142] bg-slate-950/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
-        <div class="bg-slate-950 border border-slate-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden">
-            <div class="p-6 border-b border-slate-800 flex items-start justify-between gap-4">
+        class="fixed inset-0 z-[142] bg-slate-950/90 backdrop-blur-lg hidden flex items-start justify-center p-4 overflow-y-auto">
+        <div class="bg-slate-950 border border-slate-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-2rem)] my-4">
+            <div class="p-6 border-b border-slate-800 flex items-start justify-between gap-4 shrink-0">
                 <div>
                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-300">Ledger activity import</p>
                     <h3 class="text-2xl font-bold text-white mt-1" id="xrpl-import-title">Review XRPL Import</h3>
@@ -2135,7 +2200,7 @@
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div class="p-6 space-y-4">
+            <div class="p-6 space-y-4 overflow-y-auto custom-scrollbar min-h-0">
                 <div id="xrpl-import-ledger-summary"
                     class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-300">
                     Select a ledger activity row to import.

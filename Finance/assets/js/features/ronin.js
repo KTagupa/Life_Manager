@@ -10,6 +10,14 @@ const RONIN_BALANCE_OF_SELECTOR = '0x70a08231';
 const RONIN_DEFAULT_LOOKBACK_BLOCKS = 200000;
 const RONIN_LOG_CHUNK_SIZE = 50000;
 const RONIN_MAX_TRACKED_TOKENS = 12;
+const RONIN_CSV_NATIVE_LABELS = new Set(['ron', 'ronin']);
+const RONIN_CSV_TOKEN_DEFAULTS = {
+    'axie infinity shard': { tokenId: 'axie-infinity', symbol: 'AXS', label: 'Axie Infinity Shard' },
+    'pixel': { tokenId: 'pixels', symbol: 'PIXEL', label: 'PIXEL' },
+    'usd coin': { tokenId: 'usd-coin', symbol: 'USDC', label: 'USD Coin' },
+    'ronin wrapped ether': { tokenId: 'weth', symbol: 'WETH', label: 'Ronin Wrapped Ether' },
+    'wrapped bitcoin': { tokenId: 'wrapped-bitcoin', symbol: 'WBTC', label: 'Wrapped Bitcoin' }
+};
 
 let roninReconcileState = {
     account: '',
@@ -21,7 +29,10 @@ let roninReconcileState = {
     error: '',
     fetchedAt: 0,
     latestBlock: 0,
-    fromBlock: 0
+    fromBlock: 0,
+    sourceMode: 'rpc',
+    csvSummary: null,
+    stakingSummary: null
 };
 let roninPendingImport = null;
 
@@ -137,6 +148,43 @@ function buildRoninAssetKey(contract) {
     return `erc20:${normalized}`;
 }
 
+function normalizeRoninCsvLabel(value) {
+    return String(value || '')
+        .replace(/^\uFEFF/, '')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+function slugRoninCsvLabel(value) {
+    return normalizeRoninCsvLabel(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'token';
+}
+
+function getRoninCsvAssetKey(label) {
+    const normalized = normalizeRoninCsvLabel(label);
+    const lower = normalized.toLowerCase();
+    if (RONIN_CSV_NATIVE_LABELS.has(lower)) return RONIN_NATIVE_ASSET_KEY;
+    return `csv:${slugRoninCsvLabel(normalized)}`;
+}
+
+function getRoninCsvDefaultMapping(label) {
+    const normalized = normalizeRoninCsvLabel(label);
+    const lower = normalized.toLowerCase();
+    if (RONIN_CSV_NATIVE_LABELS.has(lower)) {
+        return { tokenId: 'ronin', symbol: 'RON', label: 'RON', decimals: 18 };
+    }
+    const defaults = RONIN_CSV_TOKEN_DEFAULTS[lower] || {};
+    return {
+        tokenId: String(defaults.tokenId || '').trim().toLowerCase(),
+        symbol: String(defaults.symbol || normalized || 'TOKEN').trim().toUpperCase(),
+        label: String(defaults.label || normalized || 'Token').trim(),
+        decimals: Math.max(0, Math.round(toRoninFiniteNumber(defaults.decimals, 18))),
+        csvLabel: normalized
+    };
+}
+
 function getRoninTrackedTokenMappings(settings = getRoninReconcileSettingsSafe()) {
     return Object.entries(settings.assetMappings || {})
         .filter(([key, mapping]) => key.startsWith('erc20:') && isValidRoninAddress(mapping?.contract))
@@ -162,6 +210,20 @@ function getRoninTokenEditorMappings(settings = getRoninReconcileSettingsSafe())
             label: String(mapping?.label || mapping?.symbol || key).trim(),
             decimals: Math.max(0, Math.round(toRoninFiniteNumber(mapping?.decimals, 18)))
         }));
+}
+
+function getRoninCsvTokenMappings(settings = getRoninReconcileSettingsSafe()) {
+    return Object.entries(settings.assetMappings || {})
+        .filter(([key]) => key.startsWith('csv:'))
+        .map(([key, mapping]) => ({
+            key,
+            tokenId: String(mapping?.tokenId || '').trim().toLowerCase(),
+            symbol: String(mapping?.symbol || '').trim().toUpperCase(),
+            label: String(mapping?.label || mapping?.csvLabel || key).trim(),
+            csvLabel: String(mapping?.csvLabel || mapping?.label || key).trim(),
+            decimals: Math.max(0, Math.round(toRoninFiniteNumber(mapping?.decimals, 18)))
+        }))
+        .sort((a, b) => String(a.label || '').localeCompare(String(b.label || '')));
 }
 
 function buildRoninBalanceMap(balances) {
@@ -392,10 +454,303 @@ function buildRoninActivityExplanation(row) {
     const posText = positive.map(delta => `${roninNumberToText(delta.value)} ${delta.symbol}`).join(', ');
     const negText = negative.map(delta => `${roninNumberToText(Math.abs(delta.value))} ${delta.symbol}`).join(', ');
     const feeText = row.feeRon > 0 ? `; paid ${roninNumberToText(row.feeRon, 8)} RON fee` : '';
+    const methodText = String(row.method || '').trim();
+    if (row.category === 'stake' && negative.length) return `Delegated/staked ${negText}${feeText}.`;
+    if (row.category === 'unstake' && positive.length) return `Undelegated ${posText}${feeText}.`;
+    if (row.category === 'reward' && positive.length) return `Claimed staking reward ${posText}${feeText}.`;
+    if (row.category === 'stake-fee') return `${methodText || 'Staking maintenance'} fee: ${roninNumberToText(row.feeRon, 8)} RON.`;
+    if (row.category === 'restake' && positive.length && negative.length) return `Restaked ${posText}${feeText}.`;
     if (positive.length && negative.length) return `${negText} moved out and ${posText} moved in${feeText}.`;
     if (positive.length) return `Received ${posText}${feeText}.`;
     if (negative.length) return `Sent ${negText}${feeText}.`;
     return row.feeRon > 0 ? `Fee-only Ronin activity: ${roninNumberToText(row.feeRon, 8)} RON.` : 'Ronin activity found.';
+}
+
+function getRoninCsvMethodSet(row) {
+    return new Set(String(row?.method || '')
+        .split(',')
+        .map(method => method.trim())
+        .filter(Boolean));
+}
+
+function hasRoninCsvMethod(row, names) {
+    const methods = getRoninCsvMethodSet(row);
+    return names.some(name => methods.has(name));
+}
+
+function classifyRoninCsvCategory(row, deltas) {
+    const hasPositive = deltas.some(delta => delta.value > 0);
+    const hasNegative = deltas.some(delta => delta.value < 0);
+    if (hasRoninCsvMethod(row, ['delegate'])) return 'stake';
+    if (hasRoninCsvMethod(row, ['undelegate'])) return 'unstake';
+    if (hasRoninCsvMethod(row, ['claimRewards', 'claimPendingRewards'])) return hasPositive ? 'reward' : 'stake-fee';
+    if (hasRoninCsvMethod(row, ['delegateRewards', 'redelegate'])) return 'stake-fee';
+    if (hasRoninCsvMethod(row, ['restakeRewards'])) return hasPositive && hasNegative ? 'restake' : 'stake-fee';
+    return hasPositive && hasNegative ? 'swap' : (hasPositive ? 'receive' : (hasNegative ? 'send' : (row.feeRon > 0 ? 'fee-only' : 'unknown')));
+}
+
+function parseRoninCsvLine(line) {
+    const out = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i];
+        const next = line[i + 1];
+        if (ch === '"' && inQuotes && next === '"') {
+            current += '"';
+            i += 1;
+            continue;
+        }
+        if (ch === '"') {
+            inQuotes = !inQuotes;
+            continue;
+        }
+        if (ch === ',' && !inQuotes) {
+            out.push(current);
+            current = '';
+            continue;
+        }
+        current += ch;
+    }
+    out.push(current);
+    return out.map(value => value.trim());
+}
+
+function parseRoninCsvText(text) {
+    const lines = String(text || '')
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean);
+    if (lines.length < 2) return { headers: [], rows: [] };
+
+    const headers = parseRoninCsvLine(lines[0]).map(header => header.replace(/^\uFEFF/, '').trim());
+    const rows = lines.slice(1).map(line => {
+        const values = parseRoninCsvLine(line);
+        const row = {};
+        headers.forEach((header, index) => {
+            row[header] = values[index] || '';
+        });
+        return row;
+    });
+    return { headers, rows };
+}
+
+function parseRoninCsvNumber(value) {
+    const cleaned = String(value || '').replace(/,/g, '').trim();
+    const numeric = Number(cleaned);
+    return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function getRoninCsvField(row, names) {
+    for (const name of names) {
+        if (Object.prototype.hasOwnProperty.call(row, name)) return row[name];
+    }
+    const lowerMap = new Map(Object.keys(row || {}).map(key => [key.toLowerCase(), key]));
+    for (const name of names) {
+        const key = lowerMap.get(String(name).toLowerCase());
+        if (key) return row[key];
+    }
+    return '';
+}
+
+function buildRoninCsvFingerprint(row) {
+    return [
+        getRoninCsvField(row, ['Txhash']),
+        getRoninCsvField(row, ['Blockno']),
+        getRoninCsvField(row, ['From']),
+        getRoninCsvField(row, ['To']),
+        getRoninCsvField(row, ['Method']),
+        getRoninCsvField(row, ['Token / Collectibles']),
+        getRoninCsvField(row, ['Value in']),
+        getRoninCsvField(row, ['Value out']),
+        getRoninCsvField(row, ['TxnFee(RON)']),
+        getRoninCsvField(row, ['Status'])
+    ].map(value => String(value || '').trim().toLowerCase()).join('|');
+}
+
+function inferRoninCsvAccount(rows, preferredAccount = '') {
+    const preferred = normalizeRoninAddress(preferredAccount);
+    if (isValidRoninAddress(preferred)) return preferred;
+
+    const counts = new Map();
+    (rows || []).forEach(row => {
+        [getRoninCsvField(row, ['From']), getRoninCsvField(row, ['To'])].forEach(address => {
+            const normalized = normalizeRoninAddress(address);
+            if (!isValidRoninAddress(normalized) || /^0x0{40}$/.test(normalized)) return;
+            counts.set(normalized, (counts.get(normalized) || 0) + 1);
+        });
+    });
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+}
+
+function hydrateRoninRowsWithMappings(rows, settings = getRoninReconcileSettingsSafe()) {
+    return (rows || []).map(row => {
+        const deltas = (row.deltas || []).map(delta => {
+            const mapping = settings.assetMappings?.[delta.key] || {};
+            return {
+                ...delta,
+                tokenId: String(mapping.tokenId || delta.tokenId || '').trim().toLowerCase(),
+                symbol: String(mapping.symbol || delta.symbol || delta.label || 'TOKEN').trim().toUpperCase(),
+                label: String(mapping.label || delta.label || mapping.csvLabel || delta.symbol || 'Token').trim(),
+                decimals: Math.max(0, Math.round(toRoninFiniteNumber(mapping.decimals, delta.decimals || 18)))
+            };
+        });
+        return {
+            ...row,
+            deltas,
+            explanation: buildRoninActivityExplanation({ ...row, deltas })
+        };
+    });
+}
+
+function buildRoninCsvActivityRows(csvRows, account, settings = getRoninReconcileSettingsSafe()) {
+    const uniqueRows = new Map();
+    (csvRows || []).forEach(row => {
+        const hash = String(getRoninCsvField(row, ['Txhash']) || '').trim().toLowerCase();
+        if (!hash) return;
+        const fingerprint = buildRoninCsvFingerprint(row);
+        if (!uniqueRows.has(fingerprint)) uniqueRows.set(fingerprint, row);
+    });
+
+    const grouped = new Map();
+    const discoveredMappings = {};
+    uniqueRows.forEach(row => {
+        const hash = String(getRoninCsvField(row, ['Txhash']) || '').trim().toLowerCase();
+        const blockNumber = Math.round(parseRoninCsvNumber(getRoninCsvField(row, ['Blockno'])));
+        const unixTimestamp = parseRoninCsvNumber(getRoninCsvField(row, ['UnixTimestamp']));
+        const method = String(getRoninCsvField(row, ['Method']) || '').trim();
+        const tokenLabel = normalizeRoninCsvLabel(getRoninCsvField(row, ['Token / Collectibles']));
+        const key = getRoninCsvAssetKey(tokenLabel);
+        const defaults = getRoninCsvDefaultMapping(tokenLabel);
+        const mapping = settings.assetMappings?.[key] || defaults;
+        if (!settings.assetMappings?.[key]) discoveredMappings[key] = { ...defaults };
+
+        const valueIn = parseRoninCsvNumber(getRoninCsvField(row, ['Value in']));
+        const valueOut = parseRoninCsvNumber(getRoninCsvField(row, ['Value out']));
+        const value = valueIn - valueOut;
+        const feeRon = parseRoninCsvNumber(getRoninCsvField(row, ['TxnFee(RON)']));
+        const status = String(getRoninCsvField(row, ['Status']) || '').trim();
+        const existing = grouped.get(hash) || {
+            hash,
+            blockNumber,
+            deltasByKey: new Map(),
+            feeRon: 0,
+            from: normalizeRoninAddress(getRoninCsvField(row, ['From'])),
+            to: normalizeRoninAddress(getRoninCsvField(row, ['To'])),
+            date: unixTimestamp > 0 ? new Date(unixTimestamp * 1000).toISOString() : '',
+            category: 'unknown',
+            result: /^success$/i.test(status) ? 'success' : 'failed',
+            methods: new Set(),
+            sourceMode: 'csv',
+            csvRowCount: 0
+        };
+
+        existing.blockNumber = Math.max(existing.blockNumber || 0, blockNumber || 0);
+        if (!existing.date && unixTimestamp > 0) existing.date = new Date(unixTimestamp * 1000).toISOString();
+        existing.feeRon = Math.max(existing.feeRon || 0, feeRon || 0);
+        if (!/^success$/i.test(status)) existing.result = 'failed';
+        if (method) existing.methods.add(method);
+        existing.csvRowCount += 1;
+
+        if (Math.abs(value) > 0.00000001) {
+            const current = existing.deltasByKey.get(key) || {
+                key,
+                contract: '',
+                tokenId: String(mapping.tokenId || '').trim().toLowerCase(),
+                symbol: String(mapping.symbol || defaults.symbol || tokenLabel || 'TOKEN').trim().toUpperCase(),
+                label: String(mapping.label || defaults.label || tokenLabel || 'Token').trim(),
+                csvLabel: tokenLabel,
+                decimals: Math.max(0, Math.round(toRoninFiniteNumber(mapping.decimals, defaults.decimals || 18))),
+                from: normalizeRoninAddress(getRoninCsvField(row, ['From'])),
+                to: normalizeRoninAddress(getRoninCsvField(row, ['To'])),
+                value: 0
+            };
+            current.value += value;
+            existing.deltasByKey.set(key, current);
+        }
+        grouped.set(hash, existing);
+    });
+
+    const rows = Array.from(grouped.values()).map(row => {
+        const deltas = Array.from(row.deltasByKey.values())
+            .filter(delta => Math.abs(delta.value) > 0.00000001);
+        const normalizedRow = {
+            hash: row.hash,
+            blockNumber: row.blockNumber,
+            deltas,
+            feeRon: row.feeRon,
+            from: row.from,
+            to: row.to,
+            date: row.date,
+            category: 'unknown',
+            result: row.result,
+            method: Array.from(row.methods).join(', '),
+            sourceMode: 'csv',
+            csvRowCount: row.csvRowCount
+        };
+        normalizedRow.category = classifyRoninCsvCategory(normalizedRow, deltas);
+        normalizedRow.explanation = buildRoninActivityExplanation(normalizedRow);
+        return normalizedRow;
+    }).sort((a, b) => b.blockNumber - a.blockNumber || String(b.hash).localeCompare(String(a.hash)));
+
+    return {
+        rows,
+        discoveredMappings,
+        summary: {
+            rawRows: (csvRows || []).length,
+            uniqueRows: uniqueRows.size,
+            hashes: grouped.size,
+            duplicateRows: Math.max(0, (csvRows || []).length - uniqueRows.size),
+            firstBlock: rows.length ? Math.min(...rows.map(row => row.blockNumber || 0).filter(Boolean)) : 0,
+            lastBlock: rows.length ? Math.max(...rows.map(row => row.blockNumber || 0).filter(Boolean)) : 0,
+            csvAssets: Object.keys(discoveredMappings).length
+        }
+    };
+}
+
+function buildRoninStakingSummary(rows = []) {
+    const summary = {
+        delegatedRon: 0,
+        undelegatedRon: 0,
+        estimatedStakedRon: 0,
+        stakingFeesRon: 0,
+        rewardCount: 0,
+        stakeCount: 0,
+        unstakeCount: 0,
+        feeOnlyCount: 0,
+        rewardsBySymbol: new Map()
+    };
+
+    (rows || []).forEach(row => {
+        const category = String(row?.category || '').trim();
+        const isStakingRow = ['stake', 'unstake', 'reward', 'stake-fee', 'restake'].includes(category);
+        if (isStakingRow && Number(row?.feeRon || 0) > 0) {
+            summary.stakingFeesRon += Number(row.feeRon || 0);
+        }
+        if (category === 'stake') summary.stakeCount += 1;
+        if (category === 'unstake') summary.unstakeCount += 1;
+        if (category === 'stake-fee') summary.feeOnlyCount += 1;
+        if (category === 'reward') summary.rewardCount += 1;
+
+        (row?.deltas || []).forEach(delta => {
+            const value = Number(delta?.value || 0);
+            const key = String(delta?.key || '').toLowerCase();
+            const symbol = String(delta?.symbol || delta?.label || 'TOKEN').toUpperCase();
+            if (category === 'stake' && key === RONIN_NATIVE_ASSET_KEY && value < 0) {
+                summary.delegatedRon += Math.abs(value);
+            }
+            if (category === 'unstake' && key === RONIN_NATIVE_ASSET_KEY && value > 0) {
+                summary.undelegatedRon += value;
+            }
+            if (category === 'reward' && value > 0) {
+                summary.rewardsBySymbol.set(symbol, (summary.rewardsBySymbol.get(symbol) || 0) + value);
+            }
+        });
+    });
+
+    summary.estimatedStakedRon = Math.max(0, summary.delegatedRon - summary.undelegatedRon);
+    return summary;
 }
 
 function setRoninStatus(message, tone = 'neutral') {
@@ -548,6 +903,93 @@ function renderRoninTokenEditor(settings) {
     }).join('');
 }
 
+function renderRoninCsvSummary() {
+    const mount = document.getElementById('ronin-csv-summary');
+    if (!mount) return;
+    const summary = roninReconcileState.csvSummary;
+    if (!summary) {
+        mount.innerHTML = 'No Ronin CSV loaded yet.';
+        return;
+    }
+    mount.innerHTML = `
+        <div class="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+            <p class="font-bold text-slate-300">Loaded ${summary.hashes || 0} transaction hash${summary.hashes === 1 ? '' : 'es'} from CSV.</p>
+            <p class="mt-1 text-slate-500">
+                ${summary.uniqueRows || 0} unique row${summary.uniqueRows === 1 ? '' : 's'}${summary.duplicateRows ? `, ${summary.duplicateRows} duplicate row${summary.duplicateRows === 1 ? '' : 's'} ignored` : ''}.
+                ${summary.firstBlock && summary.lastBlock ? `Blocks ${summary.firstBlock} to ${summary.lastBlock}.` : ''}
+            </p>
+        </div>
+    `;
+}
+
+function renderRoninCsvTokenMappings(settings) {
+    const mount = document.getElementById('ronin-csv-token-mappings');
+    if (!mount) return;
+    const tokens = getRoninCsvTokenMappings(settings);
+    if (!tokens.length) {
+        mount.innerHTML = '';
+        return;
+    }
+    mount.innerHTML = `
+        <p class="text-[10px] font-bold uppercase text-slate-500">CSV Token Mappings</p>
+        ${tokens.map(token => {
+            const encodedKey = encodeInlineArg(token.key);
+            const missingClass = token.tokenId ? 'border-slate-800' : 'border-amber-800/70';
+            return `
+                <div class="rounded-xl border ${missingClass} bg-slate-900/60 p-2">
+                    <p class="text-[11px] font-bold text-slate-300 mb-2">${escapeHTML(token.csvLabel || token.label)}</p>
+                    <div class="grid grid-cols-3 gap-2">
+                        <input value="${escapeAttr(token.tokenId)}" onchange="updateRoninCsvTokenMapping('${encodedKey}', 'tokenId', this.value)"
+                            class="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none focus:border-emerald-500" placeholder="app token id">
+                        <input value="${escapeAttr(token.symbol)}" onchange="updateRoninCsvTokenMapping('${encodedKey}', 'symbol', this.value)"
+                            class="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none focus:border-emerald-500" placeholder="symbol">
+                        <input value="${escapeAttr(token.decimals)}" onchange="updateRoninCsvTokenMapping('${encodedKey}', 'decimals', this.value)"
+                            class="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-[11px] font-semibold text-slate-200 outline-none focus:border-emerald-500" placeholder="decimals">
+                    </div>
+                </div>
+            `;
+        }).join('')}
+    `;
+}
+
+function renderRoninStakingSummary() {
+    const mount = document.getElementById('ronin-staking-summary');
+    if (!mount) return;
+    const summary = roninReconcileState.stakingSummary;
+    if (!summary || (!summary.stakeCount && !summary.unstakeCount && !summary.rewardCount && !summary.feeOnlyCount)) {
+        mount.innerHTML = '';
+        return;
+    }
+    const rewardText = Array.from(summary.rewardsBySymbol || [])
+        .map(([symbol, amount]) => `${roninNumberToText(amount)} ${symbol}`)
+        .join(', ') || '--';
+    mount.innerHTML = `
+        <div class="rounded-2xl border border-sky-900/60 bg-sky-950/20 p-3">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-wide text-sky-300">Liquid vs Staked Estimate</p>
+                    <p class="text-[11px] text-slate-400 mt-1">Based on loaded Ronin CSV rows. Staked RON is still treated as owned; only network fees reduce holdings.</p>
+                </div>
+                <span class="rounded-full border border-sky-800 bg-sky-950/70 px-2 py-0.5 text-[10px] font-black text-sky-200">v1.1</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mt-3">
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-2">
+                    <p class="text-[10px] font-bold uppercase text-slate-500">Estimated Staked</p>
+                    <p class="text-sm font-black text-sky-200 mt-1">${roninNumberToText(summary.estimatedStakedRon)} RON</p>
+                </div>
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-2">
+                    <p class="text-[10px] font-bold uppercase text-slate-500">Staking Fees</p>
+                    <p class="text-sm font-black text-amber-300 mt-1">${roninNumberToText(summary.stakingFeesRon, 8)} RON</p>
+                </div>
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-2 col-span-2">
+                    <p class="text-[10px] font-bold uppercase text-slate-500">Rewards Found</p>
+                    <p class="text-sm font-black text-emerald-300 mt-1">${escapeHTML(rewardText)}</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 async function addRoninTokenMappingRow() {
     const settings = getRoninReconcileSettingsSafe();
     const id = `draft:${Date.now().toString(16)}`;
@@ -592,6 +1034,95 @@ async function removeRoninTokenMapping(keyEncoded) {
     await renderRoninReconcilePanel();
 }
 
+async function updateRoninCsvTokenMapping(keyEncoded, field, value) {
+    const key = decodeURIComponent(keyEncoded || '').toLowerCase();
+    if (!key.startsWith('csv:')) return;
+    const settings = getRoninReconcileSettingsSafe();
+    const current = { ...(settings.assetMappings?.[key] || {}) };
+    current[field] = String(value || '').trim();
+    if (field === 'tokenId') current.tokenId = current.tokenId.toLowerCase();
+    if (field === 'symbol') current.symbol = current.symbol.toUpperCase();
+    if (field === 'decimals') current.decimals = Math.max(0, Math.round(toRoninFiniteNumber(current.decimals, 18)));
+    const nextMappings = {
+        ...(settings.assetMappings || {}),
+        [key]: current
+    };
+    await persistRoninReconcileSettings({ assetMappings: nextMappings });
+    roninReconcileState = {
+        ...roninReconcileState,
+        rows: hydrateRoninRowsWithMappings(roninReconcileState.rows || [], getRoninReconcileSettingsSafe())
+    };
+    roninReconcileState.stakingSummary = buildRoninStakingSummary(roninReconcileState.rows);
+    await renderRoninReconcilePanel();
+}
+
+async function handleRoninCsvFileInput(fileList) {
+    const files = Array.from(fileList || []).filter(file => file);
+    if (!files.length) return;
+
+    try {
+        const allRows = [];
+        for (const file of files) {
+            const text = await file.text();
+            const parsed = parseRoninCsvText(text);
+            const required = ['Txhash', 'Blockno', 'UnixTimestamp', 'Token / Collectibles', 'Value in', 'Value out'];
+            const missing = required.filter(header => !parsed.headers.includes(header));
+            if (missing.length) {
+                throw new Error(`${file.name || 'CSV'} is missing Ronin columns: ${missing.join(', ')}`);
+            }
+            allRows.push(...parsed.rows);
+        }
+        if (!allRows.length) throw new Error('No Ronin CSV rows found.');
+
+        const settings = getRoninReconcileSettingsSafe();
+        const walletInput = document.getElementById('ronin-wallet-address');
+        const account = inferRoninCsvAccount(allRows, walletInput?.value || settings.walletAddress || '');
+        if (!isValidRoninAddress(account)) throw new Error('Could not infer a Ronin wallet address from the CSV files.');
+
+        const built = buildRoninCsvActivityRows(allRows, account, settings);
+        const nextMappings = {
+            ...(settings.assetMappings || {}),
+            ...built.discoveredMappings
+        };
+        await persistRoninReconcileSettings({
+            walletAddress: formatRoninAddress(account),
+            assetMappings: nextMappings,
+            lastRefreshAt: Date.now(),
+            lastBlockNumber: built.summary.lastBlock || settings.lastBlockNumber || 0
+        });
+        const nextSettings = getRoninReconcileSettingsSafe();
+        roninReconcileState = {
+            ...roninReconcileState,
+            account,
+            rows: hydrateRoninRowsWithMappings(built.rows, nextSettings),
+            loading: false,
+            error: '',
+            sourceMode: 'csv',
+            csvSummary: {
+                ...built.summary,
+                files: files.map(file => file.name || 'CSV')
+            },
+            fetchedAt: Date.now(),
+            fromBlock: built.summary.firstBlock || 0,
+            latestBlock: built.summary.lastBlock || 0
+        };
+        roninReconcileState.stakingSummary = buildRoninStakingSummary(roninReconcileState.rows);
+        await renderRoninReconcilePanel();
+        if (typeof showToast === 'function') {
+            showToast(`Loaded ${built.summary.hashes} Ronin CSV transaction${built.summary.hashes === 1 ? '' : 's'} for review`);
+        }
+    } catch (error) {
+        console.error('Ronin CSV import failed.', error);
+        roninReconcileState = {
+            ...roninReconcileState,
+            loading: false,
+            error: error?.message || 'Could not import Ronin CSV files.'
+        };
+        await renderRoninReconcilePanel();
+        if (typeof showToast === 'function') showToast(roninReconcileState.error);
+    }
+}
+
 async function getRoninImportedHashSet() {
     const imported = new Set();
     if (typeof getDecryptedCrypto !== 'function') return imported;
@@ -611,12 +1142,39 @@ function getRoninImportOptions(row) {
     const positive = (row?.deltas || []).filter(delta => delta.value > 0.00000001);
     const negative = (row?.deltas || []).filter(delta => delta.value < -0.00000001);
     const options = [];
-    if (positive.length && negative.length) options.push({ value: 'swap', label: 'Swap + fee' });
+    if (row?.category === 'stake' && negative.length && !positive.length) {
+        options.push({ value: 'stake', label: 'Stake / delegate' });
+        options.push({ value: 'transfer_out', label: 'Transfer out' });
+        return options;
+    }
+    if (row?.category === 'unstake' && positive.length && !negative.length) {
+        options.push({ value: 'unstake', label: 'Unstake / undelegate' });
+        options.push({ value: 'transfer_in', label: 'Transfer in' });
+        return options;
+    }
+    if (row?.category === 'reward' && positive.length && !negative.length) {
+        options.push({ value: 'staking_reward', label: 'Staking reward' });
+        options.push({ value: 'airdrop', label: 'Airdrop / reward' });
+        options.push({ value: 'transfer_in', label: 'Transfer in' });
+        return options;
+    }
+    if (row?.category === 'stake-fee') {
+        if (row?.feeRon > 0) options.push({ value: 'staking_fee', label: 'Staking fee only' });
+        return options;
+    }
+    if (row?.category === 'restake') {
+        options.push({ value: 'restake', label: 'Restake reward' });
+        if (row?.feeRon > 0) options.push({ value: 'staking_fee', label: 'Staking fee only' });
+        return options;
+    }
+    if (positive.length === 1 && negative.length === 1) options.push({ value: 'swap', label: 'Swap + fee' });
     if (positive.length && !negative.length) {
         options.push({ value: 'transfer_in', label: 'Transfer in' });
+        options.push({ value: 'buy', label: 'Buy' });
         options.push({ value: 'airdrop', label: 'Airdrop / reward' });
     }
     if (negative.length && !positive.length) options.push({ value: 'transfer_out', label: 'Transfer out' });
+    if (!positive.length && !negative.length && row?.feeRon > 0) options.push({ value: 'network_fee', label: 'Network fee only' });
     return options;
 }
 
@@ -625,6 +1183,12 @@ function getRoninImportOptionLabel(value) {
         swap: 'Swap + fee',
         transfer_in: 'Transfer in',
         transfer_out: 'Transfer out',
+        stake: 'Stake / delegate',
+        unstake: 'Unstake / undelegate',
+        staking_reward: 'Staking reward',
+        staking_fee: 'Staking fee',
+        restake: 'Restake reward',
+        buy: 'Buy',
         airdrop: 'Airdrop / reward',
         network_fee: 'RON network fee',
         swap_in: 'Swap in',
@@ -636,8 +1200,15 @@ function getRoninImportOptionLabel(value) {
 function getRoninImportImpactText(value) {
     if (value === 'swap') return 'Creates linked swap_out and swap_in entries from tracked ERC-20 deltas, plus a RON network_fee entry when this wallet paid gas.';
     if (value === 'transfer_in') return 'Creates balance-only transfer_in entries. Use this for movement from another wallet you own.';
+    if (value === 'buy') return 'Creates a normal buy entry with editable cost basis and the Ronin hash attached for audit/deduping.';
     if (value === 'transfer_out') return 'Creates transfer_out entries that reduce token balance without recording a sale or realized P/L.';
+    if (value === 'stake') return 'Creates balance-only staking outflow entries, separate from normal transfers or sales. The network fee is recorded separately.';
+    if (value === 'unstake') return 'Creates balance-only unstake inflow entries, separate from buys. The network fee is recorded separately.';
+    if (value === 'staking_reward') return 'Creates zero-cost staking reward entries. You can later decide whether to track taxable income separately.';
+    if (value === 'staking_fee') return 'Creates only the RON network fee for delegation/redelegation/staking maintenance.';
+    if (value === 'restake') return 'Records the reward movement as a balance-only staking flow plus the RON fee.';
     if (value === 'airdrop') return 'Creates zero-cost airdrop/reward entries.';
+    if (value === 'network_fee') return 'Creates a RON network_fee entry only. Use this for approvals, failed calls, staking maintenance, and other fee-only activity.';
     return 'Review before saving; imports are deduped by Ronin transaction hash.';
 }
 
@@ -659,9 +1230,9 @@ function buildRoninBasePayload(row, delta, type, amount, notes, extra = {}) {
         type,
         notes,
         exchange: 'ronin',
-        strategy: 'ledger-import',
+        strategy: row.sourceMode === 'csv' ? 'csv-import' : 'ledger-import',
         date: row.date || new Date().toISOString(),
-        source: 'ronin_ledger_import',
+        source: row.sourceMode === 'csv' ? 'ronin_csv_import' : 'ronin_ledger_import',
         nonTaxAdjustment: type !== 'swap_in' && type !== 'swap_out',
         ronin: {
             hash: row.hash,
@@ -670,7 +1241,9 @@ function buildRoninBasePayload(row, delta, type, amount, notes, extra = {}) {
             category: row.category,
             contract: delta.contract || '',
             importClassification: extra.importClassification || type,
-            feeRon: row.feeRon || 0
+            feeRon: row.feeRon || 0,
+            sourceMode: row.sourceMode || 'rpc',
+            method: row.method || ''
         },
         ...extra.fields
     };
@@ -689,7 +1262,39 @@ function buildRoninFeePayload(row, notes, importClassification) {
     });
 }
 
-function buildRoninImportPayloads(row, classification, notes) {
+function getRoninBuyReviewValues(row) {
+    const positive = (row?.deltas || []).filter(delta => delta.value > 0.00000001);
+    const amount = Math.max(0, Number(positive[0]?.value || 0));
+    const priceEl = document.getElementById('ronin-buy-price');
+    const totalEl = document.getElementById('ronin-buy-total');
+    const rawPriceText = String(priceEl?.value || '').trim();
+    const rawTotalText = String(totalEl?.value || '').trim();
+    const rawPrice = Number(rawPriceText || 0);
+    const rawTotal = Number(rawTotalText || 0);
+    const currency = ['PHP', 'USD', 'JPY'].includes(String(document.getElementById('ronin-buy-currency')?.value || '').trim().toUpperCase())
+        ? String(document.getElementById('ronin-buy-currency').value).trim().toUpperCase()
+        : 'PHP';
+    const totalEntered = Number.isFinite(rawTotal) && rawTotal > 0;
+    const priceEntered = Number.isFinite(rawPrice) && rawPrice > 0;
+    const originalTotal = totalEntered ? rawTotal : (priceEntered ? amount * rawPrice : 0);
+    const effectivePrice = amount > 0 && originalTotal > 0
+        ? originalTotal / amount
+        : (priceEntered ? rawPrice : 0);
+    const phpTotal = originalTotal > 0 ? convertToDisplayCurrency(originalTotal, currency, 'PHP') : 0;
+    const phpPrice = effectivePrice > 0 ? convertToDisplayCurrency(effectivePrice, currency, 'PHP') : 0;
+    return {
+        amount,
+        price: effectivePrice,
+        currency,
+        originalTotal,
+        phpPrice,
+        phpTotal,
+        priceEntered,
+        totalEntered
+    };
+}
+
+function buildRoninImportPayloads(row, classification, notes, options = {}) {
     const positive = (row?.deltas || []).filter(delta => delta.value > 0.00000001);
     const negative = (row?.deltas || []).filter(delta => delta.value < -0.00000001);
     const payloads = [];
@@ -709,16 +1314,157 @@ function buildRoninImportPayloads(row, classification, notes) {
         positive.forEach(delta => payloads.push(buildRoninBasePayload(row, delta, classification, Math.abs(delta.value), notes, {
             importClassification: classification
         })));
+    } else if (classification === 'stake') {
+        negative.forEach(delta => payloads.push(buildRoninBasePayload(row, delta, 'stake_out', Math.abs(delta.value), notes, {
+            importClassification: 'stake',
+            fields: { nonTaxAdjustment: true, stakingAction: 'delegate' }
+        })));
+    } else if (classification === 'unstake') {
+        positive.forEach(delta => payloads.push(buildRoninBasePayload(row, delta, 'stake_in', Math.abs(delta.value), notes, {
+            importClassification: 'unstake',
+            fields: { nonTaxAdjustment: true, stakingAction: 'undelegate' }
+        })));
+    } else if (classification === 'staking_reward') {
+        positive.forEach(delta => payloads.push(buildRoninBasePayload(row, delta, 'staking_reward', Math.abs(delta.value), notes, {
+            importClassification: 'staking_reward',
+            fields: { stakingAction: 'reward' }
+        })));
+    } else if (classification === 'restake') {
+        positive.forEach(delta => payloads.push(buildRoninBasePayload(row, delta, 'staking_reward', Math.abs(delta.value), notes, {
+            importClassification: 'restake',
+            fields: { nonTaxAdjustment: true, stakingAction: 'restake_reward' }
+        })));
+        negative.forEach(delta => payloads.push(buildRoninBasePayload(row, delta, 'stake_out', Math.abs(delta.value), notes, {
+            importClassification: 'restake',
+            fields: { nonTaxAdjustment: true, stakingAction: 'restake_out' }
+        })));
+    } else if (classification === 'buy') {
+        if (positive.length !== 1 || negative.length) throw new Error('Buy import needs one incoming token and no outgoing token.');
+        const buyValues = options.buy || {};
+        if (!(Number(buyValues.price) > 0) && !(Number(buyValues.originalTotal) > 0)) {
+            throw new Error('Enter a buy price or total before importing as a buy.');
+        }
+        const phpPrice = Number(buyValues.phpPrice || 0);
+        const phpTotal = Number(buyValues.phpTotal || 0);
+        if (!(phpPrice > 0) || !(phpTotal > 0)) {
+            throw new Error('Could not calculate PHP cost basis for this buy.');
+        }
+        payloads.push(buildRoninBasePayload(row, positive[0], 'buy', Math.abs(positive[0].value), notes, {
+            importClassification: 'buy',
+            fields: {
+                price: Number(buyValues.price || 0),
+                currency: String(buyValues.currency || 'PHP').trim().toUpperCase(),
+                phpPrice,
+                phpTotal,
+                total: phpTotal,
+                nonTaxAdjustment: false
+            }
+        }));
     } else if (classification === 'transfer_out') {
         negative.forEach(delta => payloads.push(buildRoninBasePayload(row, delta, 'transfer_out', Math.abs(delta.value), notes, {
             importClassification: 'transfer_out'
         })));
+    } else if (classification === 'network_fee') {
+        if (!(row.feeRon > 0)) throw new Error('This Ronin row has no network fee to import.');
+    } else if (classification === 'staking_fee') {
+        if (!(row.feeRon > 0)) throw new Error('This Ronin staking row has no network fee to import.');
     } else {
         throw new Error('Choose a supported Ronin import type.');
     }
 
     if (row.feeRon > 0) payloads.push(buildRoninFeePayload(row, notes, classification));
     return payloads;
+}
+
+function getRoninBulkDefaultClassification(row) {
+    if (!row || row.result !== 'success') return '';
+    if ((row.deltas || []).some(delta => Math.abs(delta.value) > 0.00000001 && !delta.tokenId)) return '';
+    if (row.category === 'receive') return '';
+    const options = getRoninImportOptions(row);
+    if (!options.length) return '';
+    const value = options[0].value;
+    if (value === 'buy' || value === 'transfer_in' || value === 'airdrop') return '';
+    return value;
+}
+
+function buildRoninBulkImportPlan(importedHashes = new Set()) {
+    const groups = [];
+    const skipped = {
+        imported: 0,
+        ambiguous: 0,
+        unmapped: 0,
+        failed: 0,
+        notImportable: 0
+    };
+
+    (roninReconcileState.rows || []).forEach(row => {
+        if (!row?.hash) return;
+        if (importedHashes.has(row.hash)) {
+            skipped.imported += 1;
+            return;
+        }
+        if (row.result !== 'success') {
+            skipped.failed += 1;
+            return;
+        }
+        if ((row.deltas || []).some(delta => Math.abs(delta.value) > 0.00000001 && !delta.tokenId)) {
+            skipped.unmapped += 1;
+            return;
+        }
+        const classification = getRoninBulkDefaultClassification(row);
+        if (!classification) {
+            if (row.category === 'receive') skipped.ambiguous += 1;
+            else skipped.notImportable += 1;
+            return;
+        }
+        const label = getRoninImportOptionLabel(classification);
+        const notes = `${label} bulk imported from Ronin transaction ${shortRoninText(row.hash, 10, 8)}.`;
+        try {
+            const payloads = buildRoninImportPayloads(row, classification, notes);
+            if (payloads.length) groups.push({ row, classification, payloads });
+            else skipped.notImportable += 1;
+        } catch (error) {
+            console.warn('Ronin bulk plan skipped row:', row.hash, error);
+            skipped.notImportable += 1;
+        }
+    });
+
+    const counts = groups.reduce((acc, group) => {
+        acc[group.classification] = (acc[group.classification] || 0) + 1;
+        return acc;
+    }, {});
+    const payloadCount = groups.reduce((sum, group) => sum + group.payloads.length, 0);
+    return { groups, counts, payloadCount, skipped };
+}
+
+async function persistRoninImportPayloadGroups(groups = []) {
+    if (!groups.length) throw new Error('No Ronin rows are ready to import.');
+
+    const db = await getDB();
+    db.crypto = Array.isArray(db.crypto) ? db.crypto : [];
+    const now = Date.now();
+    let created = 0;
+    for (const group of groups) {
+        const row = group.row || {};
+        for (let index = 0; index < (group.payloads || []).length; index += 1) {
+            const payload = group.payloads[index];
+            db.crypto.push({
+                id: `ronin_import_${String(row.hash || now).slice(0, 12)}_${index}_${Math.random().toString(36).slice(2, 7)}`,
+                data: await encryptData(payload),
+                createdAt: now + created,
+                lastModified: now + created,
+                deletedAt: null
+            });
+            created += 1;
+        }
+    }
+    if (typeof syncCryptoBuyExpensesInDB === 'function' && groups.some(group => (group.payloads || []).some(payload => payload.type === 'buy'))) {
+        await syncCryptoBuyExpensesInDB(db);
+    }
+    const saved = await saveDB(db);
+    rawCrypto = (saved.crypto || []).filter(c => !c.deletedAt);
+    if (typeof invalidateCryptoComputationCache === 'function') invalidateCryptoComputationCache();
+    return { saved, created };
 }
 
 function closeRoninImportReview() {
@@ -737,8 +1483,17 @@ function renderRoninImportModalDetails() {
     const notes = String(notesEl?.value || '').trim() || `${label} imported from Ronin transaction ${shortRoninText(row.hash, 10, 8)}.`;
     let payloads = [];
     let error = '';
+    const buyFieldsEl = document.getElementById('ronin-buy-fields');
+    const buyPreviewEl = document.getElementById('ronin-buy-total-preview');
+    const buyValues = classification === 'buy' ? getRoninBuyReviewValues(row) : null;
+    if (buyFieldsEl) buyFieldsEl.classList.toggle('hidden', classification !== 'buy');
+    if (buyPreviewEl) {
+        buyPreviewEl.innerText = buyValues
+            ? `Cost basis preview: ${formatCurrency(buyValues.originalTotal || 0, buyValues.currency)} total for ${roninNumberToText(buyValues.amount || 0)} token${buyValues.amount === 1 ? '' : 's'} = ${formatCurrency(buyValues.price || 0, buyValues.currency)}/token${buyValues.currency !== 'PHP' ? ` (≈ ${formatCurrency(buyValues.phpTotal || 0, 'PHP')} total)` : ''}.`
+            : '';
+    }
     try {
-        payloads = buildRoninImportPayloads(row, classification, notes);
+        payloads = buildRoninImportPayloads(row, classification, notes, { buy: buyValues });
     } catch (err) {
         error = err?.message || 'Could not build Ronin import preview.';
     }
@@ -760,12 +1515,13 @@ function renderRoninImportModalDetails() {
         previewEl.innerHTML = error
             ? `<div class="rounded-2xl border border-amber-900/60 bg-amber-950/30 p-4 text-sm text-amber-100">${escapeHTML(error)}</div>`
             : payloads.map(payload => {
-                const positive = ['swap_in', 'transfer_in', 'airdrop'].includes(payload.type);
+                const positive = ['swap_in', 'transfer_in', 'airdrop', 'buy'].includes(payload.type);
+                const displayType = payload.ronin?.importClassification || payload.type;
                 return `
                     <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 flex items-start justify-between gap-3">
                         <div>
-                            <p class="text-sm font-bold text-slate-200">${escapeHTML(getRoninImportOptionLabel(payload.type))}</p>
-                            <p class="text-[11px] text-slate-500 mt-1">${escapeHTML(payload.tokenId)} - ${escapeHTML(payload.symbol)}</p>
+                            <p class="text-sm font-bold text-slate-200">${escapeHTML(getRoninImportOptionLabel(displayType))}</p>
+                            <p class="text-[11px] text-slate-500 mt-1">${escapeHTML(payload.tokenId)} - ${escapeHTML(payload.symbol)}${payload.type === 'buy' ? ` - ${escapeHTML(formatCurrency(payload.price || 0, payload.currency || 'PHP'))}/token` : ''}</p>
                         </div>
                         <p class="text-sm font-black ${positive ? 'text-emerald-300' : 'text-rose-300'}">${positive ? '+' : '-'}${roninNumberToText(payload.amount)} ${escapeHTML(payload.symbol)}</p>
                     </div>
@@ -812,6 +1568,12 @@ async function openRoninImportReview(hashEncoded) {
     }
     const notesEl = document.getElementById('ronin-import-notes');
     if (notesEl) notesEl.value = '';
+    const buyPriceEl = document.getElementById('ronin-buy-price');
+    const buyTotalEl = document.getElementById('ronin-buy-total');
+    const buyCurrencyEl = document.getElementById('ronin-buy-currency');
+    if (buyPriceEl) buyPriceEl.value = '';
+    if (buyTotalEl) buyTotalEl.value = '';
+    if (buyCurrencyEl) buyCurrencyEl.value = 'PHP';
     document.getElementById('ronin-import-modal')?.classList.remove('hidden');
     renderRoninImportModalDetails();
 }
@@ -828,25 +1590,12 @@ async function saveRoninImport() {
         const label = getRoninImportOptionLabel(classification);
         const notes = String(document.getElementById('ronin-import-notes')?.value || '').trim() ||
             `${label} imported from Ronin transaction ${shortRoninText(row.hash, 10, 8)}.`;
-        const payloads = buildRoninImportPayloads(row, classification, notes);
+        const payloads = buildRoninImportPayloads(row, classification, notes, {
+            buy: classification === 'buy' ? getRoninBuyReviewValues(row) : null
+        });
         if (!payloads.length) throw new Error('No app entries would be created.');
 
-        const db = await getDB();
-        db.crypto = Array.isArray(db.crypto) ? db.crypto : [];
-        const now = Date.now();
-        for (let index = 0; index < payloads.length; index += 1) {
-            const payload = payloads[index];
-            db.crypto.push({
-                id: `ronin_import_${String(row.hash || now).slice(0, 12)}_${index}_${Math.random().toString(36).slice(2, 7)}`,
-                data: await encryptData(payload),
-                createdAt: now + index,
-                lastModified: now + index,
-                deletedAt: null
-            });
-        }
-        const saved = await saveDB(db);
-        rawCrypto = (saved.crypto || []).filter(c => !c.deletedAt);
-        if (typeof invalidateCryptoComputationCache === 'function') invalidateCryptoComputationCache();
+        await persistRoninImportPayloadGroups([{ row, classification, payloads }]);
         closeRoninImportReview();
         if (typeof showToast === 'function') showToast(`Imported ${payloads.length} Ronin app entr${payloads.length === 1 ? 'y' : 'ies'}`);
         if (typeof loadFromStorage === 'function') {
@@ -865,18 +1614,69 @@ async function saveRoninImport() {
     }
 }
 
+async function bulkImportRoninSafeDefaults() {
+    try {
+        const imported = await getRoninImportedHashSet();
+        const plan = buildRoninBulkImportPlan(imported);
+        if (!plan.groups.length) {
+            if (typeof showToast === 'function') showToast('No safe Ronin defaults are ready for bulk import');
+            return;
+        }
+        const countText = Object.entries(plan.counts)
+            .map(([type, count]) => `${count} ${getRoninImportOptionLabel(type)}`)
+            .join(', ');
+        const skippedBits = [];
+        if (plan.skipped.ambiguous) skippedBits.push(`${plan.skipped.ambiguous} ambiguous incoming row(s) skipped`);
+        if (plan.skipped.unmapped) skippedBits.push(`${plan.skipped.unmapped} unmapped row(s) skipped`);
+        if (plan.skipped.imported) skippedBits.push(`${plan.skipped.imported} already imported row(s) skipped`);
+        const ok = typeof window === 'undefined' || window.confirm(
+            `Import ${plan.groups.length} Ronin activity row(s) as safe defaults?\n\n${countText || 'Safe defaults'}\n${skippedBits.length ? `\n${skippedBits.join('\\n')}` : ''}\n\nThis will not import ambiguous incoming rows that might be buys.`
+        );
+        if (!ok) return;
+
+        const result = await persistRoninImportPayloadGroups(plan.groups);
+        if (typeof showToast === 'function') {
+            showToast(`Bulk imported ${result.created} Ronin app entr${result.created === 1 ? 'y' : 'ies'}`);
+        }
+        if (typeof loadFromStorage === 'function') {
+            await loadFromStorage();
+            if (typeof renderCryptoPortfolio === 'function' && !document.getElementById('crypto-portfolio-modal')?.classList.contains('hidden')) {
+                await renderCryptoPortfolio();
+            }
+        } else if (typeof renderCryptoPortfolio === 'function') {
+            await renderCryptoPortfolio();
+        }
+    } catch (error) {
+        console.error('Ronin bulk import failed.', error);
+        const message = error?.message || 'Could not bulk import Ronin activity.';
+        if (typeof showToast === 'function') showToast(message);
+        else alert(message);
+    }
+}
+
 async function renderRoninActivityList() {
     const list = document.getElementById('ronin-activity-list');
     const countEl = document.getElementById('ronin-activity-count');
+    const bulkBtn = document.getElementById('ronin-bulk-import-btn');
     if (!list) return;
     if (countEl) countEl.innerText = `${roninReconcileState.rows.length} row${roninReconcileState.rows.length === 1 ? '' : 's'}`;
     if (!roninReconcileState.rows.length) {
-        list.innerHTML = roninReconcileState.account
+        if (bulkBtn) bulkBtn.classList.add('hidden');
+        list.innerHTML = roninReconcileState.sourceMode === 'csv'
+            ? '<div class="text-sm text-slate-500 py-6 text-center">No importable Ronin CSV activity loaded yet.</div>'
+            : (roninReconcileState.account
             ? '<div class="text-sm text-slate-500 py-6 text-center">No tracked ERC-20 transfer activity found in this block window.</div>'
-            : '<div class="text-sm text-slate-500 py-6 text-center">No Ronin activity loaded yet.</div>';
+            : '<div class="text-sm text-slate-500 py-6 text-center">No Ronin activity loaded yet.</div>');
         return;
     }
     const imported = await getRoninImportedHashSet();
+    const bulkPlan = buildRoninBulkImportPlan(imported);
+    if (bulkBtn) {
+        bulkBtn.classList.toggle('hidden', !bulkPlan.groups.length);
+        bulkBtn.innerText = bulkPlan.groups.length
+            ? `Import ${bulkPlan.groups.length} Safe Default${bulkPlan.groups.length === 1 ? '' : 's'}`
+            : 'Import Safe Defaults';
+    }
     list.innerHTML = roninReconcileState.rows.map(row => {
         const alreadyImported = imported.has(row.hash);
         const importable = getRoninImportOptions(row).length > 0 && row.result === 'success';
@@ -926,10 +1726,16 @@ async function renderRoninReconcilePanel() {
     const settings = getRoninReconcileSettingsSafe();
     renderRoninControls(settings);
     renderRoninTokenEditor(settings);
+    renderRoninCsvSummary();
+    renderRoninCsvTokenMappings(settings);
+    renderRoninStakingSummary();
     if (roninReconcileState.loading) {
         setRoninStatus('Fetching Ronin balances and ERC-20 Transfer logs. This will not change saved crypto entries.');
     } else if (roninReconcileState.error) {
         setRoninStatus(roninReconcileState.error, 'error');
+    } else if (roninReconcileState.sourceMode === 'csv' && roninReconcileState.account) {
+        const summary = roninReconcileState.csvSummary || {};
+        setRoninStatus(`Loaded ${roninReconcileState.rows.length} Ronin CSV activity row${roninReconcileState.rows.length === 1 ? '' : 's'} for ${formatRoninAddress(roninReconcileState.account)}. ${summary.duplicateRows ? `${summary.duplicateRows} duplicate CSV row${summary.duplicateRows === 1 ? '' : 's'} ignored.` : 'Ready for review imports.'}`, 'success');
     } else if (roninReconcileState.account) {
         setRoninStatus(`Loaded ${roninReconcileState.rows.length} Ronin ERC-20 activity row${roninReconcileState.rows.length === 1 ? '' : 's'} for ${formatRoninAddress(roninReconcileState.account)} from block ${roninReconcileState.fromBlock || '--'} to ${roninReconcileState.latestBlock || '--'}.`, 'success');
     } else {
@@ -956,7 +1762,7 @@ async function refreshRoninReconciliation() {
         return;
     }
 
-    roninReconcileState = { ...roninReconcileState, account, endpoint, loading: true, error: '' };
+    roninReconcileState = { ...roninReconcileState, account, endpoint, loading: true, error: '', sourceMode: 'rpc', csvSummary: null };
     await persistRoninReconcileSettings({
         walletAddress: formatRoninAddress(account),
         endpoint,
@@ -987,7 +1793,10 @@ async function refreshRoninReconciliation() {
             error: '',
             fetchedAt,
             latestBlock,
-            fromBlock
+            fromBlock,
+            sourceMode: 'rpc',
+            csvSummary: null,
+            stakingSummary: null
         };
         await persistRoninReconcileSettings({
             walletAddress: formatRoninAddress(account),
