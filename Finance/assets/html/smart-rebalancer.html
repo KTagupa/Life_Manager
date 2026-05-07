@@ -1,0 +1,2375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Portfolio Rebalancer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #0a0e1a;
+      --bg-primary: #0f1525;
+      --bg-card: #151c30;
+      --bg-card-hover: #1a2340;
+      --bg-input: #0d1220;
+      --bg-input-focus: #111828;
+      --border: #1e2a45;
+      --border-focus: #3b82f6;
+      --border-hover: #2a3a5c;
+      --text-primary: #e8ecf4;
+      --text-secondary: #8b97b0;
+      --text-muted: #4f5d78;
+      --text-label: #6b7a95;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --accent-subtle: rgba(59, 130, 246, 0.1);
+      --accent-glow: rgba(59, 130, 246, 0.15);
+      --green: #10b981;
+      --green-bg: rgba(16, 185, 129, 0.1);
+      --green-border: rgba(16, 185, 129, 0.2);
+      --red: #ef4444;
+      --red-bg: rgba(239, 68, 68, 0.08);
+      --red-border: rgba(239, 68, 68, 0.15);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.1);
+      --amber-border: rgba(245, 158, 11, 0.2);
+      --purple: #8b5cf6;
+      --purple-bg: rgba(139, 92, 246, 0.1);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --radius-xs: 6px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.3);
+      --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout ── */
+    .app-container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px 20px 80px;
+    }
+
+    /* ── Header ── */
+    .app-header {
+      padding: 32px 0 28px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 32px;
+    }
+    .app-header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .app-header h1 .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .app-header p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-top: 6px;
+      font-weight: 400;
+    }
+
+    /* ── Section Cards ── */
+    .section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0;
+      margin-bottom: 16px;
+      overflow: hidden;
+      transition: border-color var(--transition);
+    }
+    .section:hover {
+      border-color: var(--border-hover);
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 22px;
+      cursor: pointer;
+      user-select: none;
+      transition: background var(--transition);
+    }
+    .section-header:hover {
+      background: var(--bg-card-hover);
+    }
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.2px;
+    }
+    .section-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-xs);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .section-icon.tokens { background: var(--accent-subtle); }
+    .section-icon.platform { background: var(--purple-bg); }
+    .section-icon.network { background: var(--amber-bg); }
+    .section-icon.rules { background: var(--green-bg); }
+    .section-icon.breakeven { background: var(--red-bg); }
+
+    .section-chevron {
+      color: var(--text-muted);
+      font-size: 12px;
+      transition: transform var(--transition);
+    }
+    .section.collapsed .section-chevron { transform: rotate(-90deg); }
+    .section.collapsed .section-body { display: none; }
+
+    .section-body {
+      padding: 0 22px 22px;
+      border-top: 1px solid var(--border);
+    }
+    .section-note {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.65;
+      padding: 14px 0 0;
+    }
+
+    /* ── Token Cards ── */
+    .token {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      margin-top: 14px;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .token:hover {
+      border-color: var(--border-hover);
+    }
+    .token:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .token-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .token-grid .field { display: flex; flex-direction: column; gap: 5px; }
+    .token-grid label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-label);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Form Inputs ── */
+    input[type=text], input[type=number], select {
+      width: 100%;
+      padding: 9px 12px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      outline: none;
+    }
+    input[type=text]:focus, input[type=number]:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    input[type=text]::placeholder, input[type=number]::placeholder {
+      color: var(--text-muted);
+    }
+    select {
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236b7a95' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+    }
+
+    /* ── Buttons ── */
+    button {
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all var(--transition);
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border-radius: var(--radius-xs);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-primary);
+      border-color: var(--border-hover);
+    }
+    .btn-danger-ghost {
+      background: transparent;
+      color: var(--red);
+      border: 1px solid var(--red-border);
+      font-size: 12px;
+      padding: 6px 10px;
+    }
+    .btn-danger-ghost:hover {
+      background: var(--red-bg);
+    }
+    .btn-add {
+      background: var(--accent-subtle);
+      color: var(--accent);
+      border: 1px dashed rgba(59, 130, 246, 0.3);
+      width: 100%;
+      justify-content: center;
+      margin-top: 12px;
+    }
+    .btn-add:hover {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+
+    .action-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+      margin-bottom: 4px;
+    }
+
+    /* ── Fee Rows ── */
+    .fee-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .fee-row .fee-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 140px; }
+    .fee-row .fee-field label { font-size: 11px; font-weight: 500; color: var(--text-label); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── Platform Fee Grid ── */
+    .platform-fee-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px 16px;
+      margin-top: 14px;
+      align-items: end;
+    }
+    .platform-fee-grid .fee-field { display: flex; flex-direction: column; gap: 5px; }
+    .platform-fee-grid .fee-field label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-label);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    #platform-fee-token-wrap { grid-column: 1 / -1; max-width: 280px; }
+
+    /* ── Results ── */
+    #results {
+      margin-top: 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .portfolio-value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .portfolio-value span {
+      font-size: 16px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    /* Currency toggle */
+    .currency-toggle {
+      display: inline-flex;
+      align-items: center;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      padding: 3px;
+      gap: 2px;
+    }
+    .currency-toggle button {
+      padding: 5px 14px;
+      margin: 0;
+      border: none;
+      border-radius: 5px;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: background var(--transition), color var(--transition);
+      font-family: 'Inter', sans-serif;
+    }
+    .currency-toggle button.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+    }
+
+    /* ── Tables ── */
+    table {
+      border-collapse: separate;
+      border-spacing: 0;
+      width: 100%;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 10px 14px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: var(--bg-input);
+      color: var(--text-label);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-align: right;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    td {
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+    }
+    td:first-child {
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    tr:hover td { background: rgba(255,255,255,0.015); }
+    .sell { color: var(--red) !important; }
+    .buy  { color: var(--green) !important; }
+
+    /* ── Section Headers in Results ── */
+    #results h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-label);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 24px 0 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    #results h3:first-of-type { margin-top: 0; }
+
+    /* ── Verdict Badges ── */
+    .verdict-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      font-family: 'Inter', sans-serif;
+    }
+    .verdict-good  { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+    .verdict-warn { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+    .verdict-bad  { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+    tr.row-warn td { background: rgba(245, 158, 11, 0.03); }
+    tr.row-bad  td { background: rgba(239, 68, 68, 0.03); }
+
+    /* ── Worth Summary ── */
+    .worth-summary {
+      font-size: 13px;
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      margin: 12px 0;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .worth-summary strong { color: var(--text-primary); }
+
+    /* ── Warnings ── */
+    .warn {
+      color: var(--amber);
+      font-weight: 600;
+      font-size: 13px;
+      padding: 10px 14px;
+      background: var(--amber-bg);
+      border: 1px solid var(--amber-border);
+      border-radius: var(--radius-sm);
+      margin: 8px 0;
+    }
+
+    /* ── Misc text styles ── */
+    .fee-note { font-size: 12px; color: var(--text-muted); line-height: 1.65; }
+
+    /* ── Breakeven output ── */
+    #mp-check-output {
+      margin-top: 14px;
+      padding: 14px 16px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    #mp-check-output strong { color: var(--text-primary); }
+    #mp-check-output ul { padding-left: 18px; margin: 6px 0; }
+    #mp-check-output li { margin: 3px 0; }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .app-container { padding: 12px 10px 60px; }
+      .app-header h1 { font-size: 20px; }
+      .token-grid { grid-template-columns: 1fr; }
+      .platform-fee-grid { grid-template-columns: 1fr; }
+      .results-header { flex-direction: column; align-items: flex-start; }
+      .portfolio-value { font-size: 22px; }
+      th, td { padding: 8px 8px; font-size: 12px; }
+      td:first-child, th:first-child { text-align: left; }
+      .action-bar { flex-direction: column; }
+      .action-bar .btn { width: 100%; justify-content: center; }
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-deep); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+    /* ── Select option (dark mode fix) ── */
+    select option { background: var(--bg-card); color: var(--text-primary); }
+
+    .aa-desc {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      line-height: 1.65;
+      min-height: 38px;
+    }
+    .aa-desc strong { color: var(--text-primary); }
+    .aa-preview-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; margin-top: 6px; }
+    .aa-preview-table th {
+      background: var(--bg-input);
+      color: var(--text-label);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 8px 12px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+    }
+    .aa-preview-table th:first-child { text-align: left; }
+    .aa-preview-table td {
+      padding: 8px 12px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .aa-preview-table td:first-child { text-align: left; font-family: 'Inter', sans-serif; font-weight: 500; color: var(--text-primary); }
+    .aa-preview-table tr:last-child td { border-bottom: none; }
+    .aa-warn { color: var(--amber); font-size: 12px; margin-top: 6px; }
+    .aa-status-loading { color: var(--accent); }
+    .aa-status-error { color: var(--red); }
+    .aa-status-ok { color: var(--green); }
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      width: 100%;
+      max-width: 420px;
+      animation: fadeIn 0.2s ease;
+    }
+    .modal-header {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: var(--radius-xs);
+    }
+    .modal-close:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+    .modal-body { padding: 18px 20px; }
+    .modal-footer {
+      padding: 12px 20px 18px;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .modal-input-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .modal-input-row label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-label);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .save-slots {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 280px;
+      overflow-y: auto;
+      margin-bottom: 4px;
+    }
+    .save-slot {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: border-color var(--transition), background var(--transition);
+    }
+    .save-slot:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
+    .save-slot.selected { border-color: var(--accent); background: var(--accent-subtle); }
+    .save-slot-name { font-size: 13px; font-weight: 500; color: var(--text-primary); flex: 1; }
+    .save-slot-meta { font-size: 11px; color: var(--text-muted); }
+    .save-slot-delete {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: var(--radius-xs);
+      font-size: 14px;
+      line-height: 1;
+    }
+    .save-slot-delete:hover { background: var(--red-bg); color: var(--red); }
+    .modal-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px 0; }
+    .modal-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 14px 0;
+    }
+    .modal-new-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- Header -->
+    <header class="app-header">
+      <h1>
+        <span class="logo-icon">&#9878;</span>
+        Smart Portfolio Rebalancer
+      </h1>
+      <p>Calculate optimal trades to rebalance your crypto portfolio with fee-aware analysis.</p>
+    </header>
+
+    <!-- Portfolio Tokens -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <div class="section-title">
+          <span class="section-icon tokens">&#9670;</span>
+          Portfolio Tokens
+        </div>
+        <span class="section-chevron">&#9660;</span>
+      </div>
+      <div class="section-body">
+        <div id="tokens"></div>
+        <button class="btn btn-add" onclick="addToken()">+ Add Token</button>
+      </div>
+    </div>
+
+    <!-- Platform Fees -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <div class="section-title">
+          <span class="section-icon platform">&#9733;</span>
+          Platform Fees (Trading App)
+        </div>
+        <span class="section-chevron">&#9660;</span>
+      </div>
+      <div class="section-body">
+        <p class="section-note">Transaction fee is a flat amount per swap. Service fee uses whichever is larger: the percentage of the trade value or the minimum — matching common broker rules.</p>
+        <div class="platform-fee-grid">
+          <div class="fee-field" style="grid-column: 1 / -1;">
+            <label for="platform-fee-mode">Flat fees entered in</label>
+            <select id="platform-fee-mode" onchange="syncPlatformFeeUI()">
+              <option value="php">PHP (&#8369;)</option>
+              <option value="usd">USD ($)</option>
+              <option value="token">Crypto token</option>
+            </select>
+          </div>
+          <div class="fee-field" id="platform-fee-token-wrap" style="display:none;">
+            <label for="platform-fee-token">Token (symbol or id)</label>
+            <input type="text" id="platform-fee-token" placeholder="USDT, BNB, ETH">
+          </div>
+          <div class="fee-field">
+            <label id="platform-txn-fee-label" for="platform-txn-fee-amount">Transaction fee (&#8369; per trade)</label>
+            <input type="number" id="platform-txn-fee-amount" step="any" min="0" value="" placeholder="0">
+          </div>
+          <div class="fee-field">
+            <label for="platform-service-pct">Service fee (% of trade)</label>
+            <input type="number" id="platform-service-pct" step="any" min="0" value="" placeholder="0">
+          </div>
+          <div class="fee-field">
+            <label id="platform-service-min-label" for="platform-service-min-amount">Service fee minimum (&#8369;)</label>
+            <input type="number" id="platform-service-min-amount" step="any" min="0" value="" placeholder="0">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Network / Gas Fees -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <div class="section-title">
+          <span class="section-icon network">&#9889;</span>
+          Network / Gas Fees (Per Trade)
+        </div>
+        <span class="section-chevron">&#9660;</span>
+      </div>
+      <div class="section-body">
+        <p class="section-note">Add one entry per fee type. Each fee is deducted per trade in that token (e.g. 0.0005 BNB gas per swap).</p>
+        <div id="fee-rows"></div>
+        <button class="btn btn-add" onclick="addFeeRow()" style="margin-top:10px;">+ Add Fee</button>
+      </div>
+    </div>
+
+    <!-- Worth-It Rules -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <div class="section-title">
+          <span class="section-icon rules">&#10003;</span>
+          Trade Worthiness Rules
+        </div>
+        <span class="section-chevron">&#9660;</span>
+      </div>
+      <div class="section-body">
+        <p class="section-note">Swaps where fees and slippage eat too much of the notional are flagged. Adjust the rules to match how picky you are.</p>
+        <div class="platform-fee-grid">
+          <div class="fee-field">
+            <label for="worth-max-friction-pct">Flag if friction &gt; (% of trade)</label>
+            <input type="number" id="worth-max-friction-pct" step="any" min="0" value="3" placeholder="3">
+          </div>
+          <div class="fee-field">
+            <label for="worth-min-trade-pct">Flag if trade &lt; (% of portfolio)</label>
+            <input type="number" id="worth-min-trade-pct" step="any" min="0" value="" placeholder="0 = off">
+          </div>
+        </div>
+        <p class="section-note" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">Friction = total fees + slippage estimate for that row. &quot;Borderline&quot; means approaching your max friction, or the swap is a very thin slice of the portfolio.</p>
+      </div>
+    </div>
+
+    <!-- Breakeven Price -->
+    <div class="section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <div class="section-title">
+          <span class="section-icon breakeven">&#8801;</span>
+          Breakeven Price (2 Tokens, One Price Locked)
+        </div>
+        <span class="section-chevron">&#9660;</span>
+      </div>
+      <div class="section-body">
+        <p class="section-note">If you only care about a pair and want to ask: &quot;With token A priced at this PHP level, where should token B trade so friction on the implied rebalance swap is at most my cap?&quot; This uses the same network + platform fee rules as above.</p>
+        <div class="platform-fee-grid">
+          <div class="fee-field">
+            <label for="mp-anchor-symbol">Anchor token (symbol)</label>
+            <input type="text" id="mp-anchor-symbol" placeholder="e.g. USDT">
+          </div>
+          <div class="fee-field">
+            <label for="mp-anchor-amount">Amount</label>
+            <input type="number" id="mp-anchor-amount" step="any" min="0" placeholder="0">
+          </div>
+          <div class="fee-field">
+            <label for="mp-anchor-target">Target %</label>
+            <input type="number" id="mp-anchor-target" step="any" min="0" max="100" placeholder="50">
+          </div>
+          <div class="fee-field">
+            <label for="mp-anchor-price-php">Anchor PHP price (fixed)</label>
+            <input type="number" id="mp-anchor-price-php" step="any" min="0" placeholder="58">
+          </div>
+          <div class="fee-field">
+            <label for="mp-var-symbol">Variable token (symbol)</label>
+            <input type="text" id="mp-var-symbol" placeholder="e.g. BTC">
+          </div>
+          <div class="fee-field">
+            <label for="mp-var-amount">Amount</label>
+            <input type="number" id="mp-var-amount" step="any" min="0" placeholder="0">
+          </div>
+          <div class="fee-field">
+            <label for="mp-var-target">Target %</label>
+            <input type="number" id="mp-var-target" step="any" min="0" max="100" placeholder="50">
+          </div>
+          <div class="fee-field">
+            <label for="mp-friction-cap">Friction cap % (optional)</label>
+            <input type="number" id="mp-friction-cap" step="any" min="0" value="" placeholder="use worth-it cap">
+          </div>
+        </div>
+        <button class="btn btn-ghost" onclick="runMeaningfulPriceCheck()" style="margin-top:14px;">Check breakeven PHP price</button>
+        <div id="mp-check-output"></div>
+      </div>
+    </div>
+
+    <!-- Auto-Allocate Targets -->
+    <div class="section collapsed" id="auto-allocate-section">
+      <div class="section-header" onclick="toggleSection(this)">
+        <div class="section-title">
+          <span class="section-icon" style="background:var(--purple-bg);">&#10024;</span>
+          Auto-Allocate Targets
+        </div>
+        <span class="section-chevron">&#9660;</span>
+      </div>
+      <div class="section-body">
+        <p class="section-note" style="padding-top:12px;">Fetches live data from CoinGecko using the token IDs already entered above, then computes suggested target % allocations. Results are written into the target fields — you can edit them freely before rebalancing.</p>
+
+        <div class="platform-fee-grid" style="margin-top:16px;">
+          <div class="fee-field" style="grid-column:1/-1;">
+            <label for="aa-strategy">Strategy</label>
+            <select id="aa-strategy" onchange="onStrategyChange()">
+              <option value="equal">Equal Weight</option>
+              <option value="mcap">Market-Cap Weight</option>
+              <option value="inv-mcap">Inverse Market-Cap Weight</option>
+              <option value="dip">Drift-Based Dip Buying</option>
+              <option value="vol-parity">Volatility Parity</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="aa-strategy-desc" class="aa-desc"></div>
+
+        <!-- Dip sensitivity slider -->
+        <div id="aa-dip-slider-wrap" style="display:none;margin-top:14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <label style="font-size:11px;font-weight:500;color:var(--text-label);text-transform:uppercase;letter-spacing:0.5px;">Tilt Strength</label>
+            <span id="aa-slider-label" style="font-size:12px;font-weight:600;color:var(--accent);">Balanced (0.5)</span>
+          </div>
+          <input type="range" id="aa-dip-strength" min="0" max="1" step="0.01" value="0.5" oninput="onStrengthChange()" style="width:100%;accent-color:var(--accent);cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px;">
+            <span>Mild</span><span>Balanced</span><span>Aggressive</span>
+          </div>
+        </div>
+
+        <button class="btn btn-ghost" id="aa-fetch-btn" onclick="runAutoAllocate()" style="margin-top:16px;">&#9889; Fetch &amp; Compute Targets</button>
+
+        <div id="aa-status" style="margin-top:10px;font-size:13px;color:var(--text-muted);display:none;"></div>
+        <div id="aa-preview" style="display:none;margin-top:14px;"></div>
+      </div>
+    </div>
+
+    <!-- Action Bar -->
+    <div class="action-bar">
+      <button class="btn btn-primary" onclick="calculate()">&#9654; Rebalance</button>
+      <button class="btn btn-ghost" onclick="savePortfolio()">Save</button>
+      <button class="btn btn-ghost" onclick="loadPortfolio()">Load</button>
+      <button class="btn btn-danger-ghost" onclick="clearPortfolio()">Clear</button>
+    </div>
+
+    <!-- Results -->
+    <div id="results"></div>
+  </div>
+
+  <!-- Save Modal -->
+  <div class="modal-backdrop" id="save-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">💾 Save Portfolio</span>
+        <button class="modal-close" onclick="closeModal('save-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="save-existing-section">
+          <p class="modal-new-label">Override an existing save:</p>
+          <div class="save-slots" id="save-slots-list"></div>
+          <hr class="modal-divider">
+        </div>
+        <p class="modal-new-label">Save as new entry:</p>
+        <div class="modal-input-row">
+          <label for="save-name-input">Name</label>
+          <input type="text" id="save-name-input" placeholder="e.g. My Main Portfolio" maxlength="60">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('save-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmSave()">Save New</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load Modal -->
+  <div class="modal-backdrop" id="load-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">📂 Load Portfolio</span>
+        <button class="modal-close" onclick="closeModal('load-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-new-label">Choose a saved portfolio:</p>
+        <div class="save-slots" id="load-slots-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('load-modal')">Cancel</button>
+        <button class="btn btn-primary" id="load-confirm-btn" onclick="confirmLoad()" disabled>Load Selected</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ── Section collapse toggle ── */
+    function toggleSection(headerEl) {
+      const section = headerEl.parentElement;
+      section.classList.toggle('collapsed');
+    }
+
+    let tokens = [];
+    let feeRows = [];
+    let coinList = null;
+    let lastResult = null;
+    let activeCurrency = 'PHP';
+
+    async function loadCoinList() {
+      if (coinList) return coinList;
+      const res = await fetch('https://api.coingecko.com/api/v3/coins/list');
+      coinList = await res.json();
+      return coinList;
+    }
+
+    async function resolveSymbol(input) {
+      input = input.toLowerCase().trim();
+      const list = await loadCoinList();
+
+      const idMatch = list.find(c => c.id.toLowerCase() === input);
+      if (idMatch) return idMatch.id;
+
+      const symbolMatches = list.filter(c => c.symbol.toLowerCase() === input);
+      if (symbolMatches.length === 1) return symbolMatches[0].id;
+      if (symbolMatches.length > 1) {
+        const preferred = symbolMatches.find(c => c.id.toLowerCase() === input || c.id.toLowerCase() === c.symbol.toLowerCase());
+        return preferred ? preferred.id : symbolMatches[0].id;
+      }
+      return input;
+    }
+
+    function addToken(data = {}) {
+      const id = tokens.length;
+      tokens.push({});
+      const div = document.createElement('div');
+      div.className = 'token';
+      div.innerHTML = `
+        <div class="token-grid">
+          <div class="field">
+            <label>Token</label>
+            <input type="text" id="id-${id}" value="${data.id || ''}" placeholder="BTC, XRP, ripple">
+          </div>
+          <div class="field">
+            <label>Amount Held</label>
+            <input type="number" id="amount-${id}" step="any" min="0" value="${data.amount || ''}" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Target %</label>
+            <input type="number" id="target-${id}" step="any" min="0" max="100" value="${data.target || ''}" placeholder="50">
+          </div>
+        </div>
+      `;
+      document.getElementById('tokens').appendChild(div);
+    }
+
+    function addFeeRow(data = {}) {
+      const id = feeRows.length;
+      feeRows.push({});
+      const div = document.createElement('div');
+      div.className = 'fee-row';
+      div.id = `fee-row-${id}`;
+      div.innerHTML = `
+        <div class="fee-field">
+          <label>Fee token</label>
+          <input type="text" id="fee-token-${id}" value="${data.token || ''}" placeholder="BNB, SOL, ETH">
+        </div>
+        <div class="fee-field">
+          <label>Amount per trade</label>
+          <input type="number" id="fee-amount-${id}" step="any" min="0" value="${data.amount || ''}" placeholder="0.0005">
+        </div>
+        <button class="btn btn-danger-ghost" onclick="removeFeeRow(${id})">Remove</button>
+      `;
+      document.getElementById('fee-rows').appendChild(div);
+    }
+
+    function removeFeeRow(id) {
+      const el = document.getElementById(`fee-row-${id}`);
+      if (el) el.remove();
+      feeRows[id] = null;
+    }
+
+    async function fetchPrices(ids) {
+      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=php,usd`;
+      const res = await fetch(url);
+      return await res.json();
+    }
+
+    function setCurrency(cur) {
+      activeCurrency = cur;
+      if (lastResult) renderResults(lastResult);
+    }
+
+    function fmt(phpValue, phpToUsd) {
+      if (activeCurrency === 'USD') return '$' + (phpValue * phpToUsd).toFixed(2);
+      return '\u20B1' + phpValue.toFixed(2);
+    }
+
+    function fmtPrice(phpPrice, phpToUsd) {
+      if (activeCurrency === 'USD') return '$' + (phpPrice * phpToUsd).toFixed(4);
+      return '\u20B1' + phpPrice.toFixed(4);
+    }
+
+    function syncPlatformFeeUI() {
+      const mode = document.getElementById('platform-fee-mode')?.value || 'php';
+      const wrap = document.getElementById('platform-fee-token-wrap');
+      const txnLbl = document.getElementById('platform-txn-fee-label');
+      const minLbl = document.getElementById('platform-service-min-label');
+      if (wrap) wrap.style.display = mode === 'token' ? 'block' : 'none';
+      if (txnLbl) {
+        txnLbl.textContent = mode === 'php' ? 'Transaction fee (\u20B1 per trade)'
+          : mode === 'usd' ? 'Transaction fee ($ per trade)'
+          : 'Transaction fee (per trade, in token units)';
+      }
+      if (minLbl) {
+        minLbl.textContent = mode === 'php' ? 'Service fee minimum (\u20B1)'
+          : mode === 'usd' ? 'Service fee minimum ($)'
+          : 'Service fee minimum (in token units)';
+      }
+    }
+
+    function platformFlatFeesToPhp(mode, phpToUsd, prices, feeResolved, rawTxn, rawMin) {
+      const txn = parseFloat(rawTxn);
+      const svcMin = parseFloat(rawMin);
+      let txnFeePhp = 0;
+      let serviceMinPhp = 0;
+      if (mode === 'php') {
+        txnFeePhp = !isNaN(txn) && txn > 0 ? txn : 0;
+        serviceMinPhp = !isNaN(svcMin) && svcMin > 0 ? svcMin : 0;
+      } else if (mode === 'usd') {
+        const usdToPhp = 1 / phpToUsd;
+        txnFeePhp = !isNaN(txn) && txn > 0 ? txn * usdToPhp : 0;
+        serviceMinPhp = !isNaN(svcMin) && svcMin > 0 ? svcMin * usdToPhp : 0;
+      } else if (mode === 'token') {
+        const px = feeResolved ? (prices[feeResolved]?.php || 0) : 0;
+        if (px <= 0) return { error: 'token_price' };
+        txnFeePhp = !isNaN(txn) && txn > 0 ? txn * px : 0;
+        serviceMinPhp = !isNaN(svcMin) && svcMin > 0 ? svcMin * px : 0;
+      }
+      return { txnFeePhp, serviceMinPhp };
+    }
+
+    function serviceFeeForTrade(tradeValuePhp, pf) {
+      const fromPct = tradeValuePhp * (pf.servicePct / 100);
+      const fee = Math.max(fromPct, pf.serviceMinPhp);
+      const usedMin = pf.serviceMinPhp > fromPct && pf.serviceMinPhp > 0;
+      return { feePhp: fee, fromPct, usedMin };
+    }
+
+    function readWorthItSettings() {
+      const maxF = parseFloat(document.getElementById('worth-max-friction-pct')?.value);
+      const minP = parseFloat(document.getElementById('worth-min-trade-pct')?.value);
+      return {
+        maxFrictionPct: !isNaN(maxF) && maxF > 0 ? maxF : 0,
+        minTradePctPortfolio: !isNaN(minP) && minP > 0 ? minP : 0
+      };
+    }
+
+    function assessTradeWorth(trade, totalValue, s) {
+      const tradeVal = trade.sellValue;
+      const netCash = tradeVal - trade.feePhp;
+      const frictionPhp = trade.feePhp + trade.slipCost;
+      const frictionPct = tradeVal > 0.00001 ? (frictionPhp / tradeVal) * 100 : 999;
+      const tradePctPort = totalValue > 0 ? (tradeVal / totalValue) * 100 : 0;
+      const maxF = s.maxFrictionPct;
+      const minP = s.minTradePctPortfolio;
+
+      if (netCash <= 0) {
+        return {
+          verdict: 'bad',
+          frictionPct,
+          tradePctPort,
+          label: 'Skip',
+          summary: 'Net after fees is not positive \u2014 this swap is not viable.'
+        };
+      }
+      if (maxF > 0 && frictionPct > maxF) {
+        return {
+          verdict: 'bad',
+          frictionPct,
+          tradePctPort,
+          label: 'Not recommended',
+          summary: `Friction (~${frictionPct.toFixed(2)}%) is above your ${maxF}% threshold.`
+        };
+      }
+      if (minP > 0 && tradePctPort < minP) {
+        return {
+          verdict: 'warn',
+          frictionPct,
+          tradePctPort,
+          label: 'Marginal',
+          summary: `Swap is only ${tradePctPort.toFixed(2)}% of the portfolio (below your ${minP}% floor).`
+        };
+      }
+      if (maxF > 0 && frictionPct > maxF * 0.65) {
+        return {
+          verdict: 'warn',
+          frictionPct,
+          tradePctPort,
+          label: 'Borderline',
+          summary: `Friction ~${frictionPct.toFixed(2)}% is a large share of this swap (under your ${maxF}% cap but close).`
+        };
+      }
+      return {
+        verdict: 'good',
+        frictionPct,
+        tradePctPort,
+        label: 'Looks fine',
+        summary: `Friction ~${frictionPct.toFixed(2)}% of notional \u2014 costs look modest vs this swap.`
+      };
+    }
+
+    const MP_SLIPPAGE = 0.002;
+
+    function clonePriceMap(prices) {
+      const o = {};
+      for (const k of Object.keys(prices)) {
+        const p = prices[k];
+        o[k] = { php: p?.php ?? 0, usd: p?.usd ?? 0 };
+      }
+      return o;
+    }
+
+    function twoAssetTradeValuePhp(qA, tA, pA, qB, tB, pB) {
+      const V = qA * pA + qB * pB;
+      if (V <= 1e-12) return { tradeValue: 0, ok: false, reason: 'Portfolio value is zero.' };
+      const valA = qA * pA;
+      const valB = qB * pB;
+      const targetValA = (tA / 100) * V;
+      const targetValB = (tB / 100) * V;
+      const diffA = valA - targetValA;
+      const diffB = valB - targetValB;
+      const tol = 0.01;
+      if (diffA > tol && diffB < -tol) {
+        const tradeValue = Math.min(diffA, Math.abs(diffB));
+        if (tradeValue <= tol) return { tradeValue: 0, ok: false, reason: 'Trade size is negligible at this price.' };
+        return { tradeValue, ok: true };
+      }
+      if (diffB > tol && diffA < -tol) {
+        const tradeValue = Math.min(diffB, Math.abs(diffA));
+        if (tradeValue <= tol) return { tradeValue: 0, ok: false, reason: 'Trade size is negligible at this price.' };
+        return { tradeValue, ok: true };
+      }
+      return { tradeValue: 0, ok: false, reason: 'With this anchor price and variable price, the pair is already within the rebalance tolerance (or targets do not imply a swap).' };
+    }
+
+    function frictionTwoAssetAtPB(pB, ctx) {
+      const pmap = clonePriceMap(ctx.priceMapBase);
+      if (!pmap[ctx.resB]) pmap[ctx.resB] = { php: 0, usd: 0 };
+      pmap[ctx.resB].php = pB;
+
+      const flatPhp = platformFlatFeesToPhp(
+        ctx.feeMode, ctx.phpToUsd, pmap, ctx.platformFeeResolved,
+        ctx.rawTxn, ctx.rawMin
+      );
+      if (flatPhp.error === 'token_price') {
+        return { ok: false, reason: 'Could not convert platform fees from token to PHP for this simulated price.' };
+      }
+
+      let totalTokenFeePhp = 0;
+      for (const f of ctx.feeInputs) {
+        totalTokenFeePhp += f.amountPerTrade * (pmap[f.resolved]?.php || 0);
+      }
+
+      const platformFees = {
+        txnFeePhp: flatPhp.txnFeePhp,
+        serviceMinPhp: flatPhp.serviceMinPhp,
+        servicePct: ctx.servicePct
+      };
+
+      const tv = twoAssetTradeValuePhp(ctx.qA, ctx.tA, ctx.pA, ctx.qB, ctx.tB, pB);
+      if (!tv.ok || tv.tradeValue <= 0) {
+        return { ok: false, frictionPct: 999, tradeValue: 0, feePhp: 0, netCash: 0, reason: tv.reason };
+      }
+
+      const tradeValue = tv.tradeValue;
+      const svc = serviceFeeForTrade(tradeValue, platformFees);
+      const feePhp = totalTokenFeePhp + platformFees.txnFeePhp + svc.feePhp;
+      const slipCost = tradeValue * MP_SLIPPAGE;
+      const frictionPct = (feePhp + slipCost) / tradeValue * 100;
+      const netCash = tradeValue - feePhp;
+      return { ok: true, frictionPct, tradeValue, feePhp, netCash, slipCost };
+    }
+
+    async function runMeaningfulPriceCheck() {
+      const out = document.getElementById('mp-check-output');
+      if (!out) return;
+      out.innerHTML = '<p style="color:var(--text-muted)">Fetching prices and scanning\u2026</p>';
+
+      const symA = document.getElementById('mp-anchor-symbol')?.value.trim() || '';
+      const symB = document.getElementById('mp-var-symbol')?.value.trim() || '';
+      const qA = parseFloat(document.getElementById('mp-anchor-amount')?.value);
+      const tA = parseFloat(document.getElementById('mp-anchor-target')?.value);
+      const pA = parseFloat(document.getElementById('mp-anchor-price-php')?.value);
+      const qB = parseFloat(document.getElementById('mp-var-amount')?.value);
+      const tB = parseFloat(document.getElementById('mp-var-target')?.value);
+      const capField = parseFloat(document.getElementById('mp-friction-cap')?.value);
+      const wi = readWorthItSettings();
+      const maxFriction = (!isNaN(capField) && capField > 0) ? capField : wi.maxFrictionPct;
+
+      if (!symA || !symB) {
+        out.innerHTML = '<p class="warn">Enter both token symbols.</p>';
+        return;
+      }
+      if (symA.toLowerCase() === symB.toLowerCase()) {
+        out.innerHTML = '<p class="warn">Anchor and variable token must be different.</p>';
+        return;
+      }
+      if (isNaN(qA) || isNaN(qB) || isNaN(tA) || isNaN(tB) || isNaN(pA) || pA <= 0) {
+        out.innerHTML = '<p class="warn">Fill in amounts, targets, and a positive anchor PHP price.</p>';
+        return;
+      }
+      if (maxFriction <= 0) {
+        out.innerHTML = '<p class="warn">Set a friction cap (&gt; 0): either the optional field here or &quot;Flag if friction&quot; under worth-it rules.</p>';
+        return;
+      }
+      if (Math.abs(tA + tB - 100) > 0.05) {
+        out.innerHTML = '<p class="warn">Targets should sum to 100% (this tool models only two assets).</p>';
+        return;
+      }
+
+      const feeMode = document.getElementById('platform-fee-mode')?.value || 'php';
+      const feeTokenInput = document.getElementById('platform-fee-token')?.value?.trim() || '';
+      let platformFeeResolved = null;
+      if (feeMode === 'token') {
+        if (!feeTokenInput) {
+          out.innerHTML = '<p class="warn">Platform fee mode is token \u2014 set the fee token above, or switch fee currency to PHP/USD for this check.</p>';
+          return;
+        }
+        platformFeeResolved = await resolveSymbol(feeTokenInput);
+      }
+
+      let resA, resB;
+      try {
+        resA = await resolveSymbol(symA);
+        resB = await resolveSymbol(symB);
+      } catch (e) {
+        out.innerHTML = '<p class="warn">Could not resolve a symbol. Check spelling.</p>';
+        return;
+      }
+      if (resA === resB) {
+        out.innerHTML = '<p class="warn">Both symbols resolved to the same asset \u2014 use distinct tickers.</p>';
+        return;
+      }
+
+      let feeInputs = [];
+      let resolvedIds = [resA, resB];
+      for (let i = 0; i < feeRows.length; i++) {
+        if (feeRows[i] === null) continue;
+        const tokenEl = document.getElementById(`fee-token-${i}`);
+        const amountEl = document.getElementById(`fee-amount-${i}`);
+        if (!tokenEl || !tokenEl.value.trim()) continue;
+        const amt = parseFloat(amountEl?.value);
+        if (isNaN(amt) || amt <= 0) continue;
+        const resolved = await resolveSymbol(tokenEl.value);
+        feeInputs.push({ resolved, amountPerTrade: amt });
+        if (!resolvedIds.includes(resolved)) resolvedIds.push(resolved);
+      }
+      if (feeMode === 'token' && platformFeeResolved && !resolvedIds.includes(platformFeeResolved)) {
+        resolvedIds.push(platformFeeResolved);
+      }
+
+      let prices;
+      try {
+        prices = await fetchPrices([...new Set(resolvedIds)]);
+      } catch (e) {
+        out.innerHTML = '<p class="warn">Failed to fetch prices.</p>';
+        return;
+      }
+
+      let phpToUsd = null;
+      for (const id of resolvedIds) {
+        if (prices[id]?.php && prices[id]?.usd) {
+          phpToUsd = prices[id].usd / prices[id].php;
+          break;
+        }
+      }
+      if (!phpToUsd) phpToUsd = 1 / 56;
+
+      const rawTxn = document.getElementById('platform-txn-fee-amount')?.value;
+      const rawMin = document.getElementById('platform-service-min-amount')?.value;
+      const svcPctRaw = parseFloat(document.getElementById('platform-service-pct')?.value);
+      const servicePct = !isNaN(svcPctRaw) && svcPctRaw > 0 ? svcPctRaw : 0;
+
+      const ctx = {
+        qA, tA, pA, qB, tB,
+        resB,
+        priceMapBase: prices,
+        feeInputs,
+        feeMode,
+        platformFeeResolved,
+        phpToUsd,
+        rawTxn,
+        rawMin,
+        servicePct
+      };
+
+      const pMarket = prices[resB]?.php || 0;
+      if (pMarket <= 0) {
+        out.innerHTML = '<p class="warn">No PHP reference price for the variable token from CoinGecko \u2014 cannot anchor the scan.</p>';
+        return;
+      }
+
+      const steps = 900;
+      const logMin = Math.log10(pMarket) - 4;
+      const logMax = Math.log10(pMarket) + 4;
+      const samples = [];
+      for (let i = 0; i < steps; i++) {
+        const t = i / (steps - 1);
+        const logP = logMin + t * (logMax - logMin);
+        const pB = Math.pow(10, logP);
+        const r = frictionTwoAssetAtPB(pB, ctx);
+        const good = r.ok && r.netCash > 0 && r.frictionPct <= maxFriction;
+        samples.push({ pB, good, r });
+      }
+
+      const intervals = [];
+      let runStart = null;
+      for (let i = 0; i < samples.length; i++) {
+        if (samples[i].good && runStart === null) runStart = i;
+        if (!samples[i].good && runStart !== null) {
+          intervals.push({ lo: samples[runStart].pB, hi: samples[i - 1].pB });
+          runStart = null;
+        }
+      }
+      if (runStart !== null) {
+        intervals.push({ lo: samples[runStart].pB, hi: samples[steps - 1].pB });
+      }
+
+      const atMarket = frictionTwoAssetAtPB(pMarket, ctx);
+      const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      const cl = activeCurrency;
+
+      let html = `<p><strong>${symB.toUpperCase()}</strong> vs fixed <strong>${symA.toUpperCase()}</strong> at <strong>${fmtPrice(pA, phpToUsd)}</strong> per unit &middot; friction cap <strong>${maxFriction}%</strong> (fees + ${(MP_SLIPPAGE * 100).toFixed(2)}% slippage est., ${cl})</p>`;
+
+      if (!atMarket.ok) {
+        html += `<p style="color:var(--text-muted)">${esc(atMarket.reason || 'At market price, no rebalance trade is implied.')}</p>`;
+      } else {
+        html += `<p>At CoinGecko\u2019s current price for <strong>${symB.toUpperCase()}</strong> (\u2248 <strong>${fmtPrice(pMarket, phpToUsd)}</strong> / unit): friction \u2248 <strong>${atMarket.frictionPct.toFixed(2)}%</strong>, implied swap notional \u2248 <strong>${fmt(atMarket.tradeValue, phpToUsd)}</strong>.</p>`;
+      }
+
+      if (intervals.length === 0) {
+        html += `<p class="warn">No price in the scanned band (four orders of magnitude around market) keeps friction at or below ${maxFriction}% with a positive net after fees. Try a higher cap, lower fixed fees, or different holdings.</p>`;
+      } else {
+        html += `<p><strong>Prices for ${symB.toUpperCase()} where this slice is &quot;meaningful&quot;</strong> (friction &le; ${maxFriction}% and net after fees &gt; 0), coarse scan (${cl} / unit):</p><ul>`;
+        intervals.forEach((iv) => {
+          html += `<li>\u2248 <strong>${fmtPrice(iv.lo, phpToUsd)}</strong> to <strong>${fmtPrice(iv.hi, phpToUsd)}</strong></li>`;
+        });
+        html += `</ul><p style="font-size:11px;color:var(--text-muted)">Bands are approximate (grid search). If fees depend on the variable token\u2019s price, the tool already re-values those fees each step.</p>`;
+      }
+
+      html += `<p style="font-size:11px;color:var(--text-muted);margin-top:8px;">This ignores multi-hop routes and only models the same single-swap friction logic as the main rebalancer. Not trading advice.</p>`;
+      out.innerHTML = html;
+    }
+
+    async function calculate() {
+      const resultsEl = document.getElementById('results');
+      resultsEl.innerHTML = '<p style="color:var(--text-muted);padding:20px 0;">Fetching prices\u2026</p>';
+
+      // --- Collect portfolio inputs ---
+      let resolvedIds = [];
+      let rawInputs = [];
+      for (let i = 0; i < tokens.length; i++) {
+        const inputEl = document.getElementById(`id-${i}`);
+        if (!inputEl || !inputEl.value.trim()) continue;
+        const resolved = await resolveSymbol(inputEl.value);
+        resolvedIds.push(resolved);
+        rawInputs.push({ index: i, input: inputEl.value, resolved });
+      }
+
+      if (resolvedIds.length === 0) {
+        resultsEl.innerHTML = '<p style="color:var(--text-muted)">No tokens entered.</p>';
+        return;
+      }
+
+      const feeMode = document.getElementById('platform-fee-mode')?.value || 'php';
+      const feeTokenInput = document.getElementById('platform-fee-token')?.value?.trim() || '';
+      let platformFeeResolved = null;
+      if (feeMode === 'token') {
+        if (!feeTokenInput) {
+          resultsEl.innerHTML = '<p class="warn">Fee mode is &quot;Crypto token&quot; \u2014 enter the token used for transaction fee and minimum (e.g. USDT, BNB).</p>';
+          return;
+        }
+        platformFeeResolved = await resolveSymbol(feeTokenInput);
+        if (!resolvedIds.includes(platformFeeResolved)) resolvedIds.push(platformFeeResolved);
+      }
+
+      // --- Collect fee inputs ---
+      let feeInputs = [];
+      for (let i = 0; i < feeRows.length; i++) {
+        if (feeRows[i] === null) continue;
+        const tokenEl = document.getElementById(`fee-token-${i}`);
+        const amountEl = document.getElementById(`fee-amount-${i}`);
+        if (!tokenEl || !tokenEl.value.trim()) continue;
+        const amt = parseFloat(amountEl?.value);
+        if (isNaN(amt) || amt <= 0) continue;
+        const resolved = await resolveSymbol(tokenEl.value);
+        feeInputs.push({ label: tokenEl.value.toUpperCase(), resolved, amountPerTrade: amt });
+        if (!resolvedIds.includes(resolved)) resolvedIds.push(resolved);
+      }
+
+      let prices;
+      try {
+        prices = await fetchPrices([...new Set(resolvedIds)]);
+      } catch(e) {
+        resultsEl.innerHTML = '<p class="warn">Failed to fetch prices. Check connection or token IDs.</p>';
+        return;
+      }
+
+      // PHP\u2192USD rate
+      let phpToUsd = null;
+      for (const id of resolvedIds) {
+        if (prices[id]?.php && prices[id]?.usd) {
+          phpToUsd = prices[id].usd / prices[id].php;
+          break;
+        }
+      }
+      if (!phpToUsd) phpToUsd = 1 / 56;
+
+      // --- Build portfolio ---
+      let portfolio = [];
+      let totalValue = 0;
+      let totalTarget = 0;
+
+      rawInputs.forEach(({ index, input, resolved }) => {
+        const amount = parseFloat(document.getElementById(`amount-${index}`).value);
+        const target = parseFloat(document.getElementById(`target-${index}`).value);
+        if (isNaN(amount) || isNaN(target)) return;
+
+        const pricePhp = prices[resolved]?.php || 0;
+        const value = amount * pricePhp;
+        totalValue += value;
+        totalTarget += target;
+        portfolio.push({ id: resolved, label: input.toUpperCase(), amount, target, pricePhp, value });
+      });
+
+      // --- Resolve fee prices ---
+      let feeBreakdown = feeInputs.map(f => {
+        const pricePhp = prices[f.resolved]?.php || 0;
+        return {
+          label: f.label,
+          amountPerTrade: f.amountPerTrade,
+          pricePhp,
+          valuePhpPerTrade: f.amountPerTrade * pricePhp
+        };
+      });
+      const totalFeePhpPerTrade = feeBreakdown.reduce((s, f) => s + f.valuePhpPerTrade, 0);
+
+      const rawTxn = document.getElementById('platform-txn-fee-amount')?.value;
+      const rawMin = document.getElementById('platform-service-min-amount')?.value;
+      const svcPctRaw = parseFloat(document.getElementById('platform-service-pct')?.value);
+      const servicePct = !isNaN(svcPctRaw) && svcPctRaw > 0 ? svcPctRaw : 0;
+
+      const flatPhp = platformFlatFeesToPhp(feeMode, phpToUsd, prices, platformFeeResolved, rawTxn, rawMin);
+      if (flatPhp.error === 'token_price') {
+        resultsEl.innerHTML = `<p class="warn">Could not price the fee token &quot;${feeTokenInput}&quot; in PHP. Check the symbol or try PHP/USD for fees.</p>`;
+        return;
+      }
+
+      const platformFees = {
+        txnFeePhp: flatPhp.txnFeePhp,
+        serviceMinPhp: flatPhp.serviceMinPhp,
+        servicePct,
+        mode: feeMode,
+        feeTokenLabel: feeMode === 'token' ? feeTokenInput.toUpperCase() : '',
+        feeTokenResolved: feeMode === 'token' ? platformFeeResolved : null
+      };
+
+      // --- Excess / deficit ---
+      const slippageRate = 0.002;
+      let excess = [];
+      let deficit = [];
+
+      portfolio.forEach(asset => {
+        const targetValue = (asset.target / 100) * totalValue;
+        const diff = asset.value - targetValue;
+        if (diff > 0.01)       excess.push({ ...asset, diff });
+        else if (diff < -0.01) deficit.push({ ...asset, diff: Math.abs(diff) });
+      });
+
+      // --- Pairwise trade matching ---
+      const worthItSettings = readWorthItSettings();
+      let trades = [];
+      excess.forEach(sell => {
+        deficit.forEach(buy => {
+          if (sell.diff <= 0.01 || buy.diff <= 0.01) return;
+          const tradeValue = Math.min(sell.diff, buy.diff);
+          const effectiveBuyPrice  = buy.pricePhp  * (1 + slippageRate);
+          const effectiveSellPrice = sell.pricePhp * (1 - slippageRate);
+          const sellTokens = tradeValue / effectiveSellPrice;
+          const svc = serviceFeeForTrade(tradeValue, platformFees);
+          const feePhp = totalFeePhpPerTrade + platformFees.txnFeePhp + svc.feePhp;
+          const netCash = tradeValue - feePhp;
+          const buyTokens = Math.max(0, netCash) / effectiveBuyPrice;
+          const slipCost = tradeValue * slippageRate;
+
+          const row = {
+            sellLabel: sell.label, sellTokens, sellValue: tradeValue,
+            buyLabel: buy.label, buyTokens,
+            feePhp,
+            tokenFeePhp: totalFeePhpPerTrade,
+            txnFeePhp: platformFees.txnFeePhp,
+            serviceFeePhp: svc.feePhp,
+            serviceFromPctPhp: svc.fromPct,
+            serviceUsedMin: svc.usedMin,
+            slipCost,
+            feeBreakdown
+          };
+          row.worth = assessTradeWorth(row, totalValue, worthItSettings);
+          trades.push(row);
+
+          sell.diff -= tradeValue;
+          buy.diff  -= tradeValue;
+        });
+      });
+
+      // --- Post-trade values ---
+      let updatedValues = {};
+      portfolio.forEach(a => { updatedValues[a.label] = a.value; });
+      trades.forEach(t => {
+        updatedValues[t.sellLabel] -= t.sellValue;
+        updatedValues[t.buyLabel]  += Math.max(0, t.sellValue - t.feePhp);
+      });
+      const totalAfter = Object.values(updatedValues).reduce((a, b) => a + b, 0);
+
+      lastResult = {
+        portfolio, totalValue, totalTarget, trades, updatedValues, totalAfter, phpToUsd,
+        feeBreakdown, totalFeePhpPerTrade, platformFees, worthItSettings
+      };
+      renderResults(lastResult);
+    }
+
+    function renderResults(data) {
+      const {
+        portfolio, totalValue, totalTarget, trades, updatedValues, totalAfter, phpToUsd,
+        feeBreakdown, totalFeePhpPerTrade, platformFees, worthItSettings
+      } = data;
+      const resultsEl = document.getElementById('results');
+      const cl = activeCurrency;
+
+      let output = '';
+
+      // Results header with portfolio value + currency toggle
+      output += `
+        <div class="results-header">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-label);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Total Portfolio Value</div>
+            <div class="portfolio-value">${fmt(totalValue, phpToUsd)}</div>
+          </div>
+          <div class="currency-toggle">
+            <button onclick="setCurrency('PHP')" class="${cl === 'PHP' ? 'active' : ''}">\u20B1 PHP</button>
+            <button onclick="setCurrency('USD')" class="${cl === 'USD' ? 'active' : ''}">$ USD</button>
+          </div>
+        </div>`;
+
+      if (Math.abs(totalTarget - 100) > 0.5) {
+        output += `<p class="warn">Target allocations sum to ${totalTarget.toFixed(2)}% (should be 100%).</p>`;
+      }
+
+      // Fee summary
+      const pf = platformFees || { txnFeePhp: 0, servicePct: 0, serviceMinPhp: 0, mode: 'php' };
+      const hasPlatform = pf.txnFeePhp > 0 || pf.servicePct > 0 || pf.serviceMinPhp > 0;
+      const denomHint = pf.mode === 'usd' ? ' (entered in USD)'
+        : (pf.mode === 'token' && pf.feeTokenLabel ? ` (entered in ${pf.feeTokenLabel})` : '');
+      const hasTokenFees = feeBreakdown.length > 0;
+
+      let feeSummaryLines = [];
+      if (hasTokenFees) {
+        const feeLines = feeBreakdown.map(f =>
+          `${f.amountPerTrade} ${f.label} (\u2248 ${fmt(f.valuePhpPerTrade, phpToUsd)})`
+        ).join(' + ');
+        feeSummaryLines.push(`Network: ${feeLines} = ${fmt(totalFeePhpPerTrade, phpToUsd)}/trade`);
+      }
+      if (hasPlatform) {
+        feeSummaryLines.push(`Platform${denomHint}: txn ${fmt(pf.txnFeePhp, phpToUsd)}/trade; service ${pf.servicePct}% (min ${fmt(pf.serviceMinPhp, phpToUsd)})`);
+      }
+      if (!hasTokenFees && !hasPlatform) {
+        feeSummaryLines.push('No fees configured \u2014 slippage only.');
+      } else if (hasTokenFees && hasPlatform) {
+        feeSummaryLines.push('Each row total includes network + platform fees.');
+      }
+      if (feeSummaryLines.length) {
+        output += `<div style="font-size:12px;color:var(--text-muted);padding:10px 14px;background:var(--bg-input);border-radius:var(--radius-xs);margin-bottom:4px;line-height:1.7;">${feeSummaryLines.join('<br>')}</div>`;
+      }
+
+      // Current allocation
+      output += `<h3>Current Allocation</h3>`;
+      output += `<table>
+        <tr><th>Token</th><th>Amount</th><th>Price (${cl})</th><th>Value (${cl})</th><th>Current %</th><th>Target %</th><th>Diff %</th></tr>`;
+      portfolio.forEach(asset => {
+        const currentPct = totalValue > 0 ? (asset.value / totalValue) * 100 : 0;
+        const diffPct = currentPct - asset.target;
+        const diffColor = diffPct > 0 ? 'var(--red)' : 'var(--green)';
+        output += `<tr>
+          <td>${asset.label}</td>
+          <td>${asset.amount}</td>
+          <td>${fmtPrice(asset.pricePhp, phpToUsd)}</td>
+          <td>${fmt(asset.value, phpToUsd)}</td>
+          <td>${currentPct.toFixed(2)}%</td>
+          <td>${asset.target.toFixed(2)}%</td>
+          <td style="color:${diffColor}">${diffPct > 0 ? '+' : ''}${diffPct.toFixed(2)}%</td>
+        </tr>`;
+      });
+      output += '</table>';
+
+      // Recommended trades
+      if (trades.length > 0) {
+        const wi = worthItSettings || { maxFrictionPct: 0, minTradePctPortfolio: 0 };
+        const counts = { good: 0, warn: 0, bad: 0 };
+        trades.forEach(t => {
+          const v = t.worth?.verdict || 'good';
+          if (counts[v] !== undefined) counts[v]++;
+        });
+        const parts = [];
+        if (counts.good) parts.push(`${counts.good} swap${counts.good === 1 ? '' : 's'} look reasonable`);
+        if (counts.warn) parts.push(`${counts.warn} marginal / borderline`);
+        if (counts.bad) parts.push(`${counts.bad} not recommended`);
+        let ruleLine = '';
+        if (wi.maxFrictionPct > 0) {
+          ruleLine = `Friction cap: ${wi.maxFrictionPct}% of trade notional (fees + slippage est.).`;
+        } else {
+          ruleLine = 'No friction cap \u2014 only \u201Cnet after fees\u201D and optional tiny-swap rule apply.';
+        }
+        if (wi.minTradePctPortfolio > 0) {
+          ruleLine += ` Flag swaps under ${wi.minTradePctPortfolio}% of portfolio.`;
+        }
+
+        output += `<h3>Recommended Trades</h3>`;
+        output += `<div class="worth-summary"><strong>Worth-it summary:</strong> ${parts.join('; ') || 'No verdicts.'}<br><span style="color:var(--text-muted);font-size:12px;">${ruleLine} You can tighten or relax the inputs above and recalculate.</span></div>`;
+        output += `<table>
+          <tr><th>Action</th><th>Sell</th><th>Buy</th><th>Trade Value (${cl})</th><th>Friction %</th><th>Total fee (${cl})</th><th>Fee detail</th><th>Slippage (${cl})</th><th>Verdict</th></tr>`;
+        const escAttr = (s) => String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        trades.forEach(t => {
+          const bits = [];
+          if (t.feeBreakdown.length > 0) {
+            bits.push(t.feeBreakdown.map(f => `${f.amountPerTrade} ${f.label}`).join(' + '));
+          }
+          if (t.txnFeePhp > 0) bits.push(`txn ${fmt(t.txnFeePhp, phpToUsd)}`);
+          if ((t.serviceFeePhp || 0) > 0) {
+            const svcLbl = t.serviceUsedMin
+              ? ' (min)'
+              : (pf.servicePct > 0 ? ` (${pf.servicePct}%)` : '');
+            bits.push(`svc ${fmt(t.serviceFeePhp, phpToUsd)}${svcLbl}`);
+          }
+          const feeDetail = bits.length ? bits.join(' \u00B7 ') : '\u2014';
+          const w = t.worth || { verdict: 'good', frictionPct: 0, label: '\u2014', summary: '' };
+          const badgeClass = w.verdict === 'bad' ? 'verdict-bad' : (w.verdict === 'warn' ? 'verdict-warn' : 'verdict-good');
+          const rowClass = w.verdict === 'bad' ? 'row-bad' : (w.verdict === 'warn' ? 'row-warn' : '');
+          output += `<tr class="${rowClass}">
+            <td style="font-family:'Inter',sans-serif;">Swap</td>
+            <td class="sell">${t.sellTokens.toFixed(6)} ${t.sellLabel}</td>
+            <td class="buy">${t.buyTokens.toFixed(6)} ${t.buyLabel}</td>
+            <td>${fmt(t.sellValue, phpToUsd)}</td>
+            <td>${w.frictionPct != null ? w.frictionPct.toFixed(2) + '%' : '\u2014'}</td>
+            <td>${fmt(t.feePhp, phpToUsd)}</td>
+            <td style="font-size:11px;color:var(--text-muted);font-family:'Inter',sans-serif;">${feeDetail}</td>
+            <td>${fmt(t.slipCost, phpToUsd)}</td>
+            <td style="text-align:left"><span class="verdict-badge ${badgeClass}" title="${escAttr(w.summary)}">${w.label}</span></td>
+          </tr>`;
+        });
+        output += '</table>';
+      } else {
+        output += '<p style="color:var(--text-secondary);padding:8px 0;">Portfolio is already balanced within tolerance.</p>';
+      }
+
+      // Post-trade allocation
+      output += `<h3>Estimated Post-Trade Allocation</h3>`;
+      output += `<table>
+        <tr><th>Token</th><th>Est. Value (${cl})</th><th>Post-Trade %</th><th>Target %</th></tr>`;
+      portfolio.forEach(asset => {
+        const postValue = updatedValues[asset.label] || 0;
+        const postPct = totalAfter > 0 ? (postValue / totalAfter) * 100 : 0;
+        output += `<tr>
+          <td>${asset.label}</td>
+          <td>${fmt(postValue, phpToUsd)}</td>
+          <td>${postPct.toFixed(2)}%</td>
+          <td>${asset.target.toFixed(2)}%</td>
+        </tr>`;
+      });
+      output += `</table>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:10px;">Total after fees: ${fmt(totalAfter, phpToUsd)}</p>`;
+
+      resultsEl.innerHTML = output;
+    }
+
+    /* ── Multi-slot save/load helpers ── */
+    const SAVES_KEY = 'portfolio_saves';
+
+    function getAllSaves() {
+      try { return JSON.parse(localStorage.getItem(SAVES_KEY)) || []; }
+      catch { return []; }
+    }
+
+    function putAllSaves(arr) {
+      localStorage.setItem(SAVES_KEY, JSON.stringify(arr));
+    }
+
+    function collectCurrentData() {
+      const data = {
+        tokens: [],
+        fees: [],
+        platformFees: {
+          mode: document.getElementById('platform-fee-mode')?.value || 'php',
+          token: document.getElementById('platform-fee-token')?.value || '',
+          txnAmount: document.getElementById('platform-txn-fee-amount')?.value || '',
+          servicePct: document.getElementById('platform-service-pct')?.value || '',
+          serviceMinAmount: document.getElementById('platform-service-min-amount')?.value || ''
+        },
+        worthIt: {
+          maxFrictionPct: document.getElementById('worth-max-friction-pct')?.value || '',
+          minTradePct: document.getElementById('worth-min-trade-pct')?.value || ''
+        },
+        breakeven: {
+          anchorSymbol: document.getElementById('mp-anchor-symbol')?.value || '',
+          anchorAmount: document.getElementById('mp-anchor-amount')?.value || '',
+          anchorTarget: document.getElementById('mp-anchor-target')?.value || '',
+          anchorPricePhp: document.getElementById('mp-anchor-price-php')?.value || '',
+          varSymbol: document.getElementById('mp-var-symbol')?.value || '',
+          varAmount: document.getElementById('mp-var-amount')?.value || '',
+          varTarget: document.getElementById('mp-var-target')?.value || '',
+          frictionCap: document.getElementById('mp-friction-cap')?.value || ''
+        }
+      };
+      tokens.forEach((_, i) => {
+        const idEl = document.getElementById(`id-${i}`);
+        if (!idEl) return;
+        data.tokens.push({
+          id: idEl.value,
+          amount: document.getElementById(`amount-${i}`).value,
+          target: document.getElementById(`target-${i}`).value
+        });
+      });
+      feeRows.forEach((_, i) => {
+        if (feeRows[i] === null) return;
+        const tokenEl = document.getElementById(`fee-token-${i}`);
+        const amountEl = document.getElementById(`fee-amount-${i}`);
+        if (!tokenEl) return;
+        data.fees.push({ token: tokenEl.value, amount: amountEl?.value || '' });
+      });
+      return data;
+    }
+
+    function applyPortfolioData(data) {
+      document.getElementById('tokens').innerHTML = '';
+      tokens = [];
+      const tokenList = Array.isArray(data) ? data : (data.tokens || []);
+      tokenList.forEach(d => addToken(d));
+
+      const p = data.platformFees || {};
+      const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v != null ? v : ''; };
+      const modeSel = document.getElementById('platform-fee-mode');
+      const legacyPhp = p.txnPhp !== undefined || p.serviceMinPhp !== undefined;
+      const hasNewAmounts = p.txnAmount !== undefined || p.serviceMinAmount !== undefined;
+      if (modeSel) {
+        if (p.mode) modeSel.value = p.mode;
+        else if (legacyPhp && !p.mode) modeSel.value = 'php';
+        else modeSel.value = 'php';
+      }
+      setVal('platform-fee-token', p.token);
+      if (legacyPhp && !hasNewAmounts) {
+        setVal('platform-txn-fee-amount', p.txnPhp);
+        setVal('platform-service-min-amount', p.serviceMinPhp);
+        if (modeSel) modeSel.value = 'php';
+      } else {
+        setVal('platform-txn-fee-amount', p.txnAmount);
+        setVal('platform-service-min-amount', p.serviceMinAmount);
+      }
+      setVal('platform-service-pct', p.servicePct);
+      syncPlatformFeeUI();
+
+      const w = data.worthIt;
+      if (w) {
+        setVal('worth-max-friction-pct', w.maxFrictionPct);
+        setVal('worth-min-trade-pct', w.minTradePct);
+      }
+
+      const b = data.breakeven;
+      if (b) {
+        setVal('mp-anchor-symbol', b.anchorSymbol);
+        setVal('mp-anchor-amount', b.anchorAmount);
+        setVal('mp-anchor-target', b.anchorTarget);
+        setVal('mp-anchor-price-php', b.anchorPricePhp);
+        setVal('mp-var-symbol', b.varSymbol);
+        setVal('mp-var-amount', b.varAmount);
+        setVal('mp-var-target', b.varTarget);
+        setVal('mp-friction-cap', b.frictionCap);
+      }
+
+      document.getElementById('fee-rows').innerHTML = '';
+      feeRows = [];
+      const feeList = data.fees || [];
+      feeList.forEach(f => addFeeRow(f));
+    }
+
+    function openModal(id) { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+    /* ── Save flow ── */
+    let _saveOverrideIdx = null;
+
+    function savePortfolio() {
+      const saves = getAllSaves();
+      const list = document.getElementById('save-slots-list');
+      const existingSection = document.getElementById('save-existing-section');
+      _saveOverrideIdx = null;
+
+      if (saves.length === 0) {
+        existingSection.style.display = 'none';
+      } else {
+        existingSection.style.display = '';
+        list.innerHTML = '';
+        saves.forEach((s, i) => {
+          const slot = document.createElement('div');
+          slot.className = 'save-slot';
+          slot.dataset.idx = i;
+          slot.innerHTML = `
+            <span class="save-slot-name">${escHtml(s.name)}</span>
+            <span class="save-slot-meta">${s.savedAt || ''}</span>
+            <button class="save-slot-delete" title="Delete this save" onclick="deleteSaveSlot(event,${i})">🗑</button>`;
+          slot.addEventListener('click', (e) => {
+            if (e.target.closest('.save-slot-delete')) return;
+            list.querySelectorAll('.save-slot').forEach(el => el.classList.remove('selected'));
+            slot.classList.add('selected');
+            _saveOverrideIdx = i;
+            document.querySelector('#save-modal .btn-primary').textContent = `Override "${s.name}"`;
+          });
+          list.appendChild(slot);
+        });
+      }
+
+      document.getElementById('save-name-input').value = '';
+      document.querySelector('#save-modal .btn-primary').textContent = 'Save New';
+      openModal('save-modal');
+      setTimeout(() => document.getElementById('save-name-input').focus(), 80);
+    }
+
+    function deleteSaveSlot(e, idx) {
+      e.stopPropagation();
+      const saves = getAllSaves();
+      if (!confirm(`Delete "${saves[idx]?.name}"?`)) return;
+      saves.splice(idx, 1);
+      putAllSaves(saves);
+      closeModal('save-modal');
+      savePortfolio(); // re-open refreshed
+    }
+
+    function confirmSave() {
+      const saves = getAllSaves();
+      const data = collectCurrentData();
+      const ts = new Date().toLocaleString();
+
+      if (_saveOverrideIdx !== null && _saveOverrideIdx < saves.length) {
+        saves[_saveOverrideIdx].data = data;
+        saves[_saveOverrideIdx].savedAt = ts;
+        putAllSaves(saves);
+        closeModal('save-modal');
+        showToast(`Overrode "${saves[_saveOverrideIdx].name}"`);
+        return;
+      }
+
+      const nameInput = document.getElementById('save-name-input').value.trim();
+      if (!nameInput) {
+        document.getElementById('save-name-input').focus();
+        document.getElementById('save-name-input').style.borderColor = 'var(--red)';
+        setTimeout(() => document.getElementById('save-name-input').style.borderColor = '', 1200);
+        return;
+      }
+      saves.push({ name: nameInput, savedAt: ts, data });
+      putAllSaves(saves);
+      closeModal('save-modal');
+      showToast(`Saved as "${nameInput}"`);
+    }
+
+    /* ── Load flow ── */
+    let _loadSelectedIdx = null;
+
+    function loadPortfolio() {
+      const saves = getAllSaves();
+      const list = document.getElementById('load-slots-list');
+      _loadSelectedIdx = null;
+      document.getElementById('load-confirm-btn').disabled = true;
+
+      if (saves.length === 0) {
+        list.innerHTML = '<p class="modal-empty">No saved portfolios yet.</p>';
+      } else {
+        list.innerHTML = '';
+        saves.forEach((s, i) => {
+          const slot = document.createElement('div');
+          slot.className = 'save-slot';
+          slot.innerHTML = `
+            <span class="save-slot-name">${escHtml(s.name)}</span>
+            <span class="save-slot-meta">${s.savedAt || ''}</span>
+            <button class="save-slot-delete" title="Delete this save" onclick="deleteSaveSlotFromLoad(event,${i})">🗑</button>`;
+          slot.addEventListener('click', (e) => {
+            if (e.target.closest('.save-slot-delete')) return;
+            list.querySelectorAll('.save-slot').forEach(el => el.classList.remove('selected'));
+            slot.classList.add('selected');
+            _loadSelectedIdx = i;
+            document.getElementById('load-confirm-btn').disabled = false;
+          });
+          list.appendChild(slot);
+        });
+      }
+
+      openModal('load-modal');
+    }
+
+    function deleteSaveSlotFromLoad(e, idx) {
+      e.stopPropagation();
+      const saves = getAllSaves();
+      if (!confirm(`Delete "${saves[idx]?.name}"?`)) return;
+      saves.splice(idx, 1);
+      putAllSaves(saves);
+      closeModal('load-modal');
+      loadPortfolio(); // re-open refreshed
+    }
+
+    function confirmLoad() {
+      if (_loadSelectedIdx === null) return;
+      const saves = getAllSaves();
+      const entry = saves[_loadSelectedIdx];
+      if (!entry) return;
+      applyPortfolioData(entry.data);
+      closeModal('load-modal');
+      showToast(`Loaded "${entry.name}"`);
+    }
+
+    /* ── Toast notification ── */
+    function showToast(msg) {
+      let t = document.getElementById('app-toast');
+      if (!t) {
+        t = document.createElement('div');
+        t.id = 'app-toast';
+        t.style.cssText = `position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);padding:10px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);z-index:2000;transition:opacity 0.3s;pointer-events:none;`;
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      t.style.opacity = '1';
+      clearTimeout(t._tid);
+      t._tid = setTimeout(() => { t.style.opacity = '0'; }, 2200);
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    /* Allow Enter key to trigger Save New */
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && document.getElementById('save-modal').classList.contains('open')) {
+        confirmSave();
+      }
+      if (e.key === 'Escape') {
+        closeModal('save-modal');
+        closeModal('load-modal');
+      }
+    });
+
+    function clearPortfolio() {
+      if (!confirm('Clear portfolio?')) return;
+      localStorage.removeItem('portfolio');
+      document.getElementById('tokens').innerHTML = '';
+      tokens = [];
+      document.getElementById('fee-rows').innerHTML = '';
+      feeRows = [];
+      const modeSel = document.getElementById('platform-fee-mode');
+      if (modeSel) modeSel.value = 'php';
+      const feeTok = document.getElementById('platform-fee-token');
+      if (feeTok) feeTok.value = '';
+      ['platform-txn-fee-amount', 'platform-service-pct', 'platform-service-min-amount'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      const wf = document.getElementById('worth-max-friction-pct');
+      if (wf) wf.value = '3';
+      const wm = document.getElementById('worth-min-trade-pct');
+      if (wm) wm.value = '';
+      ['mp-anchor-symbol', 'mp-anchor-amount', 'mp-anchor-target', 'mp-anchor-price-php', 'mp-var-symbol', 'mp-var-amount', 'mp-var-target', 'mp-friction-cap'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      const mpOut = document.getElementById('mp-check-output');
+      if (mpOut) mpOut.innerHTML = '';
+      syncPlatformFeeUI();
+      document.getElementById('results').innerHTML = '';
+      lastResult = null;
+    }
+
+    /* ═══════════════════════════════════════════════
+       AUTO-ALLOCATE TARGETS
+       ═══════════════════════════════════════════════ */
+
+    const AA_STRATEGIES = {
+      equal: {
+        label: 'Equal Weight',
+        desc: '<strong>Equal Weight</strong> — splits 100% evenly across all tokens regardless of size, price, or performance. A clean, assumption-free baseline.',
+        needs: []
+      },
+      mcap: {
+        label: 'Market-Cap Weight',
+        desc: '<strong>Market-Cap Weight</strong> — allocates proportionally to each token\'s market capitalisation. Larger, more established coins receive more weight, mirroring broad market indices.',
+        needs: ['market_cap']
+      },
+      'inv-mcap': {
+        label: 'Inverse Market-Cap Weight',
+        desc: '<strong>Inverse Market-Cap Weight</strong> — the opposite of market-cap weighting. Smaller-cap tokens receive more allocation. Higher risk, higher potential upside tilt toward underdogs.',
+        needs: ['market_cap']
+      },
+      dip: {
+        label: 'Drift-Based Dip Buying',
+        desc: '<strong>Drift-Based Dip Buying</strong> — uses your own portfolio data, no API needed. If a token\'s current allocation has fallen <em>below</em> its target (e.g. target 50%, now 40%), that gap signals its price dropped relative to the rest. Tokens with the largest positive drift (underweight) receive a higher suggested target — leaning into the laggard to harvest the oscillation between assets. Use the <em>Tilt Strength</em> slider to control how aggressively the dip is chased. <strong>Requires current amounts and prices to be filled in.</strong>',
+        needs: []
+      },
+      'vol-parity': {
+        label: 'Volatility Parity',
+        desc: '<strong>Volatility Parity</strong> — allocates inversely to each token\'s recent price volatility (approximated from 30-day absolute % change). Steadier tokens receive more weight; wilder movers receive less. Reduces overall portfolio choppiness.',
+        needs: ['price_change_percentage_30d_in_currency']
+      }
+    };
+
+    function onStrategyChange() {
+      const strat = document.getElementById('aa-strategy').value;
+      const info = AA_STRATEGIES[strat];
+      document.getElementById('aa-strategy-desc').innerHTML = info ? info.desc : '';
+      document.getElementById('aa-dip-slider-wrap').style.display = strat === 'dip' ? '' : 'none';
+      document.getElementById('aa-preview').style.display = 'none';
+      document.getElementById('aa-status').style.display = 'none';
+    }
+
+    function onStrengthChange() {
+      const v = parseFloat(document.getElementById('aa-dip-strength').value);
+      let label = 'Mild';
+      if (v >= 0.85) label = 'Aggressive';
+      else if (v >= 0.4) label = 'Balanced';
+      document.getElementById('aa-slider-label').textContent = `${label} (${v.toFixed(2)})`;
+    }
+
+    function aaSetStatus(msg, cls) {
+      const el = document.getElementById('aa-status');
+      el.className = cls ? `aa-status-${cls}` : '';
+      el.innerHTML = msg;
+      el.style.display = msg ? '' : 'none';
+    }
+
+    /* Collect token data from the Portfolio Tokens section */
+    function getPortfolioTokenIds() {
+      const ids = [];
+      tokens.forEach((_, i) => {
+        const idEl = document.getElementById(`id-${i}`);
+        if (!idEl || !idEl.value.trim()) return;
+        const amountEl = document.getElementById(`amount-${i}`);
+        const targetEl = document.getElementById(`target-${i}`);
+        // Price: try to get from coinList cache or last calculate result
+        // We store the raw amount; value needs price — we'll compute current% from amounts×prices
+        // For drift we only need relative values so we can use amount × price if price is known
+        // We'll look up prices from coinList (already fetched by the main calculator) or skip
+        ids.push({
+          idx: i,
+          id: idEl.value.trim().toLowerCase(),
+          amount: parseFloat(amountEl?.value) || 0,
+          target: parseFloat(targetEl?.value) || 0
+        });
+      });
+      return ids;
+    }
+
+    /* Distribute 100% with rounding fix on last token */
+    function distributeWeights(rawWeights) {
+      // rawWeights: array of non-negative numbers, will be normalised
+      const total = rawWeights.reduce((a, b) => a + b, 0);
+      if (total === 0) return rawWeights.map(() => 0);
+      let pcts = rawWeights.map(w => (w / total) * 100);
+      // Fix rounding so sum is exactly 100
+      const rounded = pcts.map(p => Math.round(p * 100) / 100);
+      const diff = parseFloat((100 - rounded.reduce((a, b) => a + b, 0)).toFixed(2));
+      if (diff !== 0) rounded[rounded.length - 1] = parseFloat((rounded[rounded.length - 1] + diff).toFixed(2));
+      return rounded;
+    }
+
+    async function computeWeights(strat, cgData, tokenIds, strength) {
+      const n = tokenIds.length;
+      const warnings = [];
+
+      if (strat === 'equal') {
+        return { weights: distributeWeights(tokenIds.map(() => 1)), warnings };
+      }
+
+      if (strat === 'mcap') {
+        const caps = tokenIds.map(t => {
+          const d = cgData[t.id];
+          const v = d?.market_cap;
+          if (!v) warnings.push(`${t.id}: no market cap data, using equal share`);
+          return v && v > 0 ? v : null;
+        });
+        const fallback = caps.filter(Boolean).reduce((a, b) => a + b, 0) / caps.filter(Boolean).length || 1;
+        return { weights: distributeWeights(caps.map(c => c ?? fallback)), warnings };
+      }
+
+      if (strat === 'inv-mcap') {
+        const caps = tokenIds.map(t => {
+          const d = cgData[t.id];
+          const v = d?.market_cap;
+          if (!v) warnings.push(`${t.id}: no market cap data, using equal share`);
+          return v && v > 0 ? v : null;
+        });
+        const fallback = caps.filter(Boolean).reduce((a, b) => a + b, 0) / caps.filter(Boolean).length || 1;
+        const invCaps = caps.map(c => 1 / (c ?? fallback));
+        return { weights: distributeWeights(invCaps), warnings };
+      }
+
+      if (strat === 'dip') {
+        // Drift = target% - current%
+        // Positive drift → token is underweight → price likely fell relative to the rest → boost target
+        // Primary source: lastResult.portfolio (populated after hitting Rebalance)
+        // Fallback: compute from amount × price via a fresh CoinGecko markets fetch
+
+        let drifts = null;
+        let usedSource = '';
+
+        if (lastResult && lastResult.portfolio && lastResult.totalValue > 0) {
+          // Best case: use already-calculated current values
+          const { portfolio, totalValue } = lastResult;
+          const currentPcts = tokenIds.map(t => {
+            const asset = portfolio.find(a =>
+              a.label.toLowerCase() === t.id ||
+              a.label.toLowerCase() === t.id.toLowerCase()
+            );
+            return asset ? (asset.value / totalValue) * 100 : null;
+          });
+          const anyFound = currentPcts.some(p => p !== null);
+          if (anyFound) {
+            const equalShare = 100 / tokenIds.length;
+            drifts = tokenIds.map((t, i) => {
+              const curPct = currentPcts[i] ?? equalShare;
+              return { drift: t.target - curPct, currentPct: curPct };
+            });
+            usedSource = 'last rebalance calculation';
+          }
+        }
+
+        if (!drifts) {
+          // Fallback: try fetching prices now from CoinGecko markets
+          warnings.push('No prior calculation found — fetching prices from CoinGecko to compute current allocation.');
+          try {
+            const ids = tokenIds.map(t => t.id).join(',');
+            const resp = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(ids)}&per_page=50&page=1`);
+            if (resp.ok) {
+              const json = await resp.json();
+              const priceMap = {};
+              json.forEach(c => { priceMap[c.id] = c.current_price; });
+              const values = tokenIds.map(t => {
+                const p = priceMap[t.id];
+                return p != null && t.amount > 0 ? t.amount * p : null;
+              });
+              const totalVal = values.reduce((s, v) => s + (v ?? 0), 0);
+              if (totalVal > 0) {
+                const equalShare = totalVal / tokenIds.length;
+                const currentPcts = values.map(v => ((v ?? equalShare) / totalVal) * 100);
+                drifts = tokenIds.map((t, i) => ({
+                  drift: t.target - currentPcts[i],
+                  currentPct: currentPcts[i]
+                }));
+                usedSource = 'CoinGecko prices (fallback)';
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!drifts) {
+          // Last resort: use target vs equal weight as proxy
+          warnings.push('Could not get live prices. Using target % vs equal weight as drift proxy. For best results, fill in amounts and hit Rebalance first.');
+          const equalPct = 100 / n;
+          drifts = tokenIds.map(t => ({ drift: t.target - equalPct, currentPct: equalPct }));
+          usedSource = 'equal weight proxy';
+        }
+
+        const anyTarget = tokenIds.some(t => t.target > 0);
+        if (!anyTarget) {
+          warnings.push('No target % values set — fill in targets in Portfolio Tokens first, then re-run.');
+          return { weights: distributeWeights(tokenIds.map(() => 1)), warnings };
+        }
+
+        // Raw weight: shift drift so all ≥ 0, normalize, blend with equal weight by strength
+        const driftVals = drifts.map(d => d.drift);
+        const minDrift = Math.min(...driftVals);
+        const shifted = driftVals.map(d => d - minDrift);
+        const maxShifted = Math.max(...shifted) || 1;
+        const normDrift = shifted.map(s => s / maxShifted); // 0…1, 1 = most underweight
+
+        const equalW = 1 / n;
+        const blended = normDrift.map(nd => (1 - strength) * equalW + strength * (nd * 0.98 + 0.01));
+        return { weights: distributeWeights(blended), warnings, drifts, usedSource };
+      }
+
+      if (strat === 'vol-parity') {
+        const vols = tokenIds.map(t => {
+          const d = cgData[t.id];
+          const v = d?.price_change_percentage_30d_in_currency;
+          if (v == null) warnings.push(`${t.id}: no 30d data for volatility, using equal share`);
+          return v != null ? Math.abs(v) : null;
+        });
+        const fallbackVol = vols.filter(v => v !== null).reduce((a, b) => a + b, 0) / vols.filter(v => v !== null).length || 1;
+        const invVols = vols.map(v => 1 / ((v ?? fallbackVol) + 0.1)); // +0.1 avoids div/0 for stablecoins
+        return { weights: distributeWeights(invVols), warnings, vols: vols.map(v => v ?? fallbackVol) };
+      }
+
+      return { weights: distributeWeights(tokenIds.map(() => 1)), warnings };
+    }
+
+    async function runAutoAllocate() {
+      const tokenIds = getPortfolioTokenIds();
+      if (tokenIds.length === 0) {
+        aaSetStatus('⚠ No token IDs found. Add tokens in the Portfolio Tokens section first.', 'error');
+        return;
+      }
+
+      const strat = document.getElementById('aa-strategy').value;
+      const strength = parseFloat(document.getElementById('aa-dip-strength').value);
+      const needsApi = AA_STRATEGIES[strat]?.needs?.length > 0;
+
+      const btn = document.getElementById('aa-fetch-btn');
+      btn.disabled = true;
+      btn.textContent = needsApi ? '⏳ Fetching from CoinGecko…' : '⚙ Computing…';
+      aaSetStatus(needsApi ? 'Contacting CoinGecko API…' : 'Computing targets…', 'loading');
+      document.getElementById('aa-preview').style.display = 'none';
+
+      let cgData = {}; // keyed by token id
+
+      if (needsApi) {
+        const fields = ['market_cap', 'price_change_percentage_30d_in_currency'];
+        const ids = tokenIds.map(t => t.id).join(',');
+        const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(ids)}&price_change_percentage=30d&per_page=50&page=1`;
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error(`CoinGecko returned ${resp.status}`);
+          const json = await resp.json();
+          json.forEach(coin => { cgData[coin.id] = coin; });
+        } catch (err) {
+          aaSetStatus(`✕ CoinGecko fetch failed: ${err.message}. Check your connection or try again shortly.`, 'error');
+          btn.disabled = false;
+          btn.textContent = '⚡ Fetch & Compute Targets';
+          return;
+        }
+      }
+
+      const { weights, warnings, changes, vols, drifts, usedSource } = await computeWeights(strat, cgData, tokenIds, strength);
+
+      // Write into target fields
+      tokenIds.forEach((t, i) => {
+        const el = document.getElementById(`target-${t.idx}`);
+        if (el) el.value = weights[i];
+      });
+
+      // Build preview table
+      const showExtra = strat !== 'equal';
+      let rows = tokenIds.map((t, i) => {
+        const d = cgData[t.id];
+        let extra = '';
+        let driftColor = '';
+        if (strat === 'mcap' || strat === 'inv-mcap') {
+          const mc = d?.market_cap;
+          extra = mc ? `$${(mc / 1e9).toFixed(2)}B mcap` : '—';
+        } else if (strat === 'dip') {
+          const dr = drifts ? drifts[i] : null;
+          if (dr != null) {
+            const sign = dr.drift >= 0 ? '+' : '';
+            driftColor = dr.drift > 0.5 ? 'color:var(--green)' : dr.drift < -0.5 ? 'color:var(--red)' : 'color:var(--text-muted)';
+            extra = `${dr.currentPct.toFixed(1)}% now · drift ${sign}${dr.drift.toFixed(1)}%`;
+          } else {
+            extra = '—';
+          }
+        } else if (strat === 'vol-parity') {
+          const vo = vols ? vols[i] : null;
+          extra = vo != null ? `±${vo.toFixed(1)}% (30d vol)` : '—';
+        }
+        return { id: t.id, weight: weights[i], extra, driftColor };
+      });
+
+      let tableHtml = `<table class="aa-preview-table">
+        <tr>
+          <th>Token</th>
+          ${showExtra ? `<th>${strat === 'dip' ? 'Current % · Drift' : strat === 'vol-parity' ? 'Volatility' : 'Market Cap'}</th>` : ''}
+          <th>Suggested Target %</th>
+        </tr>`;
+      rows.forEach(r => {
+        tableHtml += `<tr>
+          <td>${escHtml(r.id)}</td>
+          ${showExtra ? `<td style="font-size:11px;${r.driftColor||'color:var(--text-muted);'}">${escHtml(r.extra)}</td>` : ''}
+          <td style="color:var(--accent);font-weight:600;">${r.weight.toFixed(2)}%</td>
+        </tr>`;
+      });
+      tableHtml += '</table>';
+
+      if (warnings.length) {
+        tableHtml += warnings.map(w => `<p class="aa-warn">⚠ ${escHtml(w)}</p>`).join('');
+      }
+
+      const preview = document.getElementById('aa-preview');
+      preview.innerHTML = tableHtml;
+      preview.style.display = '';
+
+      const sourceNote = strat === 'dip' && usedSource ? ` (source: ${usedSource})` : '';
+      aaSetStatus(`✓ Targets applied${sourceNote} — edit any field freely before rebalancing.`, 'ok');
+      btn.disabled = false;
+      btn.textContent = '⚡ Fetch & Compute Targets';
+    }
+
+    // Init strategy description on load
+    window.addEventListener('DOMContentLoaded', () => { onStrategyChange(); });
+
+    addToken();
+    addToken();
+    addFeeRow();
+    syncPlatformFeeUI();
+    onStrategyChange();
+
+    /* Close modals when clicking backdrop */
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+      backdrop.addEventListener('click', e => {
+        if (e.target === backdrop) backdrop.classList.remove('open');
+      });
+    });
+
+    /* Migrate legacy single-slot save to new format */
+    (function migrateLegacy() {
+      const legacy = localStorage.getItem('portfolio');
+      if (!legacy) return;
+      try {
+        const data = JSON.parse(legacy);
+        const saves = getAllSaves();
+        const alreadyMigrated = saves.some(s => s.name === 'Imported Save');
+        if (!alreadyMigrated) {
+          saves.unshift({ name: 'Imported Save', savedAt: 'Migrated', data });
+          putAllSaves(saves);
+        }
+        localStorage.removeItem('portfolio');
+      } catch {}
+    })();
+  </script>
+</body>
+</html>
