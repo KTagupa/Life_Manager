@@ -2102,6 +2102,239 @@
             document.getElementById('installment-bulk-payment-modal')?.classList.remove('hidden');
         }
 
+        function getInstallmentAnalyticsData() {
+            const plans = getTrackedInstallmentPlans();
+            const transactions = window.allDecryptedTransactions || [];
+            const outstandingMap = typeof computeInstallmentOutstandingMapAsOf === 'function'
+                ? computeInstallmentOutstandingMapAsOf(Date.now(), transactions)
+                : new Map();
+            const todayKey = new Date().toISOString().slice(0, 10);
+            const weekEndKey = new Date(Date.now() + (7 * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+            const monthKey = todayKey.slice(0, 7);
+
+            const summary = {
+                totalOriginal: 0,
+                outstanding: 0,
+                paid: 0,
+                monthlyObligation: 0,
+                feeTotal: 0,
+                feesPaid: 0,
+                activeCount: 0,
+                completedCount: 0,
+                dueToday: 0,
+                dueWeek: 0,
+                dueMonth: 0
+            };
+            const upcoming = [];
+            const planRows = [];
+
+            plans.forEach(plan => {
+                const total = Math.max(0, Number(plan.totalAmount || 0));
+                const feeTotal = Math.max(0, Number(plan.feeTotal || 0));
+                const installmentCount = Math.max(1, Math.round(Number(plan.installmentCount || 1)));
+                const monthlyAmount = Math.max(0, Number(plan.monthlyAmount || 0)) || (total > 0 ? total / installmentCount : 0);
+                const outstanding = Math.max(0, Number(outstandingMap.get(plan.id) || 0));
+                const paid = Math.max(0, total - outstanding);
+                const paymentRows = typeof getInstallmentPaymentTransactions === 'function'
+                    ? getInstallmentPaymentTransactions(plan.id)
+                    : transactions.filter(tx => tx && tx.type === 'installment_payment' && tx.installmentPlanId === plan.id);
+                const historicalPayments = typeof getInstallmentHistoricalPayments === 'function'
+                    ? getInstallmentHistoricalPayments(plan)
+                    : normalizeInstallmentHistoricalPayments(plan.historicalPayments);
+                const feesPaid = historicalPayments.reduce((sum, payment) => sum + Math.max(0, Number(payment.feeAmount || 0)), 0)
+                    + paymentRows.reduce((sum, tx) => sum + Math.max(0, Number(tx.installmentFeeAmount || 0)), 0);
+                const isActive = outstanding > 0.01;
+
+                summary.totalOriginal += total;
+                summary.outstanding += outstanding;
+                summary.paid += paid;
+                summary.feeTotal += feeTotal;
+                summary.feesPaid += feesPaid;
+                if (isActive) {
+                    summary.activeCount += 1;
+                    summary.monthlyObligation += Math.min(monthlyAmount, outstanding);
+                } else {
+                    summary.completedCount += 1;
+                }
+
+                const schedule = buildInstallmentPaymentSchedule(plan);
+                schedule
+                    .filter(row => !row.isRecorded && isActive)
+                    .forEach(row => {
+                        if (row.dueDateKey === todayKey) summary.dueToday += 1;
+                        if (row.dueDateKey >= todayKey && row.dueDateKey <= weekEndKey) summary.dueWeek += 1;
+                        if (row.dueDateKey.slice(0, 7) === monthKey) summary.dueMonth += 1;
+                        if (row.dueDateKey >= todayKey) {
+                            upcoming.push({
+                                planName: plan.name || 'Installment Plan',
+                                provider: plan.provider || '',
+                                dueDateKey: row.dueDateKey,
+                                amount: Math.min(Math.max(0, Number(row.amount || monthlyAmount)), outstanding),
+                                feeAmount: Math.max(0, Number(row.feeAmount || 0))
+                            });
+                        }
+                    });
+
+                planRows.push({
+                    name: plan.name || 'Installment Plan',
+                    provider: plan.provider || '',
+                    total,
+                    outstanding,
+                    paid,
+                    monthlyAmount: isActive ? Math.min(monthlyAmount, outstanding) : 0,
+                    feeTotal,
+                    feesPaid,
+                    progressPct: total > 0 ? Math.min(100, Math.max(0, (paid / total) * 100)) : 0,
+                    active: isActive
+                });
+            });
+
+            upcoming.sort((a, b) => String(a.dueDateKey).localeCompare(String(b.dueDateKey)));
+            planRows.sort((a, b) => Number(b.outstanding || 0) - Number(a.outstanding || 0));
+
+            return {
+                summary,
+                upcoming: upcoming.slice(0, 6),
+                planRows
+            };
+        }
+
+        function renderInstallmentAnalyticsDashboard() {
+            const target = document.getElementById('installment-analytics-dashboard');
+            if (!target) return;
+
+            const data = getInstallmentAnalyticsData();
+            const { summary, upcoming, planRows } = data;
+            const feeRemaining = Math.max(0, summary.feeTotal - summary.feesPaid);
+            const feeBurdenPct = summary.totalOriginal > 0
+                ? Math.min(999, (summary.feeTotal / summary.totalOriginal) * 100)
+                : 0;
+
+            if (!planRows.length) {
+                target.innerHTML = '<div class="text-center text-sm text-slate-400 py-10">No installment or BNPL plans tracked yet.</div>';
+                lucide.createIcons();
+                return;
+            }
+
+            const statCards = [
+                { label: 'Outstanding', value: fmt(summary.outstanding), tone: 'text-violet-700 bg-violet-50 border-violet-100' },
+                { label: 'Monthly BNPL', value: fmt(summary.monthlyObligation), tone: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
+                { label: 'Fees Paid', value: fmt(summary.feesPaid), tone: 'text-amber-700 bg-amber-50 border-amber-100' },
+                { label: 'Fees Remaining', value: fmt(feeRemaining), tone: 'text-rose-700 bg-rose-50 border-rose-100' }
+            ];
+
+            target.innerHTML = `
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    ${statCards.map(card => `
+                        <div class="rounded-2xl border ${card.tone} p-4">
+                            <p class="text-[10px] font-black uppercase tracking-wider opacity-75">${escapeHTML(card.label)}</p>
+                            <p class="text-xl font-black mt-1">${escapeHTML(card.value)}</p>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p class="text-[10px] font-black uppercase tracking-wider text-slate-500">Plan Status</p>
+                        <div class="mt-3 grid grid-cols-2 gap-2">
+                            <div class="rounded-xl bg-white border border-slate-100 p-3">
+                                <p class="text-2xl font-black text-slate-800">${summary.activeCount}</p>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase">Active</p>
+                            </div>
+                            <div class="rounded-xl bg-white border border-slate-100 p-3">
+                                <p class="text-2xl font-black text-slate-800">${summary.completedCount}</p>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase">Complete</p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-3">Paid ${fmt(summary.paid)} of ${fmt(summary.totalOriginal)}.</p>
+                    </div>
+
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p class="text-[10px] font-black uppercase tracking-wider text-slate-500">Due Pressure</p>
+                        <div class="mt-3 grid grid-cols-3 gap-2 text-center">
+                            <div class="rounded-xl bg-white border border-slate-100 p-3">
+                                <p class="text-xl font-black text-emerald-700">${summary.dueToday}</p>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase">Today</p>
+                            </div>
+                            <div class="rounded-xl bg-white border border-slate-100 p-3">
+                                <p class="text-xl font-black text-indigo-700">${summary.dueWeek}</p>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase">7 Days</p>
+                            </div>
+                            <div class="rounded-xl bg-white border border-slate-100 p-3">
+                                <p class="text-xl font-black text-violet-700">${summary.dueMonth}</p>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase">Month</p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-3">Counts unpaid scheduled installments.</p>
+                    </div>
+
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p class="text-[10px] font-black uppercase tracking-wider text-slate-500">Fee Burden</p>
+                        <p class="text-3xl font-black text-slate-800 mt-3">${feeBurdenPct.toFixed(1)}%</p>
+                        <p class="text-xs text-slate-500 mt-1">${fmt(summary.feeTotal)} tracked fees inside ${fmt(summary.totalOriginal)} total financed.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div class="rounded-2xl border border-slate-200 p-4">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-slate-500">Upcoming Payments</p>
+                            <i data-lucide="calendar-days" class="w-4 h-4 text-slate-400"></i>
+                        </div>
+                        <div class="space-y-2">
+                            ${upcoming.length ? upcoming.map(item => `
+                                <div class="flex items-center justify-between gap-3 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-bold text-slate-800 break-words">${escapeHTML(item.planName)}</p>
+                                        <p class="text-[10px] text-slate-400">${escapeHTML(new Date(`${item.dueDateKey}T12:00:00`).toLocaleDateString())}${item.provider ? ` • ${escapeHTML(item.provider)}` : ''}</p>
+                                    </div>
+                                    <div class="shrink-0 text-right">
+                                        <p class="text-sm font-black text-slate-800">${fmt(item.amount)}</p>
+                                        ${item.feeAmount > 0 ? `<p class="text-[10px] text-violet-500">fee ${fmt(item.feeAmount)}</p>` : ''}
+                                    </div>
+                                </div>
+                            `).join('') : '<div class="text-xs text-slate-400 py-4 text-center">No upcoming unpaid installments found.</div>'}
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-slate-200 p-4">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-slate-500">Payoff By Item</p>
+                            <i data-lucide="list-checks" class="w-4 h-4 text-slate-400"></i>
+                        </div>
+                        <div class="space-y-3 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                            ${planRows.map(row => `
+                                <div class="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-bold text-slate-800 break-words">${escapeHTML(row.name)}</p>
+                                            <p class="text-[10px] text-slate-400">${row.provider ? escapeHTML(row.provider) : (row.active ? 'Active' : 'Complete')}</p>
+                                        </div>
+                                        <p class="text-sm font-black text-slate-800 shrink-0">${fmt(row.outstanding)}</p>
+                                    </div>
+                                    <div class="mt-3 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div class="h-full ${row.active ? 'bg-violet-500' : 'bg-emerald-500'} rounded-full" style="width:${row.progressPct}%"></div>
+                                    </div>
+                                    <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
+                                        <span>${row.progressPct.toFixed(0)}% paid</span>
+                                        ${row.monthlyAmount > 0 ? `<span>${fmt(row.monthlyAmount)} next</span>` : ''}
+                                        ${row.feeTotal > 0 ? `<span>${fmt(row.feesPaid)} / ${fmt(row.feeTotal)} fees</span>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            lucide.createIcons();
+        }
+
+        function openInstallmentAnalyticsModal() {
+            renderInstallmentAnalyticsDashboard();
+            document.getElementById('installment-analytics-modal')?.classList.remove('hidden');
+        }
+
         async function saveInstallmentBulkPayments() {
             const selectedRows = Array.from(document.querySelectorAll('.ip-bulk-payment-checkbox:checked'))
                 .map(input => {

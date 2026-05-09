@@ -777,6 +777,38 @@
                         <div class="text-center text-xs text-slate-400 py-4">No fixed assets tracked.</div>
                     </div>
                 </div>
+
+                <!-- Installment / BNPL Section -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mt-6">
+                    <div class="p-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-violet-100 text-violet-600 p-2 rounded-xl">
+                                <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-slate-800">Installment / BNPL</h2>
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Plans, fees, and payoff tracking</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button onclick="openInstallmentAnalyticsModal()"
+                                class="text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 px-3 py-1.5 rounded-full transition-colors">
+                                Analytics
+                            </button>
+                            <button onclick="openInstallmentBulkPaymentModal()"
+                                class="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-full transition-colors">
+                                Pay Multiple
+                            </button>
+                            <button onclick="openInstallmentPlanModal()"
+                                class="text-xs font-bold text-violet-700 hover:text-violet-800 bg-violet-50 px-3 py-1.5 rounded-full transition-colors">
+                                + Add
+                            </button>
+                        </div>
+                    </div>
+                    <div id="installment-plan-list" class="p-4 space-y-3">
+                        <div class="text-center text-xs text-slate-400 py-2">No installment plans tracked yet.</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Right: Bills, Debts & Rate Info -->
@@ -881,31 +913,6 @@
                     </div>
                     <div id="credit-card-list" class="space-y-3">
                         <div class="text-center text-xs text-slate-400 py-2">No credit cards tracked yet.</div>
-                    </div>
-                </div>
-
-                <!-- Installment / BNPL Section -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="flex items-center gap-2">
-                            <div class="bg-violet-100 text-violet-600 p-1.5 rounded-lg">
-                                <i data-lucide="calendar-clock" class="w-4 h-4"></i>
-                            </div>
-                            <h2 class="font-bold text-slate-800">Installment / BNPL</h2>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="openInstallmentBulkPaymentModal()"
-                                class="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full transition-colors">
-                                Pay Multiple
-                            </button>
-                            <button onclick="openInstallmentPlanModal()"
-                                class="text-xs font-bold text-violet-700 hover:text-violet-800 bg-violet-50 px-3 py-1 rounded-full transition-colors">
-                                + Add
-                            </button>
-                        </div>
-                    </div>
-                    <div id="installment-plan-list" class="space-y-3">
-                        <div class="text-center text-xs text-slate-400 py-2">No installment plans tracked yet.</div>
                     </div>
                 </div>
 
@@ -1750,6 +1757,31 @@
                     <button onclick="runFinancePendingAction('saveInstallmentBulkPayments', this, saveInstallmentBulkPayments)"
                         class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save Payments</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Installment / BNPL Analytics -->
+    <div id="installment-analytics-modal"
+        class="fixed inset-0 z-[117] bg-slate-900/60 backdrop-blur-sm hidden flex items-start justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl p-6 sm:p-8 max-w-4xl w-full shadow-2xl my-4">
+            <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="bg-violet-100 p-2 rounded-xl text-violet-600">
+                        <i data-lucide="chart-no-axes-combined" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-slate-800">Installment / BNPL Analytics</h3>
+                        <p class="text-sm text-slate-500 mt-1">Outstanding balances, fees, and upcoming payment pressure.</p>
+                    </div>
+                </div>
+                <button onclick="toggleModal('installment-analytics-modal')"
+                    class="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="installment-analytics-dashboard" class="space-y-5">
+                <div class="text-center text-xs text-slate-400 py-8">Loading installment analytics...</div>
             </div>
         </div>
     </div>
@@ -3787,7 +3819,7 @@
     <script src="assets/js/features/crypto.js?v=20260425a"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
     <script src="assets/js/ui/renderers.js?v=20260509e"></script>
-    <script src="assets/js/features/crud.js?v=20260509f"></script>
+    <script src="assets/js/features/crud.js?v=20260509g"></script>
     <script src="assets/js/features/backup.js?v=20260509a"></script>
     <script src="assets/js/features/quick-links.js?v=20260425a"></script>
     <script src="assets/js/features/item-tracking.js?v=20260425a"></script>
