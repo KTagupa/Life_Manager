@@ -296,10 +296,24 @@
                 .sort((a, b) => getTxTimestamp(b) - getTxTimestamp(a));
         }
 
+        function getInstallmentHistoricalPayments(plan) {
+            return normalizeInstallmentHistoricalPaymentsForRender(plan?.historicalPayments || []);
+        }
+
+        function normalizeInstallmentHistoricalPaymentsForRender(payments = []) {
+            return (Array.isArray(payments) ? payments : [])
+                .map(payment => ({
+                    ...payment,
+                    amount: Math.max(0, Number(payment?.amount || 0))
+                }))
+                .filter(payment => payment.amount > 0)
+                .sort((a, b) => Date.parse(b.date || b.createdAt || '') - Date.parse(a.date || a.createdAt || ''));
+        }
+
         function getInstallmentNextDueLabel(plan) {
             const dueDay = Number(plan?.dueDay || 0);
             const count = Math.max(0, Math.round(Number(plan?.installmentCount || 0)));
-            const paymentsMade = getInstallmentPaymentTransactions(plan?.id).length;
+            const paymentsMade = getInstallmentPaymentTransactions(plan?.id).length + getInstallmentHistoricalPayments(plan).length;
             if (!dueDay) return 'No due day set';
             if (count > 0 && paymentsMade >= count) return 'Plan complete';
             return `Due every ${dueDay}${typeof getDaySuffix === 'function' ? getDaySuffix(dueDay) : 'th'}`;
@@ -335,7 +349,8 @@
                 const paid = Math.max(0, total - outstanding);
                 const progressPct = total > 0 ? Math.min(100, Math.max(0, (paid / total) * 100)) : 0;
                 const paymentRows = getInstallmentPaymentTransactions(plan.id);
-                const paymentCount = paymentRows.length;
+                const historicalPayments = getInstallmentHistoricalPayments(plan);
+                const paymentCount = paymentRows.length + historicalPayments.length;
                 const installmentCount = Math.max(0, Math.round(Number(plan.installmentCount || 0)));
                 const encodedPlanId = encodeInlineArg(plan.id);
                 const statusLabel = outstanding <= 0.01
@@ -354,6 +369,8 @@
                         <div class="flex items-center gap-2 shrink-0">
                             <button onclick="openInstallmentPaymentModal(decodeURIComponent('${encodedPlanId}'))"
                                 class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Payment</button>
+                            <button onclick="openInstallmentPaymentModal(decodeURIComponent('${encodedPlanId}'), { recordOnly: true })"
+                                class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200">Previous</button>
                             <button onclick="openInstallmentPlanModal(decodeURIComponent('${encodedPlanId}'))"
                                 class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
                             <button onclick="deleteItem('installment_plans', decodeURIComponent('${encodedPlanId}'))"
@@ -366,6 +383,7 @@
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
                             <span>${escapeHTML(statusLabel)}</span>
+                            ${historicalPayments.length ? `<span>${historicalPayments.length} previous</span>` : ''}
                             <span>${escapeHTML(getInstallmentNextDueLabel(plan))}</span>
                             ${monthly > 0 ? `<span>${fmt(monthly)} / payment</span>` : ''}
                         </div>

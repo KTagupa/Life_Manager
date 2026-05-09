@@ -203,7 +203,13 @@
                 if (!plan?.id) return;
                 const startTs = Date.parse(plan.startDate || plan.createdAt || new Date().toISOString());
                 if (Number.isFinite(startTs) && startTs > endTs) return;
-                outstanding.set(plan.id, Math.max(0, Number(plan.totalAmount || 0)));
+                const priorPayments = (Array.isArray(plan.historicalPayments) ? plan.historicalPayments : [])
+                    .reduce((sum, payment) => {
+                        const paymentTs = Date.parse(payment?.date || payment?.createdAt || '');
+                        if (!Number.isFinite(paymentTs) || paymentTs > endTs) return sum;
+                        return sum + Math.max(0, Number(payment?.amount || 0));
+                    }, 0);
+                outstanding.set(plan.id, Math.max(0, Number(plan.totalAmount || 0) - priorPayments));
             });
 
             (transactions || []).forEach(tx => {

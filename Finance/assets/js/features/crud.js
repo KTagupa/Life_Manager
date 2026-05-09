@@ -1410,6 +1410,23 @@
             return getTrackedInstallmentPlans().find(plan => plan && plan.id === planId) || null;
         }
 
+        function normalizeInstallmentHistoricalPayments(payments = []) {
+            return (Array.isArray(payments) ? payments : [])
+                .map(payment => {
+                    const amount = Math.max(0, Number(payment?.amount || 0));
+                    if (!Number.isFinite(amount) || amount <= 0) return null;
+                    return {
+                        id: String(payment.id || generateFinanceRecordId('iph_')),
+                        amount,
+                        date: String(payment.date || new Date().toISOString()).trim(),
+                        notes: String(payment.notes || '').trim(),
+                        createdAt: payment.createdAt || new Date().toISOString()
+                    };
+                })
+                .filter(Boolean)
+                .sort((a, b) => Date.parse(b.date || b.createdAt || '') - Date.parse(a.date || a.createdAt || ''));
+        }
+
         function normalizeInstallmentPlanInput(source = {}) {
             const totalAmount = Math.max(0, Number(source.totalAmount || 0));
             const installmentCount = Math.max(0, Math.round(Number(source.installmentCount || 0)));
@@ -1431,6 +1448,7 @@
                 dueDay,
                 startDate: String(source.startDate || '').trim() || new Date().toISOString().slice(0, 10),
                 notes: String(source.notes || '').trim(),
+                historicalPayments: normalizeInstallmentHistoricalPayments(source.historicalPayments),
                 createdAt: source.createdAt || new Date().toISOString()
             };
         }
@@ -1766,6 +1784,7 @@
                     const existingData = existing?.data ? await decryptData(existing.data) : null;
                     previousPlanName = String(existingData?.name || '').trim();
                     nextPlan.createdAt = existingData?.createdAt || nextPlan.createdAt;
+                    nextPlan.historicalPayments = normalizeInstallmentHistoricalPayments(existingData?.historicalPayments);
                     db.installment_plans[idx] = {
                         ...existing,
                         id,
@@ -1828,13 +1847,17 @@
             const plan = findTrackedInstallmentPlan(id);
             if (!plan) return;
 
+            const recordOnly = options.recordOnly === true;
             document.getElementById('ip-payment-plan-id').value = id;
+            document.getElementById('ip-payment-mode').value = recordOnly ? 'record_only' : 'normal';
+            document.getElementById('ip-payment-title').innerText = recordOnly ? 'Record Previous BNPL Payment' : 'Record BNPL Payment';
             document.getElementById('ip-payment-plan-label').innerText = plan.name || 'Installment plan';
             document.getElementById('ip-payment-amount').value = Number.isFinite(Number(options.amount))
                 ? Number(options.amount).toFixed(2)
                 : (Number(plan.monthlyAmount || 0) > 0 ? Number(plan.monthlyAmount).toFixed(2) : '');
             document.getElementById('ip-payment-date').value = options.date || new Date().toISOString().split('T')[0];
             document.getElementById('ip-payment-notes').value = options.notes || '';
+            document.getElementById('ip-payment-record-note')?.classList.toggle('hidden', !recordOnly);
             document.getElementById('installment-payment-modal').classList.remove('hidden');
         }
 
@@ -1844,6 +1867,7 @@
             const amount = parseFloat(document.getElementById('ip-payment-amount').value);
             const noteInput = document.getElementById('ip-payment-notes').value.trim();
             const selectedDate = document.getElementById('ip-payment-date').value;
+            const recordOnly = document.getElementById('ip-payment-mode')?.value === 'record_only';
 
             if (!plan || !Number.isFinite(amount) || amount <= 0) {
                 alert('Enter a valid payment amount.');
@@ -1851,6 +1875,50 @@
             }
 
             const date = selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString();
+            const db = await getDB();
+            db.installment_plans = Array.isArray(db.installment_plans) ? db.installment_plans : [];
+
+            if (recordOnly) {
+                const planIndex = db.installment_plans.findIndex(entry => entry && entry.id === planId && !entry.deletedAt);
+                if (planIndex === -1) {
+                    alert('Could not find this installment plan.');
+                    return;
+                }
+
+                const rawPlan = db.installment_plans[planIndex];
+                const decryptedPlan = await decryptData(rawPlan.data);
+                const nextPlan = normalizeInstallmentPlanInput(decryptedPlan);
+                nextPlan.historicalPayments = normalizeInstallmentHistoricalPayments([
+                    ...(nextPlan.historicalPayments || []),
+                    {
+                        id: generateFinanceRecordId('iph_'),
+                        amount,
+                        date,
+                        notes: noteInput,
+                        createdAt: new Date().toISOString()
+                    }
+                ]);
+
+                db.installment_plans[planIndex] = {
+                    ...rawPlan,
+                    data: await encryptData(nextPlan),
+                    lastModified: Date.now(),
+                    deletedAt: rawPlan.deletedAt || null
+                };
+
+                const persistedDB = await saveDB(db);
+                rawInstallmentPlans = (persistedDB.installment_plans || db.installment_plans || []).filter(item => !item.deletedAt);
+                toggleModal('installment-payment-modal');
+                await renderInstallmentPlans(rawInstallmentPlans);
+                await refreshLinkedPanels({
+                    refreshKPI: true,
+                    refreshForecast: true,
+                    refreshStatements: true
+                });
+                showToast('✅ Previous BNPL payment recorded');
+                return;
+            }
+
             const desc = noteInput || `Payment for ${plan.name}`;
             const encrypted = await encryptData({
                 desc,
@@ -1872,7 +1940,6 @@
                 deletedAt: null
             });
 
-            const db = await getDB();
             db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
             await ensureInstallmentCategory(db);
             db.transactions.push({
