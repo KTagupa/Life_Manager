@@ -292,9 +292,10 @@
             data: createPreviewVaultPayload({
                 name: phoneBnplName,
                 provider: 'ShopPay',
-                totalAmount: 36000,
+                totalAmount: 37800,
+                feeTotal: 1800,
                 installmentCount: 12,
-                monthlyAmount: 3000,
+                monthlyAmount: 3150,
                 dueDay: 10,
                 startDate: phoneBnplCreatedAt.slice(0, 10),
                 notes: 'Preview fixed BNPL plan',
@@ -308,12 +309,13 @@
         const bnplPaymentDate = previewDateDaysAgo(6, rand);
         db.transactions.push(createPreviewEncryptedEntry(makeId, 'tx', {
             desc: `Payment for ${phoneBnplName}`,
-            amt: 3000,
+            amt: 3150,
             category: 'Installments/BNPL',
             type: 'installment_payment',
             paymentSource: 'cash',
             installmentPlanId: phoneBnplId,
             installmentPlanName: phoneBnplName,
+            installmentFeeAmount: 150,
             date: bnplPaymentDate,
             notes: 'Preview BNPL payment'
         }, bnplPaymentDate));

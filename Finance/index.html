@@ -893,10 +893,16 @@
                             </div>
                             <h2 class="font-bold text-slate-800">Installment / BNPL</h2>
                         </div>
-                        <button onclick="openInstallmentPlanModal()"
-                            class="text-xs font-bold text-violet-700 hover:text-violet-800 bg-violet-50 px-3 py-1 rounded-full transition-colors">
-                            + Add
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="openInstallmentBulkPaymentModal()"
+                                class="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full transition-colors">
+                                Pay Multiple
+                            </button>
+                            <button onclick="openInstallmentPlanModal()"
+                                class="text-xs font-bold text-violet-700 hover:text-violet-800 bg-violet-50 px-3 py-1 rounded-full transition-colors">
+                                + Add
+                            </button>
+                        </div>
                     </div>
                     <div id="installment-plan-list" class="space-y-3">
                         <div class="text-center text-xs text-slate-400 py-2">No installment plans tracked yet.</div>
@@ -1603,22 +1609,24 @@
                 <input type="text" id="ip-provider" placeholder="Provider / Merchant (optional)"
                     class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
                 <div class="grid grid-cols-2 gap-4">
-                    <input type="number" id="ip-total-amount" placeholder="Total financed"
+                    <input type="number" id="ip-total-amount" placeholder="Total amount"
                         class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
-                    <input type="number" id="ip-installment-count" placeholder="# Payments"
+                    <input type="number" id="ip-fee-total" placeholder="Fees inside total (optional)"
                         class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Monthly Payment</label>
-                        <input type="number" id="ip-monthly-amount" placeholder="Auto if blank"
-                            class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500 font-bold text-slate-700">
-                    </div>
+                    <input type="number" id="ip-installment-count" placeholder="# Payments"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
                     <div>
                         <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Due Day</label>
                         <input type="number" id="ip-due-day" min="1" max="31" placeholder="e.g. 10"
                             class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500 font-bold text-slate-700">
                     </div>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Monthly Payment</label>
+                    <input type="number" id="ip-monthly-amount" placeholder="Auto if blank"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500 font-bold text-slate-700">
                 </div>
                 <div>
                     <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Start Date</label>
@@ -1627,7 +1635,7 @@
                 </div>
                 <input type="text" id="ip-notes" placeholder="Notes (optional)"
                     class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
-                <p class="text-xs text-slate-400 ml-2">Unlike credit cards, this tracks a fixed repayment plan and remaining scheduled balance.</p>
+                <p class="text-xs text-slate-400 ml-2">Fees are tracked for reporting only and do not increase the total amount or remaining balance.</p>
 
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('installment-plan-modal')"
@@ -1677,6 +1685,70 @@
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
                     <button id="ip-payment-save-btn" onclick="runFinancePendingAction('saveInstallmentPayment', this, saveInstallmentPayment)"
                         class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save Payment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Batch Installment / BNPL Payment -->
+    <div id="installment-bulk-payment-modal"
+        class="fixed inset-0 z-[116] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-emerald-100 p-2 rounded-xl text-emerald-600">
+                    <i data-lucide="list-checks" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">Pay Multiple BNPL Items</h3>
+                    <p class="text-sm text-slate-500 mt-1">Pick the items covered by this payment.</p>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="date" id="ip-bulk-payment-date" onchange="renderInstallmentBulkPaymentList()"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500 font-bold text-slate-700">
+                    <input type="text" id="ip-bulk-payment-notes" placeholder="Notes (optional)"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500">
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <label class="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                <input type="checkbox" id="ip-bulk-filter-due-today"
+                                    class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                    onchange="setInstallmentBulkFilter('due_today')">
+                                Due today only
+                            </label>
+                            <label class="flex items-center gap-2 text-xs font-bold text-slate-600">
+                                <input type="checkbox" id="ip-bulk-filter-all"
+                                    class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                    onchange="setInstallmentBulkFilter('all')">
+                                All items
+                            </label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="setInstallmentBulkSelection(true)"
+                                class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100">Check All</button>
+                            <button onclick="setInstallmentBulkSelection(false)"
+                                class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100">Uncheck All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="ip-bulk-payment-list" class="space-y-2 max-h-72 overflow-y-auto pr-1"></div>
+
+                <div class="flex items-center justify-between rounded-2xl bg-emerald-50 border border-emerald-100 px-4 py-3">
+                    <span class="text-xs font-black uppercase tracking-wider text-emerald-700">Selected total</span>
+                    <span id="ip-bulk-payment-total" class="text-lg font-black text-emerald-700">₱0.00</span>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="toggleModal('installment-bulk-payment-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="runFinancePendingAction('saveInstallmentBulkPayments', this, saveInstallmentBulkPayments)"
+                        class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save Payments</button>
                 </div>
             </div>
         </div>
@@ -3703,19 +3775,19 @@
 
     <!-- App Core -->
     <script src="assets/js/core/config.js?v=20260509a"></script>
-    <script src="assets/js/core/metrics.js?v=20260509c"></script>
+    <script src="assets/js/core/metrics.js?v=20260509e"></script>
     <script src="../assets/js/financeBridgeQueue.js?v=20260425a"></script>
     <script src="assets/js/core/storage.js?v=20260509a"></script>
     <script src="assets/js/core/auth.js?v=20260509a"></script>
-    <script src="assets/js/core/preview.js?v=20260509a"></script>
+    <script src="assets/js/core/preview.js?v=20260509e"></script>
 
     <!-- App Modules -->
     <script src="assets/js/features/xrpl.js?v=20260425a"></script>
     <script src="assets/js/features/ronin.js?v=20260425a"></script>
     <script src="assets/js/features/crypto.js?v=20260425a"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
-    <script src="assets/js/ui/renderers.js?v=20260509c"></script>
-    <script src="assets/js/features/crud.js?v=20260509c"></script>
+    <script src="assets/js/ui/renderers.js?v=20260509e"></script>
+    <script src="assets/js/features/crud.js?v=20260509f"></script>
     <script src="assets/js/features/backup.js?v=20260509a"></script>
     <script src="assets/js/features/quick-links.js?v=20260425a"></script>
     <script src="assets/js/features/item-tracking.js?v=20260425a"></script>

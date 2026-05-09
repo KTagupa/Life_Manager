@@ -1418,6 +1418,7 @@
                     return {
                         id: String(payment.id || generateFinanceRecordId('iph_')),
                         amount,
+                        feeAmount: Math.max(0, Number(payment?.feeAmount || 0)),
                         date: String(payment.date || new Date().toISOString()).trim(),
                         dueDate: String(payment.dueDate || payment.date || '').slice(0, 10),
                         installmentNumber: Math.max(0, Math.round(Number(payment.installmentNumber || 0))),
@@ -1465,6 +1466,9 @@
             const monthlyAmount = normalized.monthlyAmount > 0
                 ? normalized.monthlyAmount
                 : (normalized.totalAmount > 0 ? normalized.totalAmount / count : 0);
+            const feePerPayment = count > 0
+                ? Math.min(monthlyAmount, Math.max(0, Number(normalized.feeTotal || 0)) / count)
+                : 0;
             const todayKey = new Date().toISOString().slice(0, 10);
             const historicalPayments = normalizeInstallmentHistoricalPayments(normalized.historicalPayments);
             const historicalKeys = new Set(historicalPayments.map(payment => payment.dueDate || getInstallmentDateKey(payment.date)));
@@ -1481,6 +1485,7 @@
                     installmentNumber: index + 1,
                     dueDateKey,
                     amount: monthlyAmount,
+                    feeAmount: feePerPayment,
                     isFuture,
                     isRecorded
                 };
@@ -1519,11 +1524,12 @@
                                 data-installment-number="${row.installmentNumber}"
                                 data-due-date="${escapeAttr(row.dueDateKey)}"
                                 data-amount="${Number(row.amount || 0)}"
+                                data-fee-amount="${Number(row.feeAmount || 0)}"
                                 ${checked ? 'checked' : ''}
                                 ${disabled ? 'disabled' : ''}>
                             <span class="min-w-0">
                                 <span class="block text-xs font-bold text-slate-700">#${row.installmentNumber} • ${escapeHTML(dateLabel)}</span>
-                                <span class="block text-[10px] text-slate-400">${fmt(row.amount)}</span>
+                                <span class="block text-[10px] text-slate-400">${fmt(row.amount)}${row.feeAmount > 0 ? ` • fee ${fmt(row.feeAmount)}` : ''}</span>
                             </span>
                         </span>
                         <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${labelClass}">${label}</span>
@@ -1534,6 +1540,7 @@
 
         function normalizeInstallmentPlanInput(source = {}) {
             const totalAmount = Math.max(0, Number(source.totalAmount || 0));
+            const feeTotal = Math.max(0, Number(source.feeTotal || source.totalFees || 0));
             const installmentCount = Math.max(0, Math.round(Number(source.installmentCount || 0)));
             const rawMonthlyAmount = Number(source.monthlyAmount || 0);
             const monthlyAmount = rawMonthlyAmount > 0
@@ -1548,6 +1555,7 @@
                 name: String(source.name || '').trim(),
                 provider: String(source.provider || '').trim(),
                 totalAmount,
+                feeTotal,
                 installmentCount,
                 monthlyAmount,
                 dueDay,
@@ -1815,6 +1823,7 @@
             const name = document.getElementById('ip-name');
             const provider = document.getElementById('ip-provider');
             const totalAmount = document.getElementById('ip-total-amount');
+            const feeTotal = document.getElementById('ip-fee-total');
             const installmentCount = document.getElementById('ip-installment-count');
             const monthlyAmount = document.getElementById('ip-monthly-amount');
             const dueDay = document.getElementById('ip-due-day');
@@ -1832,6 +1841,7 @@
                         name.value = plan.name;
                         provider.value = plan.provider;
                         totalAmount.value = plan.totalAmount > 0 ? plan.totalAmount.toFixed(2) : '';
+                        feeTotal.value = plan.feeTotal > 0 ? plan.feeTotal.toFixed(2) : '';
                         installmentCount.value = plan.installmentCount || '';
                         monthlyAmount.value = plan.monthlyAmount > 0 ? plan.monthlyAmount.toFixed(2) : '';
                         dueDay.value = plan.dueDay || '';
@@ -1848,6 +1858,7 @@
             name.value = '';
             provider.value = '';
             totalAmount.value = '';
+            feeTotal.value = '';
             installmentCount.value = '';
             monthlyAmount.value = '';
             dueDay.value = '';
@@ -1862,6 +1873,7 @@
                 name: document.getElementById('ip-name').value,
                 provider: document.getElementById('ip-provider').value,
                 totalAmount: document.getElementById('ip-total-amount').value,
+                feeTotal: document.getElementById('ip-fee-total').value,
                 installmentCount: document.getElementById('ip-installment-count').value,
                 monthlyAmount: document.getElementById('ip-monthly-amount').value,
                 dueDay: document.getElementById('ip-due-day').value,
@@ -1972,6 +1984,193 @@
             document.getElementById('installment-payment-modal').classList.remove('hidden');
         }
 
+        function getInstallmentBulkPaymentDateKey() {
+            const selected = document.getElementById('ip-bulk-payment-date')?.value;
+            return getInstallmentDateKey(selected || new Date().toISOString());
+        }
+
+        function getInstallmentBulkPaymentRows(filterMode = 'due_today') {
+            const plans = getTrackedInstallmentPlans();
+            const outstandingMap = typeof computeInstallmentOutstandingMapAsOf === 'function'
+                ? computeInstallmentOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
+                : new Map();
+            const paymentDateKey = getInstallmentBulkPaymentDateKey();
+
+            return plans
+                .map(plan => {
+                    const installmentCount = Math.max(1, Math.round(Number(plan.installmentCount || 1)));
+                    const totalAmount = Math.max(0, Number(plan.totalAmount || 0));
+                    const monthlyAmount = Math.max(0, Number(plan.monthlyAmount || 0)) || (totalAmount > 0 ? totalAmount / installmentCount : 0);
+                    const outstanding = Math.max(0, Number(outstandingMap.get(plan.id) || 0));
+                    const amount = Math.min(monthlyAmount, outstanding);
+                    const feeAmount = Math.min(amount, Math.max(0, Number(plan.feeTotal || 0)) / installmentCount);
+                    const schedule = buildInstallmentPaymentSchedule(plan);
+                    const dueToday = schedule.some(row => row.dueDateKey === paymentDateKey && !row.isRecorded);
+
+                    return {
+                        plan,
+                        amount,
+                        feeAmount,
+                        outstanding,
+                        dueToday
+                    };
+                })
+                .filter(row => row.outstanding > 0.01 && row.amount > 0.01)
+                .filter(row => filterMode === 'all' || row.dueToday);
+        }
+
+        function getInstallmentBulkFilterMode() {
+            return document.getElementById('ip-bulk-filter-all')?.checked ? 'all' : 'due_today';
+        }
+
+        function setInstallmentBulkFilter(mode = 'due_today') {
+            const dueToday = document.getElementById('ip-bulk-filter-due-today');
+            const all = document.getElementById('ip-bulk-filter-all');
+            if (dueToday) dueToday.checked = mode !== 'all';
+            if (all) all.checked = mode === 'all';
+            renderInstallmentBulkPaymentList();
+        }
+
+        function updateInstallmentBulkPaymentTotal() {
+            const total = Array.from(document.querySelectorAll('.ip-bulk-payment-checkbox:checked'))
+                .reduce((sum, input) => sum + Math.max(0, Number(input.dataset.amount || 0)), 0);
+            const target = document.getElementById('ip-bulk-payment-total');
+            if (target) target.textContent = fmt(total);
+        }
+
+        function setInstallmentBulkSelection(checked) {
+            document.querySelectorAll('.ip-bulk-payment-checkbox:not(:disabled)').forEach(input => {
+                input.checked = !!checked;
+            });
+            updateInstallmentBulkPaymentTotal();
+        }
+
+        function renderInstallmentBulkPaymentList() {
+            const list = document.getElementById('ip-bulk-payment-list');
+            if (!list) return;
+
+            const filterMode = getInstallmentBulkFilterMode();
+            const rows = getInstallmentBulkPaymentRows(filterMode);
+            const emptyLabel = filterMode === 'all'
+                ? 'No active BNPL items with a remaining balance.'
+                : 'No active BNPL items due on this payment date.';
+
+            if (!rows.length) {
+                list.innerHTML = `<div class="text-center text-xs text-slate-400 py-6">${emptyLabel}</div>`;
+                updateInstallmentBulkPaymentTotal();
+                return;
+            }
+
+            list.innerHTML = rows.map(row => {
+                const plan = row.plan || {};
+                const provider = String(plan.provider || '').trim();
+                const remainingAfter = Math.max(0, row.outstanding - row.amount);
+                return `
+                    <label class="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:border-emerald-200 transition-colors">
+                        <span class="flex items-start gap-3 min-w-0">
+                            <input type="checkbox"
+                                class="ip-bulk-payment-checkbox mt-1 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                data-plan-id="${escapeAttr(plan.id)}"
+                                data-amount="${Number(row.amount || 0)}"
+                                data-fee-amount="${Number(row.feeAmount || 0)}"
+                                onchange="updateInstallmentBulkPaymentTotal()"
+                                checked>
+                            <span class="min-w-0">
+                                <span class="block text-sm font-bold text-slate-800 break-words">${escapeHTML(plan.name || 'Installment Plan')}</span>
+                                ${provider ? `<span class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">${escapeHTML(provider)}</span>` : ''}
+                                <span class="block text-[10px] text-slate-500 mt-1">Remaining after this ${fmt(remainingAfter)}</span>
+                            </span>
+                        </span>
+                        <span class="shrink-0 text-right">
+                            <span class="block text-sm font-black text-emerald-700">${fmt(row.amount)}</span>
+                            ${row.feeAmount > 0 ? `<span class="block text-[10px] text-violet-500 mt-0.5">fee ${fmt(row.feeAmount)}</span>` : ''}
+                            ${row.dueToday ? '<span class="inline-block text-[10px] font-bold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5 mt-1">Due</span>' : ''}
+                        </span>
+                    </label>
+                `;
+            }).join('');
+
+            updateInstallmentBulkPaymentTotal();
+        }
+
+        function openInstallmentBulkPaymentModal() {
+            const paymentDate = document.getElementById('ip-bulk-payment-date');
+            const notes = document.getElementById('ip-bulk-payment-notes');
+            if (paymentDate) paymentDate.value = new Date().toISOString().slice(0, 10);
+            if (notes) notes.value = '';
+            setInstallmentBulkFilter('due_today');
+            document.getElementById('installment-bulk-payment-modal')?.classList.remove('hidden');
+        }
+
+        async function saveInstallmentBulkPayments() {
+            const selectedRows = Array.from(document.querySelectorAll('.ip-bulk-payment-checkbox:checked'))
+                .map(input => {
+                    const plan = findTrackedInstallmentPlan(input.dataset.planId || '');
+                    return {
+                        plan,
+                        amount: Math.max(0, Number(input.dataset.amount || 0)),
+                        feeAmount: Math.max(0, Number(input.dataset.feeAmount || 0))
+                    };
+                })
+                .filter(row => row.plan && row.amount > 0);
+
+            if (!selectedRows.length) {
+                alert('Choose at least one BNPL item to pay.');
+                return;
+            }
+
+            const noteInput = document.getElementById('ip-bulk-payment-notes')?.value.trim() || '';
+            const selectedDate = document.getElementById('ip-bulk-payment-date')?.value;
+            const date = selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString();
+            const db = await getDB();
+            db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
+            await ensureInstallmentCategory(db);
+
+            for (const row of selectedRows) {
+                const desc = noteInput || `Payment for ${row.plan.name}`;
+                const encrypted = await encryptData({
+                    desc,
+                    merchant: row.plan.provider || null,
+                    tags: [],
+                    amt: row.amount,
+                    originalAmt: row.amount,
+                    originalCurrency: 'PHP',
+                    quantity: 1,
+                    notes: noteInput,
+                    type: 'installment_payment',
+                    category: 'Installments/BNPL',
+                    installmentPlanId: row.plan.id,
+                    installmentPlanName: row.plan.name,
+                    installmentFeeAmount: row.feeAmount,
+                    paymentSource: 'cash',
+                    date,
+                    importId: null,
+                    dedupeHash: null,
+                    deletedAt: null
+                });
+
+                db.transactions.push({
+                    id: generateFinanceRecordId('tx_'),
+                    data: encrypted,
+                    createdAt: Date.now(),
+                    deletedAt: null
+                });
+            }
+
+            const persistedDB = await saveDB(db);
+            rawTransactions = (persistedDB.transactions || db.transactions || []).filter(t => !t.deletedAt);
+            toggleModal('installment-bulk-payment-modal');
+            await loadAndRender();
+            await renderInstallmentPlans(rawInstallmentPlans);
+            refreshTransactionCategorySelect();
+            await refreshLinkedPanels({
+                refreshKPI: true,
+                refreshForecast: true,
+                refreshStatements: true
+            });
+            showToast(`✅ ${selectedRows.length} BNPL payment${selectedRows.length === 1 ? '' : 's'} recorded`);
+        }
+
         async function saveInstallmentPayment() {
             const planId = document.getElementById('ip-payment-plan-id').value;
             const plan = findTrackedInstallmentPlan(planId);
@@ -2007,6 +2206,7 @@
                     .map(input => ({
                         id: generateFinanceRecordId('iph_'),
                         amount: Math.max(0, Number(input.dataset.amount || 0)),
+                        feeAmount: Math.max(0, Number(input.dataset.feeAmount || 0)),
                         dueDate: String(input.dataset.dueDate || '').slice(0, 10),
                         installmentNumber: Math.max(0, Math.round(Number(input.dataset.installmentNumber || 0))),
                         notes: noteInput,
@@ -2061,6 +2261,7 @@
                 category: 'Installments/BNPL',
                 installmentPlanId: plan.id,
                 installmentPlanName: plan.name,
+                installmentFeeAmount: Math.min(amount, Math.max(0, Number(plan.feeTotal || 0)) / Math.max(1, Math.round(Number(plan.installmentCount || 1)))),
                 paymentSource: 'cash',
                 date,
                 importId: null,

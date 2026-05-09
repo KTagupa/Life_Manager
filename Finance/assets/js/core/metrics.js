@@ -231,6 +231,30 @@
                 .reduce((sum, amount) => sum + (Number(amount) || 0), 0);
         }
 
+        function computeInstallmentFeesPaidAsOf(endTs, transactions) {
+            const planById = new Map((window.allDecryptedInstallmentPlans || [])
+                .filter(plan => plan && plan.id)
+                .map(plan => [plan.id, plan]));
+
+            let feePaid = 0;
+            planById.forEach(plan => {
+                (Array.isArray(plan.historicalPayments) ? plan.historicalPayments : []).forEach(payment => {
+                    const paymentTs = Date.parse(payment?.date || payment?.createdAt || '');
+                    if (!Number.isFinite(paymentTs) || paymentTs > endTs) return;
+                    feePaid += Math.max(0, Number(payment?.feeAmount || 0));
+                });
+            });
+
+            (transactions || []).forEach(tx => {
+                if (!isInstallmentPayment(tx)) return;
+                const ts = getTxTimestamp(tx);
+                if (!Number.isFinite(ts) || ts > endTs) return;
+                feePaid += Math.max(0, Number(tx?.installmentFeeAmount || 0));
+            });
+
+            return feePaid;
+        }
+
         function toTxMetaTimestamp(value) {
             const numeric = Number(value);
             if (Number.isFinite(numeric) && numeric > 0) return numeric;

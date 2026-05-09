@@ -343,6 +343,7 @@
             decrypted.forEach(plan => {
                 const safeName = escapeHTML(plan.name || 'Installment Plan');
                 const safeProvider = escapeHTML(plan.provider || 'BNPL / installment');
+                const feeTotal = Math.max(0, Number(plan.feeTotal || 0));
                 const total = Math.max(0, Number(plan.totalAmount || 0));
                 const monthly = Math.max(0, Number(plan.monthlyAmount || 0));
                 const outstanding = Math.max(0, Number(outstandingMap.get(plan.id) || 0));
@@ -350,6 +351,9 @@
                 const progressPct = total > 0 ? Math.min(100, Math.max(0, (paid / total) * 100)) : 0;
                 const paymentRows = getInstallmentPaymentTransactions(plan.id);
                 const historicalPayments = getInstallmentHistoricalPayments(plan);
+                const historicalFees = historicalPayments.reduce((sum, payment) => sum + Math.max(0, Number(payment.feeAmount || 0)), 0);
+                const transactionFees = paymentRows.reduce((sum, tx) => sum + Math.max(0, Number(tx.installmentFeeAmount || 0)), 0);
+                const feesPaid = historicalFees + transactionFees;
                 const paymentCount = paymentRows.length + historicalPayments.length;
                 const installmentCount = Math.max(0, Math.round(Number(plan.installmentCount || 0)));
                 const encodedPlanId = encodeInlineArg(plan.id);
@@ -365,6 +369,7 @@
                             <p class="text-sm font-bold text-slate-800 break-words">${safeName}</p>
                             <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${safeProvider}</p>
                             <p class="text-[10px] text-slate-500 mt-1">Remaining ${fmt(outstanding)} of ${fmt(total)}</p>
+                            ${feeTotal > 0 ? `<p class="text-[10px] text-violet-500 mt-1">Fees paid ${fmt(feesPaid)} of ${fmt(feeTotal)}</p>` : ''}
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
                             <button onclick="openInstallmentPaymentModal(decodeURIComponent('${encodedPlanId}'))"
@@ -386,6 +391,7 @@
                             ${historicalPayments.length ? `<span>${historicalPayments.length} previous</span>` : ''}
                             <span>${escapeHTML(getInstallmentNextDueLabel(plan))}</span>
                             ${monthly > 0 ? `<span>${fmt(monthly)} / payment</span>` : ''}
+                            ${feeTotal > 0 && installmentCount > 0 ? `<span>${fmt(feeTotal / installmentCount)} fee / payment</span>` : ''}
                         </div>
                     </div>
                 `;
