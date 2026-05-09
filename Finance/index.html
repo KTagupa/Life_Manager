@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.exchangerate-api.com https://api.coingecko.com https://firestore.googleapis.com https://www.googleapis.com https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://xrplcluster.com https://xrpl.ws https://s1.ripple.com:51234 https://s2.ripple.com:51234 https://api.roninchain.com/rpc wss://xrplcluster.com wss://xrpl.ws wss://s1.ripple.com wss://s2.ripple.com; frame-src 'self' file:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
+        content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.exchangerate-api.com https://api.coingecko.com https://api-mainnet-prod.minswap.org https://firestore.googleapis.com https://www.googleapis.com https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://xrplcluster.com https://xrpl.ws https://s1.ripple.com:51234 https://s2.ripple.com:51234 https://api.roninchain.com/rpc wss://xrplcluster.com wss://xrpl.ws wss://s1.ripple.com wss://s2.ripple.com; frame-src 'self' file:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
     <title>FinanceFlow | Life Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -2022,6 +2022,15 @@
             </div>
 
             <div class="p-6 overflow-y-auto custom-scrollbar flex-1">
+                <div class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700 mb-6">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                        <div class="min-w-0">
+                            <p class="text-xs text-slate-500 font-bold uppercase">Minswap Cardano Data</p>
+                            <p class="text-[11px] text-slate-400 mt-1">Minswap search and LP pricing use the public Minswap API. No CoinGecko key is needed for Cardano/Minswap assets.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Top Stats Row 1 -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
@@ -2687,7 +2696,7 @@
     <!-- Modal: Crypto Transaction -->
     <div id="crypto-transaction-modal"
         class="fixed inset-0 z-[130] bg-slate-900/90 backdrop-blur-lg hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative">
+        <div class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative max-h-[92vh] overflow-y-auto custom-scrollbar">
             <button onclick="toggleModal('crypto-transaction-modal')"
                 class="absolute top-6 right-6 text-slate-400 hover:text-slate-600">
                 <i data-lucide="x" class="w-5 h-5"></i>
@@ -2712,6 +2721,11 @@
                     <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block" id="lbl-c-token">Token Name /
                         ID</label>
                     <div class="flex gap-2">
+                        <select id="c-token-search-mode" onchange="setCryptoSearchMode('source')"
+                            class="w-28 p-3 bg-slate-50 border rounded-xl outline-none text-[11px] font-bold text-slate-600">
+                            <option value="coingecko">CoinGecko</option>
+                            <option value="minswap">Minswap</option>
+                        </select>
                         <input type="text" id="c-token-search" placeholder="e.g. bitcoin"
                             class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
                         <button onclick="searchToken('source')"
@@ -2719,16 +2733,28 @@
                                 data-lucide="search" class="w-4 h-4"></i></button>
                     </div>
                     <div id="token-search-results"
-                        class="hidden absolute top-full left-0 right-0 bg-white border shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto z-10 custom-scrollbar">
+                        class="hidden absolute top-full left-0 right-0 bg-white border shadow-xl rounded-xl mt-1 max-h-64 overflow-y-auto z-10 custom-scrollbar">
                     </div>
                     <input type="hidden" id="c-token-id">
                     <input type="hidden" id="c-token-symbol">
+                    <input type="hidden" id="c-token-asset-type">
+                    <input type="hidden" id="c-token-network">
+                    <input type="hidden" id="c-token-dex">
+                    <input type="hidden" id="c-token-pool-address">
+                    <input type="hidden" id="c-token-pool-name">
+                    <input type="hidden" id="c-token-base-token">
+                    <input type="hidden" id="c-token-quote-token">
                 </div>
 
                 <!-- Target Token (Swap To) -->
                 <div class="relative hidden" id="c-swap-target-container">
                     <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Swap To Token</label>
                     <div class="flex gap-2">
+                        <select id="c-target-token-search-mode" onchange="setCryptoSearchMode('target')"
+                            class="w-28 p-3 bg-slate-50 border rounded-xl outline-none text-[11px] font-bold text-slate-600">
+                            <option value="coingecko">CoinGecko</option>
+                            <option value="minswap">Minswap</option>
+                        </select>
                         <input type="text" id="c-target-token-search" placeholder="e.g. ethereum"
                             class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
                         <button onclick="searchToken('target')"
@@ -2736,10 +2762,17 @@
                                 data-lucide="search" class="w-4 h-4"></i></button>
                     </div>
                     <div id="target-token-search-results"
-                        class="hidden absolute top-full left-0 right-0 bg-white border shadow-xl rounded-xl mt-1 max-h-40 overflow-y-auto z-10 custom-scrollbar">
+                        class="hidden absolute top-full left-0 right-0 bg-white border shadow-xl rounded-xl mt-1 max-h-64 overflow-y-auto z-10 custom-scrollbar">
                     </div>
                     <input type="hidden" id="c-target-token-id">
                     <input type="hidden" id="c-target-token-symbol">
+                    <input type="hidden" id="c-target-token-asset-type">
+                    <input type="hidden" id="c-target-token-network">
+                    <input type="hidden" id="c-target-token-dex">
+                    <input type="hidden" id="c-target-token-pool-address">
+                    <input type="hidden" id="c-target-token-pool-name">
+                    <input type="hidden" id="c-target-token-base-token">
+                    <input type="hidden" id="c-target-token-quote-token">
                 </div>
 
                 <!-- Date Input (New) -->
@@ -2776,6 +2809,20 @@
                             </select>
                         </div>
                     </div>
+                </div>
+
+                <div id="c-lp-supply-container" class="hidden">
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">LP Total Supply</label>
+                    <input type="number" step="any" min="0" id="c-token-lp-token-supply" placeholder="Total LP token supply"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    <p class="text-[10px] text-slate-400 mt-1 ml-2">Used with your LP token quantity to value your share of the Minswap pool.</p>
+                </div>
+
+                <div id="c-target-lp-supply-container" class="hidden">
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Received LP Total Supply</label>
+                    <input type="number" step="any" min="0" id="c-target-token-lp-token-supply" placeholder="Total LP token supply"
+                        class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                    <p class="text-[10px] text-slate-400 mt-1 ml-2">Required when swapping into a Minswap LP asset.</p>
                 </div>
 
                 <div class="bg-indigo-50 p-3 rounded-xl flex justify-between items-center"
@@ -3816,7 +3863,7 @@
     <!-- App Modules -->
     <script src="assets/js/features/xrpl.js?v=20260425a"></script>
     <script src="assets/js/features/ronin.js?v=20260425a"></script>
-    <script src="assets/js/features/crypto.js?v=20260425a"></script>
+    <script src="assets/js/features/crypto.js?v=20260510c"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
     <script src="assets/js/ui/renderers.js?v=20260509e"></script>
     <script src="assets/js/features/crud.js?v=20260509g"></script>

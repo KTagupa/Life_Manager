@@ -37,6 +37,384 @@
             return method || 'fifo';
         }
 
+        const FINANCE_COINGECKO_DEMO_API_KEY_STORAGE_KEY = 'finance_coingecko_demo_api_key_v1';
+        const CARDANO_NETWORK_ID = 'cardano';
+        const MINSWAP_DEX_ID = 'minswap-cardano';
+        const MINSWAP_API_BASE_URL = 'https://api-mainnet-prod.minswap.org';
+        const MINSWAP_PROTOCOLS = ['Minswap', 'MinswapV2', 'MinswapStable'];
+
+        function getFinanceCoinGeckoDemoApiKey() {
+            try {
+                return String(localStorage.getItem(FINANCE_COINGECKO_DEMO_API_KEY_STORAGE_KEY) || '').trim();
+            } catch (_error) {
+                return '';
+            }
+        }
+
+        function setFinanceCoinGeckoDemoApiKey(apiKey) {
+            const value = String(apiKey || '').trim();
+            if (!value) throw new Error('Paste a CoinGecko Demo API key first.');
+            localStorage.setItem(FINANCE_COINGECKO_DEMO_API_KEY_STORAGE_KEY, value);
+            renderFinanceCoinGeckoDemoApiKeyControl();
+            if (typeof showToast === 'function') showToast('CoinGecko Demo API key saved locally');
+            return value;
+        }
+
+        function clearFinanceCoinGeckoDemoApiKey() {
+            localStorage.removeItem(FINANCE_COINGECKO_DEMO_API_KEY_STORAGE_KEY);
+            renderFinanceCoinGeckoDemoApiKeyControl();
+            if (typeof showToast === 'function') showToast('CoinGecko Demo API key cleared');
+        }
+
+        function saveFinanceCoinGeckoDemoApiKeyFromInput() {
+            const input = document.getElementById('coingecko-demo-api-key');
+            try {
+                setFinanceCoinGeckoDemoApiKey(input?.value || '');
+                if (input) input.value = '';
+            } catch (error) {
+                alert(error?.message || 'Could not save CoinGecko API key.');
+            }
+        }
+
+        function renderFinanceCoinGeckoDemoApiKeyControl() {
+            const status = document.getElementById('coingecko-demo-api-key-status');
+            if (!status) return;
+            const key = getFinanceCoinGeckoDemoApiKey();
+            status.innerText = key
+                ? `Saved locally (${key.slice(0, 4)}...${key.slice(-4)})`
+                : 'Optional legacy setting; Minswap uses the public Minswap API now';
+        }
+
+        function normalizeCardanoAssetAddress(address) {
+            return String(address || '').trim().toLowerCase();
+        }
+
+        function normalizeMinswapLpAssetReference(value) {
+            let candidate = String(value || '').trim().toLowerCase();
+            if (!candidate) return '';
+            candidate = candidate.replace(/[()]/g, '').replace(/\s+/g, '');
+            const prefix = `lp:${CARDANO_NETWORK_ID}:${MINSWAP_DEX_ID}:`;
+            if (candidate.startsWith(prefix)) {
+                candidate = candidate.slice(prefix.length);
+            }
+            if (candidate.includes('.')) {
+                const parts = candidate.split('.');
+                if (parts.length !== 2 || !parts.every(part => /^[0-9a-f]+$/.test(part))) return '';
+                candidate = parts.join('');
+            }
+            return /^[0-9a-f]{57,}$/.test(candidate) ? candidate : '';
+        }
+
+        function makeMinswapAssetAddress(asset) {
+            if (!asset) return '';
+            const policyId = normalizeCardanoAssetAddress(asset.currency_symbol || asset.policy_id || '');
+            const tokenName = normalizeCardanoAssetAddress(asset.token_name || '');
+            if (!policyId && !tokenName) return '0x';
+            return `${policyId}${tokenName}`;
+        }
+
+        function getMinswapAssetSymbol(asset, fallback = '') {
+            return String(asset?.metadata?.ticker || asset?.metadata?.name || fallback || '').trim();
+        }
+
+        function getMinswapAssetName(asset, fallback = '') {
+            return String(asset?.metadata?.name || asset?.metadata?.ticker || fallback || '').trim();
+        }
+
+        function makeCardanoTokenId(address) {
+            const normalized = normalizeCardanoAssetAddress(address);
+            return normalized ? `${CARDANO_NETWORK_ID}:${normalized}` : '';
+        }
+
+        function parseCardanoTokenId(tokenId) {
+            const value = String(tokenId || '').trim();
+            if (!value.startsWith(`${CARDANO_NETWORK_ID}:`)) return null;
+            const address = normalizeCardanoAssetAddress(value.slice(`${CARDANO_NETWORK_ID}:`.length));
+            return address ? { network: CARDANO_NETWORK_ID, address } : null;
+        }
+
+        function makeMinswapLpTokenId(poolAddress) {
+            const normalized = normalizeMinswapLpAssetReference(poolAddress) || normalizeCardanoAssetAddress(poolAddress);
+            return normalized ? `lp:${CARDANO_NETWORK_ID}:${MINSWAP_DEX_ID}:${normalized}` : '';
+        }
+
+        function parseMinswapLpTokenId(tokenId) {
+            const value = String(tokenId || '').trim();
+            const prefix = `lp:${CARDANO_NETWORK_ID}:${MINSWAP_DEX_ID}:`;
+            if (!value.startsWith(prefix)) return null;
+            const poolAddress = normalizeMinswapLpAssetReference(value) || normalizeCardanoAssetAddress(value.slice(prefix.length));
+            return poolAddress ? { network: CARDANO_NETWORK_ID, dex: MINSWAP_DEX_ID, poolAddress } : null;
+        }
+
+        function isCardanoTokenId(tokenId) {
+            return !!parseCardanoTokenId(tokenId);
+        }
+
+        function isMinswapLpTokenId(tokenId) {
+            return !!parseMinswapLpTokenId(tokenId);
+        }
+
+        function getCryptoAssetFieldPrefix(type = 'source') {
+            return type === 'target' ? 'c-target-token' : 'c-token';
+        }
+
+        function getCryptoAssetMetadata(type = 'source') {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            const meta = {
+                assetType: document.getElementById(`${prefix}-asset-type`)?.value || '',
+                network: document.getElementById(`${prefix}-network`)?.value || '',
+                dex: document.getElementById(`${prefix}-dex`)?.value || '',
+                poolAddress: document.getElementById(`${prefix}-pool-address`)?.value || '',
+                poolName: document.getElementById(`${prefix}-pool-name`)?.value || '',
+                lpTokenSupply: document.getElementById(`${prefix}-lp-token-supply`)?.value || '',
+                baseToken: document.getElementById(`${prefix}-base-token`)?.value || '',
+                quoteToken: document.getElementById(`${prefix}-quote-token`)?.value || ''
+            };
+            if (meta.assetType !== 'lp_pool') delete meta.lpTokenSupply;
+            return meta;
+        }
+
+        function clearCryptoAssetMetadata(type = 'source') {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            ['asset-type', 'network', 'dex', 'pool-address', 'pool-name', 'lp-token-supply', 'base-token', 'quote-token'].forEach(field => {
+                const el = document.getElementById(`${prefix}-${field}`);
+                if (el) el.value = '';
+            });
+            updateCryptoLpSupplyVisibility(type);
+        }
+
+        function setCryptoSearchMode(type = 'source') {
+            const isTarget = type === 'target';
+            const idInput = document.getElementById(isTarget ? 'c-target-token-id' : 'c-token-id');
+            const symbolInput = document.getElementById(isTarget ? 'c-target-token-symbol' : 'c-token-symbol');
+            const results = document.getElementById(isTarget ? 'target-token-search-results' : 'token-search-results');
+            if (idInput) idInput.value = '';
+            if (symbolInput) symbolInput.value = '';
+            if (results) {
+                results.innerHTML = '';
+                results.classList.add('hidden');
+            }
+            clearCryptoAssetMetadata(type);
+        }
+
+        function applyCryptoAssetMetadata(type, metadata = {}) {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            const map = {
+                'asset-type': metadata.assetType || '',
+                network: metadata.network || '',
+                dex: metadata.dex || '',
+                'pool-address': metadata.poolAddress || '',
+                'pool-name': metadata.poolName || '',
+                'lp-token-supply': metadata.lpTokenSupply || '',
+                'base-token': metadata.baseToken || '',
+                'quote-token': metadata.quoteToken || ''
+            };
+            Object.entries(map).forEach(([field, value]) => {
+                const el = document.getElementById(`${prefix}-${field}`);
+                if (el) el.value = value;
+            });
+            updateCryptoLpSupplyVisibility(type);
+        }
+
+        function updateCryptoLpSupplyVisibility(type = 'source') {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            const assetType = document.getElementById(`${prefix}-asset-type`)?.value || '';
+            const containerId = type === 'target' ? 'c-target-lp-supply-container' : 'c-lp-supply-container';
+            const container = document.getElementById(containerId);
+            if (container) container.classList.toggle('hidden', assetType !== 'lp_pool');
+        }
+
+        function buildCryptoTxMetadata(type = 'source') {
+            const meta = getCryptoAssetMetadata(type);
+            const payload = {};
+            ['assetType', 'network', 'dex', 'poolAddress', 'poolName', 'baseToken', 'quoteToken'].forEach(key => {
+                const value = String(meta[key] || '').trim();
+                if (value) payload[key] = value;
+            });
+            if (meta.assetType === 'lp_pool') {
+                const supply = Number(meta.lpTokenSupply);
+                if (Number.isFinite(supply) && supply > 0) payload.lpTokenSupply = supply;
+            }
+            return payload;
+        }
+
+        function getLatestLpTokenSupplyFromTransactions(tokenId, txs = []) {
+            const related = (txs || [])
+                .filter(tx => String(tx?.tokenId || '').trim() === String(tokenId || '').trim())
+                .sort((a, b) => Date.parse(b?.date) - Date.parse(a?.date));
+            for (const tx of related) {
+                const supply = Number(tx?.lpTokenSupply);
+                if (Number.isFinite(supply) && supply > 0) return supply;
+            }
+            return 0;
+        }
+
+        function chunkCryptoArray(items, size) {
+            const chunks = [];
+            for (let i = 0; i < items.length; i += size) {
+                chunks.push(items.slice(i, i + size));
+            }
+            return chunks;
+        }
+
+        function buildCryptoPriceCacheEntryFromUsd(usdPrice, now, extra = {}) {
+            const usd = Number(usdPrice);
+            if (!Number.isFinite(usd) || usd <= 0) return null;
+            const php = convertToDisplayCurrency(usd, 'USD', 'PHP');
+            const jpy = convertToDisplayCurrency(usd, 'USD', 'JPY');
+            return {
+                php,
+                usd,
+                jpy,
+                price: php,
+                updated: now,
+                ...extra
+            };
+        }
+
+        async function fetchMinswapJson(url, options = {}, label = 'Minswap request') {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) throw new Error(`${label} failed`);
+                return response.json();
+            } catch (error) {
+                if (String(error?.message || '').includes('Failed to fetch')) {
+                    throw new Error(`${label} was blocked by the browser. Direct LP-id paste still works, but live Minswap search/pricing needs a CORS-safe proxy or fallback source.`);
+                }
+                throw error;
+            }
+        }
+
+        async function fetchCoinGeckoSimplePriceUpdates(ids, now) {
+            const updates = {};
+            for (const chunk of chunkCryptoArray(ids, 100)) {
+                if (!chunk.length) continue;
+                const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${chunk.map(encodeURIComponent).join(',')}&vs_currencies=php,usd,jpy`);
+                if (!res.ok) throw new Error('CoinGecko simple price fetch failed');
+                const data = await res.json();
+                Object.keys(data || {}).forEach(id => {
+                    updates[id] = {
+                        php: data[id].php,
+                        usd: data[id].usd,
+                        jpy: data[id].jpy,
+                        price: data[id].php,
+                        updated: now,
+                        source: 'coingecko_simple'
+                    };
+                });
+            }
+            return updates;
+        }
+
+        async function fetchCardanoTokenPriceUpdates(cardanoTokenIds, now) {
+            const updates = {};
+            const entries = cardanoTokenIds
+                .map(id => ({ id, parsed: parseCardanoTokenId(id) }))
+                .filter(entry => entry.parsed?.address);
+            const nativeAdaEntries = entries.filter(entry => entry.parsed.address === '0x');
+            const minswapEntries = entries.filter(entry => entry.parsed.address !== '0x');
+
+            if (nativeAdaEntries.length > 0) {
+                const adaUpdates = await fetchCoinGeckoSimplePriceUpdates(['cardano'], now);
+                const adaPrice = adaUpdates.cardano;
+                if (adaPrice) {
+                    nativeAdaEntries.forEach(entry => {
+                        updates[entry.id] = {
+                            ...adaPrice,
+                            source: 'coingecko_simple_native_cardano',
+                            network: CARDANO_NETWORK_ID,
+                            tokenAddress: entry.parsed.address
+                        };
+                    });
+                }
+            }
+
+            for (const entry of minswapEntries) {
+                const data = await fetchMinswapJson(
+                    `${MINSWAP_API_BASE_URL}/v1/assets/${encodeURIComponent(entry.parsed.address)}/metrics?currency=usd`,
+                    {},
+                    'Minswap Cardano token price fetch'
+                );
+                const cacheEntry = buildCryptoPriceCacheEntryFromUsd(Number(data?.price), now, {
+                    source: 'minswap_asset_metrics',
+                    network: CARDANO_NETWORK_ID,
+                    tokenAddress: entry.parsed.address,
+                    tokenName: getMinswapAssetName(data?.asset),
+                    tokenSymbol: getMinswapAssetSymbol(data?.asset),
+                    liquidityUsd: Number(data?.liquidity || 0) || undefined
+                });
+                if (cacheEntry) updates[entry.id] = cacheEntry;
+            }
+            return updates;
+        }
+
+        async function fetchMinswapLpPriceUpdates(lpTokenIds, allTxs, now) {
+            const updates = {};
+            const entries = lpTokenIds
+                .map(id => ({
+                    id,
+                    parsed: parseMinswapLpTokenId(id),
+                    lpTokenSupply: getLatestLpTokenSupplyFromTransactions(id, allTxs)
+                }))
+                .filter(entry => entry.parsed?.poolAddress && entry.lpTokenSupply > 0);
+
+            for (const entry of entries) {
+                const data = await fetchMinswapJson(
+                    `${MINSWAP_API_BASE_URL}/v1/pools/${encodeURIComponent(entry.parsed.poolAddress)}/metrics?currency=usd`,
+                    {},
+                    'Minswap LP pool fetch'
+                );
+                const reserveUsd = Number(data?.liquidity_currency || data?.liquidity || 0);
+                if (!Number.isFinite(reserveUsd) || reserveUsd <= 0) continue;
+                const lpPriceUsd = reserveUsd / entry.lpTokenSupply;
+                const baseSymbol = getMinswapAssetSymbol(data?.asset_a, makeMinswapAssetAddress(data?.asset_a));
+                const quoteSymbol = getMinswapAssetSymbol(data?.asset_b, makeMinswapAssetAddress(data?.asset_b));
+                const cacheEntry = buildCryptoPriceCacheEntryFromUsd(lpPriceUsd, now, {
+                    source: 'minswap_pool_metrics',
+                    network: CARDANO_NETWORK_ID,
+                    dex: MINSWAP_DEX_ID,
+                    protocol: data?.type || '',
+                    poolAddress: entry.parsed.poolAddress,
+                    poolName: `${baseSymbol || '?'}-${quoteSymbol || '?'} LP`,
+                    reserveUsd,
+                    lpTokenSupply: entry.lpTokenSupply,
+                    baseToken: baseSymbol,
+                    quoteToken: quoteSymbol
+                });
+                if (cacheEntry) updates[entry.id] = cacheEntry;
+            }
+            return updates;
+        }
+
+        async function fetchMinswapPoolSearch(query) {
+            const directPoolAddress = normalizeMinswapLpAssetReference(query);
+            if (directPoolAddress) {
+                const pool = await fetchMinswapJson(
+                    `${MINSWAP_API_BASE_URL}/v1/pools/${encodeURIComponent(directPoolAddress)}/metrics?currency=usd`,
+                    {},
+                    'Minswap LP pool lookup'
+                );
+                return {
+                    search_after: undefined,
+                    pool_metrics: [pool]
+                };
+            }
+
+            return fetchMinswapJson(`${MINSWAP_API_BASE_URL}/v1/pools/metrics`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    term: query,
+                    only_verified: false,
+                    limit: 12,
+                    sort_field: 'liquidity',
+                    sort_direction: 'desc',
+                    protocols: MINSWAP_PROTOCOLS,
+                    currency: 'usd'
+                })
+            }, 'Minswap pool search');
+        }
+
         const CRYPTO_CONVERSION_LAB_STORAGE_KEY = 'finance_crypto_conversion_lab_v1';
         let cryptoConversionLabState = null;
 
@@ -1096,6 +1474,7 @@
 
         function openCryptoPortfolio() {
             document.getElementById('crypto-portfolio-modal').classList.remove('hidden');
+            renderFinanceCoinGeckoDemoApiKeyControl();
             renderCryptoPortfolio();
         }
 
@@ -1118,15 +1497,21 @@
             // Reset form
             document.getElementById('c-token-search').value = '';
             document.getElementById('c-token-id').value = '';
+            document.getElementById('c-token-search-mode').value = 'coingecko';
             document.getElementById('c-target-token-search').value = '';
             document.getElementById('c-target-token-id').value = '';
+            document.getElementById('c-target-token-search-mode').value = 'coingecko';
             document.getElementById('c-amount').value = '';
+            document.getElementById('c-token-lp-token-supply').value = '';
+            document.getElementById('c-target-token-lp-token-supply').value = '';
             document.getElementById('c-price').value = '';
             document.getElementById('c-notes').value = '';
             document.getElementById('c-date').value = new Date().toISOString().split('T')[0];
             document.getElementById('c-exchange').value = '';
             document.getElementById('c-strategy').value = '';
             document.getElementById('c-total-calc').innerText = fmt(0);
+            clearCryptoAssetMetadata('source');
+            clearCryptoAssetMetadata('target');
             setCType('buy');
 
             document.getElementById('crypto-transaction-modal').classList.remove('hidden');
@@ -1189,6 +1574,209 @@
             }
         }
 
+        function buildMinswapIncludedTokenMap(included) {
+            const map = new Map();
+            (Array.isArray(included) ? included : []).forEach(item => {
+                if (item?.type !== 'token' || !item?.id) return;
+                map.set(item.id, item.attributes || {});
+            });
+            return map;
+        }
+
+        function getMinswapPoolRelationshipId(pool, key) {
+            return String(pool?.relationships?.[key]?.data?.id || '').trim();
+        }
+
+        function getMinswapTokenSummary(tokenId, includedMap) {
+            const attributes = includedMap.get(tokenId) || {};
+            const address = normalizeCardanoAssetAddress(attributes.address || tokenId.replace(/^cardano_/, ''));
+            const symbol = String(attributes.symbol || address || '').trim().toUpperCase();
+            const name = String(attributes.name || symbol || address || '').trim();
+            return {
+                address,
+                tokenId: makeCardanoTokenId(address),
+                symbol,
+                name,
+                image: String(attributes.image_url || '').trim()
+            };
+        }
+
+        function selectCryptoSearchAsset(type, tokenIdEncoded, symbolEncoded, labelEncoded, metadataEncoded = '') {
+            const isTarget = type === 'target';
+            const inputId = isTarget ? 'c-target-token-search' : 'c-token-search';
+            const resultsId = isTarget ? 'target-token-search-results' : 'token-search-results';
+            const idInputId = isTarget ? 'c-target-token-id' : 'c-token-id';
+            const symbolInputId = isTarget ? 'c-target-token-symbol' : 'c-token-symbol';
+
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            const symbol = decodeURIComponent(symbolEncoded || '');
+            const label = decodeURIComponent(labelEncoded || '') || symbol || tokenId;
+            let metadata = {};
+            if (metadataEncoded) {
+                try {
+                    metadata = JSON.parse(decodeURIComponent(metadataEncoded));
+                } catch (_error) {
+                    metadata = {};
+                }
+            }
+
+            document.getElementById(inputId).value = label;
+            document.getElementById(idInputId).value = tokenId;
+            document.getElementById(symbolInputId).value = symbol || tokenId;
+            applyCryptoAssetMetadata(type, metadata);
+            document.getElementById(resultsId)?.classList.add('hidden');
+        }
+
+        function buildMinswapSearchButton(type, tokenId, symbol, label, metadata, text, tone = 'slate') {
+            const toneClass = tone === 'cyan'
+                ? 'bg-cyan-50 text-cyan-700 border-cyan-100 hover:bg-cyan-100'
+                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
+            return `
+                <button type="button"
+                    onclick="selectCryptoSearchAsset('${type}', '${encodeInlineArg(tokenId)}', '${encodeInlineArg(symbol)}', '${encodeInlineArg(label)}', '${encodeInlineArg(JSON.stringify(metadata || {}))}')"
+                    class="px-2.5 py-1.5 rounded-lg border ${toneClass} text-[10px] font-black uppercase tracking-wide">
+                    ${escapeHTML(text)}
+                </button>
+            `;
+        }
+
+        function buildMinswapPoolSelection(pool) {
+            const baseAddress = makeMinswapAssetAddress(pool.asset_a);
+            const quoteAddress = makeMinswapAssetAddress(pool.asset_b);
+            const poolAddress = makeMinswapAssetAddress(pool.lp_asset);
+            const baseSymbol = getMinswapAssetSymbol(pool.asset_a, baseAddress === '0x' ? 'ADA' : baseAddress).toUpperCase();
+            const quoteSymbol = getMinswapAssetSymbol(pool.asset_b, quoteAddress === '0x' ? 'ADA' : quoteAddress).toUpperCase();
+            const baseName = getMinswapAssetName(pool.asset_a, baseSymbol);
+            const quoteName = getMinswapAssetName(pool.asset_b, quoteSymbol);
+            const poolName = `${baseSymbol || '?'}-${quoteSymbol || '?'} LP`;
+            const lpTokenId = makeMinswapLpTokenId(poolAddress);
+            const lpSymbol = `LP ${baseSymbol || '?'}-${quoteSymbol || '?'}`;
+            const baseTokenId = makeCardanoTokenId(baseAddress);
+            const quoteTokenId = makeCardanoTokenId(quoteAddress);
+            const commonMeta = {
+                network: CARDANO_NETWORK_ID,
+                dex: MINSWAP_DEX_ID,
+                protocol: pool.type || '',
+                poolAddress,
+                poolName,
+                baseToken: baseSymbol || baseTokenId,
+                quoteToken: quoteSymbol || quoteTokenId
+            };
+            return {
+                baseAddress,
+                quoteAddress,
+                poolAddress,
+                baseSymbol,
+                quoteSymbol,
+                baseName,
+                quoteName,
+                poolName,
+                lpTokenId,
+                lpSymbol,
+                baseTokenId,
+                quoteTokenId,
+                commonMeta,
+                reserve: Number(pool.liquidity_currency || pool.liquidity || 0),
+                protocolText: String(pool.type || 'Minswap').replace(/^Minswap$/, 'Minswap V1')
+            };
+        }
+
+        function selectMinswapLpPoolFromMetrics(type, pool, resDiv) {
+            const selection = buildMinswapPoolSelection(pool);
+            if (!selection.lpTokenId) return false;
+            const isTarget = type === 'target';
+            const inputId = isTarget ? 'c-target-token-search' : 'c-token-search';
+            const resultsId = isTarget ? 'target-token-search-results' : 'token-search-results';
+            const idInputId = isTarget ? 'c-target-token-id' : 'c-token-id';
+            const symbolInputId = isTarget ? 'c-target-token-symbol' : 'c-token-symbol';
+
+            document.getElementById(inputId).value = selection.poolName;
+            document.getElementById(idInputId).value = selection.lpTokenId;
+            document.getElementById(symbolInputId).value = selection.lpSymbol;
+            applyCryptoAssetMetadata(type, {
+                ...selection.commonMeta,
+                assetType: 'lp_pool'
+            });
+            const resultsEl = resDiv || document.getElementById(resultsId);
+            if (resultsEl) {
+                resultsEl.innerHTML = `<div class="p-3 text-xs text-emerald-700">LP id recognized and converted to ${escapeHTML(selection.lpTokenId)}.</div>`;
+            }
+            return true;
+        }
+
+        function selectMinswapLpReference(type, poolAddress, resDiv) {
+            const normalizedPoolAddress = normalizeMinswapLpAssetReference(poolAddress);
+            if (!normalizedPoolAddress) return false;
+            const isTarget = type === 'target';
+            const inputId = isTarget ? 'c-target-token-search' : 'c-token-search';
+            const resultsId = isTarget ? 'target-token-search-results' : 'token-search-results';
+            const idInputId = isTarget ? 'c-target-token-id' : 'c-token-id';
+            const symbolInputId = isTarget ? 'c-target-token-symbol' : 'c-token-symbol';
+            const lpTokenId = makeMinswapLpTokenId(normalizedPoolAddress);
+            const shortId = `${normalizedPoolAddress.slice(0, 10)}...${normalizedPoolAddress.slice(-10)}`;
+
+            document.getElementById(inputId).value = `Minswap LP ${shortId}`;
+            document.getElementById(idInputId).value = lpTokenId;
+            document.getElementById(symbolInputId).value = 'LP';
+            applyCryptoAssetMetadata(type, {
+                assetType: 'lp_pool',
+                network: CARDANO_NETWORK_ID,
+                dex: MINSWAP_DEX_ID,
+                poolAddress: normalizedPoolAddress,
+                poolName: 'Minswap LP'
+            });
+
+            const resultsEl = resDiv || document.getElementById(resultsId);
+            if (resultsEl) {
+                resultsEl.innerHTML = `<div class="p-3 text-xs text-emerald-700">LP id converted to ${escapeHTML(lpTokenId)}. Add the LP total supply before saving.</div>`;
+            }
+            return true;
+        }
+
+        function renderMinswapSearchResults(type, data, resDiv) {
+            const pools = (Array.isArray(data?.pool_metrics) ? data.pool_metrics : [])
+                .filter(pool => MINSWAP_PROTOCOLS.includes(String(pool?.type || '')))
+                .slice(0, 8);
+
+            if (!pools.length) {
+                resDiv.innerHTML = '<div class="p-3 text-xs text-slate-400">No Minswap pools found.</div>';
+                return;
+            }
+
+            resDiv.innerHTML = pools.map(pool => {
+                const selection = buildMinswapPoolSelection(pool);
+                const baseButton = selection.baseTokenId ? buildMinswapSearchButton(type, selection.baseTokenId, selection.baseSymbol, selection.baseName || selection.baseSymbol, {
+                    ...selection.commonMeta,
+                    assetType: 'cardano_token'
+                }, selection.baseSymbol || 'Base') : '';
+                const quoteButton = selection.quoteTokenId ? buildMinswapSearchButton(type, selection.quoteTokenId, selection.quoteSymbol, selection.quoteName || selection.quoteSymbol, {
+                    ...selection.commonMeta,
+                    assetType: 'cardano_token'
+                }, selection.quoteSymbol || 'Quote') : '';
+                const lpButton = selection.lpTokenId ? buildMinswapSearchButton(type, selection.lpTokenId, selection.lpSymbol, selection.poolName, {
+                    ...selection.commonMeta,
+                    assetType: 'lp_pool'
+                }, 'LP token', 'cyan') : '';
+                const reserveText = selection.reserve > 0 ? `$${selection.reserve.toLocaleString(undefined, { maximumFractionDigits: 0 })} liquidity` : 'Liquidity unavailable';
+
+                return `
+                    <div class="p-3 border-b border-slate-100 last:border-b-0">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-bold text-slate-800">${escapeHTML(selection.poolName)}</p>
+                                <p class="text-[10px] text-slate-400 mt-0.5">${escapeHTML(reserveText)} - ${escapeHTML(selection.protocolText)} Cardano</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mt-2">
+                            ${baseButton}
+                            ${quoteButton}
+                            ${lpButton}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
         async function searchToken(type = 'source') {
             const isTarget = type === 'target';
             const inputId = isTarget ? 'c-target-token-search' : 'c-token-search';
@@ -1198,12 +1786,30 @@
 
             const query = document.getElementById(inputId).value;
             if (!query) return;
+            document.getElementById(idInputId).value = '';
+            document.getElementById(symbolInputId).value = '';
+            clearCryptoAssetMetadata(type);
             const resDiv = document.getElementById(resultsId);
-            resDiv.innerHTML = '<div class="p-3 text-xs text-slate-400">Searching CoinGecko...</div>';
+            const mode = document.getElementById(isTarget ? 'c-target-token-search-mode' : 'c-token-search-mode')?.value || 'coingecko';
+            const directPoolAddress = normalizeMinswapLpAssetReference(query);
+            resDiv.innerHTML = `<div class="p-3 text-xs text-slate-400">Searching ${mode === 'minswap' || directPoolAddress ? 'Minswap pools' : 'CoinGecko'}...</div>`;
             resDiv.classList.remove('hidden');
 
             try {
-                const res = await fetch(`https://api.coingecko.com/api/v3/search?query=${query}`);
+                if (mode === 'minswap' || directPoolAddress) {
+                    if (directPoolAddress && selectMinswapLpReference(type, directPoolAddress, resDiv)) {
+                        return;
+                    }
+                    const data = await fetchMinswapPoolSearch(query);
+                    const directPool = directPoolAddress && Array.isArray(data?.pool_metrics) ? data.pool_metrics[0] : null;
+                    if (directPool && selectMinswapLpPoolFromMetrics(type, directPool, resDiv)) {
+                        return;
+                    }
+                    renderMinswapSearchResults(type, data, resDiv);
+                    return;
+                }
+
+                const res = await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`);
                 const data = await res.json();
                 const coins = data.coins.slice(0, 10);
 
@@ -1223,6 +1829,7 @@
                         document.getElementById(inputId).value = c.name;
                         document.getElementById(idInputId).value = c.id;
                         document.getElementById(symbolInputId).value = c.symbol;
+                        applyCryptoAssetMetadata(type, { assetType: 'coingecko' });
                         resDiv.classList.add('hidden');
                     };
                     div.innerHTML = `
@@ -1235,7 +1842,8 @@
                     resDiv.appendChild(div);
                 });
             } catch (e) {
-                resDiv.innerHTML = '<div class="p-3 text-xs text-rose-400">API Error. Try again.</div>';
+                const sourceLabel = mode === 'minswap' || directPoolAddress ? 'Minswap' : 'API';
+                resDiv.innerHTML = `<div class="p-3 text-xs text-rose-400">${escapeHTML(e?.message || `${sourceLabel} error. Try again.`)}</div>`;
             }
         }
 
@@ -1723,8 +2331,18 @@
                 const targetTokenId = document.getElementById('c-target-token-id').value;
                 const targetTokenSymbol = document.getElementById('c-target-token-symbol').value;
                 const targetAmount = parseFloat(document.getElementById('c-target-amount').value);
+                const sourceMetadata = buildCryptoTxMetadata('source');
+                const targetMetadata = buildCryptoTxMetadata('target');
 
                 if (!tokenId || !amount || !targetTokenId || !targetAmount) { alert("Please fill details"); return; }
+                if (targetMetadata.assetType === 'lp_pool' && (!Number.isFinite(Number(targetMetadata.lpTokenSupply)) || Number(targetMetadata.lpTokenSupply) <= 0)) {
+                    alert("Enter the total LP token supply for the received Minswap LP asset.");
+                    return;
+                }
+                if (sourceMetadata.assetType === 'lp_pool' && (!Number.isFinite(Number(sourceMetadata.lpTokenSupply)) || Number(sourceMetadata.lpTokenSupply) <= 0)) {
+                    alert("Enter the total LP token supply for the source Minswap LP asset.");
+                    return;
+                }
 
                 const swapId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 
@@ -1742,6 +2360,7 @@
                     type: 'swap_out',
                     swapId,
                     linkedToken: targetTokenSymbol,
+                    ...sourceMetadata,
                     notes, exchange, strategy, date
                 };
 
@@ -1759,6 +2378,7 @@
                     type: 'swap_in',
                     swapId,
                     linkedToken: tokenSymbol,
+                    ...targetMetadata,
                     notes, exchange, strategy, date
                 };
 
@@ -1769,8 +2389,13 @@
                 const isAirdrop = type === 'airdrop';
                 const price = isAirdrop ? 0 : parseFloat(document.getElementById('c-price').value);
                 const currency = isAirdrop ? 'PHP' : document.getElementById('c-currency').value;
+                const sourceMetadata = buildCryptoTxMetadata('source');
 
                 if (!tokenId || !amount || (!isAirdrop && !price)) { alert("Please fill details"); return; }
+                if (sourceMetadata.assetType === 'lp_pool' && (!Number.isFinite(Number(sourceMetadata.lpTokenSupply)) || Number(sourceMetadata.lpTokenSupply) <= 0)) {
+                    alert("Enter the total LP token supply for this Minswap LP asset.");
+                    return;
+                }
 
                 // Convert to PHP for base storage consistency
                 const phpPrice = isAirdrop ? 0 : convertToDisplayCurrency(price, currency, 'PHP');
@@ -1787,6 +2412,7 @@
                     phpTotal,
                     total: phpTotal, // Maintain compatibility with existing logic which uses .total as PHP
                     type,
+                    ...sourceMetadata,
                     notes,
                     exchange,
                     strategy,
@@ -2301,13 +2927,16 @@
 
 	        async function fetchCryptoPrices() {
             let holdings = {};
+            let allTxs = [];
             const canReadVaultHoldings = !!cryptoKey || !!previewMode;
             if (canReadVaultHoldings) {
                 try {
                     holdings = await calculateHoldings();
+                    allTxs = await getDecryptedCrypto();
                 } catch (error) {
                     console.warn('Could not calculate holdings for crypto price refresh.', error);
                     holdings = {};
+                    allTxs = [];
                 }
             }
 
@@ -2344,22 +2973,38 @@
 	            if (statusEl) statusEl.innerText = canReadVaultHoldings ? "Updating prices..." : "Updating route prices...";
 
 	            try {
-	                // Using PHP as base currency since app is PHP-centric
-	                const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=php,usd,jpy`);
-	                if (!res.ok) throw new Error("API Limit or Error");
-	                const data = await res.json();
+                    const normalIds = ids.filter(id => !isCardanoTokenId(id) && !isMinswapLpTokenId(id));
+                    const cardanoTokenIds = ids.filter(id => isCardanoTokenId(id));
+                    const lpTokenIds = ids.filter(id => isMinswapLpTokenId(id));
+                    const now = Date.now();
+                    const priceUpdates = {};
+                    const warnings = [];
+
+                    if (normalIds.length > 0) {
+                        Object.assign(priceUpdates, await fetchCoinGeckoSimplePriceUpdates(normalIds, now));
+                    }
+
+                    if (cardanoTokenIds.length > 0) {
+                        Object.assign(priceUpdates, await fetchCardanoTokenPriceUpdates(cardanoTokenIds, now));
+                    }
+                    if (lpTokenIds.length > 0) {
+                        const lpIdsWithSupply = lpTokenIds.filter(id => getLatestLpTokenSupplyFromTransactions(id, allTxs) > 0);
+                        const missingSupplyCount = lpTokenIds.length - lpIdsWithSupply.length;
+                        if (missingSupplyCount > 0) {
+                            warnings.push(`${missingSupplyCount} Minswap LP holding${missingSupplyCount === 1 ? '' : 's'} missing total LP supply.`);
+                        }
+                        Object.assign(priceUpdates, await fetchMinswapLpPriceUpdates(lpIdsWithSupply, allTxs, now));
+                    }
+
+                    if (!Object.keys(priceUpdates).length && warnings.length) {
+                        throw new Error(warnings.join(' '));
+                    }
 
 	                // Update cache locally only (avoid Firestore upload on price refresh)
 	                const db = await getDB();
-	                const now = Date.now();
-	                Object.keys(data).forEach(id => {
-	                    db.crypto_prices[id] = {
-	                        php: data[id].php,
-	                        usd: data[id].usd,
-	                        jpy: data[id].jpy,
-	                        price: data[id].php, // Backward compatibility
-	                        updated: now
-	                    };
+                    db.crypto_prices = db.crypto_prices || {};
+	                Object.keys(priceUpdates).forEach(id => {
+	                    db.crypto_prices[id] = priceUpdates[id];
 	                });
 		                await persistLocalDBSnapshot(db);
 		                cryptoPrices = db.crypto_prices || {};
@@ -2367,10 +3012,15 @@
                         if (!document.getElementById('crypto-conversion-lab-modal')?.classList.contains('hidden')) {
                             renderCryptoConversionLab();
                         }
+                        if (warnings.length) {
+                            const message = warnings.join(' ');
+                            if (statusEl) statusEl.innerText = `Prices updated with warning: ${message}`;
+                            if (typeof showToast === 'function') showToast(message);
+                        }
 		            } catch (e) {
 	                console.error(e);
-	                if (statusEl) statusEl.innerText = "Update Failed (Rate Limit?)";
-	                alert("Could not fetch prices. The free API might be rate-limited. Please try again in a minute.");
+	                if (statusEl) statusEl.innerText = "Update Failed";
+	                alert(e?.message || "Could not fetch prices. The free API might be rate-limited. Please try again in a minute.");
 	            } finally {
                 if (icon) icon.classList.remove('animate-spin');
             }
