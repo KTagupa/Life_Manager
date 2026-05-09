@@ -1419,12 +1419,117 @@
                         id: String(payment.id || generateFinanceRecordId('iph_')),
                         amount,
                         date: String(payment.date || new Date().toISOString()).trim(),
+                        dueDate: String(payment.dueDate || payment.date || '').slice(0, 10),
+                        installmentNumber: Math.max(0, Math.round(Number(payment.installmentNumber || 0))),
                         notes: String(payment.notes || '').trim(),
                         createdAt: payment.createdAt || new Date().toISOString()
                     };
                 })
                 .filter(Boolean)
                 .sort((a, b) => Date.parse(b.date || b.createdAt || '') - Date.parse(a.date || a.createdAt || ''));
+        }
+
+        function getInstallmentDateKey(value) {
+            const raw = String(value || '').trim();
+            const matched = raw.match(/^\d{4}-\d{2}-\d{2}/);
+            if (matched) return matched[0];
+            return new Date().toISOString().slice(0, 10);
+        }
+
+        function getInstallmentLocalDate(value) {
+            const key = getInstallmentDateKey(value);
+            return new Date(`${key}T12:00:00`);
+        }
+
+        function getInstallmentDaysInMonth(year, monthIndex) {
+            return new Date(year, monthIndex + 1, 0).getDate();
+        }
+
+        function makeInstallmentDueDate(year, monthIndex, dueDay) {
+            const day = Math.min(Math.max(1, Math.round(Number(dueDay || 1))), getInstallmentDaysInMonth(year, monthIndex));
+            return new Date(year, monthIndex, day, 12, 0, 0, 0);
+        }
+
+        function buildInstallmentPaymentSchedule(plan) {
+            const normalized = normalizeInstallmentPlanInput(plan);
+            const count = Math.max(0, Math.round(Number(normalized.installmentCount || 0)));
+            const dueDay = Number(normalized.dueDay || 0);
+            if (!count || !dueDay) return [];
+
+            const startDate = getInstallmentLocalDate(normalized.startDate);
+            let firstDue = makeInstallmentDueDate(startDate.getFullYear(), startDate.getMonth(), dueDay);
+            if (firstDue < startDate) {
+                firstDue = makeInstallmentDueDate(startDate.getFullYear(), startDate.getMonth() + 1, dueDay);
+            }
+
+            const monthlyAmount = normalized.monthlyAmount > 0
+                ? normalized.monthlyAmount
+                : (normalized.totalAmount > 0 ? normalized.totalAmount / count : 0);
+            const todayKey = new Date().toISOString().slice(0, 10);
+            const historicalPayments = normalizeInstallmentHistoricalPayments(normalized.historicalPayments);
+            const historicalKeys = new Set(historicalPayments.map(payment => payment.dueDate || getInstallmentDateKey(payment.date)));
+            const normalPaymentKeys = new Set((window.allDecryptedTransactions || [])
+                .filter(tx => tx && tx.type === 'installment_payment' && String(tx.installmentPlanId || '').trim() === String(plan?.id || '').trim())
+                .map(tx => getInstallmentDateKey(tx.date)));
+
+            return Array.from({ length: count }, (_, index) => {
+                const dueDate = makeInstallmentDueDate(firstDue.getFullYear(), firstDue.getMonth() + index, dueDay);
+                const dueDateKey = dueDate.toISOString().slice(0, 10);
+                const isFuture = dueDateKey > todayKey;
+                const isRecorded = historicalKeys.has(dueDateKey) || normalPaymentKeys.has(dueDateKey);
+                return {
+                    installmentNumber: index + 1,
+                    dueDateKey,
+                    amount: monthlyAmount,
+                    isFuture,
+                    isRecorded
+                };
+            });
+        }
+
+        function renderInstallmentPreviousPaymentSchedule(plan) {
+            const wrap = document.getElementById('ip-payment-schedule-wrap');
+            const list = document.getElementById('ip-payment-schedule-list');
+            const meta = document.getElementById('ip-payment-schedule-meta');
+            if (!wrap || !list || !meta) return;
+
+            const schedule = buildInstallmentPaymentSchedule(plan);
+            const availableRows = schedule.filter(row => !row.isFuture && !row.isRecorded);
+            meta.textContent = `${availableRows.length} available`;
+
+            if (!schedule.length) {
+                list.innerHTML = '<div class="text-xs text-violet-500 text-center py-4">Set start date, due day, and number of payments first.</div>';
+                return;
+            }
+
+            list.innerHTML = schedule.map(row => {
+                const disabled = row.isFuture || row.isRecorded;
+                const checked = !disabled;
+                const label = row.isRecorded ? 'Recorded' : (row.isFuture ? 'Future' : 'Ready');
+                const labelClass = row.isRecorded
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : (row.isFuture ? 'bg-slate-100 text-slate-500' : 'bg-violet-100 text-violet-700');
+                const dateLabel = new Date(`${row.dueDateKey}T12:00:00`).toLocaleDateString();
+
+                return `
+                    <label class="flex items-center justify-between gap-3 rounded-xl border ${disabled ? 'border-slate-100 bg-white/60 opacity-70' : 'border-violet-100 bg-white'} px-3 py-2">
+                        <span class="flex items-center gap-3 min-w-0">
+                            <input type="checkbox"
+                                class="ip-previous-payment-checkbox w-4 h-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                                data-installment-number="${row.installmentNumber}"
+                                data-due-date="${escapeAttr(row.dueDateKey)}"
+                                data-amount="${Number(row.amount || 0)}"
+                                ${checked ? 'checked' : ''}
+                                ${disabled ? 'disabled' : ''}>
+                            <span class="min-w-0">
+                                <span class="block text-xs font-bold text-slate-700">#${row.installmentNumber} • ${escapeHTML(dateLabel)}</span>
+                                <span class="block text-[10px] text-slate-400">${fmt(row.amount)}</span>
+                            </span>
+                        </span>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${labelClass}">${label}</span>
+                    </label>
+                `;
+            }).join('');
         }
 
         function normalizeInstallmentPlanInput(source = {}) {
@@ -1858,6 +1963,12 @@
             document.getElementById('ip-payment-date').value = options.date || new Date().toISOString().split('T')[0];
             document.getElementById('ip-payment-notes').value = options.notes || '';
             document.getElementById('ip-payment-record-note')?.classList.toggle('hidden', !recordOnly);
+            document.getElementById('ip-payment-manual-fields')?.classList.toggle('hidden', recordOnly);
+            document.getElementById('ip-payment-schedule-wrap')?.classList.toggle('hidden', !recordOnly);
+            document.getElementById('ip-payment-save-btn').innerText = recordOnly ? 'Save Previous' : 'Save Payment';
+            if (recordOnly) {
+                renderInstallmentPreviousPaymentSchedule(plan);
+            }
             document.getElementById('installment-payment-modal').classList.remove('hidden');
         }
 
@@ -1869,7 +1980,11 @@
             const selectedDate = document.getElementById('ip-payment-date').value;
             const recordOnly = document.getElementById('ip-payment-mode')?.value === 'record_only';
 
-            if (!plan || !Number.isFinite(amount) || amount <= 0) {
+            if (!plan) {
+                alert('Could not find this installment plan.');
+                return;
+            }
+            if (!recordOnly && (!Number.isFinite(amount) || amount <= 0)) {
                 alert('Enter a valid payment amount.');
                 return;
             }
@@ -1888,15 +2003,28 @@
                 const rawPlan = db.installment_plans[planIndex];
                 const decryptedPlan = await decryptData(rawPlan.data);
                 const nextPlan = normalizeInstallmentPlanInput(decryptedPlan);
-                nextPlan.historicalPayments = normalizeInstallmentHistoricalPayments([
-                    ...(nextPlan.historicalPayments || []),
-                    {
+                const selectedRows = Array.from(document.querySelectorAll('.ip-previous-payment-checkbox:checked:not(:disabled)'))
+                    .map(input => ({
                         id: generateFinanceRecordId('iph_'),
-                        amount,
-                        date,
+                        amount: Math.max(0, Number(input.dataset.amount || 0)),
+                        dueDate: String(input.dataset.dueDate || '').slice(0, 10),
+                        installmentNumber: Math.max(0, Math.round(Number(input.dataset.installmentNumber || 0))),
                         notes: noteInput,
                         createdAt: new Date().toISOString()
-                    }
+                    }))
+                    .filter(item => item.amount > 0 && item.dueDate);
+
+                if (!selectedRows.length) {
+                    alert('Choose at least one past installment to record.');
+                    return;
+                }
+
+                nextPlan.historicalPayments = normalizeInstallmentHistoricalPayments([
+                    ...(nextPlan.historicalPayments || []),
+                    ...selectedRows.map(row => ({
+                        ...row,
+                        date: new Date(`${row.dueDate}T12:00:00`).toISOString()
+                    }))
                 ]);
 
                 db.installment_plans[planIndex] = {

@@ -1655,10 +1655,19 @@
             <input type="hidden" id="ip-payment-plan-id">
             <input type="hidden" id="ip-payment-mode" value="normal">
             <div class="space-y-4">
-                <input type="number" id="ip-payment-amount" placeholder="Payment Amount"
-                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500">
-                <input type="date" id="ip-payment-date"
-                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500 font-bold text-slate-700">
+                <div id="ip-payment-manual-fields" class="space-y-4">
+                    <input type="number" id="ip-payment-amount" placeholder="Payment Amount"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500">
+                    <input type="date" id="ip-payment-date"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500 font-bold text-slate-700">
+                </div>
+                <div id="ip-payment-schedule-wrap" class="hidden rounded-2xl border border-violet-100 bg-violet-50/50 p-3">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <p class="text-xs font-black uppercase tracking-wider text-violet-700">Installment Schedule</p>
+                        <span id="ip-payment-schedule-meta" class="text-[10px] font-bold text-violet-500">0 available</span>
+                    </div>
+                    <div id="ip-payment-schedule-list" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+                </div>
                 <input type="text" id="ip-payment-notes" placeholder="Notes (optional)"
                     class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500">
                 <p id="ip-payment-record-note" class="hidden text-xs text-violet-600 bg-violet-50 border border-violet-100 rounded-2xl px-4 py-3">Previous payments update this plan's history and remaining balance only. They do not change cash, reports, or Recent Movements.</p>
@@ -1666,7 +1675,7 @@
                 <div class="flex gap-3 pt-4">
                     <button onclick="toggleModal('installment-payment-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                    <button onclick="runFinancePendingAction('saveInstallmentPayment', this, saveInstallmentPayment)"
+                    <button id="ip-payment-save-btn" onclick="runFinancePendingAction('saveInstallmentPayment', this, saveInstallmentPayment)"
                         class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save Payment</button>
                 </div>
             </div>
@@ -3694,7 +3703,7 @@
 
     <!-- App Core -->
     <script src="assets/js/core/config.js?v=20260509a"></script>
-    <script src="assets/js/core/metrics.js?v=20260509b"></script>
+    <script src="assets/js/core/metrics.js?v=20260509c"></script>
     <script src="../assets/js/financeBridgeQueue.js?v=20260425a"></script>
     <script src="assets/js/core/storage.js?v=20260509a"></script>
     <script src="assets/js/core/auth.js?v=20260509a"></script>
@@ -3705,8 +3714,8 @@
     <script src="assets/js/features/ronin.js?v=20260425a"></script>
     <script src="assets/js/features/crypto.js?v=20260425a"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
-    <script src="assets/js/ui/renderers.js?v=20260509b"></script>
-    <script src="assets/js/features/crud.js?v=20260509b"></script>
+    <script src="assets/js/ui/renderers.js?v=20260509c"></script>
+    <script src="assets/js/features/crud.js?v=20260509c"></script>
     <script src="assets/js/features/backup.js?v=20260509a"></script>
     <script src="assets/js/features/quick-links.js?v=20260425a"></script>
     <script src="assets/js/features/item-tracking.js?v=20260425a"></script>
