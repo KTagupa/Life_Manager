@@ -94,6 +94,10 @@
             return tx?.type === 'credit_card_payment' && !!getTxCreditCardId(tx);
         }
 
+        function isInstallmentPayment(tx) {
+            return tx?.type === 'installment_payment' && !!String(tx?.installmentPlanId || '').trim();
+        }
+
         function isDebtBorrowCashInTx(tx) {
             return tx?.debtBorrowTracked === true && (tx?.type === 'debt_increase' || tx?.type === 'income');
         }
@@ -126,7 +130,7 @@
                 return isCreditCardCharge(tx) ? 0 : -amount;
             }
 
-            if (isCreditCardPayment(tx)) {
+            if (isCreditCardPayment(tx) || isInstallmentPayment(tx)) {
                 return -amount;
             }
 
@@ -141,7 +145,7 @@
         }
 
         function isExpenseLikeTx(tx) {
-            return tx?.type === 'expense' || isCreditCardPayment(tx);
+            return tx?.type === 'expense' || isCreditCardPayment(tx) || isInstallmentPayment(tx);
         }
 
         function getTxExpenseDelta(tx) {
@@ -152,6 +156,7 @@
 
         function getTxExpenseCategory(tx) {
             if (isCreditCardPayment(tx)) return 'Card Payments';
+            if (isInstallmentPayment(tx)) return 'BNPL Payments';
             return String(tx?.category || 'Others').trim() || 'Others';
         }
 
@@ -187,6 +192,36 @@
 
         function computeCreditCardOutstandingAsOf(endTs, transactions) {
             return Array.from(computeCreditCardOutstandingMapAsOf(endTs, transactions).values())
+                .reduce((sum, amount) => sum + (Number(amount) || 0), 0);
+        }
+
+        function computeInstallmentOutstandingMapAsOf(endTs, transactions) {
+            const plans = window.allDecryptedInstallmentPlans || [];
+            const outstanding = new Map();
+
+            plans.forEach(plan => {
+                if (!plan?.id) return;
+                const startTs = Date.parse(plan.startDate || plan.createdAt || new Date().toISOString());
+                if (Number.isFinite(startTs) && startTs > endTs) return;
+                outstanding.set(plan.id, Math.max(0, Number(plan.totalAmount || 0)));
+            });
+
+            (transactions || []).forEach(tx => {
+                if (!isInstallmentPayment(tx)) return;
+                const ts = getTxTimestamp(tx);
+                const planId = String(tx.installmentPlanId || '').trim();
+                if (!planId || !Number.isFinite(ts) || ts > endTs || !outstanding.has(planId)) return;
+
+                const amount = Math.max(0, Number(tx?.amt || 0));
+                if (!Number.isFinite(amount) || amount <= 0) return;
+                outstanding.set(planId, Math.max(0, outstanding.get(planId) - amount));
+            });
+
+            return outstanding;
+        }
+
+        function computeInstallmentOutstandingAsOf(endTs, transactions) {
+            return Array.from(computeInstallmentOutstandingMapAsOf(endTs, transactions).values())
                 .reduce((sum, amount) => sum + (Number(amount) || 0), 0);
         }
 

@@ -15,6 +15,8 @@ const {
   buildAutomaticHatchReminders,
   buildAutomaticIncubationReminders,
   stageSuggestion,
+  applyAutomaticStage,
+  applyAutomaticStages,
   retentionDaysForStatus,
   buildRetentionSnapshot,
   buildBirdSaleFinanceRows,
@@ -68,6 +70,39 @@ function run() {
     breed: "broiler",
     status: "active"
   }).stage, "rooster");
+  const autoStageNow = "2026-01-02T03:04:05.000Z";
+  const staleFemale = {
+    id: "bird-auto-stage",
+    hatchDate: isoDaysAgo(160, nowMs),
+    sex: "female",
+    breed: "native",
+    status: "active",
+    stage: "pullet"
+  };
+  const autoFemale = applyAutomaticStage(staleFemale, {
+    nowIso: autoStageNow
+  });
+  assert.equal(autoFemale.stage, "layer");
+  assert.equal(autoFemale.updatedAt, autoStageNow);
+  const matureUnknown = {
+    id: "bird-unknown-stage",
+    hatchDate: isoDaysAgo(180, nowMs),
+    sex: "unknown",
+    breed: "native",
+    status: "active",
+    stage: "grower"
+  };
+  assert.equal(applyAutomaticStage(matureUnknown), matureUnknown);
+  assert.equal(applyAutomaticStage({
+    ...staleFemale,
+    archivedAt: autoStageNow
+  }).stage, "pullet");
+  const autoBatch = applyAutomaticStages([staleFemale, matureUnknown], {
+    nowIso: autoStageNow
+  });
+  assert.equal(autoBatch.hasChanges, true);
+  assert.equal(autoBatch.changed.length, 1);
+  assert.equal(autoBatch.rows[0].stage, "layer");
 
   assert.equal(retentionDaysForStatus("sold"), 90);
   assert.equal(retentionDaysForStatus("culled"), 30);

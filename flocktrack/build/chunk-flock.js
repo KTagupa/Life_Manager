@@ -324,6 +324,56 @@ function formatBirdWeightDisplay(value, unit) {
   const normalizedUnit = String(unit || "").trim();
   return `${fmtNum(numeric)} ${normalizedUnit}`.trim();
 }
+function stageNeedsSexForAutomaticChoice(bird, suggestion) {
+  if (!bird || suggestion?.stage) return false;
+  if (!bird.hatchDate) return false;
+  if (bird.status && bird.status !== "active") return false;
+  if (bird.stage === "retired") return false;
+  const daysOld = ageDays(bird.hatchDate);
+  return Number.isFinite(daysOld) && daysOld >= 140 && String(bird.sex || "unknown").toLowerCase() === "unknown";
+}
+function AutoStagePanel({
+  suggestion,
+  currentStage = "chick",
+  accent = "#b45309",
+  needsSex = false
+}) {
+  const hasSuggestion = !!suggestion?.stage;
+  const title = hasSuggestion ? stageLabel(suggestion.stage) : stageLabel(currentStage || "chick");
+  const detail = hasSuggestion ? suggestion.reason : needsSex ? "Set sex to female or male so the mature stage is clear." : "";
+  if (!hasSuggestion && !detail) return null;
+  return React.createElement("div", {
+    style: {
+      border: `1px solid ${accent}55`,
+      background: `${accent}12`,
+      borderRadius: 10,
+      padding: "10px 11px",
+      marginBottom: 8
+    }
+  }, React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#475569",
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: ".04em"
+    }
+  }, hasSuggestion ? "Age-based stage" : "One detail needed"), React.createElement("div", {
+    style: {
+      marginTop: 4,
+      fontSize: 16,
+      fontWeight: 800,
+      color: "#0f172a"
+    }
+  }, title), detail && React.createElement("div", {
+    style: {
+      marginTop: 4,
+      fontSize: 13,
+      color: "#475569",
+      lineHeight: 1.35
+    }
+  }, detail));
+}
 
 function birdFeedRecentDays(count, endDay = today()) {
   const addDaysToDay = globalThis.FlockTrackLogic?.addDaysToDay;
@@ -983,6 +1033,33 @@ function BirdsScreen({
     status: infoForm.status || sel.status
   }) : stageSuggestion(sel), [infoForm?.breed, infoForm?.hatchDate, infoForm?.sex, infoForm?.stage, infoForm?.status, sel?.id, sel?.status]);
   const addSuggestion = useMemo(() => stageSuggestion(bf), [bf.hatchDate, bf.sex, bf.breed, bf.stage, bf.status]);
+  useEffect(() => {
+    if (!infoForm || !infoSuggestion?.stage || infoSuggestion.stage === infoForm.stage) return;
+    setInfoForm(prev => {
+      if (!prev || prev.stage === infoSuggestion.stage) return prev;
+      const suggestion = stageSuggestion({
+        ...sel,
+        ...prev,
+        status: prev.status || sel?.status
+      });
+      if (!suggestion?.stage || suggestion.stage === prev.stage) return prev;
+      return {
+        ...prev,
+        stage: suggestion.stage
+      };
+    });
+  }, [infoForm?.stage, infoSuggestion?.stage, sel]);
+  useEffect(() => {
+    if (!addSuggestion?.stage || addSuggestion.stage === bf.stage) return;
+    setBf(prev => {
+      const suggestion = stageSuggestion(prev);
+      if (!suggestion?.stage || suggestion.stage === prev.stage) return prev;
+      return {
+        ...prev,
+        stage: suggestion.stage
+      };
+    });
+  }, [addSuggestion?.stage, bf.stage]);
   const parseCodeNum = v => {
     const n = Number.parseInt(v, 10);
     return Number.isFinite(n) && n > 0 ? n : 1;
@@ -1201,25 +1278,6 @@ function BirdsScreen({
     }
     return items.filter(item => item.sortAt > 0).sort((a, b) => b.sortAt - a.sortAt || a.title.localeCompare(b.title));
   }, [batchById, bhs, birdReminderItems, bmsDesc, penById, sel, selEggState, selPhotos]);
-  function confirmApplyStageSuggestion(bird, suggestion) {
-    if (!bird || !infoForm || !suggestion || !suggestion.stage) return;
-    if (suggestion.stage === infoForm.stage) return;
-    const ok = window.confirm(`Apply stage suggestion for ${bird.tagId || "this bird"}?\n\n${stageLabel(infoForm.stage)} -> ${stageLabel(suggestion.stage)}\n${suggestion.reason}`);
-    if (!ok) return;
-    setInfoForm({
-      ...infoForm,
-      stage: suggestion.stage
-    });
-  }
-  function confirmApplyAddSuggestion() {
-    if (!addSuggestion || addSuggestion.stage === bf.stage) return;
-    const ok = window.confirm(`Use suggested stage for this new bird?\n\n${stageLabel(bf.stage)} -> ${stageLabel(addSuggestion.stage)}\n${addSuggestion.reason}`);
-    if (!ok) return;
-    setBf({
-      ...bf,
-      stage: addSuggestion.stage
-    });
-  }
   function openAddBirdForm() {
     const seed = nextOutsiderSeed(birds);
     setObBatch(seed.batchNo);
@@ -1735,7 +1793,8 @@ function BirdsScreen({
       background: theme,
       color: "#ffffff"
     };
-    const canApplyInfoSuggestion = !!(infoSuggestion && infoForm && infoSuggestion.stage !== infoForm.stage);
+    const showInfoAutoStage = !!(infoSuggestion && infoForm);
+    const infoStageNeedsSex = stageNeedsSexForAutomaticChoice(infoForm || sel, infoSuggestion);
     const showFloatingInfoSave = tab === "info" && infoDirty;
     const floatingInfoSaveBottom = showFloatingSummary ? 164 : 84;
     const recentPhotoFloatingTop = 16;
@@ -2062,33 +2121,20 @@ function BirdsScreen({
       key: pen.id,
       value: pen.id
     }, pen.name)))), React.createElement(FL, {
-      lbl: "Update Stage"
+      lbl: "Stage"
     }, React.createElement("div", {
       style: {
         position: "relative"
       }
-    }, canApplyInfoSuggestion && React.createElement("button", {
-      type: "button",
-      style: {
-        ...C.sm,
-        position: "absolute",
-        top: 8,
-        right: 8,
-        zIndex: 1,
-        color: theme,
-        borderColor: theme + "55",
-        background: "#ffffff"
-      },
-      onClick: () => confirmApplyStageSuggestion(sel, infoSuggestion)
-    }, "Apply Suggestion"), canApplyInfoSuggestion && React.createElement("div", {
-      style: {
-        fontSize: 12,
-        color: "#475569",
-        fontWeight: 700,
-        marginBottom: 6,
-        paddingRight: 148
-      }
-    }, "Suggested: ", stageLabel(infoSuggestion.stage)), React.createElement(StagePicker, {
+    }, showInfoAutoStage && React.createElement(AutoStagePanel, {
+      suggestion: infoSuggestion,
+      currentStage: infoForm?.stage || sel.stage,
+      accent: theme
+    }), infoStageNeedsSex && React.createElement(AutoStagePanel, {
+      currentStage: infoForm?.stage || sel.stage,
+      accent: theme,
+      needsSex: true
+    }), React.createElement(StagePicker, {
       value: infoForm?.stage || sel.stage,
       accent: theme,
       options: STAGES_BIRD_INFO,
@@ -2096,14 +2142,7 @@ function BirdsScreen({
         ...(p || makeInfoForm(sel)),
         stage
       }))
-    }), canApplyInfoSuggestion && React.createElement("div", {
-      style: {
-        marginTop: 6,
-        fontSize: 12,
-        color: "#64748b",
-        lineHeight: 1.35
-      }
-    }, infoSuggestion.reason))), (infoForm?.status || sel.status) === "sold" && React.createElement("div", {
+    }))), (infoForm?.status || sel.status) === "sold" && React.createElement("div", {
       style: {
         marginTop: 4,
         marginBottom: 2,
@@ -3850,52 +3889,19 @@ function BirdsScreen({
     value: pen.id
   }, pen.name)))), React.createElement(FL, {
     lbl: "Stage"
-  }, React.createElement(StagePicker, {
+  }, (addSuggestion || stageNeedsSexForAutomaticChoice(bf, addSuggestion)) && React.createElement(AutoStagePanel, {
+    suggestion: addSuggestion,
+    currentStage: bf.stage,
+    accent: "#b45309",
+    needsSex: stageNeedsSexForAutomaticChoice(bf, addSuggestion)
+  }), React.createElement(StagePicker, {
     value: bf.stage,
     accent: "#b45309",
     onChange: stage => setBf({
       ...bf,
       stage
     })
-  })), addSuggestion && addSuggestion.stage !== bf.stage && React.createElement("div", {
-    style: {
-      border: "1px solid #b4530955",
-      background: "#b4530912",
-      borderRadius: 10,
-      padding: "10px 11px",
-      marginTop: 4
-    }
-  }, React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: "#475569",
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: ".04em"
-    }
-  }, "Suggested Stage"), React.createElement("div", {
-    style: {
-      marginTop: 4,
-      fontSize: 16,
-      fontWeight: 800,
-      color: "#0f172a"
-    }
-  }, stageLabel(addSuggestion.stage)), React.createElement("div", {
-    style: {
-      marginTop: 4,
-      fontSize: 13,
-      color: "#475569"
-    }
-  }, addSuggestion.reason), React.createElement("button", {
-    style: {
-      ...C.sm,
-      marginTop: 8,
-      color: "#b45309",
-      borderColor: "#b4530955",
-      background: "#ffffff"
-    },
-    onClick: confirmApplyAddSuggestion
-  }, "Use Suggestion")), React.createElement(FL, {
+  })), React.createElement(FL, {
     lbl: "Sex"
   }, React.createElement("select", {
     style: C.sel,

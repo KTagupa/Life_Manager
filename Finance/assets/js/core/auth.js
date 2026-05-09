@@ -45,7 +45,7 @@ function createNewKdfMeta() {
 
 function hasVaultData(db) {
     if (!db || typeof db !== 'object') return false;
-    const keys = ['transactions', 'bills', 'debts', 'credit_cards', 'lent', 'crypto', 'wishlist', 'recurring_transactions', 'goals', 'investment_goals'];
+    const keys = ['transactions', 'bills', 'debts', 'credit_cards', 'installment_plans', 'lent', 'crypto', 'wishlist', 'recurring_transactions', 'goals', 'investment_goals'];
     return keys.some(k => Array.isArray(db[k]) && db[k].length > 0);
 }
 
@@ -61,7 +61,7 @@ function isEncryptedVaultPayload(value) {
 
 function countEncryptedVaultEntries(db) {
     if (!db || typeof db !== 'object') return 0;
-    const collectionKeys = ['transactions', 'bills', 'debts', 'credit_cards', 'lent', 'crypto', 'wishlist'];
+    const collectionKeys = ['transactions', 'bills', 'debts', 'credit_cards', 'installment_plans', 'lent', 'crypto', 'wishlist'];
     let count = 0;
     collectionKeys.forEach(key => {
         count += (db[key] || []).filter(item => item && !item.deletedAt && isEncryptedVaultPayload(item.data)).length;
@@ -76,7 +76,7 @@ function collectVaultDecryptProbes(db) {
 
     if (isEncryptedVaultPayload(db?.vault_probe)) probes.push(db.vault_probe);
 
-    const collectionKeys = ['transactions', 'bills', 'debts', 'credit_cards', 'lent', 'crypto', 'wishlist'];
+    const collectionKeys = ['transactions', 'bills', 'debts', 'credit_cards', 'installment_plans', 'lent', 'crypto', 'wishlist'];
     collectionKeys.forEach(key => {
         const sample = (db?.[key] || []).find(item => item && !item.deletedAt && isEncryptedVaultPayload(item.data));
         if (sample && sample.data) probes.push(sample.data);
@@ -552,6 +552,7 @@ async function loadFromStorage() {
     rawBills = (db.bills || []).filter(b => !b.deletedAt);
     rawDebts = (db.debts || []).filter(d => !d.deletedAt);
     rawCreditCards = (db.credit_cards || []).filter(card => !card.deletedAt);
+    rawInstallmentPlans = (db.installment_plans || []).filter(plan => !plan.deletedAt);
     rawLent = (db.lent || []).filter(l => !l.deletedAt);
     rawWishlist = (db.wishlist || []).filter(w => !w.deletedAt);
     rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
@@ -566,6 +567,7 @@ async function loadFromStorage() {
     await runLoadStep('bills', async () => renderBills(rawBills));
     await runLoadStep('debts', async () => renderDebts(rawDebts));
     await runLoadStep('credit-cards', async () => renderCreditCards(rawCreditCards));
+    await runLoadStep('installments-bnpl', async () => renderInstallmentPlans(rawInstallmentPlans));
     await runLoadStep('lent', async () => renderLent(rawLent));
     await runLoadStep('post-ledger-refresh', async () => {
         if (typeof refreshBusinessKPIPanel === 'function') {

@@ -625,9 +625,10 @@ async function computeStatementForMonth(monthKey) {
     const receivables = statementsComputeReceivablesAsOf(range.endTs, allTransactions);
     const debt = statementsComputeDebtOutstandingAsOf(range.endTs, allTransactions);
     const creditCardDebt = computeCreditCardOutstandingAsOf(range.endTs, allTransactions);
+    const installmentDebt = computeInstallmentOutstandingAsOf(range.endTs, allTransactions);
     const crypto = cryptoPosition.bookValue;
     const totalAssets = cash + receivables + crypto;
-    const totalLiabilities = debt + creditCardDebt;
+    const totalLiabilities = debt + creditCardDebt + installmentDebt;
     const netWorth = totalAssets - totalLiabilities;
 
     return {
@@ -661,6 +662,7 @@ async function computeStatementForMonth(monthKey) {
             crypto,
             debt,
             creditCardDebt,
+            installmentDebt,
             totalAssets,
             totalLiabilities,
             netWorth
@@ -788,6 +790,7 @@ function renderStatementPanels(statement, source = 'live') {
         statementsMetricRow('Crypto (Book)', fmt(Number(balanceSheet.crypto || 0))),
         statementsMetricRow('Debt', fmt(Number(balanceSheet.debt || 0))),
         statementsMetricRow('Credit Cards', fmt(Number(balanceSheet.creditCardDebt || 0))),
+        statementsMetricRow('Installment/BNPL', fmt(Number(balanceSheet.installmentDebt || 0))),
         '<div class="border-t border-slate-100 my-1"></div>',
         statementsMetricRow('Total Assets', fmt(Number(balanceSheet.totalAssets || 0))),
         statementsMetricRow('Total Liabilities', fmt(Number(balanceSheet.totalLiabilities || 0))),
@@ -940,6 +943,7 @@ async function exportStatementToPDF(statement, sourceLabel = 'Live') {
             ['Crypto (Book)', fmt(Number(statement?.balanceSheet?.crypto || 0))],
             ['Debt', fmt(Number(statement?.balanceSheet?.debt || 0))],
             ['Credit Cards', fmt(Number(statement?.balanceSheet?.creditCardDebt || 0))],
+            ['Installment/BNPL', fmt(Number(statement?.balanceSheet?.installmentDebt || 0))],
             ['Total Assets', fmt(Number(statement?.balanceSheet?.totalAssets || 0))],
             ['Total Liabilities', fmt(Number(statement?.balanceSheet?.totalLiabilities || 0))],
             ['Net Worth', fmt(Number(statement?.balanceSheet?.netWorth || 0))]

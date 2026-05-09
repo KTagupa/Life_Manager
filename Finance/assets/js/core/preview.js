@@ -64,7 +64,7 @@
         const db = getDefaultDB();
 
         db.sync.updatedAt = new Date(now).toISOString();
-        db.custom_categories = ['Software', 'Health', 'Travel', 'Coffee', 'Gear', 'Business Ops'];
+        db.custom_categories = ['Software', 'Health', 'Travel', 'Coffee', 'Gear', 'Business Ops', 'Installments/BNPL'];
         db.kpi_targets = {
             ...getDefaultKpiTargets(),
             savingsRatePct: 24,
@@ -95,6 +95,9 @@
         const backupCardId = makeId('cc');
         const backupCardName = 'Transit Visa';
         const backupCardCreatedAt = previewDateDaysAgo(84, rand);
+        const phoneBnplId = makeId('ip');
+        const phoneBnplName = 'Phone BNPL';
+        const phoneBnplCreatedAt = previewDateDaysAgo(58, rand);
 
         const transactionTemplates = [
             ['Client Retainer', 'Salary', 'income', 2],
@@ -283,6 +286,37 @@
             createdAt: backupCardCreatedAt,
             lastModified: Date.parse(backupCardCreatedAt) || now
         });
+
+        db.installment_plans.push({
+            id: phoneBnplId,
+            data: createPreviewVaultPayload({
+                name: phoneBnplName,
+                provider: 'ShopPay',
+                totalAmount: 36000,
+                installmentCount: 12,
+                monthlyAmount: 3000,
+                dueDay: 10,
+                startDate: phoneBnplCreatedAt.slice(0, 10),
+                notes: 'Preview fixed BNPL plan',
+                createdAt: phoneBnplCreatedAt
+            }),
+            deletedAt: null,
+            createdAt: phoneBnplCreatedAt,
+            lastModified: Date.parse(phoneBnplCreatedAt) || now
+        });
+
+        const bnplPaymentDate = previewDateDaysAgo(6, rand);
+        db.transactions.push(createPreviewEncryptedEntry(makeId, 'tx', {
+            desc: `Payment for ${phoneBnplName}`,
+            amt: 3000,
+            category: 'Installments/BNPL',
+            type: 'installment_payment',
+            paymentSource: 'cash',
+            installmentPlanId: phoneBnplId,
+            installmentPlanName: phoneBnplName,
+            date: bnplPaymentDate,
+            notes: 'Preview BNPL payment'
+        }, bnplPaymentDate));
 
         [
             ['Alex', 6000],

@@ -430,6 +430,7 @@ let rawTransactions = [];
 let rawBills = [];
 let rawDebts = [];
 let rawCreditCards = [];
+let rawInstallmentPlans = [];
 let rawLent = [];
 let rawCrypto = [];
 let rawWishlist = [];

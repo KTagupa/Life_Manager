@@ -4,6 +4,8 @@ const {
   completeReminderAndScheduleNext,
   buildAutomaticHatchReminders,
   buildAutomaticIncubationReminders,
+  applyAutomaticStage: appApplyAutomaticStage,
+  applyAutomaticStages: appApplyAutomaticStages,
   financeCategoryLabel
 } = globalThis.FlockTrackLogic;
 const dataApi = globalThis.FlockTrackData || {};
@@ -1271,6 +1273,13 @@ function App() {
     eggStates
   }), [batches, eggStates]);
   const allReminders = useMemo(() => [...instances, ...autoIncubationReminders, ...autoHatchReminders], [autoHatchReminders, autoIncubationReminders, instances]);
+  useEffect(() => {
+    if (!loaded || typeof appApplyAutomaticStages !== "function" || !birds.length) return;
+    const result = appApplyAutomaticStages(birds);
+    if (!result.hasChanges) return;
+    setBirds(result.rows);
+    result.changed.forEach(bird => dbPut("birds", bird).catch(console.error));
+  }, [birds, loaded]);
   const calendarEventsByDay = useMemo(() => {
     const map = new Map();
     allReminders.forEach((reminder, idx) => {
@@ -1778,12 +1787,14 @@ function App() {
     dbDel("financeEntries", id);
   }
   function addBird(b) {
-    setBirds(p => [...p, b]);
-    dbPut("birds", b);
+    const nextBird = typeof appApplyAutomaticStage === "function" ? appApplyAutomaticStage(b) : b;
+    setBirds(p => [...p, nextBird]);
+    dbPut("birds", nextBird);
   }
   function updBird(b) {
-    setBirds(p => p.map(x => x.id === b.id ? b : x));
-    dbPut("birds", b);
+    const nextBird = typeof appApplyAutomaticStage === "function" ? appApplyAutomaticStage(b) : b;
+    setBirds(p => p.map(x => x.id === nextBird.id ? nextBird : x));
+    dbPut("birds", nextBird);
   }
   async function delBird(id) {
     const current = birds.find(b => b.id === id);

@@ -236,7 +236,7 @@ async function refreshBusinessKPIPanel() {
     const investmentRate = income > 0 ? (investmentContribution / income) * 100 : NaN;
 
     const cashNow = computeCurrentBalance(allTx);
-    const debtOutstandingNow = computeDebtOutstandingAsOf(Date.now(), allTx) + computeCreditCardOutstandingAsOf(Date.now(), allTx);
+    const debtOutstandingNow = computeDebtOutstandingAsOf(Date.now(), allTx) + computeCreditCardOutstandingAsOf(Date.now(), allTx) + computeInstallmentOutstandingAsOf(Date.now(), allTx);
     const lentOutstandingNow = computeLentOutstandingAsOf(Date.now(), allTx);
     const netWorth = cashNow + lentOutstandingNow + cryptoValue - debtOutstandingNow;
 
@@ -245,10 +245,10 @@ async function refreshBusinessKPIPanel() {
     const prevMonthEnd = new Date(range.end.getFullYear(), range.end.getMonth(), 0, 23, 59, 59, 999);
     const currentCore = computeCashBalanceAsOf(currentEndTs, allTx)
         + computeLentOutstandingAsOf(currentEndTs, allTx)
-        - (computeDebtOutstandingAsOf(currentEndTs, allTx) + computeCreditCardOutstandingAsOf(currentEndTs, allTx));
+        - (computeDebtOutstandingAsOf(currentEndTs, allTx) + computeCreditCardOutstandingAsOf(currentEndTs, allTx) + computeInstallmentOutstandingAsOf(currentEndTs, allTx));
     const prevCore = computeCashBalanceAsOf(prevMonthEnd.getTime(), allTx)
         + computeLentOutstandingAsOf(prevMonthEnd.getTime(), allTx)
-        - (computeDebtOutstandingAsOf(prevMonthEnd.getTime(), allTx) + computeCreditCardOutstandingAsOf(prevMonthEnd.getTime(), allTx));
+        - (computeDebtOutstandingAsOf(prevMonthEnd.getTime(), allTx) + computeCreditCardOutstandingAsOf(prevMonthEnd.getTime(), allTx) + computeInstallmentOutstandingAsOf(prevMonthEnd.getTime(), allTx));
     const coreTrendPct = Math.abs(prevCore) > 0.01
         ? ((currentCore - prevCore) / Math.abs(prevCore)) * 100
         : NaN;

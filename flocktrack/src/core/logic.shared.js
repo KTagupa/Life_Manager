@@ -707,6 +707,34 @@
     };
     return null;
   };
+  const applyAutomaticStage = (bird, options = {}) => {
+    if (!bird || typeof bird !== "object") return bird;
+    if (bird.archivedAt) return bird;
+    const suggestion = stageSuggestion(bird);
+    if (!suggestion?.stage || suggestion.stage === bird.stage) return bird;
+    return {
+      ...bird,
+      stage: suggestion.stage,
+      updatedAt: options.nowIso || new Date().toISOString()
+    };
+  };
+  const applyAutomaticStages = (birds, options = {}) => {
+    const source = Array.isArray(birds) ? birds : [];
+    const nowIso = options.nowIso || new Date().toISOString();
+    const changed = [];
+    const rows = source.map(bird => {
+      const nextBird = applyAutomaticStage(bird, {
+        nowIso
+      });
+      if (nextBird !== bird) changed.push(nextBird);
+      return nextBird;
+    });
+    return {
+      rows,
+      changed,
+      hasChanges: changed.length > 0
+    };
+  };
   const buildRetentionSnapshot = ({
     birds = [],
     photos = [],
@@ -822,6 +850,8 @@
     buildAutomaticHatchReminders,
     buildAutomaticIncubationReminders,
     stageSuggestion,
+    applyAutomaticStage,
+    applyAutomaticStages,
     retentionDaysForStatus,
     buildRetentionSnapshot,
     buildBirdSaleFinanceRows,

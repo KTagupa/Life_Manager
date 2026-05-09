@@ -161,6 +161,7 @@
                 debts: 'debt',
                 credit_cards: 'credit card',
                 creditCards: 'credit card',
+                installment_plans: 'installment / BNPL plan',
                 lent: 'lent record',
                 wishlist: 'wishlist item',
                 reminders: 'reminder'
@@ -683,7 +684,7 @@
                 // Check if category exists in dropdown
                 const categoryExists = Array.from(cat.options).some(o => o.value === item.category);
 
-                if (item.type === 'debt_increase' || item.type === 'credit_card_payment' || !categoryExists) {
+                if (item.type === 'debt_increase' || item.type === 'credit_card_payment' || item.type === 'installment_payment' || !categoryExists) {
                     alert("This transaction belongs to a specialized workflow. Please manage it from its dedicated section instead.");
                     return;
                 }
@@ -1213,7 +1214,7 @@
             document.getElementById('electricity-history-modal')?.classList.add('hidden');
         }
 
-        async function openElectricityCycleModal(billId, cycleId = null) {
+        async function openElectricityCycleModal(billId, cycleId = null, options = {}) {
             const resolved = await getNormalizedBillPayloadById(billId);
             if (!resolved) {
                 alert('Could not load this electricity bill.');
@@ -1239,14 +1240,55 @@
             document.getElementById('electricity-cycle-kwh').value = Number.isFinite(Number(cycle?.kwhUsed))
                 ? Number(cycle.kwhUsed)
                 : '';
-            document.getElementById('electricity-cycle-status').value = cycle?.status || 'unpaid';
-            document.getElementById('electricity-cycle-paid-by').value = cycle?.paidBy || 'me';
+            const defaultStatus = options.status === 'paid' ? 'paid' : (cycle?.status || 'unpaid');
+            document.getElementById('electricity-cycle-status').value = defaultStatus;
+            document.getElementById('electricity-cycle-paid-by').value = options.paidBy === 'family_other' ? 'family_other' : (cycle?.paidBy || 'me');
             document.getElementById('electricity-cycle-paid-at').value = cycle?.paidAt
                 ? String(cycle.paidAt).slice(0, 10)
-                : new Date().toISOString().slice(0, 10);
+                : (options.paidAt || new Date().toISOString().slice(0, 10));
             document.getElementById('electricity-cycle-notes').value = cycle?.notes || '';
             onElectricityCycleStatusChange();
             modal.classList.remove('hidden');
+        }
+
+        async function openBillPaymentTrigger(billId) {
+            const resolved = await getNormalizedBillPayloadById(billId);
+            if (!resolved) {
+                alert('Could not load this bill.');
+                return;
+            }
+
+            const bill = resolved.bill;
+            if (bill.billType === 'electricity') {
+                const currentMonth = new Date().toISOString().slice(0, 7);
+                const currentCycle = (bill.electricityHistory || []).find(cycle => cycle.billingMonth === currentMonth);
+                await openElectricityCycleModal(billId, currentCycle?.id || null, {
+                    status: 'paid',
+                    paidBy: 'me',
+                    paidAt: new Date().toISOString().slice(0, 10)
+                });
+                return;
+            }
+
+            openTransactionModal();
+            document.getElementById('t-desc').value = bill.name || 'Bill payment';
+            document.getElementById('t-category').value = 'Bills';
+            setTType('expense');
+            setTPaymentSource('cash');
+            document.getElementById('t-date').value = new Date().toISOString().split('T')[0];
+
+            if (Number.isFinite(Number(bill.amt)) && Number(bill.amt) > 0) {
+                document.getElementById('t-amount').value = Number(bill.amt).toFixed(2);
+                updateConversionPreview();
+                showToast(`💡 Estimated: ${fmt(bill.amt)} (you can adjust)`);
+            }
+
+            window.setTimeout(() => {
+                const amountField = document.getElementById('t-amount');
+                if (!amountField) return;
+                amountField.focus();
+                amountField.select();
+            }, 100);
         }
 
         async function upsertElectricityBillPaymentTransaction(db, billId, billName, cycle) {
@@ -1358,6 +1400,49 @@
             billType.value = 'standard';
             setBillTypeUIState(null);
             modal.classList.remove('hidden');
+        }
+
+        function getTrackedInstallmentPlans() {
+            return Array.isArray(window.allDecryptedInstallmentPlans) ? window.allDecryptedInstallmentPlans : [];
+        }
+
+        function findTrackedInstallmentPlan(planId) {
+            return getTrackedInstallmentPlans().find(plan => plan && plan.id === planId) || null;
+        }
+
+        function normalizeInstallmentPlanInput(source = {}) {
+            const totalAmount = Math.max(0, Number(source.totalAmount || 0));
+            const installmentCount = Math.max(0, Math.round(Number(source.installmentCount || 0)));
+            const rawMonthlyAmount = Number(source.monthlyAmount || 0);
+            const monthlyAmount = rawMonthlyAmount > 0
+                ? rawMonthlyAmount
+                : (totalAmount > 0 && installmentCount > 0 ? totalAmount / installmentCount : 0);
+            const rawDueDay = Number(source.dueDay || 0);
+            const dueDay = Number.isFinite(rawDueDay) && rawDueDay > 0
+                ? Math.max(1, Math.min(31, Math.round(rawDueDay)))
+                : null;
+
+            return {
+                name: String(source.name || '').trim(),
+                provider: String(source.provider || '').trim(),
+                totalAmount,
+                installmentCount,
+                monthlyAmount,
+                dueDay,
+                startDate: String(source.startDate || '').trim() || new Date().toISOString().slice(0, 10),
+                notes: String(source.notes || '').trim(),
+                createdAt: source.createdAt || new Date().toISOString()
+            };
+        }
+
+        async function ensureInstallmentCategory(db) {
+            const categoryName = 'Installments/BNPL';
+            const existing = getUniqueCategoryList([...(db.custom_categories || []), ...customCategories])
+                .some(name => String(name || '').toLowerCase() === categoryName.toLowerCase());
+            if (!existing) {
+                customCategories.push(categoryName);
+                db.custom_categories = getUniqueCategoryList([...(db.custom_categories || []), categoryName]);
+            }
         }
 
         function openDebtModal() {
@@ -1598,6 +1683,217 @@
                 checkRecurringReminders();
             }
             showToast('✅ Card payment recorded');
+        }
+
+        async function openInstallmentPlanModal(id = null) {
+            const modal = document.getElementById('installment-plan-modal');
+            const title = document.getElementById('ip-modal-title');
+            const planId = document.getElementById('ip-id');
+            const name = document.getElementById('ip-name');
+            const provider = document.getElementById('ip-provider');
+            const totalAmount = document.getElementById('ip-total-amount');
+            const installmentCount = document.getElementById('ip-installment-count');
+            const monthlyAmount = document.getElementById('ip-monthly-amount');
+            const dueDay = document.getElementById('ip-due-day');
+            const startDate = document.getElementById('ip-start-date');
+            const notes = document.getElementById('ip-notes');
+
+            if (id) {
+                const raw = rawInstallmentPlans.find(plan => plan.id === id);
+                if (raw) {
+                    const data = await decryptData(raw.data);
+                    if (data) {
+                        const plan = normalizeInstallmentPlanInput(data);
+                        title.innerText = 'Edit Installment / BNPL';
+                        planId.value = id;
+                        name.value = plan.name;
+                        provider.value = plan.provider;
+                        totalAmount.value = plan.totalAmount > 0 ? plan.totalAmount.toFixed(2) : '';
+                        installmentCount.value = plan.installmentCount || '';
+                        monthlyAmount.value = plan.monthlyAmount > 0 ? plan.monthlyAmount.toFixed(2) : '';
+                        dueDay.value = plan.dueDay || '';
+                        startDate.value = getDateInputValue(plan.startDate);
+                        notes.value = plan.notes;
+                        modal.classList.remove('hidden');
+                        return;
+                    }
+                }
+            }
+
+            title.innerText = 'Add Installment / BNPL';
+            planId.value = '';
+            name.value = '';
+            provider.value = '';
+            totalAmount.value = '';
+            installmentCount.value = '';
+            monthlyAmount.value = '';
+            dueDay.value = '';
+            startDate.value = new Date().toISOString().slice(0, 10);
+            notes.value = '';
+            modal.classList.remove('hidden');
+        }
+
+        async function saveInstallmentPlan() {
+            const id = document.getElementById('ip-id').value;
+            const nextPlan = normalizeInstallmentPlanInput({
+                name: document.getElementById('ip-name').value,
+                provider: document.getElementById('ip-provider').value,
+                totalAmount: document.getElementById('ip-total-amount').value,
+                installmentCount: document.getElementById('ip-installment-count').value,
+                monthlyAmount: document.getElementById('ip-monthly-amount').value,
+                dueDay: document.getElementById('ip-due-day').value,
+                startDate: document.getElementById('ip-start-date').value,
+                notes: document.getElementById('ip-notes').value
+            });
+
+            if (!nextPlan.name || nextPlan.totalAmount <= 0) {
+                alert('Enter a plan name and valid total financed amount.');
+                return;
+            }
+
+            const db = await getDB();
+            db.installment_plans = Array.isArray(db.installment_plans) ? db.installment_plans : [];
+            db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
+            await ensureInstallmentCategory(db);
+
+            let previousPlanName = '';
+            let planId = id;
+
+            if (id) {
+                const idx = db.installment_plans.findIndex(plan => plan.id === id);
+                if (idx !== -1) {
+                    const existing = db.installment_plans[idx] || {};
+                    const existingData = existing?.data ? await decryptData(existing.data) : null;
+                    previousPlanName = String(existingData?.name || '').trim();
+                    nextPlan.createdAt = existingData?.createdAt || nextPlan.createdAt;
+                    db.installment_plans[idx] = {
+                        ...existing,
+                        id,
+                        data: await encryptData(nextPlan),
+                        lastModified: Date.now(),
+                        deletedAt: existing.deletedAt || null
+                    };
+                }
+            } else {
+                planId = generateFinanceRecordId('ip_');
+                db.installment_plans.push({
+                    id: planId,
+                    data: await encryptData(nextPlan),
+                    createdAt: Date.now(),
+                    deletedAt: null
+                });
+            }
+
+            if (id && previousPlanName && previousPlanName !== nextPlan.name) {
+                for (let i = 0; i < db.transactions.length; i++) {
+                    const rawTx = db.transactions[i];
+                    if (!rawTx || rawTx.deletedAt) continue;
+                    const decrypted = await decryptData(rawTx.data);
+                    if (!decrypted || decrypted.type !== 'installment_payment') continue;
+                    if (String(decrypted.installmentPlanId || '').trim() !== id) continue;
+
+                    const updatedTx = {
+                        ...decrypted,
+                        installmentPlanName: nextPlan.name
+                    };
+                    if (String(decrypted.desc || '').trim() === `Payment for ${previousPlanName}`) {
+                        updatedTx.desc = `Payment for ${nextPlan.name}`;
+                    }
+
+                    db.transactions[i] = {
+                        ...rawTx,
+                        data: await encryptData(updatedTx),
+                        lastModified: Date.now(),
+                        deletedAt: rawTx.deletedAt || null
+                    };
+                }
+            }
+
+            const persistedDB = await saveDB(db);
+            rawInstallmentPlans = (persistedDB.installment_plans || db.installment_plans || []).filter(plan => !plan.deletedAt);
+            rawTransactions = (persistedDB.transactions || db.transactions || []).filter(tx => !tx.deletedAt);
+            toggleModal('installment-plan-modal');
+            await loadAndRender();
+            await renderInstallmentPlans(rawInstallmentPlans);
+            refreshTransactionCategorySelect();
+            await refreshLinkedPanels({
+                refreshKPI: true,
+                refreshForecast: true,
+                refreshStatements: true
+            });
+            showToast(id ? '✅ Installment plan updated' : '✅ Installment plan added');
+        }
+
+        function openInstallmentPaymentModal(id, options = {}) {
+            const plan = findTrackedInstallmentPlan(id);
+            if (!plan) return;
+
+            document.getElementById('ip-payment-plan-id').value = id;
+            document.getElementById('ip-payment-plan-label').innerText = plan.name || 'Installment plan';
+            document.getElementById('ip-payment-amount').value = Number.isFinite(Number(options.amount))
+                ? Number(options.amount).toFixed(2)
+                : (Number(plan.monthlyAmount || 0) > 0 ? Number(plan.monthlyAmount).toFixed(2) : '');
+            document.getElementById('ip-payment-date').value = options.date || new Date().toISOString().split('T')[0];
+            document.getElementById('ip-payment-notes').value = options.notes || '';
+            document.getElementById('installment-payment-modal').classList.remove('hidden');
+        }
+
+        async function saveInstallmentPayment() {
+            const planId = document.getElementById('ip-payment-plan-id').value;
+            const plan = findTrackedInstallmentPlan(planId);
+            const amount = parseFloat(document.getElementById('ip-payment-amount').value);
+            const noteInput = document.getElementById('ip-payment-notes').value.trim();
+            const selectedDate = document.getElementById('ip-payment-date').value;
+
+            if (!plan || !Number.isFinite(amount) || amount <= 0) {
+                alert('Enter a valid payment amount.');
+                return;
+            }
+
+            const date = selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString();
+            const desc = noteInput || `Payment for ${plan.name}`;
+            const encrypted = await encryptData({
+                desc,
+                merchant: plan.provider || null,
+                tags: [],
+                amt: amount,
+                originalAmt: amount,
+                originalCurrency: 'PHP',
+                quantity: 1,
+                notes: noteInput,
+                type: 'installment_payment',
+                category: 'Installments/BNPL',
+                installmentPlanId: plan.id,
+                installmentPlanName: plan.name,
+                paymentSource: 'cash',
+                date,
+                importId: null,
+                dedupeHash: null,
+                deletedAt: null
+            });
+
+            const db = await getDB();
+            db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
+            await ensureInstallmentCategory(db);
+            db.transactions.push({
+                id: generateFinanceRecordId('tx_'),
+                data: encrypted,
+                createdAt: Date.now(),
+                deletedAt: null
+            });
+
+            const persistedDB = await saveDB(db);
+            rawTransactions = (persistedDB.transactions || db.transactions || []).filter(t => !t.deletedAt);
+            toggleModal('installment-payment-modal');
+            await loadAndRender();
+            await renderInstallmentPlans(rawInstallmentPlans);
+            refreshTransactionCategorySelect();
+            await refreshLinkedPanels({
+                refreshKPI: true,
+                refreshForecast: true,
+                refreshStatements: true
+            });
+            showToast('✅ BNPL payment recorded');
         }
 
         async function saveTransaction() {
@@ -2571,6 +2867,7 @@
             if (col === 'transactions') return 'transactions';
             if (col === 'bills') return 'bills';
             if (col === 'debts') return 'debts';
+            if (col === 'installment_plans') return 'installment_plans';
             if (col === 'lent') return 'lent';
             if (col === 'crypto') return 'crypto';
             if (col === 'wishlist') return 'wishlist';
@@ -2676,6 +2973,7 @@
                 await loadAndRender();
                 await renderDebts(rawDebts); // Update debt progress if a payment was deleted
                 await renderCreditCards(rawCreditCards);
+                await renderInstallmentPlans(rawInstallmentPlans);
             } else if (col === 'bills') {
                 rawBills = (persistedDB.bills || []).filter(b => !b.deletedAt);
                 recurringTransactions = persistedDB.recurring_transactions || recurringTransactions;
@@ -2687,6 +2985,14 @@
                 await renderDebts(rawDebts);
                 populateBudgetInputs();
                 refreshTransactionCategorySelect();
+                await refreshLinkedPanels({
+                    refreshKPI: true,
+                    refreshForecast: true,
+                    refreshStatements: true
+                });
+            } else if (col === 'installment_plans') {
+                rawInstallmentPlans = (persistedDB.installment_plans || []).filter(plan => !plan.deletedAt);
+                await renderInstallmentPlans(rawInstallmentPlans);
                 await refreshLinkedPanels({
                     refreshKPI: true,
                     refreshForecast: true,

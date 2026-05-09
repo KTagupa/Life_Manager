@@ -711,8 +711,8 @@
                                 </div>
                                 <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4">
                                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-700">Takes Cash Away Now</p>
-                                    <p class="text-sm font-bold text-rose-950 mt-2">Cash expenses and credit card payments reduce Total Balance immediately.</p>
-                                    <p class="text-xs text-rose-800 mt-2">This covers regular expenses, bill payments paid by you, wishlist conversions once saved, reminder quick-adds saved as cash expenses, crypto buy expense mirrors, CSV or bridge expenses, debt repayments, and credit card payment records. Card payments are cash leaving you now, even though they settle debt instead of creating a new purchase.</p>
+                                    <p class="text-sm font-bold text-rose-950 mt-2">Cash expenses, credit card payments, and BNPL payments reduce Total Balance immediately.</p>
+                                    <p class="text-xs text-rose-800 mt-2">This covers regular expenses, bill payments paid by you, wishlist conversions once saved, reminder quick-adds saved as cash expenses, crypto buy expense mirrors, CSV or bridge expenses, debt repayments, credit card payment records, and installment/BNPL payments. Card and BNPL payments are cash leaving you now, even though they settle debt instead of creating a new purchase.</p>
                                 </div>
                                 <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4">
                                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Recorded, Not Cash Gone Yet</p>
@@ -722,7 +722,7 @@
                             </div>
                             <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                                 <p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Where These Movements Come From</p>
-                                <p class="text-sm text-slate-700 mt-2">Recent Movements includes transactions saved directly from Add Transaction, Reminders quick-add, Credit Card Payment, Electricity bill payment records, Debt activity, Wishlist conversion, CSV Import, bridge imports from the main app, and auto-created crypto buy expense entries. Bills, debts, credit cards, and wishlist items only appear here after they create an actual transaction.</p>
+                                <p class="text-sm text-slate-700 mt-2">Recent Movements includes transactions saved directly from Add Transaction, Reminders quick-add, Credit Card Payment, BNPL Payment, Electricity bill payment records, Debt activity, Wishlist conversion, CSV Import, bridge imports from the main app, and auto-created crypto buy expense entries. Bills, debts, credit cards, BNPL plans, and wishlist items only appear here after they create an actual transaction.</p>
                                 <p class="text-sm font-bold text-slate-800 mt-3">Quick rule: if you want Total Balance to reflect what you currently have on hand, save card purchases as credit-card charges and only reduce cash when you log the payment.</p>
                             </div>
                         </details>
@@ -881,6 +881,25 @@
                     </div>
                     <div id="credit-card-list" class="space-y-3">
                         <div class="text-center text-xs text-slate-400 py-2">No credit cards tracked yet.</div>
+                    </div>
+                </div>
+
+                <!-- Installment / BNPL Section -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-violet-100 text-violet-600 p-1.5 rounded-lg">
+                                <i data-lucide="calendar-clock" class="w-4 h-4"></i>
+                            </div>
+                            <h2 class="font-bold text-slate-800">Installment / BNPL</h2>
+                        </div>
+                        <button onclick="openInstallmentPlanModal()"
+                            class="text-xs font-bold text-violet-700 hover:text-violet-800 bg-violet-50 px-3 py-1 rounded-full transition-colors">
+                            + Add
+                        </button>
+                    </div>
+                    <div id="installment-plan-list" class="space-y-3">
+                        <div class="text-center text-xs text-slate-400 py-2">No installment plans tracked yet.</div>
                     </div>
                 </div>
 
@@ -1561,6 +1580,91 @@
                     <button onclick="toggleModal('credit-card-payment-modal')"
                         class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
                     <button onclick="runFinancePendingAction('saveCreditCardPayment', this, saveCreditCardPayment)"
+                        class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save Payment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Add/Edit Installment Plan -->
+    <div id="installment-plan-modal"
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-violet-100 p-2 rounded-xl text-violet-600">
+                    <i data-lucide="calendar-clock" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-2xl font-bold text-slate-800" id="ip-modal-title">Add Installment / BNPL</h3>
+            </div>
+            <input type="hidden" id="ip-id">
+            <div class="space-y-4">
+                <input type="text" id="ip-name" placeholder="Plan Name (e.g. Phone Installment)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
+                <input type="text" id="ip-provider" placeholder="Provider / Merchant (optional)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="number" id="ip-total-amount" placeholder="Total financed"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
+                    <input type="number" id="ip-installment-count" placeholder="# Payments"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Monthly Payment</label>
+                        <input type="number" id="ip-monthly-amount" placeholder="Auto if blank"
+                            class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500 font-bold text-slate-700">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Due Day</label>
+                        <input type="number" id="ip-due-day" min="1" max="31" placeholder="e.g. 10"
+                            class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500 font-bold text-slate-700">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Start Date</label>
+                    <input type="date" id="ip-start-date"
+                        class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500 font-bold text-slate-700">
+                </div>
+                <input type="text" id="ip-notes" placeholder="Notes (optional)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
+                <p class="text-xs text-slate-400 ml-2">Unlike credit cards, this tracks a fixed repayment plan and remaining scheduled balance.</p>
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="toggleModal('installment-plan-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="runFinancePendingAction('saveInstallmentPlan', this, saveInstallmentPlan)"
+                        class="flex-1 py-4 bg-violet-600 text-white rounded-2xl font-bold hover:bg-violet-700 shadow-lg shadow-violet-200">Save Plan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Record Installment / BNPL Payment -->
+    <div id="installment-payment-modal"
+        class="fixed inset-0 z-[115] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="bg-emerald-100 p-2 rounded-xl text-emerald-600">
+                    <i data-lucide="banknote-arrow-down" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">Record BNPL Payment</h3>
+                    <p id="ip-payment-plan-label" class="text-sm text-slate-500 mt-1">Installment plan</p>
+                </div>
+            </div>
+            <input type="hidden" id="ip-payment-plan-id">
+            <div class="space-y-4">
+                <input type="number" id="ip-payment-amount" placeholder="Payment Amount"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500">
+                <input type="date" id="ip-payment-date"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500 font-bold text-slate-700">
+                <input type="text" id="ip-payment-notes" placeholder="Notes (optional)"
+                    class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-emerald-500">
+
+                <div class="flex gap-3 pt-4">
+                    <button onclick="toggleModal('installment-payment-modal')"
+                        class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
+                    <button onclick="runFinancePendingAction('saveInstallmentPayment', this, saveInstallmentPayment)"
                         class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save Payment</button>
                 </div>
             </div>
@@ -3587,21 +3691,21 @@
     </div>
 
     <!-- App Core -->
-    <script src="assets/js/core/config.js?v=20260425a"></script>
-    <script src="assets/js/core/metrics.js?v=20260425a"></script>
+    <script src="assets/js/core/config.js?v=20260509a"></script>
+    <script src="assets/js/core/metrics.js?v=20260509a"></script>
     <script src="../assets/js/financeBridgeQueue.js?v=20260425a"></script>
-    <script src="assets/js/core/storage.js?v=20260425a"></script>
-    <script src="assets/js/core/auth.js?v=20260425a"></script>
-    <script src="assets/js/core/preview.js?v=20260425a"></script>
+    <script src="assets/js/core/storage.js?v=20260509a"></script>
+    <script src="assets/js/core/auth.js?v=20260509a"></script>
+    <script src="assets/js/core/preview.js?v=20260509a"></script>
 
     <!-- App Modules -->
     <script src="assets/js/features/xrpl.js?v=20260425a"></script>
     <script src="assets/js/features/ronin.js?v=20260425a"></script>
     <script src="assets/js/features/crypto.js?v=20260425a"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
-    <script src="assets/js/ui/renderers.js?v=20260425a"></script>
-    <script src="assets/js/features/crud.js?v=20260425a"></script>
-    <script src="assets/js/features/backup.js?v=20260425a"></script>
+    <script src="assets/js/ui/renderers.js?v=20260509a"></script>
+    <script src="assets/js/features/crud.js?v=20260509a"></script>
+    <script src="assets/js/features/backup.js?v=20260509a"></script>
     <script src="assets/js/features/quick-links.js?v=20260425a"></script>
     <script src="assets/js/features/item-tracking.js?v=20260425a"></script>
     <script src="assets/js/features/reminders.js?v=20260425a"></script>
@@ -3610,10 +3714,10 @@
     <script src="assets/js/features/insights.js?v=20260425a"></script>
     <script src="assets/js/features/planning.js?v=20260425a"></script>
     <script src="assets/js/features/forecast.js?v=20260425a"></script>
-    <script src="assets/js/features/statements.js?v=20260425a"></script>
+    <script src="assets/js/features/statements.js?v=20260509a"></script>
     <script src="assets/js/features/operations.js?v=20260425a"></script>
     <script src="assets/js/features/close.js?v=20260425a"></script>
-    <script src="assets/js/features/kpi.js?v=20260425a"></script>
+    <script src="assets/js/features/kpi.js?v=20260509a"></script>
     <script src="assets/js/features/analytics.js?v=20260425a"></script>
     <script src="assets/js/features/revenue.js?v=20260425a"></script>
     <script src="assets/js/features/variance.js?v=20260425a"></script>

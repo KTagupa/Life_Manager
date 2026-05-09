@@ -719,6 +719,34 @@ const {
     };
     return null;
   };
+  const applyAutomaticStage = (bird, options = {}) => {
+    if (!bird || typeof bird !== "object") return bird;
+    if (bird.archivedAt) return bird;
+    const suggestion = stageSuggestion(bird);
+    if (!suggestion?.stage || suggestion.stage === bird.stage) return bird;
+    return {
+      ...bird,
+      stage: suggestion.stage,
+      updatedAt: options.nowIso || new Date().toISOString()
+    };
+  };
+  const applyAutomaticStages = (birds, options = {}) => {
+    const source = Array.isArray(birds) ? birds : [];
+    const nowIso = options.nowIso || new Date().toISOString();
+    const changed = [];
+    const rows = source.map(bird => {
+      const nextBird = applyAutomaticStage(bird, {
+        nowIso
+      });
+      if (nextBird !== bird) changed.push(nextBird);
+      return nextBird;
+    });
+    return {
+      rows,
+      changed,
+      hasChanges: changed.length > 0
+    };
+  };
   const buildRetentionSnapshot = ({
     birds = [],
     photos = [],
@@ -834,6 +862,8 @@ const {
     buildAutomaticHatchReminders,
     buildAutomaticIncubationReminders,
     stageSuggestion,
+    applyAutomaticStage,
+    applyAutomaticStages,
     retentionDaysForStatus,
     buildRetentionSnapshot,
     buildBirdSaleFinanceRows,
@@ -4139,6 +4169,8 @@ const {
   completeReminderAndScheduleNext,
   buildAutomaticHatchReminders,
   buildAutomaticIncubationReminders,
+  applyAutomaticStage: appApplyAutomaticStage,
+  applyAutomaticStages: appApplyAutomaticStages,
   financeCategoryLabel
 } = globalThis.FlockTrackLogic;
 const dataApi = globalThis.FlockTrackData || {};
@@ -5406,6 +5438,13 @@ function App() {
     eggStates
   }), [batches, eggStates]);
   const allReminders = useMemo(() => [...instances, ...autoIncubationReminders, ...autoHatchReminders], [autoHatchReminders, autoIncubationReminders, instances]);
+  useEffect(() => {
+    if (!loaded || typeof appApplyAutomaticStages !== "function" || !birds.length) return;
+    const result = appApplyAutomaticStages(birds);
+    if (!result.hasChanges) return;
+    setBirds(result.rows);
+    result.changed.forEach(bird => dbPut("birds", bird).catch(console.error));
+  }, [birds, loaded]);
   const calendarEventsByDay = useMemo(() => {
     const map = new Map();
     allReminders.forEach((reminder, idx) => {
@@ -5913,12 +5952,14 @@ function App() {
     dbDel("financeEntries", id);
   }
   function addBird(b) {
-    setBirds(p => [...p, b]);
-    dbPut("birds", b);
+    const nextBird = typeof appApplyAutomaticStage === "function" ? appApplyAutomaticStage(b) : b;
+    setBirds(p => [...p, nextBird]);
+    dbPut("birds", nextBird);
   }
   function updBird(b) {
-    setBirds(p => p.map(x => x.id === b.id ? b : x));
-    dbPut("birds", b);
+    const nextBird = typeof appApplyAutomaticStage === "function" ? appApplyAutomaticStage(b) : b;
+    setBirds(p => p.map(x => x.id === nextBird.id ? nextBird : x));
+    dbPut("birds", nextBird);
   }
   async function delBird(id) {
     const current = birds.find(b => b.id === id);

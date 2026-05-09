@@ -12,6 +12,7 @@
                 const isDebtInc = i.type === 'debt_increase' || isDebtCashIn;
                 const isInc = i.type === 'income' && !isDebtCashIn;
                 const isCardPayment = i.type === 'credit_card_payment';
+                const isInstallmentPay = typeof isInstallmentPayment === 'function' ? isInstallmentPayment(i) : i.type === 'installment_payment';
                 const isCardCharge = typeof isCreditCardCharge === 'function' ? isCreditCardCharge(i) : false;
                 const isDebtPayment = i.type === 'expense' && debtNames.has(String(i.category || '').trim());
                 const isToday = isTxAssignedToToday(i);
@@ -43,7 +44,10 @@
                 const debtIncreaseBadge = isDebtInc
                     ? `<span class="text-[9px] ${isDebtCashIn ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'} px-1.5 py-0.5 rounded font-bold">${isDebtCashIn ? 'DEBT + CASH' : 'DEBT ONLY'}</span>`
                     : '';
-                const badges = [currencyBadge, creditCardBadge, debtPaymentBadge, debtIncreaseBadge].filter(Boolean).join(' ');
+                const installmentBadge = isInstallmentPay
+                    ? '<span class="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-bold">BNPL PAYMENT</span>'
+                    : '';
+                const badges = [currencyBadge, creditCardBadge, installmentBadge, debtPaymentBadge, debtIncreaseBadge].filter(Boolean).join(' ');
 
                 // Icon & Color Logic
                 let iconBg, iconText, amountColor, sign, amountText;
@@ -61,6 +65,9 @@
                 } else if (isCardPayment) {
                     iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
                     amountColor = 'text-rose-600'; sign = '-';
+                } else if (isInstallmentPay) {
+                    iconBg = 'bg-violet-50'; iconText = 'text-violet-600';
+                    amountColor = 'text-violet-600'; sign = '-';
                 } else {
                     iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
                     amountColor = 'text-rose-600'; sign = '-';
@@ -281,6 +288,95 @@
             lucide.createIcons();
         }
 
+        function getInstallmentPaymentTransactions(planId) {
+            const targetId = String(planId || '').trim();
+            if (!targetId) return [];
+            return (window.allDecryptedTransactions || [])
+                .filter(tx => tx && tx.type === 'installment_payment' && String(tx.installmentPlanId || '').trim() === targetId)
+                .sort((a, b) => getTxTimestamp(b) - getTxTimestamp(a));
+        }
+
+        function getInstallmentNextDueLabel(plan) {
+            const dueDay = Number(plan?.dueDay || 0);
+            const count = Math.max(0, Math.round(Number(plan?.installmentCount || 0)));
+            const paymentsMade = getInstallmentPaymentTransactions(plan?.id).length;
+            if (!dueDay) return 'No due day set';
+            if (count > 0 && paymentsMade >= count) return 'Plan complete';
+            return `Due every ${dueDay}${typeof getDaySuffix === 'function' ? getDaySuffix(dueDay) : 'th'}`;
+        }
+
+        async function renderInstallmentPlans(items) {
+            const list = document.getElementById('installment-plan-list');
+            if (!list) return;
+            list.innerHTML = '';
+
+            const decrypted = (await Promise.all((items || []).map(async item => {
+                const data = await decryptData(item.data);
+                return data ? { ...data, id: item.id } : null;
+            }))).filter(Boolean);
+
+            window.allDecryptedInstallmentPlans = decrypted;
+
+            if (decrypted.length === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No installment plans tracked yet.</div>';
+                return;
+            }
+
+            const outstandingMap = typeof computeInstallmentOutstandingMapAsOf === 'function'
+                ? computeInstallmentOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
+                : new Map();
+
+            decrypted.forEach(plan => {
+                const safeName = escapeHTML(plan.name || 'Installment Plan');
+                const safeProvider = escapeHTML(plan.provider || 'BNPL / installment');
+                const total = Math.max(0, Number(plan.totalAmount || 0));
+                const monthly = Math.max(0, Number(plan.monthlyAmount || 0));
+                const outstanding = Math.max(0, Number(outstandingMap.get(plan.id) || 0));
+                const paid = Math.max(0, total - outstanding);
+                const progressPct = total > 0 ? Math.min(100, Math.max(0, (paid / total) * 100)) : 0;
+                const paymentRows = getInstallmentPaymentTransactions(plan.id);
+                const paymentCount = paymentRows.length;
+                const installmentCount = Math.max(0, Math.round(Number(plan.installmentCount || 0)));
+                const encodedPlanId = encodeInlineArg(plan.id);
+                const statusLabel = outstanding <= 0.01
+                    ? 'Complete'
+                    : `${paymentCount}${installmentCount ? ` / ${installmentCount}` : ''} payments`;
+
+                const div = document.createElement('div');
+                div.className = 'p-4 bg-slate-50 rounded-2xl border border-slate-200';
+                div.innerHTML = `
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-sm font-bold text-slate-800 break-words">${safeName}</p>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${safeProvider}</p>
+                            <p class="text-[10px] text-slate-500 mt-1">Remaining ${fmt(outstanding)} of ${fmt(total)}</p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button onclick="openInstallmentPaymentModal(decodeURIComponent('${encodedPlanId}'))"
+                                class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Payment</button>
+                            <button onclick="openInstallmentPlanModal(decodeURIComponent('${encodedPlanId}'))"
+                                class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
+                            <button onclick="deleteItem('installment_plans', decodeURIComponent('${encodedPlanId}'))"
+                                class="text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-violet-500 rounded-full" style="width:${progressPct}%"></div>
+                        </div>
+                        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
+                            <span>${escapeHTML(statusLabel)}</span>
+                            <span>${escapeHTML(getInstallmentNextDueLabel(plan))}</span>
+                            ${monthly > 0 ? `<span>${fmt(monthly)} / payment</span>` : ''}
+                        </div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+
+            lucide.createIcons();
+        }
+
         async function renderLent(items) {
             const list = document.getElementById('lent-list');
             list.innerHTML = '';
@@ -417,6 +513,7 @@
                         </div>
 
                         <div class="mt-3 flex flex-wrap items-center gap-2">
+                            <button onclick="openBillPaymentTrigger(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 whitespace-nowrap">Pay</button>
                             <button onclick="openElectricityCycleModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 whitespace-nowrap">${latestCycle ? 'Record Bill' : 'Add Cycle'}</button>
                             <button onclick="openElectricityHistoryModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap">History</button>
                             <button onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'} whitespace-nowrap">${isPaused ? 'Resume' : 'Pause'}</button>
@@ -435,6 +532,7 @@
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
                             <span class="font-bold text-slate-500">${amountLabel}</span>
+                            <button onclick="openBillPaymentTrigger(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 whitespace-nowrap">Pay</button>
                             <button onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'} whitespace-nowrap">${isPaused ? 'Resume' : 'Pause'}</button>
                             <button onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
                         </div>

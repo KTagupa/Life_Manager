@@ -184,6 +184,8 @@ function estimateDBPayloadWeight(db) {
         db.transactions,
         db.bills,
         db.debts,
+        db.credit_cards,
+        db.installment_plans,
         db.lent,
         db.crypto,
         db.wishlist,
@@ -303,6 +305,7 @@ function countDBRecords(db) {
         bills: (safe.bills || []).filter(i => i && !i.deletedAt).length,
         debts: (safe.debts || []).filter(i => i && !i.deletedAt).length,
         creditCards: (safe.credit_cards || []).filter(i => i && !i.deletedAt).length,
+        installmentPlans: (safe.installment_plans || []).filter(i => i && !i.deletedAt).length,
         lent: (safe.lent || []).filter(i => i && !i.deletedAt).length,
         crypto: (safe.crypto || []).filter(i => i && !i.deletedAt).length,
         wishlist: (safe.wishlist || []).filter(i => i && !i.deletedAt).length,
@@ -477,7 +480,7 @@ async function refreshStorageDiagnosticsPanel() {
         setDiagText('diag-idb-write', writeTs);
         setDiagText(
             'diag-counts',
-            `Tx ${diag.counts.transactions} • Bills ${diag.counts.bills} • Debts ${diag.counts.debts} • Cards ${diag.counts.creditCards} • Lent ${diag.counts.lent} • Crypto ${diag.counts.crypto} • Wishlist ${diag.counts.wishlist} • Assets ${diag.counts.fixedAssets} • AGM ${diag.counts.agmRecords} • Closes ${diag.counts.monthlyCloses} • KPI ${diag.counts.kpiSnapshots} • Forecast ${diag.counts.forecastRuns} • Statements ${diag.counts.statementSnapshots} • Undo ${diag.counts.undoLog}`
+            `Tx ${diag.counts.transactions} • Bills ${diag.counts.bills} • Debts ${diag.counts.debts} • Cards ${diag.counts.creditCards} • BNPL ${diag.counts.installmentPlans} • Lent ${diag.counts.lent} • Crypto ${diag.counts.crypto} • Wishlist ${diag.counts.wishlist} • Assets ${diag.counts.fixedAssets} • AGM ${diag.counts.agmRecords} • Closes ${diag.counts.monthlyCloses} • KPI ${diag.counts.kpiSnapshots} • Forecast ${diag.counts.forecastRuns} • Statements ${diag.counts.statementSnapshots} • Undo ${diag.counts.undoLog}`
         );
         setDiagText('diag-status', `Last refresh: ${new Date().toLocaleTimeString()}`);
     } catch (error) {
@@ -643,6 +646,7 @@ function getDefaultDB() {
         bills: [],
         debts: [],
         credit_cards: [],
+        installment_plans: [],
         lent: [],
         crypto: [],
         crypto_prices: {},
@@ -1190,6 +1194,7 @@ function normalizeDBSchema(rawDB) {
     db.bills = normalizeCollectionEntries(db.bills);
     db.debts = normalizeCollectionEntries(db.debts);
     db.credit_cards = normalizeCollectionEntries(db.credit_cards);
+    db.installment_plans = normalizeCollectionEntries(db.installment_plans);
     db.lent = normalizeCollectionEntries(db.lent);
     db.crypto = normalizeCollectionEntries(db.crypto);
     db.wishlist = normalizeCollectionEntries(db.wishlist);
@@ -1286,6 +1291,7 @@ function mergeSafeDB(localDB, remoteDB) {
     merged.bills = mergeSafeList(local.bills, merged.bills);
     merged.debts = mergeSafeList(local.debts, merged.debts);
     merged.credit_cards = mergeSafeList(local.credit_cards, merged.credit_cards);
+    merged.installment_plans = mergeSafeList(local.installment_plans, merged.installment_plans);
     merged.lent = mergeSafeList(local.lent, merged.lent);
     merged.crypto = mergeSafeList(local.crypto, merged.crypto);
     merged.wishlist = mergeSafeList(local.wishlist, merged.wishlist);

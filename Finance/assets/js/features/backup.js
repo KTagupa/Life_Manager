@@ -35,11 +35,12 @@
                 transactions: (data.transactions || []).length,
                 bills: (data.bills || []).length,
                 debts: (data.debts || []).length,
+                installmentPlans: (data.installment_plans || []).length,
                 crypto: (data.crypto || []).length,
                 budgets: backup.metadata?.budgetCategoryCount || 0
             };
 
-            const encryptedCollections = ['transactions', 'bills', 'debts', 'lent', 'crypto', 'wishlist'];
+            const encryptedCollections = ['transactions', 'bills', 'debts', 'installment_plans', 'lent', 'crypto', 'wishlist'];
             encryptedCollections.forEach(key => {
                 (data[key] || []).forEach((item, idx) => {
                     if (!item || !item.data || !isEncryptedPayload(item.data)) {
@@ -220,6 +221,7 @@
                     <div class="flex justify-between"><span class="text-slate-500">Transactions:</span><span class="font-bold text-slate-700">${data.transactions?.length || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Bills:</span><span class="font-bold text-slate-700">${data.bills?.length || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Debts:</span><span class="font-bold text-slate-700">${data.debts?.length || 0}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Installment/BNPL:</span><span class="font-bold text-slate-700">${data.installment_plans?.length || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Crypto Transactions:</span><span class="font-bold text-slate-700">${data.crypto?.length || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Budget Categories:</span><span class="font-bold text-slate-700">${backup.metadata?.budgetCategoryCount || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Schema Version:</span><span class="font-bold text-slate-700">${validation.stats.schemaVersion}</span></div>
