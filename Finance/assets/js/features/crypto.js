@@ -2802,18 +2802,29 @@
             }).join('');
         }
 
-        function calculateCryptoInterestApy(holding, interestEntry) {
+        function calculateCryptoInterestApy(tokenId, holding, interestEntry) {
             const weightedHoldingDays = calculateWeightedHoldingDays(holding?.lots || []);
             const principal = Number(holding?.totalCost || 0);
+            const holdingAmount = Number(holding?.amount || 0);
+            const normalizedTokenId = String(tokenId || '').trim().toLowerCase();
             const rewards = Array.isArray(interestEntry?.rewards) ? interestEntry.rewards : [];
             let earnedValue = 0;
             let hasAmount = false;
             let missingPriceCount = 0;
+            let sameTokenEarnedAmount = 0;
+            let otherTokenRewardCount = 0;
 
             rewards.forEach(reward => {
                 const amount = Number(reward?.amount || 0);
                 if (!Number.isFinite(amount) || amount <= 0) return;
                 hasAmount = true;
+                const rewardTokenId = String(reward?.tokenId || '').trim();
+                const isSameTokenReward = !!normalizedTokenId && rewardTokenId.toLowerCase() === normalizedTokenId;
+                if (isSameTokenReward) {
+                    sameTokenEarnedAmount += amount;
+                } else {
+                    otherTokenRewardCount += 1;
+                }
                 const price = Number(cryptoPrices?.[reward.tokenId]?.price || 0);
                 if (price > 0) {
                     earnedValue += amount * price;
@@ -2822,14 +2833,39 @@
                 }
             });
 
-            if (principal <= 0) {
-                return { status: 'invalid', message: 'No invested value yet for APY computation.' };
-            }
             if (weightedHoldingDays <= 0) {
                 return { status: 'invalid', message: 'Holding time is too short to annualize APY.' };
             }
             if (!hasAmount) {
                 return { status: 'pending', message: 'Enter earned amounts to compute APY.' };
+            }
+            if (principal <= 0) {
+                if (sameTokenEarnedAmount <= 0) {
+                    return { status: 'invalid', message: 'No invested value yet for APY computation.' };
+                }
+                if (holdingAmount <= 0) {
+                    return { status: 'invalid', message: 'No token balance available for same-token APY computation.' };
+                }
+
+                const years = weightedHoldingDays / 365;
+                const periodReturnPct = (sameTokenEarnedAmount / holdingAmount) * 100;
+                const apyPct = years > 0 ? (periodReturnPct / years) : 0;
+                const sameTokenPrice = Number(cryptoPrices?.[tokenId]?.price || 0);
+
+                return {
+                    status: 'ok',
+                    basis: 'token',
+                    earnedValue: sameTokenPrice > 0 ? sameTokenEarnedAmount * sameTokenPrice : 0,
+                    earnedValueAvailable: sameTokenPrice > 0,
+                    earnedTokenAmount: sameTokenEarnedAmount,
+                    principalTokenAmount: holdingAmount,
+                    rewardSymbol: holding?.symbol || tokenId,
+                    apyPct,
+                    periodReturnPct,
+                    weightedHoldingDays,
+                    missingPriceCount,
+                    otherTokenRewardCount
+                };
             }
             if (earnedValue <= 0) {
                 return { status: 'pending', message: 'Missing reward token prices. Refresh crypto prices first.' };
@@ -2841,7 +2877,9 @@
 
             return {
                 status: 'ok',
+                basis: 'value',
                 earnedValue,
+                earnedValueAvailable: true,
                 apyPct,
                 periodReturnPct,
                 weightedHoldingDays,
@@ -3841,17 +3879,36 @@
                     `;
                 }).join('');
 
-                const interestApy = calculateCryptoInterestApy(h, interestEntry);
+                const interestApy = calculateCryptoInterestApy(id, h, interestEntry);
                 let interestSummary = '';
                 if (interestApy.status === 'ok') {
-                    const missingNote = interestApy.missingPriceCount > 0
-                        ? `<p class="text-[10px] text-amber-300 mt-0.5">${interestApy.missingPriceCount} reward token(s) missing price and excluded.</p>`
-                        : '';
-                    interestSummary = `
-                        <p class="text-[10px] text-cyan-300 mt-2">APY so far: ${interestApy.apyPct.toFixed(2)}%</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">Earned value: ${fmt(interestApy.earnedValue)} • Period return: ${interestApy.periodReturnPct.toFixed(2)}% • Weighted hold: ${interestApy.weightedHoldingDays.toFixed(1)}d</p>
-                        ${missingNote}
-                    `;
+                    if (interestApy.basis === 'token') {
+                        const rewardSymbol = escapeHTML(String(interestApy.rewardSymbol || h.symbol || id).toUpperCase());
+                        const earnedValueText = interestApy.earnedValueAvailable
+                            ? ` • Earned value: ${fmt(interestApy.earnedValue)}`
+                            : '';
+                        const missingNote = !interestApy.earnedValueAvailable
+                            ? '<p class="text-[10px] text-slate-500 mt-0.5">No current price; APY uses same-token amounts only.</p>'
+                            : '';
+                        const excludedNote = interestApy.otherTokenRewardCount > 0
+                            ? `<p class="text-[10px] text-amber-300 mt-0.5">${interestApy.otherTokenRewardCount} non-matching reward token(s) excluded from zero-cost token APY.</p>`
+                            : '';
+                        interestSummary = `
+                            <p class="text-[10px] text-cyan-300 mt-2">Token APY so far: ${interestApy.apyPct.toFixed(2)}%</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Earned: ${interestApy.earnedTokenAmount.toFixed(8)} ${rewardSymbol} • Period token return: ${interestApy.periodReturnPct.toFixed(2)}% • Weighted hold: ${interestApy.weightedHoldingDays.toFixed(1)}d${earnedValueText}</p>
+                            ${missingNote}
+                            ${excludedNote}
+                        `;
+                    } else {
+                        const missingNote = interestApy.missingPriceCount > 0
+                            ? `<p class="text-[10px] text-amber-300 mt-0.5">${interestApy.missingPriceCount} reward token(s) missing price and excluded.</p>`
+                            : '';
+                        interestSummary = `
+                            <p class="text-[10px] text-cyan-300 mt-2">APY so far: ${interestApy.apyPct.toFixed(2)}%</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Earned value: ${fmt(interestApy.earnedValue)} • Period return: ${interestApy.periodReturnPct.toFixed(2)}% • Weighted hold: ${interestApy.weightedHoldingDays.toFixed(1)}d</p>
+                            ${missingNote}
+                        `;
+                    }
                 } else {
                     const safeApyMsg = escapeHTML(interestApy.message || 'Add reward amounts to estimate APY.');
                     interestSummary = `<p class="text-[10px] text-slate-500 mt-2">${safeApyMsg}</p>`;
