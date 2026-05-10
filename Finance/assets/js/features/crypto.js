@@ -10,6 +10,7 @@
             pendingDecryptPromise: null,
             holdingsByMethod: new Map()
         };
+        let editingCryptoTransactionState = null;
 
         function invalidateCryptoComputationCache() {
             cryptoComputationCache.sourceRef = null;
@@ -1558,15 +1559,51 @@
             if (modal) modal.classList.add('hidden');
         }
 
-        function openCryptoTransaction() {
+        function getCryptoTxSearchLabel(tx) {
+            return String(tx?.poolName || tx?.symbol || tx?.tokenId || '').trim();
+        }
+
+        function getCryptoSearchModeForTokenId(tokenId) {
+            return isMinswapLpTokenId(tokenId) || isCardanoTokenId(tokenId) ? 'minswap' : 'coingecko';
+        }
+
+        function populateCryptoTransactionSide(type, tx = {}) {
+            const isTarget = type === 'target';
+            const searchInput = document.getElementById(isTarget ? 'c-target-token-search' : 'c-token-search');
+            const idInput = document.getElementById(isTarget ? 'c-target-token-id' : 'c-token-id');
+            const symbolInput = document.getElementById(isTarget ? 'c-target-token-symbol' : 'c-token-symbol');
+            const modeInput = document.getElementById(isTarget ? 'c-target-token-search-mode' : 'c-token-search-mode');
+            if (searchInput) searchInput.value = getCryptoTxSearchLabel(tx);
+            if (idInput) idInput.value = String(tx.tokenId || '');
+            if (symbolInput) symbolInput.value = String(tx.symbol || tx.tokenId || '');
+            if (modeInput) modeInput.value = getCryptoSearchModeForTokenId(tx.tokenId);
+            applyCryptoAssetMetadata(type, {
+                assetType: tx.assetType || (isMinswapLpTokenId(tx.tokenId) ? 'lp_pool' : (isCardanoTokenId(tx.tokenId) ? 'cardano_token' : 'coingecko')),
+                network: tx.network || '',
+                dex: tx.dex || '',
+                poolAddress: tx.poolAddress || '',
+                poolName: tx.poolName || '',
+                lpTokenSupply: tx.lpTokenSupply || '',
+                manualLpPrice: tx.manualLpPrice || '',
+                manualLpPriceCurrency: tx.manualLpPriceCurrency || '',
+                baseToken: tx.baseToken || '',
+                quoteToken: tx.quoteToken || ''
+            });
+        }
+
+        async function openCryptoTransaction(txId = null) {
             // Reset form
+            editingCryptoTransactionState = null;
             document.getElementById('c-token-search').value = '';
             document.getElementById('c-token-id').value = '';
+            document.getElementById('c-token-symbol').value = '';
             document.getElementById('c-token-search-mode').value = 'coingecko';
             document.getElementById('c-target-token-search').value = '';
             document.getElementById('c-target-token-id').value = '';
+            document.getElementById('c-target-token-symbol').value = '';
             document.getElementById('c-target-token-search-mode').value = 'coingecko';
             document.getElementById('c-amount').value = '';
+            document.getElementById('c-target-amount').value = '';
             document.getElementById('c-token-lp-token-supply').value = '';
             document.getElementById('c-target-token-lp-token-supply').value = '';
             const targetLpManualPrice = document.getElementById('c-target-token-lp-manual-price');
@@ -1581,9 +1618,69 @@
             document.getElementById('c-exchange').value = '';
             document.getElementById('c-strategy').value = '';
             document.getElementById('c-total-calc').innerText = fmt(0);
+            document.getElementById('c-total-base-preview').innerText = '';
             clearCryptoAssetMetadata('source');
             clearCryptoAssetMetadata('target');
             setCType('buy');
+
+            const titleEl = document.getElementById('crypto-transaction-title');
+            const saveBtn = document.getElementById('btn-save-crypto-transaction');
+            if (titleEl) titleEl.innerText = 'Crypto Transaction';
+            if (saveBtn) saveBtn.innerText = 'Record Transaction';
+
+            if (txId) {
+                const allTxs = await getDecryptedCrypto();
+                const tx = allTxs.find(item => String(item.id || '') === String(txId));
+                if (!tx) {
+                    alert('Could not find that crypto transaction.');
+                    return;
+                }
+                const isSwapEdit = tx.type === 'swap_in' || tx.type === 'swap_out';
+                const supportedSingleTypes = ['buy', 'sell', 'airdrop'];
+                if (!isSwapEdit && !supportedSingleTypes.includes(tx.type)) {
+                    alert('This crypto transaction type cannot be edited in the form yet.');
+                    return;
+                }
+
+                if (isSwapEdit) {
+                    const swapRows = allTxs.filter(item => item.swapId && item.swapId === tx.swapId);
+                    const sourceTx = swapRows.find(item => item.type === 'swap_out');
+                    const targetTx = swapRows.find(item => item.type === 'swap_in');
+                    if (!sourceTx || !targetTx) {
+                        alert('Could not find the linked swap pair for this transaction.');
+                        return;
+                    }
+                    editingCryptoTransactionState = {
+                        mode: 'swap',
+                        sourceId: sourceTx.id,
+                        targetId: targetTx.id,
+                        swapId: tx.swapId
+                    };
+                    setCType('swap');
+                    populateCryptoTransactionSide('source', sourceTx);
+                    populateCryptoTransactionSide('target', targetTx);
+                    document.getElementById('c-amount').value = sourceTx.amount || '';
+                    document.getElementById('c-target-amount').value = targetTx.amount || '';
+                    document.getElementById('c-date').value = sourceTx.date ? new Date(sourceTx.date).toISOString().split('T')[0] : '';
+                    document.getElementById('c-exchange').value = sourceTx.exchange || targetTx.exchange || '';
+                    document.getElementById('c-strategy').value = sourceTx.strategy || targetTx.strategy || '';
+                    document.getElementById('c-notes').value = sourceTx.notes || targetTx.notes || '';
+                } else {
+                    editingCryptoTransactionState = { mode: 'single', id: tx.id, originalType: tx.type };
+                    setCType(tx.type);
+                    populateCryptoTransactionSide('source', tx);
+                    document.getElementById('c-amount').value = tx.amount || '';
+                    document.getElementById('c-price').value = tx.price || '';
+                    document.getElementById('c-currency').value = tx.currency || 'PHP';
+                    document.getElementById('c-date').value = tx.date ? new Date(tx.date).toISOString().split('T')[0] : '';
+                    document.getElementById('c-exchange').value = tx.exchange || '';
+                    document.getElementById('c-strategy').value = tx.strategy || '';
+                    document.getElementById('c-notes').value = tx.notes || '';
+                    calcCryptoTotal();
+                }
+                if (titleEl) titleEl.innerText = isSwapEdit ? 'Edit Crypto Swap' : 'Edit Crypto Transaction';
+                if (saveBtn) saveBtn.innerText = 'Save Changes';
+            }
 
             document.getElementById('crypto-transaction-modal').classList.remove('hidden');
         }
@@ -2472,6 +2569,16 @@
             const date = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
 
             const db = await getDB();
+            db.crypto = Array.isArray(db.crypto) ? db.crypto : [];
+            const editState = editingCryptoTransactionState ? { ...editingCryptoTransactionState } : null;
+            if (editState?.mode === 'swap' && type !== 'swap') {
+                alert('Swap edits must remain swaps. Delete and re-record if you need a different transaction type.');
+                return;
+            }
+            if (editState?.mode === 'single' && type !== editState.originalType) {
+                alert('Transaction type changes are not supported while editing. Delete and re-record if you need a different type.');
+                return;
+            }
 
             if (type === 'swap') {
                 const targetTokenId = document.getElementById('c-target-token-id').value;
@@ -2492,7 +2599,9 @@
                 if (!await ensureCryptoLpManualPriceReady(sourceMetadata, 'source LP')) return;
                 if (!await ensureCryptoLpManualPriceReady(targetMetadata, 'received LP')) return;
 
-                const swapId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+                const swapId = editState?.mode === 'swap'
+                    ? editState.swapId
+                    : Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 
                 // Transaction 1: Swap Out (Sell Source)
                 // We use 'swap_out' type. It behaves like sell but doesn't trigger realized P/L
@@ -2530,8 +2639,27 @@
                     notes, exchange, strategy, date
                 };
 
-                db.crypto.push({ id: swapId + '_out', data: await encryptData(txOut), deletedAt: null });
-                db.crypto.push({ id: swapId + '_in', data: await encryptData(txIn), deletedAt: null });
+                if (editState?.mode === 'swap') {
+                    const sourceIndex = db.crypto.findIndex(item => item.id === editState.sourceId);
+                    const targetIndex = db.crypto.findIndex(item => item.id === editState.targetId);
+                    if (sourceIndex < 0 || targetIndex < 0) {
+                        alert('Could not update the linked swap rows.');
+                        return;
+                    }
+                    db.crypto[sourceIndex] = {
+                        ...db.crypto[sourceIndex],
+                        data: await encryptData(txOut),
+                        deletedAt: null
+                    };
+                    db.crypto[targetIndex] = {
+                        ...db.crypto[targetIndex],
+                        data: await encryptData(txIn),
+                        deletedAt: null
+                    };
+                } else {
+                    db.crypto.push({ id: swapId + '_out', data: await encryptData(txOut), deletedAt: null });
+                    db.crypto.push({ id: swapId + '_in', data: await encryptData(txIn), deletedAt: null });
+                }
                 const targetManualPriceCache = buildManualCryptoPriceCacheEntryFromMetadata(targetMetadata);
                 if (targetManualPriceCache) {
                     db.crypto_prices = db.crypto_prices || {};
@@ -2593,13 +2721,27 @@
                     date: date
                 };
                 const encrypted = await encryptData(txData);
-                db.crypto.push({
-                    id: Date.now().toString(36),
-                    data: encrypted,
-                    deletedAt: null
-                });
+                if (editState?.mode === 'single') {
+                    const itemIndex = db.crypto.findIndex(item => item.id === editState.id);
+                    if (itemIndex < 0) {
+                        alert('Could not update that crypto transaction.');
+                        return;
+                    }
+                    db.crypto[itemIndex] = {
+                        ...db.crypto[itemIndex],
+                        data: encrypted,
+                        deletedAt: null
+                    };
+                } else {
+                    db.crypto.push({
+                        id: Date.now().toString(36),
+                        data: encrypted,
+                        deletedAt: null
+                    });
+                }
             }
 
+            editingCryptoTransactionState = null;
             toggleModal('crypto-transaction-modal');
 
             await syncCryptoBuyExpensesInDB(db);
@@ -3205,11 +3347,27 @@
                         if (missingSupplyCount > 0) {
                             warnings.push(`${missingSupplyCount} Minswap LP holding${missingSupplyCount === 1 ? '' : 's'} missing total LP supply.`);
                         }
-                        Object.assign(priceUpdates, await fetchMinswapLpPriceUpdates(lpIdsWithSupply, allTxs, now));
-                    }
-
-                    if (!Object.keys(priceUpdates).length && warnings.length) {
-                        throw new Error(warnings.join(' '));
+                        const manualLpIds = lpIdsWithSupply.filter(id => {
+                            const cache = cryptoPrices?.[id];
+                            return cache?.source === 'manual_lp_price' && Number(cache?.price || 0) > 0;
+                        });
+                        manualLpIds.forEach(id => {
+                            priceUpdates[id] = {
+                                ...cryptoPrices[id],
+                                updated: now
+                            };
+                        });
+                        const lpIdsNeedingFetch = lpIdsWithSupply.filter(id => !manualLpIds.includes(id));
+                        if (manualLpIds.length > 0) {
+                            warnings.push(`Using manual LP price for ${manualLpIds.length} Minswap LP holding${manualLpIds.length === 1 ? '' : 's'}.`);
+                        }
+                        if (lpIdsNeedingFetch.length > 0) {
+                            try {
+                                Object.assign(priceUpdates, await fetchMinswapLpPriceUpdates(lpIdsNeedingFetch, allTxs, now));
+                            } catch (error) {
+                                warnings.push(error?.message || 'Minswap LP price refresh failed.');
+                            }
+                        }
                     }
 
 	                // Update cache locally only (avoid Firestore upload on price refresh)
@@ -3756,6 +3914,7 @@
                     const meta = getCryptoTransactionDisplayMeta(tx);
                     const safeActionText = escapeHTML(meta.actionText);
                     const safeTokenSymbol = escapeHTML(String(tx.symbol || tx.tokenId || symbol).toUpperCase());
+                    const encodedTxId = encodeInlineArg(tx.id || '');
                     const noteBits = [
                         tx.exchange ? `Exchange: ${tx.exchange}` : '',
                         tx.strategy ? `Strategy: ${tx.strategy}` : '',
@@ -3780,6 +3939,10 @@
                                         <p class="text-sm font-bold text-slate-200 mobile-text-clip">${safeActionText} ${!meta.isSwap ? safeTokenSymbol : ''}</p>
                                         <p class="text-[11px] text-slate-500">${meta.detailText}</p>
                                     </div>
+                                    <button type="button" title="Edit transaction" onclick="openCryptoTransaction(decodeURIComponent('${encodedTxId}'))"
+                                        class="ml-auto text-slate-600 hover:text-cyan-300 transition-colors">
+                                        <i data-lucide="edit-2" class="w-4 h-4"></i>
+                                    </button>
                                 </div>
                                 ${noteMarkup}
                             </div>
@@ -4280,6 +4443,9 @@
                                   <p class="text-sm font-bold text-slate-300">${meta.totalText}</p>
                                   <p class="text-[10px] text-slate-500">${tx.amount} tokens</p>
                               </div>
+                             <button type="button" title="Edit transaction" onclick="openCryptoTransaction(decodeURIComponent('${encodedTxId}'))" class="text-slate-600 hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i data-lucide="edit-2" class="w-4 h-4"></i>
+                             </button>
                              <button onclick="deleteItem('crypto', decodeURIComponent('${encodedTxId}'), 'Delete this crypto transaction? This can be restored from Undo.')" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                              </button>
