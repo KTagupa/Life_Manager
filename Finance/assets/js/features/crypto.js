@@ -167,19 +167,29 @@
                 poolAddress: document.getElementById(`${prefix}-pool-address`)?.value || '',
                 poolName: document.getElementById(`${prefix}-pool-name`)?.value || '',
                 lpTokenSupply: document.getElementById(`${prefix}-lp-token-supply`)?.value || '',
+                manualLpPrice: document.getElementById(`${prefix}-lp-manual-price`)?.value || '',
+                manualLpPriceCurrency: document.getElementById(`${prefix}-lp-manual-price-currency`)?.value || '',
                 baseToken: document.getElementById(`${prefix}-base-token`)?.value || '',
                 quoteToken: document.getElementById(`${prefix}-quote-token`)?.value || ''
             };
-            if (meta.assetType !== 'lp_pool') delete meta.lpTokenSupply;
+            if (meta.assetType !== 'lp_pool') {
+                delete meta.lpTokenSupply;
+                delete meta.manualLpPrice;
+                delete meta.manualLpPriceCurrency;
+            }
             return meta;
         }
 
         function clearCryptoAssetMetadata(type = 'source') {
             const prefix = getCryptoAssetFieldPrefix(type);
-            ['asset-type', 'network', 'dex', 'pool-address', 'pool-name', 'lp-token-supply', 'base-token', 'quote-token'].forEach(field => {
+            ['asset-type', 'network', 'dex', 'pool-address', 'pool-name', 'lp-token-supply', 'lp-manual-price', 'base-token', 'quote-token'].forEach(field => {
                 const el = document.getElementById(`${prefix}-${field}`);
                 if (el) el.value = '';
             });
+            const manualPriceCurrencyEl = document.getElementById(`${prefix}-lp-manual-price-currency`);
+            if (manualPriceCurrencyEl) manualPriceCurrencyEl.value = 'PHP';
+            const previewEl = document.getElementById(type === 'target' ? 'c-target-lp-price-preview' : 'c-lp-price-preview');
+            if (previewEl) previewEl.innerText = '';
             updateCryptoLpSupplyVisibility(type);
         }
 
@@ -206,6 +216,8 @@
                 'pool-address': metadata.poolAddress || '',
                 'pool-name': metadata.poolName || '',
                 'lp-token-supply': metadata.lpTokenSupply || '',
+                'lp-manual-price': metadata.manualLpPrice || '',
+                'lp-manual-price-currency': metadata.manualLpPriceCurrency || '',
                 'base-token': metadata.baseToken || '',
                 'quote-token': metadata.quoteToken || ''
             };
@@ -214,6 +226,7 @@
                 if (el) el.value = value;
             });
             updateCryptoLpSupplyVisibility(type);
+            calcCryptoLpManualPricePreview(type);
         }
 
         function updateCryptoLpSupplyVisibility(type = 'source') {
@@ -234,6 +247,16 @@
             if (meta.assetType === 'lp_pool') {
                 const supply = Number(meta.lpTokenSupply);
                 if (Number.isFinite(supply) && supply > 0) payload.lpTokenSupply = supply;
+                const manualPrice = Number(meta.manualLpPrice);
+                const manualCurrency = String(meta.manualLpPriceCurrency || 'PHP').trim().toUpperCase();
+                if (Number.isFinite(manualPrice) && manualPrice > 0) {
+                    payload.manualLpPrice = manualPrice;
+                    payload.manualLpPriceCurrency = manualCurrency;
+                    const manualPhpPrice = convertToDisplayCurrency(manualPrice, manualCurrency, 'PHP');
+                    if (Number.isFinite(manualPhpPrice) && manualPhpPrice > 0) {
+                        payload.manualLpPhpPrice = manualPhpPrice;
+                    }
+                }
             }
             return payload;
         }
@@ -247,6 +270,20 @@
                 if (Number.isFinite(supply) && supply > 0) return supply;
             }
             return 0;
+        }
+
+        function buildManualCryptoPriceCacheEntryFromMetadata(metadata = {}, now = Date.now()) {
+            const manualPrice = Number(metadata.manualLpPrice || 0);
+            const manualCurrency = String(metadata.manualLpPriceCurrency || 'PHP').trim().toUpperCase();
+            if (!(manualPrice > 0)) return null;
+            const usd = convertToDisplayCurrency(manualPrice, manualCurrency, 'USD');
+            if (!Number.isFinite(usd) || usd <= 0) return null;
+            return buildCryptoPriceCacheEntryFromUsd(usd, now, {
+                source: 'manual_lp_price',
+                manualCurrency,
+                manualPrice,
+                manualPhpPrice: Number(metadata.manualLpPhpPrice || convertToDisplayCurrency(manualPrice, manualCurrency, 'PHP')) || undefined
+            });
         }
 
         function chunkCryptoArray(items, size) {
@@ -1532,6 +1569,12 @@
             document.getElementById('c-amount').value = '';
             document.getElementById('c-token-lp-token-supply').value = '';
             document.getElementById('c-target-token-lp-token-supply').value = '';
+            const targetLpManualPrice = document.getElementById('c-target-token-lp-manual-price');
+            const targetLpManualPriceCurrency = document.getElementById('c-target-token-lp-manual-price-currency');
+            const targetLpPricePreview = document.getElementById('c-target-lp-price-preview');
+            if (targetLpManualPrice) targetLpManualPrice.value = '';
+            if (targetLpManualPriceCurrency) targetLpManualPriceCurrency.value = 'PHP';
+            if (targetLpPricePreview) targetLpPricePreview.innerText = '';
             document.getElementById('c-price').value = '';
             document.getElementById('c-notes').value = '';
             document.getElementById('c-date').value = new Date().toISOString().split('T')[0];
@@ -1908,6 +1951,62 @@
                 await ensureCryptoAdaPriceForConversion();
             }
             calcCryptoTotal();
+        }
+
+        function calcCryptoLpManualPricePreview(type = 'target') {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            const price = parseFloat(document.getElementById(`${prefix}-lp-manual-price`)?.value || '');
+            const currency = String(document.getElementById(`${prefix}-lp-manual-price-currency`)?.value || 'PHP').trim().toUpperCase();
+            const amount = type === 'target'
+                ? parseFloat(document.getElementById('c-target-amount')?.value || '')
+                : parseFloat(document.getElementById('c-amount')?.value || '');
+            const previewEl = document.getElementById(type === 'target' ? 'c-target-lp-price-preview' : 'c-lp-price-preview');
+            if (!previewEl) return;
+            if (!Number.isFinite(price) || price <= 0) {
+                previewEl.innerText = '';
+                return;
+            }
+            const displayPrice = convertToDisplayCurrency(price, currency, activeCurrency);
+            const hasAmount = Number.isFinite(amount) && amount > 0;
+            const displayTotal = hasAmount ? convertToDisplayCurrency(price * amount, currency, activeCurrency) : NaN;
+            if (Number.isFinite(displayPrice)) {
+                previewEl.innerText = hasAmount && Number.isFinite(displayTotal)
+                    ? `≈ ${formatCurrency(displayPrice, activeCurrency)} per LP • ${formatCurrency(displayTotal, activeCurrency)} total`
+                    : `≈ ${formatCurrency(displayPrice, activeCurrency)} per LP`;
+            } else if (currency === 'ADA') {
+                previewEl.innerText = 'Fetching ADA rate...';
+            } else {
+                previewEl.innerText = '';
+            }
+        }
+
+        async function onCryptoLpManualPriceCurrencyChange(type = 'target') {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            const currency = String(document.getElementById(`${prefix}-lp-manual-price-currency`)?.value || 'PHP').trim().toUpperCase();
+            if (currency === 'ADA' && !getCachedAdaPhpRate()) {
+                await ensureCryptoAdaPriceForConversion();
+            }
+            calcCryptoLpManualPricePreview(type);
+        }
+
+        async function ensureCryptoLpManualPriceReady(metadata, label = 'LP') {
+            const manualPrice = Number(metadata?.manualLpPrice || 0);
+            const manualCurrency = String(metadata?.manualLpPriceCurrency || '').trim().toUpperCase();
+            if (!(manualPrice > 0)) return true;
+            if (manualCurrency === 'ADA') {
+                const hasAdaRate = await ensureCryptoAdaPriceForConversion();
+                if (!hasAdaRate) {
+                    alert(`Could not fetch the ADA rate for the ${label} manual LP price. Leave optional LP price blank or use PHP/USD/JPY.`);
+                    return false;
+                }
+            }
+            const phpPrice = convertToDisplayCurrency(manualPrice, manualCurrency || 'PHP', 'PHP');
+            if (!Number.isFinite(phpPrice) || phpPrice <= 0) {
+                alert(`Could not convert the ${label} manual LP price. Leave it blank or use PHP/USD/JPY.`);
+                return false;
+            }
+            metadata.manualLpPhpPrice = phpPrice;
+            return true;
         }
 
         const CRYPTO_BUY_EXPENSE_CATEGORY = 'Investment';
@@ -2390,6 +2489,8 @@
                     alert("Enter the total LP token supply for the source Minswap LP asset.");
                     return;
                 }
+                if (!await ensureCryptoLpManualPriceReady(sourceMetadata, 'source LP')) return;
+                if (!await ensureCryptoLpManualPriceReady(targetMetadata, 'received LP')) return;
 
                 const swapId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 
@@ -2431,6 +2532,18 @@
 
                 db.crypto.push({ id: swapId + '_out', data: await encryptData(txOut), deletedAt: null });
                 db.crypto.push({ id: swapId + '_in', data: await encryptData(txIn), deletedAt: null });
+                const targetManualPriceCache = buildManualCryptoPriceCacheEntryFromMetadata(targetMetadata);
+                if (targetManualPriceCache) {
+                    db.crypto_prices = db.crypto_prices || {};
+                    db.crypto_prices[targetTokenId] = {
+                        ...targetManualPriceCache,
+                        network: targetMetadata.network || CARDANO_NETWORK_ID,
+                        dex: targetMetadata.dex || MINSWAP_DEX_ID,
+                        poolAddress: targetMetadata.poolAddress || '',
+                        poolName: targetMetadata.poolName || '',
+                        lpTokenSupply: targetMetadata.lpTokenSupply || undefined
+                    };
+                }
 
             } else {
                 const isAirdrop = type === 'airdrop';
@@ -2443,6 +2556,7 @@
                     alert("Enter the total LP token supply for this Minswap LP asset.");
                     return;
                 }
+                if (!await ensureCryptoLpManualPriceReady(sourceMetadata, 'LP')) return;
                 if (currency === 'ADA') {
                     const hasAdaRate = await ensureCryptoAdaPriceForConversion();
                     if (!hasAdaRate) {

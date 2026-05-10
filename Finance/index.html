@@ -2798,7 +2798,7 @@
 
                     <div id="c-target-amount-container" class="hidden">
                         <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Receive Quantity</label>
-                        <input type="number" step="any" id="c-target-amount" placeholder="0.00"
+                        <input type="number" step="any" id="c-target-amount" placeholder="0.00" oninput="calcCryptoLpManualPricePreview('target')"
                             class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
                     </div>
 
@@ -2830,6 +2830,23 @@
                     <input type="number" step="any" min="0" id="c-target-token-lp-token-supply" placeholder="Total LP token supply"
                         class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
                     <p class="text-[10px] text-slate-400 mt-1 ml-2">Required when swapping into a Minswap LP asset.</p>
+                    <div class="mt-3">
+                        <label class="text-xs font-bold text-slate-400 ml-2 mb-1 block">Optional LP Price</label>
+                        <div class="flex gap-1">
+                            <input type="number" step="any" min="0" id="c-target-token-lp-manual-price" placeholder="e.g. 0.002426"
+                                oninput="calcCryptoLpManualPricePreview('target')"
+                                class="flex-1 p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
+                            <select id="c-target-token-lp-manual-price-currency" onchange="onCryptoLpManualPriceCurrencyChange('target')"
+                                class="p-3 bg-slate-50 border rounded-xl outline-none font-bold text-slate-600 text-xs w-20">
+                                <option value="PHP">PHP</option>
+                                <option value="USD">USD</option>
+                                <option value="JPY">JPY</option>
+                                <option value="ADA">ADA</option>
+                            </select>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-1 ml-2">Optional. Use LP price = TVL / Total LPs if you want an immediate valuation reference.</p>
+                        <p class="text-[10px] text-cyan-600 font-bold mt-1 ml-2" id="c-target-lp-price-preview"></p>
+                    </div>
                 </div>
 
                 <div class="bg-indigo-50 p-3 rounded-xl flex justify-between items-center"
@@ -3870,10 +3887,10 @@
     <!-- App Modules -->
     <script src="assets/js/features/xrpl.js?v=20260425a"></script>
     <script src="assets/js/features/ronin.js?v=20260425a"></script>
-    <script src="assets/js/features/crypto.js?v=20260510d"></script>
+    <script src="assets/js/features/crypto.js?v=20260510e"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
     <script src="assets/js/ui/renderers.js?v=20260510a"></script>
-    <script src="assets/js/features/crud.js?v=20260510a"></script>
+    <script src="assets/js/features/crud.js?v=20260510b"></script>
     <script src="assets/js/features/backup.js?v=20260510a"></script>
     <script src="assets/js/features/quick-links.js?v=20260425a"></script>
     <script src="assets/js/features/item-tracking.js?v=20260425a"></script>
