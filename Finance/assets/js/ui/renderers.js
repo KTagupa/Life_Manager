@@ -45,7 +45,7 @@
                     ? `<span class="text-[9px] ${isDebtCashIn ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'} px-1.5 py-0.5 rounded font-bold">${isDebtCashIn ? 'DEBT + CASH' : 'DEBT ONLY'}</span>`
                     : '';
                 const installmentBadge = isInstallmentPay
-                    ? '<span class="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-bold">BNPL PAYMENT</span>'
+                    ? '<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">BNPL PAYMENT</span>'
                     : '';
                 const badges = [currencyBadge, creditCardBadge, installmentBadge, debtPaymentBadge, debtIncreaseBadge].filter(Boolean).join(' ');
 
@@ -66,8 +66,8 @@
                     iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
                     amountColor = 'text-rose-600'; sign = '-';
                 } else if (isInstallmentPay) {
-                    iconBg = 'bg-violet-50'; iconText = 'text-violet-600';
-                    amountColor = 'text-violet-600'; sign = '-';
+                    iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
+                    amountColor = 'text-rose-600'; sign = '-';
                 } else {
                     iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
                     amountColor = 'text-rose-600'; sign = '-';

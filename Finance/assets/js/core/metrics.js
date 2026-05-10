@@ -399,7 +399,7 @@
                     return;
                 }
 
-                if (isCreditCardPayment(t)) {
+                if (isCreditCardPayment(t) || isInstallmentPayment(t)) {
                     expense += getTxExpenseDelta(t);
                     balance += getTxCashBalanceDelta(t);
                     const expenseCategory = getTxExpenseCategory(t);

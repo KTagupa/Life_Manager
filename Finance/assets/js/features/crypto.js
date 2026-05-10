@@ -306,6 +306,34 @@
             return updates;
         }
 
+        function getCachedAdaPhpRate() {
+            const price = Number(cryptoPrices?.cardano?.php ?? cryptoPrices?.cardano?.price ?? 0);
+            return Number.isFinite(price) && price > 0 ? price : 0;
+        }
+
+        async function ensureCryptoAdaPriceForConversion() {
+            const cached = getCachedAdaPhpRate();
+            const updated = Number(cryptoPrices?.cardano?.updated || 0);
+            if (cached > 0 && Date.now() - updated < 60 * 60 * 1000) return true;
+
+            try {
+                if (typeof updateExchangeRates === 'function') {
+                    await updateExchangeRates();
+                }
+                const updates = await fetchCoinGeckoSimplePriceUpdates(['cardano'], Date.now());
+                if (!updates.cardano) return false;
+                const db = await getDB();
+                db.crypto_prices = db.crypto_prices || {};
+                db.crypto_prices.cardano = updates.cardano;
+                await persistLocalDBSnapshot(db);
+                cryptoPrices = db.crypto_prices || {};
+                return getCachedAdaPhpRate() > 0;
+            } catch (error) {
+                console.warn('Could not refresh ADA price for crypto currency conversion.', error);
+                return false;
+            }
+        }
+
         async function fetchCardanoTokenPriceUpdates(cardanoTokenIds, now) {
             const updates = {};
             const entries = cardanoTokenIds
@@ -1850,17 +1878,36 @@
         function calcCryptoTotal() {
             const amt = parseFloat(document.getElementById('c-amount').value) || 0;
             const prc = parseFloat(document.getElementById('c-price').value) || 0;
-            const cur = document.getElementById('c-currency').value;
+            const cur = String(document.getElementById('c-currency').value || 'PHP').trim().toUpperCase();
 
             const total = amt * prc;
             document.getElementById('c-total-calc').innerText = formatCurrency(total, cur);
 
-            if (cur !== 'PHP') {
-                const phpVal = convertToDisplayCurrency(total, cur, 'PHP');
-                document.getElementById('c-total-base-preview').innerText = `≈ ${formatCurrency(phpVal, 'PHP')}`;
+            const previewEl = document.getElementById('c-total-base-preview');
+            if (cur !== activeCurrency) {
+                const displayVal = convertToDisplayCurrency(total, cur, activeCurrency);
+                if (Number.isFinite(displayVal)) {
+                    previewEl.innerText = `≈ ${formatCurrency(displayVal, activeCurrency)} in ${activeCurrency}`;
+                } else if (cur === 'ADA') {
+                    previewEl.innerText = 'Refresh crypto prices first so the app has the ADA rate.';
+                } else {
+                    previewEl.innerText = '';
+                }
             } else {
-                document.getElementById('c-total-base-preview').innerText = '';
+                previewEl.innerText = '';
             }
+        }
+
+        async function onCryptoPriceCurrencyChange() {
+            const cur = String(document.getElementById('c-currency')?.value || 'PHP').trim().toUpperCase();
+            if (cur === 'ADA') {
+                const previewEl = document.getElementById('c-total-base-preview');
+                if (previewEl && !getCachedAdaPhpRate()) {
+                    previewEl.innerText = 'Fetching ADA rate...';
+                }
+                await ensureCryptoAdaPriceForConversion();
+            }
+            calcCryptoTotal();
         }
 
         const CRYPTO_BUY_EXPENSE_CATEGORY = 'Investment';
@@ -2396,9 +2443,22 @@
                     alert("Enter the total LP token supply for this Minswap LP asset.");
                     return;
                 }
+                if (currency === 'ADA') {
+                    const hasAdaRate = await ensureCryptoAdaPriceForConversion();
+                    if (!hasAdaRate) {
+                        alert('Could not fetch the ADA rate. Enter the LP price in PHP/USD/JPY for now.');
+                        return;
+                    }
+                }
 
                 // Convert to PHP for base storage consistency
                 const phpPrice = isAirdrop ? 0 : convertToDisplayCurrency(price, currency, 'PHP');
+                if (!isAirdrop && !Number.isFinite(phpPrice)) {
+                    alert(currency === 'ADA'
+                        ? 'Refresh crypto prices first so the app has the ADA rate, or enter the price in PHP/USD/JPY.'
+                        : 'Could not convert this price currency.');
+                    return;
+                }
                 const phpTotal = isAirdrop ? 0 : (amount * phpPrice);
 
                 // Store transaction

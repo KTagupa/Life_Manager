@@ -2801,11 +2801,12 @@
                         <div class="flex gap-1">
                             <input type="number" step="any" id="c-price" placeholder="0.00" oninput="calcCryptoTotal()"
                                 class="flex-1 p-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold">
-                            <select id="c-currency" onchange="calcCryptoTotal()"
+                            <select id="c-currency" onchange="onCryptoPriceCurrencyChange()"
                                 class="p-3 bg-slate-50 border rounded-xl outline-none font-bold text-slate-600 text-xs w-20">
                                 <option value="PHP">PHP</option>
                                 <option value="USD">USD</option>
                                 <option value="JPY">JPY</option>
+                                <option value="ADA">ADA</option>
                             </select>
                         </div>
                     </div>
@@ -3854,7 +3855,7 @@
 
     <!-- App Core -->
     <script src="assets/js/core/config.js?v=20260509a"></script>
-    <script src="assets/js/core/metrics.js?v=20260509e"></script>
+    <script src="assets/js/core/metrics.js?v=20260510a"></script>
     <script src="../assets/js/financeBridgeQueue.js?v=20260425a"></script>
     <script src="assets/js/core/storage.js?v=20260509a"></script>
     <script src="assets/js/core/auth.js?v=20260509a"></script>
@@ -3863,10 +3864,10 @@
     <!-- App Modules -->
     <script src="assets/js/features/xrpl.js?v=20260425a"></script>
     <script src="assets/js/features/ronin.js?v=20260425a"></script>
-    <script src="assets/js/features/crypto.js?v=20260510c"></script>
+    <script src="assets/js/features/crypto.js?v=20260510d"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
-    <script src="assets/js/ui/renderers.js?v=20260509e"></script>
-    <script src="assets/js/features/crud.js?v=20260509g"></script>
+    <script src="assets/js/ui/renderers.js?v=20260510a"></script>
+    <script src="assets/js/features/crud.js?v=20260510a"></script>
     <script src="assets/js/features/backup.js?v=20260509a"></script>
     <script src="assets/js/features/quick-links.js?v=20260425a"></script>
     <script src="assets/js/features/item-tracking.js?v=20260425a"></script>

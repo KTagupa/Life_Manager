@@ -3694,28 +3694,48 @@
         }
 
         // Convert from one currency to another
+        function getAdaPhpRateForCurrencyConversion() {
+            const cache = typeof cryptoPrices !== 'undefined' ? cryptoPrices?.cardano : null;
+            const price = Number(cache?.php ?? cache?.price ?? 0);
+            return Number.isFinite(price) && price > 0 ? price : 0;
+        }
+
         function convertToDisplayCurrency(amount, fromCurrency, toCurrency) {
-            if (fromCurrency === toCurrency) return amount;
+            const sourceCurrency = String(fromCurrency || 'PHP').trim().toUpperCase();
+            const targetCurrency = String(toCurrency || 'PHP').trim().toUpperCase();
+            const numericAmount = Number(amount) || 0;
+            if (sourceCurrency === targetCurrency) return numericAmount;
 
             // Convert to PHP first (base currency)
-            let inPHP = amount;
-            if (fromCurrency !== 'PHP') {
-                inPHP = amount / exchangeRates[fromCurrency];
+            let inPHP = numericAmount;
+            if (sourceCurrency === 'ADA') {
+                const adaPhp = getAdaPhpRateForCurrencyConversion();
+                if (!(adaPhp > 0)) return NaN;
+                inPHP = numericAmount * adaPhp;
+            } else if (sourceCurrency !== 'PHP') {
+                const sourceRate = Number(exchangeRates[sourceCurrency] || 0);
+                if (!(sourceRate > 0)) return NaN;
+                inPHP = numericAmount / sourceRate;
             }
 
             // Then convert to target currency
-            if (toCurrency === 'PHP') {
+            if (targetCurrency === 'PHP') {
                 return inPHP;
+            } else if (targetCurrency === 'ADA') {
+                const adaPhp = getAdaPhpRateForCurrencyConversion();
+                return adaPhp > 0 ? inPHP / adaPhp : NaN;
             } else {
-                return inPHP * exchangeRates[toCurrency];
+                const targetRate = Number(exchangeRates[targetCurrency] || 0);
+                return targetRate > 0 ? inPHP * targetRate : NaN;
             }
         }
 
         // Format currency with symbol
         function formatCurrency(amount, currency) {
-            const symbols = { PHP: '₱', USD: '$', JPY: '¥' };
-            const decimals = currency === 'JPY' ? 0 : 2;
-            return symbols[currency] + amount.toLocaleString(undefined, {
+            const safeCurrency = String(currency || 'PHP').trim().toUpperCase();
+            const symbols = { PHP: '₱', USD: '$', JPY: '¥', ADA: '₳' };
+            const decimals = safeCurrency === 'JPY' ? 0 : (safeCurrency === 'ADA' ? 6 : 2);
+            return (symbols[safeCurrency] || `${safeCurrency} `) + Number(amount || 0).toLocaleString(undefined, {
                 minimumFractionDigits: decimals,
                 maximumFractionDigits: decimals
             });
