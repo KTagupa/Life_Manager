@@ -1,0 +1,310 @@
+/* Shared Markdown preview skin for main notes, maximized blocks, and the notes workspace. */
+:root {
+    --markdown-reader-bg: rgba(13, 17, 23, 0.965);
+    --markdown-reader-bg-soft: #161b22;
+    --markdown-reader-text: #c9d1d9;
+    --markdown-reader-muted: #8b949e;
+    --markdown-reader-border: #30363d;
+    --markdown-reader-link: #58a6ff;
+    --markdown-reader-code-bg: #161b22;
+    --markdown-reader-shadow: 0 14px 34px rgba(2, 6, 23, 0.34);
+}
+
+.block-preview-area,
+.note-block-preview,
+.maximized-block-preview,
+#note-preview-pane {
+    box-sizing: border-box;
+    color: var(--markdown-reader-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 0.98rem;
+    line-height: 1.6;
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+
+.block-preview-area,
+.note-block-preview,
+#note-preview-pane {
+    background: linear-gradient(180deg, var(--markdown-reader-bg), rgba(22, 27, 34, 0.94));
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 8px;
+    box-shadow: var(--markdown-reader-shadow);
+    padding: clamp(14px, 2vw, 22px);
+}
+
+.maximized-block-preview {
+    max-width: 880px;
+    min-height: 100%;
+    margin: 0 auto;
+    background: linear-gradient(180deg, var(--markdown-reader-bg), rgba(22, 27, 34, 0.94));
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 8px;
+    box-shadow: var(--markdown-reader-shadow);
+    padding: clamp(18px, 3vw, 34px);
+}
+
+.note-block-preview {
+    min-height: 92px;
+}
+
+.block-preview-area {
+    min-height: 96px;
+}
+
+.note-block-split .note-block-preview {
+    min-height: 120px;
+    overflow-y: auto;
+}
+
+.block-preview-area > :first-child,
+.note-block-preview > :first-child,
+.maximized-block-preview > :first-child,
+#note-preview-pane > :first-child {
+    margin-top: 0;
+}
+
+.block-preview-area > :last-child,
+.note-block-preview > :last-child,
+.maximized-block-preview > :last-child,
+#note-preview-pane > :last-child {
+    margin-bottom: 0;
+}
+
+.block-preview-area h1,
+.block-preview-area h2,
+.block-preview-area h3,
+.block-preview-area h4,
+.block-preview-area h5,
+.block-preview-area h6,
+.note-block-preview h1,
+.note-block-preview h2,
+.note-block-preview h3,
+.note-block-preview h4,
+.note-block-preview h5,
+.note-block-preview h6,
+.maximized-block-preview h1,
+.maximized-block-preview h2,
+.maximized-block-preview h3,
+.maximized-block-preview h4,
+.maximized-block-preview h5,
+.maximized-block-preview h6,
+#note-preview-pane h1,
+#note-preview-pane h2,
+#note-preview-pane h3,
+#note-preview-pane h4,
+#note-preview-pane h5,
+#note-preview-pane h6 {
+    color: var(--markdown-reader-text);
+    font-weight: 600;
+    line-height: 1.25;
+    margin: 24px 0 16px;
+}
+
+.block-preview-area h1,
+.note-block-preview h1,
+.maximized-block-preview h1,
+#note-preview-pane h1 {
+    border-bottom: 1px solid var(--markdown-reader-border);
+    font-size: 2em;
+    padding-bottom: 0.3em;
+}
+
+.block-preview-area h2,
+.note-block-preview h2,
+.maximized-block-preview h2,
+#note-preview-pane h2 {
+    border-bottom: 1px solid var(--markdown-reader-border);
+    font-size: 1.5em;
+    padding-bottom: 0.3em;
+}
+
+.block-preview-area h3,
+.note-block-preview h3,
+.maximized-block-preview h3,
+#note-preview-pane h3 {
+    font-size: 1.25em;
+}
+
+.block-preview-area p,
+.note-block-preview p,
+.maximized-block-preview p,
+#note-preview-pane p {
+    margin: 0 0 16px;
+}
+
+.block-preview-area a,
+.note-block-preview a,
+.maximized-block-preview a,
+#note-preview-pane a,
+.block-preview-area .wiki-link,
+.note-block-preview .wiki-link,
+.maximized-block-preview .wiki-link,
+#note-preview-pane .wiki-link,
+.block-preview-area .bookmark-link,
+.note-block-preview .bookmark-link,
+.maximized-block-preview .bookmark-link,
+#note-preview-pane .bookmark-link {
+    color: var(--markdown-reader-link);
+    text-decoration: none;
+}
+
+.block-preview-area a:hover,
+.note-block-preview a:hover,
+.maximized-block-preview a:hover,
+#note-preview-pane a:hover,
+.block-preview-area .wiki-link:hover,
+.note-block-preview .wiki-link:hover,
+.maximized-block-preview .wiki-link:hover,
+#note-preview-pane .wiki-link:hover,
+.block-preview-area .bookmark-link:hover,
+.note-block-preview .bookmark-link:hover,
+.maximized-block-preview .bookmark-link:hover,
+#note-preview-pane .bookmark-link:hover {
+    text-decoration: underline;
+}
+
+.block-preview-area ul,
+.block-preview-area ol,
+.note-block-preview ul,
+.note-block-preview ol,
+.maximized-block-preview ul,
+.maximized-block-preview ol,
+#note-preview-pane ul,
+#note-preview-pane ol {
+    margin: 0 0 16px;
+    padding-left: 2em;
+}
+
+.block-preview-area li,
+.note-block-preview li,
+.maximized-block-preview li,
+#note-preview-pane li {
+    margin: 0.25em 0;
+}
+
+.block-preview-area blockquote,
+.note-block-preview blockquote,
+.maximized-block-preview blockquote,
+#note-preview-pane blockquote {
+    border-left: 0.25em solid var(--markdown-reader-border);
+    color: var(--markdown-reader-muted);
+    margin: 0 0 16px;
+    padding: 0 1em;
+    background: transparent;
+}
+
+.block-preview-area code,
+.note-block-preview code,
+.maximized-block-preview code,
+#note-preview-pane code {
+    background: var(--markdown-reader-code-bg);
+    border-radius: 6px;
+    color: var(--markdown-reader-text);
+    font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+    font-size: 85%;
+    padding: 0.2em 0.4em;
+}
+
+.block-preview-area pre,
+.note-block-preview pre,
+.maximized-block-preview pre,
+#note-preview-pane pre {
+    background: var(--markdown-reader-code-bg);
+    border: 1px solid rgba(208, 215, 222, 0.9);
+    border-radius: 6px;
+    margin: 0 0 16px;
+    overflow-x: auto;
+    padding: 16px;
+}
+
+.block-preview-area pre code,
+.note-block-preview pre code,
+.maximized-block-preview pre code,
+#note-preview-pane pre code {
+    background: transparent;
+    border-radius: 0;
+    font-size: 100%;
+    padding: 0;
+}
+
+.block-preview-area table,
+.note-block-preview table,
+.maximized-block-preview table,
+#note-preview-pane table {
+    border-collapse: collapse;
+    border-spacing: 0;
+    display: block;
+    margin: 0 0 16px;
+    max-width: 100%;
+    overflow-x: auto;
+    width: max-content;
+}
+
+.block-preview-area th,
+.block-preview-area td,
+.note-block-preview th,
+.note-block-preview td,
+.maximized-block-preview th,
+.maximized-block-preview td,
+#note-preview-pane th,
+#note-preview-pane td {
+    border: 1px solid var(--markdown-reader-border);
+    padding: 6px 13px;
+}
+
+.block-preview-area tr:nth-child(2n),
+.note-block-preview tr:nth-child(2n),
+.maximized-block-preview tr:nth-child(2n),
+#note-preview-pane tr:nth-child(2n) {
+    background-color: var(--markdown-reader-bg-soft);
+}
+
+.block-preview-area img,
+.note-block-preview img,
+.maximized-block-preview img,
+#note-preview-pane img {
+    border-radius: 6px;
+    box-sizing: content-box;
+}
+
+.block-preview-area input[type="checkbox"],
+.note-block-preview input[type="checkbox"],
+.maximized-block-preview input[type="checkbox"],
+#note-preview-pane input[type="checkbox"] {
+    accent-color: var(--ready-color, #22c55e);
+    margin-right: 8px;
+}
+
+.note-image-inline-frame {
+    color: var(--markdown-reader-muted);
+}
+
+.note-image-inline-hint {
+    background: rgba(9, 105, 218, 0.08);
+    color: var(--markdown-reader-muted);
+}
+
+@media (max-width: 720px) {
+    .block-preview-area,
+    .note-block-preview,
+    .maximized-block-preview,
+    #note-preview-pane {
+        font-size: 0.94rem;
+        padding: 14px;
+    }
+
+    .block-preview-area h1,
+    .note-block-preview h1,
+    .maximized-block-preview h1,
+    #note-preview-pane h1 {
+        font-size: 1.55em;
+    }
+
+    .block-preview-area h2,
+    .note-block-preview h2,
+    .maximized-block-preview h2,
+    #note-preview-pane h2 {
+        font-size: 1.28em;
+    }
+}
