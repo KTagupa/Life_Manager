@@ -2420,6 +2420,16 @@
                 alert('Enter a valid payment amount.');
                 return;
             }
+            if (!recordOnly && typeof computeInstallmentOutstandingMapAsOf === 'function') {
+                const outstandingMap = computeInstallmentOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || []);
+                const outstanding = outstandingMap.has(plan.id)
+                    ? Math.max(0, Number(outstandingMap.get(plan.id) || 0))
+                    : Math.max(0, Number(plan.totalAmount || 0));
+                if (outstanding <= 0.01) {
+                    alert('This BNPL plan is already paid in full.');
+                    return;
+                }
+            }
 
             const date = selectedDate ? new Date(selectedDate).toISOString() : new Date().toISOString();
             const db = await getDB();

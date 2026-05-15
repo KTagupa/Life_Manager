@@ -340,13 +340,15 @@
                 ? computeInstallmentOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
                 : new Map();
 
-            decrypted.forEach(plan => {
+            const rows = decrypted.map(plan => {
                 const safeName = escapeHTML(plan.name || 'Installment Plan');
                 const safeProvider = escapeHTML(plan.provider || 'BNPL / installment');
                 const feeTotal = Math.max(0, Number(plan.feeTotal || 0));
                 const total = Math.max(0, Number(plan.totalAmount || 0));
                 const monthly = Math.max(0, Number(plan.monthlyAmount || 0));
-                const outstanding = Math.max(0, Number(outstandingMap.get(plan.id) || 0));
+                const outstanding = outstandingMap.has(plan.id)
+                    ? Math.max(0, Number(outstandingMap.get(plan.id) || 0))
+                    : total;
                 const paid = Math.max(0, total - outstanding);
                 const progressPct = total > 0 ? Math.min(100, Math.max(0, (paid / total) * 100)) : 0;
                 const paymentRows = getInstallmentPaymentTransactions(plan.id);
@@ -357,46 +359,109 @@
                 const paymentCount = paymentRows.length + historicalPayments.length;
                 const installmentCount = Math.max(0, Math.round(Number(plan.installmentCount || 0)));
                 const encodedPlanId = encodeInlineArg(plan.id);
-                const statusLabel = outstanding <= 0.01
+                const isComplete = outstanding <= 0.01;
+                const statusLabel = isComplete
                     ? 'Complete'
                     : `${paymentCount}${installmentCount ? ` / ${installmentCount}` : ''} payments`;
 
+                return {
+                    plan,
+                    safeName,
+                    safeProvider,
+                    feeTotal,
+                    total,
+                    monthly,
+                    outstanding,
+                    paid,
+                    progressPct,
+                    historicalPayments,
+                    feesPaid,
+                    installmentCount,
+                    encodedPlanId,
+                    statusLabel,
+                    isComplete
+                };
+            });
+
+            const activeRows = rows.filter(row => !row.isComplete);
+            const completedRows = rows.filter(row => row.isComplete);
+
+            activeRows.forEach(row => {
                 const div = document.createElement('div');
                 div.className = 'p-4 bg-slate-50 rounded-2xl border border-slate-200';
                 div.innerHTML = `
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <p class="text-sm font-bold text-slate-800 break-words">${safeName}</p>
-                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${safeProvider}</p>
-                            <p class="text-[10px] text-slate-500 mt-1">Remaining ${fmt(outstanding)} of ${fmt(total)}</p>
-                            ${feeTotal > 0 ? `<p class="text-[10px] text-violet-500 mt-1">Fees paid ${fmt(feesPaid)} of ${fmt(feeTotal)}</p>` : ''}
+                            <p class="text-sm font-bold text-slate-800 break-words">${row.safeName}</p>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${row.safeProvider}</p>
+                            <p class="text-[10px] text-slate-500 mt-1">Remaining ${fmt(row.outstanding)} of ${fmt(row.total)}</p>
+                            ${row.feeTotal > 0 ? `<p class="text-[10px] text-violet-500 mt-1">Fees paid ${fmt(row.feesPaid)} of ${fmt(row.feeTotal)}</p>` : ''}
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
-                            <button onclick="openInstallmentPaymentModal(decodeURIComponent('${encodedPlanId}'))"
+                            <button onclick="openInstallmentPaymentModal(decodeURIComponent('${row.encodedPlanId}'))"
                                 class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Payment</button>
-                            <button onclick="openInstallmentPaymentModal(decodeURIComponent('${encodedPlanId}'), { recordOnly: true })"
+                            <button onclick="openInstallmentPaymentModal(decodeURIComponent('${row.encodedPlanId}'), { recordOnly: true })"
                                 class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200">Previous</button>
-                            <button onclick="openInstallmentPlanModal(decodeURIComponent('${encodedPlanId}'))"
+                            <button onclick="openInstallmentPlanModal(decodeURIComponent('${row.encodedPlanId}'))"
                                 class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
-                            <button onclick="deleteItem('installment_plans', decodeURIComponent('${encodedPlanId}'))"
+                            <button onclick="deleteItem('installment_plans', decodeURIComponent('${row.encodedPlanId}'))"
                                 class="text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
                         </div>
                     </div>
                     <div class="mt-3">
                         <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
-                            <div class="h-full bg-violet-500 rounded-full" style="width:${progressPct}%"></div>
+                            <div class="h-full bg-violet-500 rounded-full" style="width:${row.progressPct}%"></div>
                         </div>
                         <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
-                            <span>${escapeHTML(statusLabel)}</span>
-                            ${historicalPayments.length ? `<span>${historicalPayments.length} previous</span>` : ''}
-                            <span>${escapeHTML(getInstallmentNextDueLabel(plan))}</span>
-                            ${monthly > 0 ? `<span>${fmt(monthly)} / payment</span>` : ''}
-                            ${feeTotal > 0 && installmentCount > 0 ? `<span>${fmt(feeTotal / installmentCount)} fee / payment</span>` : ''}
+                            <span>${escapeHTML(row.statusLabel)}</span>
+                            ${row.historicalPayments.length ? `<span>${row.historicalPayments.length} previous</span>` : ''}
+                            <span>${escapeHTML(getInstallmentNextDueLabel(row.plan))}</span>
+                            ${row.monthly > 0 ? `<span>${fmt(row.monthly)} / payment</span>` : ''}
+                            ${row.feeTotal > 0 && row.installmentCount > 0 ? `<span>${fmt(row.feeTotal / row.installmentCount)} fee / payment</span>` : ''}
                         </div>
                     </div>
                 `;
                 list.appendChild(div);
             });
+
+            if (completedRows.length) {
+                const completedWrap = document.createElement('details');
+                completedWrap.className = 'group rounded-2xl border border-slate-200 bg-slate-50/70';
+                completedWrap.innerHTML = `
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-500">
+                        <span>Completed (${completedRows.length})</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180"></i>
+                    </summary>
+                    <div class="border-t border-slate-200 p-3 space-y-2"></div>
+                `;
+                const completedList = completedWrap.querySelector('div');
+                completedRows.forEach(row => {
+                    const item = document.createElement('div');
+                    item.className = 'rounded-xl border border-slate-200 bg-white/70 px-3 py-3';
+                    item.innerHTML = `
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-bold text-slate-600 break-words">${row.safeName}</p>
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${row.safeProvider}</p>
+                                <p class="text-[10px] font-black uppercase tracking-wider text-emerald-700 mt-1">Paid in full</p>
+                                <p class="text-[10px] text-slate-500 mt-1">Total paid ${fmt(row.paid)}</p>
+                                ${row.feeTotal > 0 ? `<p class="text-[10px] text-violet-500 mt-1">Fees paid ${fmt(row.feesPaid)} of ${fmt(row.feeTotal)}</p>` : ''}
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button onclick="openInstallmentPlanModal(decodeURIComponent('${row.encodedPlanId}'))"
+                                    class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
+                                <button onclick="deleteItem('installment_plans', decodeURIComponent('${row.encodedPlanId}'))"
+                                    class="text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                            </div>
+                        </div>
+                        <div class="mt-3 h-1.5 bg-emerald-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-emerald-500 rounded-full" style="width:100%"></div>
+                        </div>
+                    `;
+                    completedList.appendChild(item);
+                });
+                list.appendChild(completedWrap);
+            }
 
             lucide.createIcons();
         }
