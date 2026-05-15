@@ -1,0 +1,1927 @@
+// =============================================
+// SECTION 2: DATABASE & STORAGE
+// =============================================
+const DB_KEY = 'finance_flow_encrypted_v3';
+const BACKUP_SETTINGS_KEY = 'finance_flow_backup_settings_v1';
+const KDF_META_PREFIX = 'finance_flow_kdf_meta_v1_';
+const CURRENT_SCHEMA_VERSION = 6;
+const UNDO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const LOCAL_DB_NAME = 'finance_flow_local_v1';
+const LOCAL_DB_VERSION = 1;
+const LOCAL_DB_STORE = 'app_kv';
+const LOCAL_STORAGE_MIRROR_DELAY_MS = 300;
+const REMOTE_REFRESH_TTL_MS = 30 * 1000;
+
+let localIndexedDBPromise = null;
+let latestStorageDiagnostics = null;
+let cachedLocalDBSnapshot = null;
+let pendingLocalStorageMirrorTimer = null;
+let lastRemoteReadAt = 0;
+let remoteRefreshPromise = null;
+let remoteSyncPromise = null;
+let remoteSyncDirty = false;
+
+function canUseIndexedDB() {
+    return typeof window !== 'undefined' && 'indexedDB' in window;
+}
+
+function openLocalIndexedDB() {
+    if (!canUseIndexedDB()) return Promise.resolve(null);
+    if (localIndexedDBPromise) return localIndexedDBPromise;
+
+    localIndexedDBPromise = new Promise((resolve) => {
+        try {
+            const req = window.indexedDB.open(LOCAL_DB_NAME, LOCAL_DB_VERSION);
+            req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(LOCAL_DB_STORE)) {
+                    db.createObjectStore(LOCAL_DB_STORE, { keyPath: 'key' });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => {
+                console.error('IndexedDB open failed; falling back to localStorage.', req.error);
+                resolve(null);
+            };
+        } catch (error) {
+            console.error('IndexedDB init failed; falling back to localStorage.', error);
+            resolve(null);
+        }
+    });
+
+    return localIndexedDBPromise;
+}
+
+async function readDBFromIndexedDB() {
+    const record = await readDBRecordFromIndexedDB();
+    return record?.value || null;
+}
+
+async function readDBRecordFromIndexedDB() {
+    try {
+        const db = await openLocalIndexedDB();
+        if (!db) return null;
+
+        return await new Promise((resolve) => {
+            try {
+                const tx = db.transaction(LOCAL_DB_STORE, 'readonly');
+                const store = tx.objectStore(LOCAL_DB_STORE);
+                const req = store.get(DB_KEY);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => {
+                    console.error('IndexedDB read failed; using localStorage fallback.', req.error);
+                    resolve(null);
+                };
+            } catch (error) {
+                console.error('IndexedDB read transaction failed; using localStorage fallback.', error);
+                resolve(null);
+            }
+        });
+    } catch (error) {
+        console.error('IndexedDB read failed; using localStorage fallback.', error);
+        return null;
+    }
+}
+
+async function writeDBToIndexedDB(dbData) {
+    try {
+        const db = await openLocalIndexedDB();
+        if (!db) return false;
+
+        return await new Promise((resolve) => {
+            try {
+                const tx = db.transaction(LOCAL_DB_STORE, 'readwrite');
+                const store = tx.objectStore(LOCAL_DB_STORE);
+                store.put({
+                    key: DB_KEY,
+                    value: dbData,
+                    updatedAt: Date.now()
+                });
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => {
+                    console.error('IndexedDB write failed; localStorage cache still updated.', tx.error);
+                    resolve(false);
+                };
+            } catch (error) {
+                console.error('IndexedDB write transaction failed; localStorage cache still updated.', error);
+                resolve(false);
+            }
+        });
+    } catch (error) {
+        console.error('IndexedDB write failed; localStorage cache still updated.', error);
+        return false;
+    }
+}
+
+function setCachedLocalDBSnapshot(dbData) {
+    const normalized = normalizeDBSchema(dbData);
+    cachedLocalDBSnapshot = cloneStorageSafeValue(normalized);
+    return normalized;
+}
+
+function getCachedLocalDBSnapshotClone() {
+    if (!cachedLocalDBSnapshot) return null;
+    return normalizeDBSchema(cloneStorageSafeValue(cachedLocalDBSnapshot));
+}
+
+function flushLocalStorageMirrorNow() {
+    if (pendingLocalStorageMirrorTimer != null && typeof window !== 'undefined') {
+        window.clearTimeout(pendingLocalStorageMirrorTimer);
+        pendingLocalStorageMirrorTimer = null;
+    }
+
+    if (!cachedLocalDBSnapshot) return;
+
+    try {
+        localStorage.setItem(DB_KEY, JSON.stringify(cachedLocalDBSnapshot));
+    } catch (error) {
+        console.error('Failed to update localStorage cache.', error);
+    }
+}
+
+function scheduleLocalStorageMirrorWrite() {
+    if (typeof window === 'undefined') {
+        flushLocalStorageMirrorNow();
+        return;
+    }
+
+    if (pendingLocalStorageMirrorTimer != null) {
+        window.clearTimeout(pendingLocalStorageMirrorTimer);
+    }
+
+    pendingLocalStorageMirrorTimer = window.setTimeout(() => {
+        pendingLocalStorageMirrorTimer = null;
+        flushLocalStorageMirrorNow();
+    }, LOCAL_STORAGE_MIRROR_DELAY_MS);
+}
+
+if (typeof window !== 'undefined' && !window.__financeLocalStorageMirrorFlushBound) {
+    window.__financeLocalStorageMirrorFlushBound = true;
+    window.addEventListener('pagehide', flushLocalStorageMirrorNow);
+    window.addEventListener('beforeunload', flushLocalStorageMirrorNow);
+}
+
+function readDBFromLocalStorage() {
+    try {
+        const raw = localStorage.getItem(DB_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+        console.error('localStorage DB parse failed; ignoring local cache.', error);
+        return null;
+    }
+}
+
+function getDBLastUpdatedTs(db) {
+    const raw = db?.sync?.updatedAt;
+    if (!raw) return 0;
+    const ts = typeof raw === 'number' ? raw : new Date(raw).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+}
+
+function estimateDBPayloadWeight(db) {
+    if (!db || typeof db !== 'object') return 0;
+    return [
+        db.transactions,
+        db.bills,
+        db.debts,
+        db.credit_cards,
+        db.installment_plans,
+        db.lent,
+        db.crypto,
+        db.wishlist,
+        db.fixed_assets,
+        db.agm_records,
+        db.goals,
+        db.investment_goals,
+        db.categorization_rules,
+        db.imports,
+        db.monthly_closes,
+        db.kpi_snapshots,
+        db.forecast_runs,
+        db.statement_snapshots,
+        db.quick_links,
+        db.undo_log
+    ].reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
+}
+
+function choosePreferredLocalDB(localStorageDB, indexedDBData) {
+    if (!localStorageDB && !indexedDBData) return { db: getDefaultDB(), source: 'default' };
+    if (!localStorageDB) return { db: indexedDBData, source: 'idb' };
+    if (!indexedDBData) return { db: localStorageDB, source: 'localstorage' };
+
+    const localTs = getDBLastUpdatedTs(localStorageDB);
+    const idbTs = getDBLastUpdatedTs(indexedDBData);
+    if (idbTs > localTs) return { db: indexedDBData, source: 'idb' };
+    if (localTs > idbTs) return { db: localStorageDB, source: 'localstorage' };
+
+    const localWeight = estimateDBPayloadWeight(localStorageDB);
+    const idbWeight = estimateDBPayloadWeight(indexedDBData);
+    if (idbWeight > localWeight) return { db: indexedDBData, source: 'idb' };
+    return { db: localStorageDB, source: 'localstorage' };
+}
+
+async function persistLocalDBSnapshot(dbData, options = {}) {
+    const normalized = setCachedLocalDBSnapshot(dbData);
+    await writeDBToIndexedDB(normalized);
+    if (options.flushLocalStorage === true) flushLocalStorageMirrorNow();
+    else scheduleLocalStorageMirrorWrite();
+    return normalized;
+}
+
+async function getLocalDBSnapshot() {
+    const cached = getCachedLocalDBSnapshotClone();
+    if (cached) return cached;
+
+    const rawLocalStorageDB = readDBFromLocalStorage();
+    const rawLocalStorageStr = rawLocalStorageDB ? JSON.stringify(rawLocalStorageDB) : null;
+    let localStorageDB = rawLocalStorageDB ? normalizeDBSchema(rawLocalStorageDB) : null;
+    let rawIndexedDBData = null;
+    let indexedDBData = null;
+    try {
+        rawIndexedDBData = await readDBFromIndexedDB();
+        indexedDBData = rawIndexedDBData ? normalizeDBSchema(rawIndexedDBData) : null;
+    } catch (error) {
+        console.error('IndexedDB local snapshot read failed.', error);
+        rawIndexedDBData = null;
+        indexedDBData = null;
+    }
+
+    const preferred = choosePreferredLocalDB(localStorageDB, indexedDBData);
+    const resolved = normalizeDBSchema(preferred.db);
+
+    const resolvedStr = JSON.stringify(resolved);
+    const localStr = localStorageDB ? JSON.stringify(localStorageDB) : null;
+    const rawIdbStr = rawIndexedDBData ? JSON.stringify(rawIndexedDBData) : null;
+    const idbStr = indexedDBData ? JSON.stringify(indexedDBData) : null;
+    const localWasNormalized = rawLocalStorageStr !== localStr;
+    const idbWasNormalized = rawIdbStr !== idbStr;
+
+    // Keep both local stores aligned after reads, but avoid redundant writes.
+    if (idbWasNormalized || idbStr !== resolvedStr) {
+        await writeDBToIndexedDB(resolved);
+    }
+    if (localWasNormalized || localStr !== resolvedStr) {
+        try {
+            localStorage.setItem(DB_KEY, resolvedStr);
+        } catch (error) {
+            console.error('Failed to update localStorage cache.', error);
+        }
+    }
+    setCachedLocalDBSnapshot(resolved);
+    return resolved;
+}
+
+function estimateSerializedBytes(value) {
+    try {
+        if (value == null) return 0;
+        const str = typeof value === 'string' ? value : JSON.stringify(value);
+        return new TextEncoder().encode(str).length;
+    } catch (_) {
+        return 0;
+    }
+}
+
+function formatBytes(bytes) {
+    const n = Number(bytes || 0);
+    if (!Number.isFinite(n) || n <= 0) return '0 B';
+    if (n < 1024) return `${n} B`;
+    const kb = n / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    const mb = kb / 1024;
+    return `${mb.toFixed(2)} MB`;
+}
+
+function formatDiagnosticTime(value) {
+    if (!value) return '—';
+    const ts = typeof value === 'number' ? value : new Date(value).getTime();
+    if (!Number.isFinite(ts) || ts <= 0) return '—';
+    return new Date(ts).toLocaleString();
+}
+
+function countDBRecords(db) {
+    const safe = normalizeDBSchema(db || getDefaultDB());
+    return {
+        transactions: (safe.transactions || []).filter(i => i && !i.deletedAt).length,
+        bills: (safe.bills || []).filter(i => i && !i.deletedAt).length,
+        debts: (safe.debts || []).filter(i => i && !i.deletedAt).length,
+        creditCards: (safe.credit_cards || []).filter(i => i && !i.deletedAt).length,
+        installmentPlans: (safe.installment_plans || []).filter(i => i && !i.deletedAt).length,
+        lent: (safe.lent || []).filter(i => i && !i.deletedAt).length,
+        crypto: (safe.crypto || []).filter(i => i && !i.deletedAt).length,
+        wishlist: (safe.wishlist || []).filter(i => i && !i.deletedAt).length,
+        fixedAssets: (safe.fixed_assets || []).filter(i => i && !i.deletedAt).length,
+        agmRecords: (safe.agm_records || []).filter(i => i && !i.deletedAt).length,
+        monthlyCloses: (safe.monthly_closes || []).length,
+        kpiSnapshots: (safe.kpi_snapshots || []).length,
+        forecastRuns: (safe.forecast_runs || []).length,
+        statementSnapshots: (safe.statement_snapshots || []).length,
+        undoLog: (safe.undo_log || []).length
+    };
+}
+
+async function getStorageDiagnostics() {
+    const rawLocal = (() => {
+        try {
+            return localStorage.getItem(DB_KEY);
+        } catch (error) {
+            console.error('localStorage read failed for diagnostics.', error);
+            return null;
+        }
+    })();
+
+    let localParsed = null;
+    try {
+        localParsed = rawLocal ? normalizeDBSchema(JSON.parse(rawLocal)) : null;
+    } catch (error) {
+        console.error('localStorage parse failed for diagnostics.', error);
+        localParsed = null;
+    }
+
+    const idbRecord = await readDBRecordFromIndexedDB();
+    let idbParsed = null;
+    try {
+        idbParsed = idbRecord?.value ? normalizeDBSchema(idbRecord.value) : null;
+    } catch (error) {
+        console.error('IndexedDB parse failed for diagnostics.', error);
+        idbParsed = null;
+    }
+
+    const preferred = choosePreferredLocalDB(localParsed, idbParsed);
+    const preferredDB = normalizeDBSchema(preferred.db || getDefaultDB());
+
+    return {
+        preferredSource: preferred.source,
+        syncUpdatedAt: preferredDB.sync?.updatedAt || null,
+        conflictStrategy: preferredDB.sync?.conflictStrategy || 'local_wins',
+        counts: countDBRecords(preferredDB),
+        localStorage: {
+            available: true,
+            hasData: !!localParsed,
+            sizeBytes: estimateSerializedBytes(rawLocal),
+            updatedAt: localParsed?.sync?.updatedAt || null
+        },
+        indexedDB: {
+            supported: canUseIndexedDB(),
+            hasData: !!idbParsed,
+            sizeBytes: estimateSerializedBytes(idbRecord?.value || null),
+            updatedAt: idbParsed?.sync?.updatedAt || null,
+            writeTimestamp: idbRecord?.updatedAt || null
+        }
+    };
+}
+
+function setDiagText(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerText = value;
+}
+
+function copyTextFallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    ta.style.opacity = '0';
+    ta.style.pointerEvents = 'none';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    let ok = false;
+    try {
+        ok = document.execCommand('copy');
+    } catch (_) {
+        ok = false;
+    }
+    document.body.removeChild(ta);
+    return ok;
+}
+
+function downloadDiagnosticsJSON(json) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `financeflow_diagnostics_${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+async function copyStorageDiagnosticsJSON() {
+    setDiagText('diag-status', 'Preparing diagnostics JSON...');
+    try {
+        const diagnostics = latestStorageDiagnostics || await getStorageDiagnostics();
+        latestStorageDiagnostics = diagnostics;
+        const payload = {
+            exportedAt: new Date().toISOString(),
+            appId: typeof appId !== 'undefined' ? appId : null,
+            diagnostics
+        };
+        const json = JSON.stringify(payload, null, 2);
+
+        let copied = false;
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            try {
+                await navigator.clipboard.writeText(json);
+                copied = true;
+            } catch (_) {
+                copied = false;
+            }
+        }
+        if (!copied) copied = copyTextFallback(json);
+        if (!copied) {
+            downloadDiagnosticsJSON(json);
+            const timeLabel = new Date().toLocaleTimeString();
+            setDiagText('diag-status', `Clipboard blocked. Downloaded diagnostics JSON at ${timeLabel}`);
+            if (typeof showToast === 'function') showToast('ℹ️ Clipboard blocked, diagnostics JSON downloaded');
+            return;
+        }
+
+        const timeLabel = new Date().toLocaleTimeString();
+        setDiagText('diag-status', `Diagnostics JSON copied at ${timeLabel}`);
+        if (typeof showToast === 'function') showToast('✅ Diagnostics JSON copied');
+    } catch (error) {
+        console.error('Diagnostics JSON copy failed.', error);
+        setDiagText('diag-status', 'Could not copy diagnostics JSON');
+        if (typeof showToast === 'function') showToast('❌ Could not copy diagnostics JSON');
+    }
+}
+
+async function refreshStorageDiagnosticsPanel() {
+    const panel = document.getElementById('storage-diagnostics-panel');
+    if (!panel) return;
+
+    setDiagText('diag-status', 'Refreshing...');
+    try {
+        const diag = await getStorageDiagnostics();
+        latestStorageDiagnostics = diag;
+        const localStatus = diag.localStorage.hasData ? 'Data present' : 'No data';
+        const idbStatus = !diag.indexedDB.supported
+            ? 'Not supported'
+            : (diag.indexedDB.hasData ? 'Data present' : 'No data');
+
+        setDiagText('diag-source', diag.preferredSource);
+        setDiagText('diag-sync-updated', formatDiagnosticTime(diag.syncUpdatedAt));
+        setDiagText('diag-conflict-strategy', diag.conflictStrategy);
+
+        setDiagText('diag-local-status', localStatus);
+        setDiagText('diag-local-size', formatBytes(diag.localStorage.sizeBytes));
+        setDiagText('diag-local-updated', formatDiagnosticTime(diag.localStorage.updatedAt));
+
+        setDiagText('diag-idb-status', idbStatus);
+        setDiagText('diag-idb-size', formatBytes(diag.indexedDB.sizeBytes));
+        setDiagText('diag-idb-updated', formatDiagnosticTime(diag.indexedDB.updatedAt));
+
+        const writeTs = diag.indexedDB.writeTimestamp ? formatDiagnosticTime(diag.indexedDB.writeTimestamp) : '—';
+        setDiagText('diag-idb-write', writeTs);
+        setDiagText(
+            'diag-counts',
+            `Tx ${diag.counts.transactions} • Bills ${diag.counts.bills} • Debts ${diag.counts.debts} • Cards ${diag.counts.creditCards} • BNPL ${diag.counts.installmentPlans} • Lent ${diag.counts.lent} • Crypto ${diag.counts.crypto} • Wishlist ${diag.counts.wishlist} • Assets ${diag.counts.fixedAssets} • AGM ${diag.counts.agmRecords} • Closes ${diag.counts.monthlyCloses} • KPI ${diag.counts.kpiSnapshots} • Forecast ${diag.counts.forecastRuns} • Statements ${diag.counts.statementSnapshots} • Undo ${diag.counts.undoLog}`
+        );
+        setDiagText('diag-status', `Last refresh: ${new Date().toLocaleTimeString()}`);
+    } catch (error) {
+        console.error('Storage diagnostics refresh failed.', error);
+        setDiagText('diag-status', 'Could not refresh diagnostics');
+    }
+}
+
+function getDefaultKpiTargets() {
+    return {
+        savingsRatePct: 20,
+        runwayDays: 180,
+        maxOverBudgetCategories: 1,
+        lastModified: 0
+    };
+}
+
+function getDefaultForecastAssumptions() {
+    return {
+        months: 12,
+        startMonth: null,
+        incomeBase: 0,
+        fixedCostsBase: 0,
+        variableCostsBase: 0,
+        debtPaymentBase: 0,
+        investmentBase: 0,
+        bestIncomeMultiplier: 1.12,
+        bestExpenseMultiplier: 0.9,
+        worstIncomeMultiplier: 0.9,
+        worstExpenseMultiplier: 1.12,
+        includeCryptoInNetWorth: true,
+        lastModified: 0
+    };
+}
+
+function getDefaultOperationsGuardrails() {
+    return {
+        incomeVarianceWarnPct: 12,
+        outflowVarianceWarnPct: 12,
+        cashFloor: 0,
+        lastModified: 0
+    };
+}
+
+function getDefaultXrplReconcileSettings() {
+    return {
+        walletAddress: '',
+        endpoint: 'https://xrplcluster.com/',
+        assetMappings: {
+            'native:XRP': {
+                tokenId: 'ripple',
+                symbol: 'XRP',
+                label: 'XRP'
+            }
+        },
+        lastRefreshAt: 0,
+        lastLedgerIndex: 0,
+        lastModified: 0
+    };
+}
+
+function normalizeXrplAssetMappingsShape(assetMappings) {
+    const defaults = getDefaultXrplReconcileSettings().assetMappings;
+    const source = assetMappings && typeof assetMappings === 'object' ? assetMappings : {};
+    const normalized = { ...defaults };
+
+    Object.entries(source).forEach(([assetKey, mapping]) => {
+        const key = String(assetKey || '').trim();
+        if (!key) return;
+
+        const sourceMapping = mapping && typeof mapping === 'object' ? mapping : {};
+        const tokenId = String(sourceMapping.tokenId || '').trim().toLowerCase();
+        const symbol = String(sourceMapping.symbol || '').trim();
+        const label = String(sourceMapping.label || '').trim();
+
+        normalized[key] = {
+            tokenId,
+            symbol,
+            label
+        };
+    });
+
+    return normalized;
+}
+
+function normalizeXrplReconcileSettingsShape(settings) {
+    const defaults = getDefaultXrplReconcileSettings();
+    const source = settings && typeof settings === 'object' ? settings : {};
+    const endpoint = String(source.endpoint || defaults.endpoint).trim() || defaults.endpoint;
+
+    return {
+        walletAddress: String(source.walletAddress || '').trim(),
+        endpoint,
+        assetMappings: normalizeXrplAssetMappingsShape(source.assetMappings),
+        lastRefreshAt: Math.max(0, toFiniteNumber(source.lastRefreshAt, 0)),
+        lastLedgerIndex: Math.max(0, Math.round(toFiniteNumber(source.lastLedgerIndex, 0))),
+        lastModified: Math.max(0, toFiniteNumber(source.lastModified, 0))
+    };
+}
+
+function getDefaultRoninReconcileSettings() {
+    return {
+        walletAddress: '',
+        endpoint: 'https://api.roninchain.com/rpc',
+        fromBlock: '',
+        assetMappings: {
+            'native:ron': {
+                tokenId: 'ronin',
+                symbol: 'RON',
+                label: 'RON',
+                decimals: 18
+            }
+        },
+        lastRefreshAt: 0,
+        lastBlockNumber: 0,
+        lastModified: 0
+    };
+}
+
+function normalizeRoninAssetMappingsShape(assetMappings) {
+    const defaults = getDefaultRoninReconcileSettings().assetMappings;
+    const source = assetMappings && typeof assetMappings === 'object' ? assetMappings : {};
+    const normalized = { ...defaults };
+
+    Object.entries(source).forEach(([assetKey, mapping]) => {
+        const key = String(assetKey || '').trim().toLowerCase();
+        if (!key) return;
+
+        const sourceMapping = mapping && typeof mapping === 'object' ? mapping : {};
+        const contract = String(sourceMapping.contract || '').trim().toLowerCase();
+        normalized[key] = {
+            tokenId: String(sourceMapping.tokenId || '').trim().toLowerCase(),
+            symbol: String(sourceMapping.symbol || '').trim(),
+            label: String(sourceMapping.label || '').trim(),
+            csvLabel: String(sourceMapping.csvLabel || '').trim(),
+            contract,
+            decimals: Math.max(0, Math.round(toFiniteNumber(sourceMapping.decimals, 18)))
+        };
+    });
+
+    return normalized;
+}
+
+function normalizeRoninReconcileSettingsShape(settings) {
+    const defaults = getDefaultRoninReconcileSettings();
+    const source = settings && typeof settings === 'object' ? settings : {};
+
+    return {
+        walletAddress: String(source.walletAddress || '').trim().toLowerCase(),
+        endpoint: String(source.endpoint || defaults.endpoint).trim() || defaults.endpoint,
+        fromBlock: String(source.fromBlock || '').trim(),
+        assetMappings: normalizeRoninAssetMappingsShape(source.assetMappings),
+        lastRefreshAt: Math.max(0, toFiniteNumber(source.lastRefreshAt, 0)),
+        lastBlockNumber: Math.max(0, Math.round(toFiniteNumber(source.lastBlockNumber, 0))),
+        lastModified: Math.max(0, toFiniteNumber(source.lastModified, 0))
+    };
+}
+
+function getDefaultDB() {
+    return {
+        schema_version: CURRENT_SCHEMA_VERSION,
+        transactions: [],
+        bills: [],
+        debts: [],
+        credit_cards: [],
+        installment_plans: [],
+        lent: [],
+        crypto: [],
+        crypto_prices: {},
+        crypto_interest: {},
+        xrpl_reconcile: getDefaultXrplReconcileSettings(),
+        ronin_reconcile: getDefaultRoninReconcileSettings(),
+        wishlist: [],
+        fixed_assets: [],
+        agm_records: [],
+        budgets: { data: null },
+        custom_categories: [],
+        recurring_transactions: [],
+        investment_goals: [],
+        goals: [],
+        categorization_rules: [],
+        imports: [],
+        insight_snapshots: [],
+        monthly_closes: [],
+        kpi_targets: getDefaultKpiTargets(),
+        kpi_snapshots: [],
+        forecast_assumptions: getDefaultForecastAssumptions(),
+        forecast_runs: [],
+        statement_snapshots: [],
+        quick_links: [],
+        quick_links_last_modified: 0,
+        operations_guardrails: getDefaultOperationsGuardrails(),
+        undo_log: [],
+        sync: {
+            revision: null,
+            lastKnownRemoteRevision: null,
+            updatedAt: null,
+            conflictStrategy: 'local_wins'
+        }
+    };
+}
+
+function getBackupSettings() {
+    const str = localStorage.getItem(BACKUP_SETTINGS_KEY);
+    return str ? JSON.parse(str) : {
+        autoBackupEnabled: true,
+        backupHour: 20, // 8 PM
+        lastBackupDate: null,
+        lastBackupTime: null
+    };
+}
+
+function saveBackupSettings(settings) {
+    localStorage.setItem(BACKUP_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function getKdfMetaStorageKey(vaultId) {
+    return `${KDF_META_PREFIX}${vaultId}`;
+}
+
+function pruneUndoLog(undoEntries) {
+    const cutoff = Date.now() - UNDO_RETENTION_MS;
+    return (undoEntries || []).filter(e => {
+        const ts = e && e.deletedAt ? new Date(e.deletedAt).getTime() : 0;
+        return ts > cutoff;
+    });
+}
+
+function getUndoEntryKey(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    if (entry.id) return `id:${entry.id}`;
+    return `legacy:${entry.entityType || ''}:${entry.entityId || ''}:${entry.deletedAt || ''}`;
+}
+
+function dedupeUndoLogEntries(undoEntries) {
+    const source = Array.isArray(undoEntries) ? undoEntries : [];
+    const seen = new Set();
+    const out = [];
+
+    for (let i = source.length - 1; i >= 0; i -= 1) {
+        const entry = source[i];
+        if (!entry || typeof entry !== 'object') continue;
+        const key = getUndoEntryKey(entry);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push(entry);
+    }
+
+    out.reverse();
+    return out;
+}
+
+function normalizeReminderShape(reminder) {
+    if (!reminder || typeof reminder !== 'object') return null;
+    const out = { ...reminder };
+
+    if (out.frequency === 'weekly') {
+        if (typeof out.dayOfWeek !== 'number') {
+            const legacy = (typeof out.dayOfMonth === 'number' && out.dayOfMonth >= 0 && out.dayOfMonth <= 6)
+                ? out.dayOfMonth
+                : 1;
+            out.dayOfWeek = legacy;
+        }
+        delete out.dayOfMonth;
+    } else if (out.frequency === 'monthly') {
+        if (typeof out.dayOfMonth !== 'number' || out.dayOfMonth < 1 || out.dayOfMonth > 31) {
+            out.dayOfMonth = 1;
+        }
+        delete out.dayOfWeek;
+    } else {
+        out.frequency = 'daily';
+        delete out.dayOfWeek;
+        delete out.dayOfMonth;
+    }
+
+    return out;
+}
+
+function normalizeCollectionEntries(entries) {
+    return (entries || []).map(e => {
+        if (!e || typeof e !== 'object') return null;
+        if (typeof e.deletedAt === 'undefined') {
+            return { ...e, deletedAt: null };
+        }
+        return e;
+    }).filter(Boolean);
+}
+
+function compareElectricityCyclesDesc(a, b) {
+    const monthDiff = String(b?.billingMonth || '').localeCompare(String(a?.billingMonth || ''));
+    if (monthDiff !== 0) return monthDiff;
+    return Math.max(0, Number(b?.lastModified || 0)) - Math.max(0, Number(a?.lastModified || 0));
+}
+
+function computeElectricityRateMetrics(amount, kwhUsed) {
+    const normalizedAmount = Math.max(0, toFiniteNumber(amount, 0));
+    const normalizedKwh = Math.max(0, toFiniteNumber(kwhUsed, 0));
+    if (normalizedKwh <= 0) {
+        return { ratePerKwh: 0, ratePerWh: 0 };
+    }
+
+    const ratePerKwh = normalizedAmount / normalizedKwh;
+    return {
+        ratePerKwh,
+        ratePerWh: ratePerKwh / 1000
+    };
+}
+
+function normalizeElectricityBillCycleEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+
+    const billingMonth = normalizeMonthKey(entry.billingMonth || entry.month);
+    if (!billingMonth) return null;
+
+    const amount = Math.max(0, toFiniteNumber(entry.amount, 0));
+    const kwhUsed = Math.max(0, toFiniteNumber(entry.kwhUsed, 0));
+    const computedRates = computeElectricityRateMetrics(amount, kwhUsed);
+    const status = entry.status === 'paid' ? 'paid' : 'unpaid';
+    const paidBy = entry.paidBy === 'family_other' ? 'family_other' : 'me';
+    const paidAt = status === 'paid'
+        ? normalizeISOString(entry.paidAt || entry.paymentDate)
+        : null;
+    const fallbackCreatedAt = `${billingMonth}-01T00:00:00.000Z`;
+    const createdAt = normalizeISOString(entry.createdAt) || fallbackCreatedAt;
+    const lastModified = Math.max(
+        0,
+        toFiniteNumber(entry.lastModified, new Date(createdAt).getTime())
+    );
+    const stableFallbackId = `electricity_${billingMonth.replace('-', '')}_${Math.round(amount * 100)}_${Math.round(kwhUsed * 1000)}`;
+
+    return {
+        id: String(entry.id || stableFallbackId),
+        billingMonth,
+        amount,
+        kwhUsed,
+        ratePerKwh: computedRates.ratePerKwh,
+        ratePerWh: computedRates.ratePerWh,
+        status,
+        paidBy,
+        paidAt,
+        linkedTransactionId: String(entry.linkedTransactionId || '').trim() || null,
+        notes: String(entry.notes || ''),
+        createdAt,
+        lastModified
+    };
+}
+
+function normalizeBillDataShape(rawBill) {
+    const source = rawBill && typeof rawBill === 'object' ? rawBill : {};
+    const parsedDay = parseInt(source.day, 10);
+    const electricityHistory = (Array.isArray(source.electricityHistory) ? source.electricityHistory : [])
+        .map(normalizeElectricityBillCycleEntry)
+        .filter(Boolean)
+        .sort(compareElectricityCyclesDesc);
+    const inferredBillType = source.billType === 'electricity' || electricityHistory.length > 0
+        ? 'electricity'
+        : 'standard';
+    const latestCycle = electricityHistory[0] || null;
+
+    return {
+        name: String(source.name || ''),
+        day: Number.isInteger(parsedDay) ? Math.max(1, Math.min(31, parsedDay)) : 1,
+        amt: latestCycle ? latestCycle.amount : Math.max(0, toFiniteNumber(source.amt, 0)),
+        paused: source.paused === true,
+        billType: inferredBillType,
+        electricityHistory
+    };
+}
+
+function getLatestElectricityBillCycle(billData) {
+    const normalizedBill = normalizeBillDataShape(billData);
+    return normalizedBill.electricityHistory[0] || null;
+}
+
+function formatBillingMonthLabel(billingMonth) {
+    const normalized = normalizeMonthKey(billingMonth);
+    if (!normalized) return 'Unknown month';
+    const [year, month] = normalized.split('-').map(Number);
+    return new Date(year, month - 1, 1).toLocaleString('en', {
+        month: 'long',
+        year: 'numeric'
+    });
+}
+
+function normalizeCryptoInterestShape(rawMap) {
+    if (!rawMap || typeof rawMap !== 'object' || Array.isArray(rawMap)) return {};
+    const out = {};
+    Object.entries(rawMap).forEach(([tokenId, cfg]) => {
+        if (!tokenId || !cfg || typeof cfg !== 'object') return;
+        const rewards = Array.isArray(cfg.rewards) ? cfg.rewards : [];
+        const normalizedRewards = rewards
+            .map(reward => {
+                if (!reward || typeof reward !== 'object') return null;
+                const rewardTokenId = String(reward.tokenId || '').trim();
+                if (!rewardTokenId) return null;
+                const parsedAmount = Number(reward.amount);
+                const amount = Number.isFinite(parsedAmount) ? Math.max(parsedAmount, 0) : 0;
+                const rewardSymbol = String(reward.symbol || rewardTokenId).trim();
+                return {
+                    tokenId: rewardTokenId,
+                    symbol: rewardSymbol || rewardTokenId,
+                    amount
+                };
+            })
+            .filter(Boolean);
+
+        const parsedLastModified = Number(cfg.lastModified);
+        out[String(tokenId)] = {
+            enabled: !!cfg.enabled,
+            rewards: normalizedRewards,
+            lastModified: Number.isFinite(parsedLastModified) ? parsedLastModified : 0
+        };
+    });
+    return out;
+}
+
+function normalizeMonthKey(value) {
+    const raw = String(value || '').trim();
+    const match = raw.match(/^(\d{4})-(\d{2})$/);
+    if (!match) return null;
+    const month = Number(match[2]);
+    if (month < 1 || month > 12) return null;
+    return `${match[1]}-${String(month).padStart(2, '0')}`;
+}
+
+function toFiniteNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeISOString(value) {
+    if (!value) return null;
+    const ts = typeof value === 'number' ? value : new Date(value).getTime();
+    if (!Number.isFinite(ts) || ts <= 0) return null;
+    return new Date(ts).toISOString();
+}
+
+function normalizeKpiTargetsShape(rawTargets) {
+    const defaults = getDefaultKpiTargets();
+    const source = rawTargets && typeof rawTargets === 'object' && !Array.isArray(rawTargets)
+        ? rawTargets
+        : {};
+
+    const savingsTarget = Math.max(0, Math.min(100, toFiniteNumber(source.savingsRatePct, defaults.savingsRatePct)));
+    const runwayTarget = Math.max(0, Math.round(toFiniteNumber(source.runwayDays, defaults.runwayDays)));
+    const overBudgetTarget = Math.max(0, Math.round(toFiniteNumber(source.maxOverBudgetCategories, defaults.maxOverBudgetCategories)));
+
+    return {
+        savingsRatePct: savingsTarget,
+        runwayDays: runwayTarget,
+        maxOverBudgetCategories: overBudgetTarget,
+        lastModified: Math.max(0, toFiniteNumber(source.lastModified, defaults.lastModified))
+    };
+}
+
+function normalizeKpiSnapshotEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    const month = normalizeMonthKey(entry.month);
+    if (!month) return null;
+
+    const id = entry.id || `kpi_${month.replace('-', '')}`;
+    const createdAt = normalizeISOString(entry.createdAt);
+    const summary = entry.summary && typeof entry.summary === 'object' ? entry.summary : {};
+
+    return {
+        id: String(id),
+        month,
+        summary: {
+            income: Math.max(0, toFiniteNumber(summary.income, 0)),
+            expense: Math.max(0, toFiniteNumber(summary.expense, 0)),
+            savingsRate: toFiniteNumber(summary.savingsRate, 0),
+            avgDailySpend: Math.max(0, toFiniteNumber(summary.avgDailySpend, 0)),
+            monthEndBalance: toFiniteNumber(summary.monthEndBalance, 0),
+            runwayDays: Math.max(0, toFiniteNumber(summary.runwayDays, 0)),
+            burnRateMonthly: Math.max(0, toFiniteNumber(summary.burnRateMonthly, 0)),
+            overBudgetCategories: Math.max(0, Math.round(toFiniteNumber(summary.overBudgetCategories, 0))),
+            transactionCount: Math.max(0, Math.round(toFiniteNumber(summary.transactionCount, 0)))
+        },
+        createdAt,
+        lastModified: Math.max(
+            0,
+            toFiniteNumber(entry.lastModified, createdAt ? new Date(createdAt).getTime() : 0)
+        )
+    };
+}
+
+function normalizeMonthlyCloseEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    const month = normalizeMonthKey(entry.month);
+    if (!month) return null;
+
+    const id = entry.id || `close_${month.replace('-', '')}`;
+    const closedAt = normalizeISOString(entry.closedAt);
+    const createdAt = normalizeISOString(entry.createdAt) || closedAt;
+    const summary = entry.summary && typeof entry.summary === 'object' ? entry.summary : {};
+    const checklist = entry.checklist && typeof entry.checklist === 'object' ? entry.checklist : {};
+
+    return {
+        id: String(id),
+        month,
+        status: entry.status === 'closed' ? 'closed' : 'open',
+        notes: String(entry.notes || ''),
+        summary: {
+            income: Math.max(0, toFiniteNumber(summary.income, 0)),
+            expense: Math.max(0, toFiniteNumber(summary.expense, 0)),
+            savingsRate: toFiniteNumber(summary.savingsRate, 0),
+            avgDailySpend: Math.max(0, toFiniteNumber(summary.avgDailySpend, 0)),
+            monthEndBalance: toFiniteNumber(summary.monthEndBalance, 0),
+            totalBudget: Math.max(0, toFiniteNumber(summary.totalBudget, 0)),
+            budgetSpent: Math.max(0, toFiniteNumber(summary.budgetSpent, 0)),
+            budgetVariance: toFiniteNumber(summary.budgetVariance, 0),
+            overBudgetCategories: Math.max(0, Math.round(toFiniteNumber(summary.overBudgetCategories, 0))),
+            transactionCount: Math.max(0, Math.round(toFiniteNumber(summary.transactionCount, 0))),
+            runwayDays: Math.max(0, toFiniteNumber(summary.runwayDays, 0)),
+            burnRateMonthly: Math.max(0, toFiniteNumber(summary.burnRateMonthly, 0))
+        },
+        checklist: {
+            uncategorizedCount: Math.max(0, Math.round(toFiniteNumber(checklist.uncategorizedCount, 0))),
+            needsReviewCount: Math.max(0, Math.round(toFiniteNumber(checklist.needsReviewCount, 0))),
+            remindersDueCount: Math.max(0, Math.round(toFiniteNumber(checklist.remindersDueCount, 0)))
+        },
+        closedAt,
+        createdAt,
+        lastModified: Math.max(
+            0,
+            toFiniteNumber(entry.lastModified, closedAt ? new Date(closedAt).getTime() : 0)
+        )
+    };
+}
+
+function normalizeForecastAssumptionsShape(rawAssumptions) {
+    const defaults = getDefaultForecastAssumptions();
+    const source = rawAssumptions && typeof rawAssumptions === 'object' && !Array.isArray(rawAssumptions)
+        ? rawAssumptions
+        : {};
+
+    const months = Math.max(3, Math.min(24, Math.round(toFiniteNumber(source.months, defaults.months))));
+    const startMonth = normalizeMonthKey(source.startMonth || defaults.startMonth);
+
+    return {
+        months,
+        startMonth,
+        incomeBase: Math.max(0, toFiniteNumber(source.incomeBase, defaults.incomeBase)),
+        fixedCostsBase: Math.max(0, toFiniteNumber(source.fixedCostsBase, defaults.fixedCostsBase)),
+        variableCostsBase: Math.max(0, toFiniteNumber(source.variableCostsBase, defaults.variableCostsBase)),
+        debtPaymentBase: Math.max(0, toFiniteNumber(source.debtPaymentBase, defaults.debtPaymentBase)),
+        investmentBase: Math.max(0, toFiniteNumber(source.investmentBase, defaults.investmentBase)),
+        bestIncomeMultiplier: Math.max(0.5, Math.min(2, toFiniteNumber(source.bestIncomeMultiplier, defaults.bestIncomeMultiplier))),
+        bestExpenseMultiplier: Math.max(0.5, Math.min(2, toFiniteNumber(source.bestExpenseMultiplier, defaults.bestExpenseMultiplier))),
+        worstIncomeMultiplier: Math.max(0.5, Math.min(2, toFiniteNumber(source.worstIncomeMultiplier, defaults.worstIncomeMultiplier))),
+        worstExpenseMultiplier: Math.max(0.5, Math.min(2, toFiniteNumber(source.worstExpenseMultiplier, defaults.worstExpenseMultiplier))),
+        includeCryptoInNetWorth: source.includeCryptoInNetWorth !== false,
+        lastModified: Math.max(0, toFiniteNumber(source.lastModified, defaults.lastModified))
+    };
+}
+
+function normalizeOperationsGuardrailsShape(rawGuardrails) {
+    const defaults = getDefaultOperationsGuardrails();
+    const source = rawGuardrails && typeof rawGuardrails === 'object' && !Array.isArray(rawGuardrails)
+        ? rawGuardrails
+        : {};
+
+    return {
+        incomeVarianceWarnPct: Math.max(0, Math.min(100, toFiniteNumber(source.incomeVarianceWarnPct, defaults.incomeVarianceWarnPct))),
+        outflowVarianceWarnPct: Math.max(0, Math.min(100, toFiniteNumber(source.outflowVarianceWarnPct, defaults.outflowVarianceWarnPct))),
+        cashFloor: Math.max(0, toFiniteNumber(source.cashFloor, defaults.cashFloor)),
+        lastModified: Math.max(0, toFiniteNumber(source.lastModified, defaults.lastModified))
+    };
+}
+
+function normalizeForecastRowEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    const month = normalizeMonthKey(entry.month);
+    if (!month) return null;
+
+    return {
+        month,
+        openingCash: toFiniteNumber(entry.openingCash, 0),
+        income: Math.max(0, toFiniteNumber(entry.income, 0)),
+        fixedCosts: Math.max(0, toFiniteNumber(entry.fixedCosts, 0)),
+        variableCosts: Math.max(0, toFiniteNumber(entry.variableCosts, 0)),
+        debtPayment: Math.max(0, toFiniteNumber(entry.debtPayment, 0)),
+        investmentContribution: Math.max(0, toFiniteNumber(entry.investmentContribution, 0)),
+        netCashFlow: toFiniteNumber(entry.netCashFlow, 0),
+        closingCash: toFiniteNumber(entry.closingCash, 0),
+        runwayDays: Math.max(0, Math.round(toFiniteNumber(entry.runwayDays, 0)))
+    };
+}
+
+function normalizeForecastRunEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    const startMonth = normalizeMonthKey(entry.startMonth || entry.month);
+    if (!startMonth) return null;
+
+    const scenariosSource = entry.scenarios && typeof entry.scenarios === 'object' ? entry.scenarios : {};
+    const normalizeScenarioRows = (rows) => (Array.isArray(rows) ? rows : [])
+        .map(normalizeForecastRowEntry)
+        .filter(Boolean)
+        .sort((a, b) => (a.month || '').localeCompare(b.month || ''));
+
+    const createdAt = normalizeISOString(entry.createdAt);
+    const summary = entry.summary && typeof entry.summary === 'object' ? entry.summary : {};
+
+    return {
+        id: String(entry.id || `forecast_${startMonth.replace('-', '')}`),
+        startMonth,
+        assumptionsSnapshot: normalizeForecastAssumptionsShape(entry.assumptionsSnapshot),
+        scenarios: {
+            base: normalizeScenarioRows(scenariosSource.base),
+            best: normalizeScenarioRows(scenariosSource.best),
+            worst: normalizeScenarioRows(scenariosSource.worst)
+        },
+        summary: {
+            baseEndCash: toFiniteNumber(summary.baseEndCash, 0),
+            bestEndCash: toFiniteNumber(summary.bestEndCash, 0),
+            worstEndCash: toFiniteNumber(summary.worstEndCash, 0),
+            baseMinCash: toFiniteNumber(summary.baseMinCash, 0)
+        },
+        createdAt,
+        lastModified: Math.max(
+            0,
+            toFiniteNumber(entry.lastModified, createdAt ? new Date(createdAt).getTime() : 0)
+        )
+    };
+}
+
+function normalizeQuickLinkEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    const url = String(entry.url || '').trim();
+    if (!url) return null;
+
+    const id = String(entry.id || `quick_link_${Math.random().toString(36).slice(2, 10)}`);
+    const label = typeof entry.label === 'string' ? entry.label.trim() : '';
+    const icon = typeof entry.icon === 'string' ? entry.icon.trim() : '';
+    const color = typeof entry.color === 'string' ? entry.color.trim() : '';
+    const createdAt = Math.max(0, toFiniteNumber(entry.createdAt, 0));
+    const lastModified = Math.max(
+        0,
+        toFiniteNumber(entry.lastModified, createdAt)
+    );
+
+    return {
+        id,
+        label,
+        url,
+        icon,
+        color,
+        createdAt,
+        lastModified
+    };
+}
+
+function normalizeStatementSnapshotEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    const month = normalizeMonthKey(entry.month);
+    if (!month) return null;
+    const createdAt = normalizeISOString(entry.createdAt);
+    const pnl = entry.pnl && typeof entry.pnl === 'object' ? entry.pnl : {};
+    const cashflow = entry.cashflow && typeof entry.cashflow === 'object' ? entry.cashflow : {};
+    const balanceSheet = entry.balanceSheet && typeof entry.balanceSheet === 'object' ? entry.balanceSheet : {};
+
+    return {
+        id: String(entry.id || `statement_${month.replace('-', '')}`),
+        month,
+        pnl: {
+            income: Math.max(0, toFiniteNumber(pnl.income, 0)),
+            costOfEarning: Math.max(0, toFiniteNumber(pnl.costOfEarning, 0)),
+            grossProfit: toFiniteNumber(pnl.grossProfit, 0),
+            grossMargin: toFiniteNumber(pnl.grossMargin, 0),
+            operatingExpenses: Math.max(0, toFiniteNumber(pnl.operatingExpenses, 0)),
+            ebitda: toFiniteNumber(pnl.ebitda, 0),
+            ebitdaMargin: toFiniteNumber(pnl.ebitdaMargin, 0),
+            debtService: Math.max(0, toFiniteNumber(pnl.debtService, 0)),
+            growthSpend: Math.max(0, toFiniteNumber(pnl.growthSpend, 0)),
+            netIncome: toFiniteNumber(pnl.netIncome, 0),
+            netMargin: toFiniteNumber(pnl.netMargin, 0)
+        },
+        cashflow: {
+            operatingCashFlow: toFiniteNumber(cashflow.operatingCashFlow, 0),
+            investingCashFlow: toFiniteNumber(cashflow.investingCashFlow, 0),
+            creditCardBorrowing: Math.max(0, toFiniteNumber(cashflow.creditCardBorrowing, 0)),
+            creditCardPayments: Math.max(0, toFiniteNumber(cashflow.creditCardPayments, 0)),
+            financingCashFlow: toFiniteNumber(cashflow.financingCashFlow, 0),
+            freeCashFlow: toFiniteNumber(cashflow.freeCashFlow, 0),
+            netCashFlow: toFiniteNumber(cashflow.netCashFlow, 0)
+        },
+        balanceSheet: {
+            cash: toFiniteNumber(balanceSheet.cash, 0),
+            receivables: toFiniteNumber(balanceSheet.receivables, 0),
+            crypto: toFiniteNumber(balanceSheet.crypto, 0),
+            debt: toFiniteNumber(balanceSheet.debt, 0),
+            creditCardDebt: toFiniteNumber(balanceSheet.creditCardDebt, 0),
+            totalAssets: toFiniteNumber(balanceSheet.totalAssets, 0),
+            totalLiabilities: toFiniteNumber(balanceSheet.totalLiabilities, 0),
+            netWorth: toFiniteNumber(balanceSheet.netWorth, 0)
+        },
+        createdAt,
+        lastModified: Math.max(
+            0,
+            toFiniteNumber(entry.lastModified, createdAt ? new Date(createdAt).getTime() : 0)
+        )
+    };
+}
+
+function normalizeDBSchema(rawDB) {
+    const base = getDefaultDB();
+    const db = { ...base, ...(rawDB || {}) };
+
+    db.schema_version = Math.max(1, parseInt(db.schema_version || 1, 10));
+    db.transactions = normalizeCollectionEntries(db.transactions);
+    db.bills = normalizeCollectionEntries(db.bills);
+    db.debts = normalizeCollectionEntries(db.debts);
+    db.credit_cards = normalizeCollectionEntries(db.credit_cards);
+    db.installment_plans = normalizeCollectionEntries(db.installment_plans);
+    db.lent = normalizeCollectionEntries(db.lent);
+    db.crypto = normalizeCollectionEntries(db.crypto);
+    db.wishlist = normalizeCollectionEntries(db.wishlist);
+    db.fixed_assets = normalizeCollectionEntries(db.fixed_assets);
+    db.agm_records = normalizeCollectionEntries(db.agm_records);
+    db.crypto_prices = db.crypto_prices || {};
+    db.crypto_interest = normalizeCryptoInterestShape(db.crypto_interest);
+    db.xrpl_reconcile = normalizeXrplReconcileSettingsShape(db.xrpl_reconcile);
+    db.ronin_reconcile = normalizeRoninReconcileSettingsShape(db.ronin_reconcile);
+    db.budgets = db.budgets && typeof db.budgets === 'object' ? db.budgets : { data: null };
+    db.custom_categories = Array.isArray(db.custom_categories) ? db.custom_categories : [];
+    db.investment_goals = Array.isArray(db.investment_goals) ? db.investment_goals : [];
+    db.goals = Array.isArray(db.goals) ? db.goals : [];
+    db.categorization_rules = Array.isArray(db.categorization_rules) ? db.categorization_rules : [];
+    db.imports = Array.isArray(db.imports) ? db.imports : [];
+    db.insight_snapshots = Array.isArray(db.insight_snapshots) ? db.insight_snapshots : [];
+    db.monthly_closes = (Array.isArray(db.monthly_closes) ? db.monthly_closes : [])
+        .map(normalizeMonthlyCloseEntry)
+        .filter(Boolean)
+        .sort((a, b) => (b.month || '').localeCompare(a.month || ''));
+    db.kpi_targets = normalizeKpiTargetsShape(db.kpi_targets);
+    db.kpi_snapshots = (Array.isArray(db.kpi_snapshots) ? db.kpi_snapshots : [])
+        .map(normalizeKpiSnapshotEntry)
+        .filter(Boolean)
+        .sort((a, b) => (b.month || '').localeCompare(a.month || ''));
+    db.forecast_assumptions = normalizeForecastAssumptionsShape(db.forecast_assumptions);
+    db.forecast_runs = (Array.isArray(db.forecast_runs) ? db.forecast_runs : [])
+        .map(normalizeForecastRunEntry)
+        .filter(Boolean)
+        .sort((a, b) => getEntryTimestamp(b) - getEntryTimestamp(a));
+    db.statement_snapshots = (Array.isArray(db.statement_snapshots) ? db.statement_snapshots : [])
+        .map(normalizeStatementSnapshotEntry)
+        .filter(Boolean)
+        .sort((a, b) => (b.month || '').localeCompare(a.month || ''));
+    db.quick_links = (Array.isArray(db.quick_links) ? db.quick_links : [])
+        .map(normalizeQuickLinkEntry)
+        .filter(Boolean)
+        .sort((a, b) => {
+            const timeDiff = getEntryTimestamp(a) - getEntryTimestamp(b);
+            if (timeDiff !== 0) return timeDiff;
+            return String(a.id || '').localeCompare(String(b.id || ''));
+        });
+    db.quick_links_last_modified = Math.max(
+        toFiniteNumber(db.quick_links_last_modified, 0),
+        ...db.quick_links.map(link => getEntryTimestamp(link))
+    );
+    db.operations_guardrails = normalizeOperationsGuardrailsShape(db.operations_guardrails);
+    db.undo_log = pruneUndoLog(dedupeUndoLogEntries(Array.isArray(db.undo_log) ? db.undo_log : []));
+
+    db.recurring_transactions = (Array.isArray(db.recurring_transactions) ? db.recurring_transactions : [])
+        .map(normalizeReminderShape)
+        .filter(Boolean);
+
+    db.sync = db.sync && typeof db.sync === 'object' ? db.sync : {};
+    db.sync.revision = db.sync.revision || null;
+    db.sync.lastKnownRemoteRevision = db.sync.lastKnownRemoteRevision || db.sync.revision || null;
+    db.sync.updatedAt = db.sync.updatedAt || null;
+    db.sync.conflictStrategy = db.sync.conflictStrategy || 'local_wins';
+
+    db.schema_version = CURRENT_SCHEMA_VERSION;
+    return db;
+}
+
+function toEntryMap(arr) {
+    const map = new Map();
+    (arr || []).forEach(item => {
+        if (item && item.id) map.set(item.id, item);
+    });
+    return map;
+}
+
+function getEntryTimestamp(entry) {
+    const raw = entry?.lastModified || entry?.createdAt || entry?.deletedAt || 0;
+    const ts = typeof raw === 'number' ? raw : new Date(raw).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+}
+
+function mergeSafeList(localList, remoteList) {
+    const merged = toEntryMap(remoteList);
+    toEntryMap(localList).forEach((localItem, id) => {
+        const remoteItem = merged.get(id);
+        if (!remoteItem || getEntryTimestamp(localItem) >= getEntryTimestamp(remoteItem)) {
+            merged.set(id, localItem);
+        }
+    });
+    return Array.from(merged.values());
+}
+
+function mergeSafeDB(localDB, remoteDB) {
+    const merged = normalizeDBSchema(remoteDB);
+    const local = normalizeDBSchema(localDB);
+
+    merged.transactions = mergeSafeList(local.transactions, merged.transactions);
+    merged.bills = mergeSafeList(local.bills, merged.bills);
+    merged.debts = mergeSafeList(local.debts, merged.debts);
+    merged.credit_cards = mergeSafeList(local.credit_cards, merged.credit_cards);
+    merged.installment_plans = mergeSafeList(local.installment_plans, merged.installment_plans);
+    merged.lent = mergeSafeList(local.lent, merged.lent);
+    merged.crypto = mergeSafeList(local.crypto, merged.crypto);
+    merged.wishlist = mergeSafeList(local.wishlist, merged.wishlist);
+    merged.fixed_assets = mergeSafeList(local.fixed_assets, merged.fixed_assets);
+    merged.agm_records = mergeSafeList(local.agm_records, merged.agm_records);
+
+    merged.custom_categories = Array.from(new Set([...(merged.custom_categories || []), ...(local.custom_categories || [])]));
+    merged.goals = mergeSafeList(local.goals, merged.goals);
+    merged.investment_goals = mergeSafeList(local.investment_goals, merged.investment_goals);
+    merged.imports = mergeSafeList(local.imports, merged.imports);
+    merged.monthly_closes = mergeSafeList(local.monthly_closes, merged.monthly_closes);
+    merged.kpi_snapshots = mergeSafeList(local.kpi_snapshots, merged.kpi_snapshots);
+    merged.forecast_runs = mergeSafeList(local.forecast_runs, merged.forecast_runs);
+    merged.statement_snapshots = mergeSafeList(local.statement_snapshots, merged.statement_snapshots);
+    merged.undo_log = pruneUndoLog(dedupeUndoLogEntries([...(merged.undo_log || []), ...(local.undo_log || [])]));
+
+    const localKpiTargetTs = getEntryTimestamp(local.kpi_targets);
+    const remoteKpiTargetTs = getEntryTimestamp(merged.kpi_targets);
+    if (!merged.kpi_targets || localKpiTargetTs >= remoteKpiTargetTs) {
+        merged.kpi_targets = local.kpi_targets;
+    }
+
+    const localForecastAssumptionsTs = getEntryTimestamp(local.forecast_assumptions);
+    const remoteForecastAssumptionsTs = getEntryTimestamp(merged.forecast_assumptions);
+    if (!merged.forecast_assumptions || localForecastAssumptionsTs >= remoteForecastAssumptionsTs) {
+        merged.forecast_assumptions = local.forecast_assumptions;
+    }
+
+    const localQuickLinksTs = Math.max(
+        toFiniteNumber(local.quick_links_last_modified, 0),
+        ...((local.quick_links || []).map(link => getEntryTimestamp(link)))
+    );
+    const remoteQuickLinksTs = Math.max(
+        toFiniteNumber(merged.quick_links_last_modified, 0),
+        ...((merged.quick_links || []).map(link => getEntryTimestamp(link)))
+    );
+    if (!Array.isArray(merged.quick_links) || localQuickLinksTs >= remoteQuickLinksTs) {
+        merged.quick_links = local.quick_links;
+        merged.quick_links_last_modified = localQuickLinksTs;
+    } else {
+        merged.quick_links_last_modified = remoteQuickLinksTs;
+    }
+
+    const localOperationsGuardrailsTs = getEntryTimestamp(local.operations_guardrails);
+    const remoteOperationsGuardrailsTs = getEntryTimestamp(merged.operations_guardrails);
+    if (!merged.operations_guardrails || localOperationsGuardrailsTs >= remoteOperationsGuardrailsTs) {
+        merged.operations_guardrails = local.operations_guardrails;
+    }
+
+    merged.categorization_rules = mergeSafeList(local.categorization_rules, merged.categorization_rules)
+        .sort((a, b) => (a.priority || 999) - (b.priority || 999));
+
+    merged.crypto_prices = { ...(merged.crypto_prices || {}) };
+    Object.entries(local.crypto_prices || {}).forEach(([key, localPrice]) => {
+        const remotePrice = merged.crypto_prices[key];
+        if (!remotePrice || (localPrice.updated || 0) >= (remotePrice.updated || 0)) {
+            merged.crypto_prices[key] = localPrice;
+        }
+    });
+
+    merged.crypto_interest = { ...(merged.crypto_interest || {}) };
+    Object.entries(local.crypto_interest || {}).forEach(([tokenId, localCfg]) => {
+        const remoteCfg = merged.crypto_interest[tokenId];
+        const localTs = Number(localCfg?.lastModified || 0);
+        const remoteTs = Number(remoteCfg?.lastModified || 0);
+        if (!remoteCfg || localTs >= remoteTs) {
+            merged.crypto_interest[tokenId] = localCfg;
+        }
+    });
+
+    const localXrplSettingsTs = getEntryTimestamp(local.xrpl_reconcile);
+    const remoteXrplSettingsTs = getEntryTimestamp(merged.xrpl_reconcile);
+    const localHasXrplWallet = !!String(local.xrpl_reconcile?.walletAddress || '').trim();
+    const remoteHasXrplWallet = !!String(merged.xrpl_reconcile?.walletAddress || '').trim();
+    if (
+        !merged.xrpl_reconcile ||
+        localXrplSettingsTs > remoteXrplSettingsTs ||
+        (localXrplSettingsTs === remoteXrplSettingsTs && localHasXrplWallet && !remoteHasXrplWallet)
+    ) {
+        merged.xrpl_reconcile = local.xrpl_reconcile;
+    }
+
+    const localRoninSettingsTs = getEntryTimestamp(local.ronin_reconcile);
+    const remoteRoninSettingsTs = getEntryTimestamp(merged.ronin_reconcile);
+    const localHasRoninWallet = !!String(local.ronin_reconcile?.walletAddress || '').trim();
+    const remoteHasRoninWallet = !!String(merged.ronin_reconcile?.walletAddress || '').trim();
+    if (
+        !merged.ronin_reconcile ||
+        localRoninSettingsTs > remoteRoninSettingsTs ||
+        (localRoninSettingsTs === remoteRoninSettingsTs && localHasRoninWallet && !remoteHasRoninWallet)
+    ) {
+        merged.ronin_reconcile = local.ronin_reconcile;
+    }
+
+    merged.budgets = local.budgets?.data ? local.budgets : merged.budgets;
+    merged.sync.conflictStrategy = local.sync?.conflictStrategy || merged.sync.conflictStrategy || 'merge_safe_lists';
+    return normalizeDBSchema(merged);
+}
+
+function applyLocalOnlyFields(targetDB, localDB) {
+    const target = normalizeDBSchema(targetDB);
+    const local = normalizeDBSchema(localDB);
+    target.crypto_prices = { ...(local.crypto_prices || {}) };
+    return target;
+}
+
+function buildRemoteVaultPayload(db) {
+    const remotePayload = normalizeDBSchema(db);
+    delete remotePayload.crypto_prices;
+    return remotePayload;
+}
+
+function cloneStorageSafeValue(value) {
+    if (typeof structuredClone === 'function') {
+        try {
+            return structuredClone(value);
+        } catch (_) { }
+    }
+
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+        return value;
+    }
+}
+
+function hasRemoteSyncSession() {
+    return !previewMode && !!(masterKey && firestoreDB);
+}
+
+function hasUnsyncedLocalChanges(db) {
+    if (!hasRemoteSyncSession()) return false;
+    const snapshot = db && typeof db === 'object' ? db : cachedLocalDBSnapshot;
+    const revision = snapshot?.sync?.revision || null;
+    const knownRemoteRevision = snapshot?.sync?.lastKnownRemoteRevision || null;
+    return !!(revision && revision !== knownRemoteRevision);
+}
+
+async function resolveDBAgainstRemote(localDB) {
+    let resolvedDB = normalizeDBSchema(localDB);
+    let loadedFromRemote = false;
+    let remoteChecked = false;
+
+    try {
+        if (masterKey && firestoreDB) {
+            const vaultId = await getVaultId(masterKey);
+            const doc = await firestoreDB.collection('vaults').doc(vaultId).get();
+            remoteChecked = true;
+            if (doc.exists) {
+                const remoteDB = normalizeDBSchema(doc.data().vaultData || getDefaultDB());
+                const strategy = localDB.sync?.conflictStrategy || remoteDB.sync?.conflictStrategy || 'merge_safe_lists';
+
+                if (strategy === 'remote_wins') {
+                    resolvedDB = remoteDB;
+                } else {
+                    // Merge at read time to avoid overwriting unsynced local edits with stale remote snapshots.
+                    resolvedDB = mergeSafeDB(localDB, remoteDB);
+                    resolvedDB.sync.conflictStrategy = strategy;
+                    resolvedDB.sync.lastKnownRemoteRevision = remoteDB.sync?.revision || null;
+                }
+                resolvedDB = applyLocalOnlyFields(resolvedDB, localDB);
+                loadedFromRemote = true;
+                console.log(`✅ Loaded from Firebase (${strategy})`);
+            }
+        }
+    } catch (error) {
+        console.error('Firebase load failed, using localStorage:', error);
+    }
+
+    return {
+        resolvedDB: normalizeDBSchema(resolvedDB),
+        loadedFromRemote,
+        remoteChecked
+    };
+}
+
+function maybeRefreshDBFromRemoteInBackground(localDB) {
+    if (!hasRemoteSyncSession()) return;
+    if (remoteRefreshPromise || remoteSyncPromise) return;
+    if (hasUnsyncedLocalChanges(localDB)) return;
+    if (lastRemoteReadAt > 0 && (Date.now() - lastRemoteReadAt) < REMOTE_REFRESH_TTL_MS) return;
+
+    remoteRefreshPromise = (async () => {
+        const startingLocal = getCachedLocalDBSnapshotClone() || normalizeDBSchema(localDB);
+        if (hasUnsyncedLocalChanges(startingLocal) || remoteSyncPromise) return;
+
+        const startingRevision = startingLocal.sync?.revision || null;
+        const { resolvedDB, loadedFromRemote, remoteChecked } = await resolveDBAgainstRemote(startingLocal);
+        if (remoteChecked) lastRemoteReadAt = Date.now();
+        if (!loadedFromRemote) return;
+
+        const latestLocal = getCachedLocalDBSnapshotClone();
+        if (!latestLocal) return;
+        if (hasUnsyncedLocalChanges(latestLocal)) return;
+        if ((latestLocal.sync?.revision || null) !== startingRevision) return;
+
+        await persistLocalDBSnapshot(resolvedDB);
+    })().catch((error) => {
+        console.error('Background Firebase refresh failed:', error);
+    }).finally(() => {
+        remoteRefreshPromise = null;
+    });
+}
+
+function queueRemoteDBSync() {
+    if (!hasRemoteSyncSession()) {
+        return Promise.resolve(getCachedLocalDBSnapshotClone());
+    }
+
+    remoteSyncDirty = true;
+    if (remoteSyncPromise) return remoteSyncPromise;
+
+    remoteSyncPromise = (async () => {
+        while (remoteSyncDirty) {
+            remoteSyncDirty = false;
+
+            const localSnapshot = getCachedLocalDBSnapshotClone() || await getLocalDBSnapshot();
+            if (!hasUnsyncedLocalChanges(localSnapshot)) continue;
+
+            const processingRevision = localSnapshot.sync?.revision || null;
+            const localCryptoPrices = { ...(localSnapshot.crypto_prices || {}) };
+            let dbToSync = normalizeDBSchema(localSnapshot);
+
+            try {
+                const vaultId = await getVaultId(masterKey);
+                const ref = firestoreDB.collection('vaults').doc(vaultId);
+                const remoteDoc = await ref.get();
+                lastRemoteReadAt = Date.now();
+                const remoteDB = remoteDoc.exists ? normalizeDBSchema(remoteDoc.data().vaultData || getDefaultDB()) : null;
+
+                if (remoteDB) {
+                    const remoteRev = remoteDB.sync?.revision || null;
+                    const knownRemoteRev = dbToSync.sync?.lastKnownRemoteRevision || null;
+                    const localRev = dbToSync.sync?.revision || null;
+                    const strategy = dbToSync.sync?.conflictStrategy || 'local_wins';
+                    const conflictDetected = !!(
+                        remoteRev &&
+                        ((knownRemoteRev && remoteRev !== knownRemoteRev) ||
+                            (!knownRemoteRev && localRev && remoteRev !== localRev))
+                    );
+
+                    if (conflictDetected) {
+                        if (strategy === 'remote_wins') {
+                            dbToSync = remoteDB;
+                        } else if (strategy === 'merge_safe_lists') {
+                            dbToSync = mergeSafeDB(dbToSync, remoteDB);
+                        }
+                    }
+                }
+
+                dbToSync.crypto_prices = localCryptoPrices;
+
+                const newRevision = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                dbToSync.sync.revision = newRevision;
+                dbToSync.sync.lastKnownRemoteRevision = newRevision;
+                dbToSync.sync.updatedAt = new Date().toISOString();
+
+                await firestoreDB.collection('vaults').doc(vaultId).set({
+                    vaultData: buildRemoteVaultPayload(dbToSync),
+                    kdfMeta: kdfMeta || null,
+                    kdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    lastModified: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                const latestLocal = getCachedLocalDBSnapshotClone();
+                if (latestLocal && (latestLocal.sync?.revision || null) === processingRevision) {
+                    await persistLocalDBSnapshot(dbToSync);
+                } else {
+                    remoteSyncDirty = true;
+                }
+            } catch (error) {
+                console.error('❌ Background Firebase sync failed:', error);
+            }
+        }
+
+        return getCachedLocalDBSnapshotClone();
+    })().finally(() => {
+        remoteSyncPromise = null;
+    });
+
+    return remoteSyncPromise;
+}
+
+async function getDB(options = {}) {
+    if (previewMode && previewDBSnapshot) {
+        return normalizeDBSchema(cloneStorageSafeValue(previewDBSnapshot));
+    }
+
+    const allowRemote = options.allowRemote !== false;
+    const forceRemote = options.forceRemote === true;
+    let localDB = normalizeDBSchema(getDefaultDB());
+    try {
+        localDB = await getLocalDBSnapshot();
+    } catch (e) {
+        console.error('Local DB snapshot load failed, resetting to default schema.', e);
+        localDB = normalizeDBSchema(getDefaultDB());
+    }
+
+    if (!allowRemote || !hasRemoteSyncSession()) {
+        return normalizeDBSchema(localDB);
+    }
+
+    if (forceRemote || lastRemoteReadAt === 0) {
+        const { resolvedDB, loadedFromRemote, remoteChecked } = await resolveDBAgainstRemote(localDB);
+        if (remoteChecked) lastRemoteReadAt = Date.now();
+        if (loadedFromRemote) {
+            await persistLocalDBSnapshot(resolvedDB);
+        }
+        return normalizeDBSchema(resolvedDB);
+    }
+
+    maybeRefreshDBFromRemoteInBackground(localDB);
+    return normalizeDBSchema(localDB);
+}
+
+async function saveDB(inputDB) {
+    let db = normalizeDBSchema(inputDB);
+    if (previewMode) {
+        const nowISO = new Date().toISOString();
+        const previewRevision = `preview_rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        db.sync.revision = previewRevision;
+        db.sync.lastKnownRemoteRevision = previewRevision;
+        db.sync.updatedAt = nowISO;
+        previewDBSnapshot = cloneStorageSafeValue(db);
+        return normalizeDBSchema(cloneStorageSafeValue(previewDBSnapshot));
+    }
+
+    const localCryptoPrices = { ...(db.crypto_prices || {}) };
+    // Lightweight sync diagnostics. Enable via `window.DEBUG_SYNC_DIAGNOSTICS = true`.
+    try {
+        if (typeof window !== 'undefined') {
+            window.__syncDiagnostics = window.__syncDiagnostics || {
+                count: 0,
+                totalBytes: 0,
+                lastBytes: 0,
+                lastAt: 0
+            };
+        }
+    } catch (_) { }
+
+    const estimatedBytes = estimateSerializedBytes(db);
+    try {
+        if (typeof window !== 'undefined' && window.__syncDiagnostics) {
+            window.__syncDiagnostics.count += 1;
+            window.__syncDiagnostics.lastBytes = estimatedBytes;
+            window.__syncDiagnostics.totalBytes += estimatedBytes;
+            window.__syncDiagnostics.lastAt = Date.now();
+        }
+        if (typeof window !== 'undefined' && window.DEBUG_SYNC_DIAGNOSTICS) {
+            console.log(`[sync] saveDB call #${window.__syncDiagnostics?.count || 0} ~${formatBytes(estimatedBytes)}`);
+            // Useful to pinpoint callers that are saving too frequently.
+            console.trace('[sync] saveDB stack');
+        }
+    } catch (_) { }
+
+    const nowISO = new Date().toISOString();
+    db.sync.updatedAt = nowISO;
+
+    // Save locally first so the UI can resume before remote sync completes.
+    const localRevision = `rev_local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    db.crypto_prices = localCryptoPrices;
+    db.sync.revision = localRevision;
+    if (!hasRemoteSyncSession()) {
+        db.sync.lastKnownRemoteRevision = localRevision;
+    } else {
+        db.sync.lastKnownRemoteRevision = db.sync.lastKnownRemoteRevision || null;
+    }
+    db.sync.updatedAt = nowISO;
+    await persistLocalDBSnapshot(db);
+
+    if (hasRemoteSyncSession()) {
+        queueRemoteDBSync().catch((error) => {
+            console.error('❌ Firebase sync enqueue failed:', error);
+        });
+    }
+
+    return db;
+}
+
+const financePendingActionPromises = new Map();
+
+function setFinanceActionButtonPending(button, pendingLabel = 'Saving...') {
+    if (!(button instanceof HTMLElement)) {
+        return () => { };
+    }
+
+    const originalHtml = button.innerHTML;
+    const originalDisabled = button.disabled;
+    const originalAriaBusy = button.getAttribute('aria-busy');
+    const originalMinWidth = button.style.minWidth;
+    const buttonWidth = button.getBoundingClientRect().width;
+
+    if (buttonWidth > 0) {
+        button.style.minWidth = `${Math.ceil(buttonWidth)}px`;
+    }
+
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.classList.add('finance-action-pending');
+    button.textContent = pendingLabel;
+
+    return () => {
+        button.innerHTML = originalHtml;
+        button.disabled = originalDisabled;
+        if (originalAriaBusy == null) {
+            button.removeAttribute('aria-busy');
+        } else {
+            button.setAttribute('aria-busy', originalAriaBusy);
+        }
+        button.classList.remove('finance-action-pending');
+        button.style.minWidth = originalMinWidth;
+    };
+}
+
+function runFinancePendingAction(actionKey, button, actionFn, pendingLabel = '') {
+    const normalizedKey = String(actionKey || '').trim();
+    if (!normalizedKey || typeof actionFn !== 'function') {
+        return Promise.resolve();
+    }
+
+    const existingPromise = financePendingActionPromises.get(normalizedKey);
+    if (existingPromise) {
+        return existingPromise;
+    }
+
+    const resolvedLabel = String(
+        pendingLabel
+        || button?.dataset?.pendingLabel
+        || button?.getAttribute?.('data-pending-label')
+        || 'Saving...'
+    ).trim() || 'Saving...';
+    const restoreButton = setFinanceActionButtonPending(button, resolvedLabel);
+
+    let trackedPromise;
+    try {
+        trackedPromise = Promise.resolve(actionFn());
+    } catch (error) {
+        restoreButton();
+        throw error;
+    }
+
+    trackedPromise = trackedPromise.finally(() => {
+        financePendingActionPromises.delete(normalizedKey);
+        restoreButton();
+    });
+
+    financePendingActionPromises.set(normalizedKey, trackedPromise);
+    return trackedPromise;
+}
+
+window.runFinancePendingAction = runFinancePendingAction;
+
+function normalizeBridgeAmountToPHP(amount, currency) {
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return 0;
+
+    const fromCurrency = String(currency || 'PHP').toUpperCase();
+    if (fromCurrency === 'PHP') return parsedAmount;
+
+    const rate = Number(exchangeRates?.[fromCurrency]);
+    if (!Number.isFinite(rate) || rate <= 0) {
+        return parsedAmount;
+    }
+
+    return parsedAmount / rate;
+}
+
+function normalizeBridgeDateToISO(value) {
+    if (!value) return new Date().toISOString();
+    const ts = typeof value === 'number' ? value : new Date(value).getTime();
+    if (!Number.isFinite(ts) || ts <= 0) return new Date().toISOString();
+    return new Date(ts).toISOString();
+}
+
+async function importPendingMainTransactionsIntoFinance(previewRows = null) {
+    const bridge = (typeof window !== 'undefined') ? window.FinanceBridgeQueue : null;
+    if (!bridge || typeof bridge.listFinancePendingTransactions !== 'function') {
+        return {
+            checked: 0,
+            imported: 0,
+            skipped: 0,
+            failed: 0,
+            cleared: 0,
+            saveFailed: false
+        };
+    }
+
+    let pending = Array.isArray(previewRows) ? previewRows : [];
+    if (!Array.isArray(previewRows)) {
+        try {
+            const rows = await bridge.listFinancePendingTransactions();
+            pending = Array.isArray(rows) ? rows : [];
+        } catch (error) {
+            console.error('[bridge-import] Failed to load pending queue:', error);
+            return {
+                checked: 0,
+                imported: 0,
+                skipped: 0,
+                failed: 0,
+                cleared: 0,
+                saveFailed: false
+            };
+        }
+    }
+
+    if (pending.length === 0) {
+        return {
+            checked: 0,
+            imported: 0,
+            skipped: 0,
+            failed: 0,
+            cleared: 0,
+            saveFailed: false
+        };
+    }
+
+    const db = await getDB();
+    db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
+
+    const existingIds = new Set(
+        db.transactions
+            .map(item => (item && item.id) ? String(item.id) : '')
+            .filter(Boolean)
+    );
+
+    const duplicateIds = [];
+    const importedIds = [];
+    let imported = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const item of pending) {
+        const queueId = String(item?.id || '').trim();
+        if (!queueId) {
+            failed += 1;
+            continue;
+        }
+
+        const txId = `bridge_${queueId}`;
+        if (existingIds.has(txId)) {
+            skipped += 1;
+            duplicateIds.push(queueId);
+            continue;
+        }
+
+        const desc = String(item?.desc || '').trim();
+        const amount = Number(item?.amt);
+        if (!desc || !Number.isFinite(amount) || amount <= 0) {
+            failed += 1;
+            continue;
+        }
+
+        const type = item?.type === 'income' ? 'income' : 'expense';
+        const currencyRaw = String(item?.currency || 'PHP').toUpperCase();
+        const currency = (currencyRaw === 'USD' || currencyRaw === 'JPY' || currencyRaw === 'PHP') ? currencyRaw : 'PHP';
+        const category = String(item?.category || '').trim() || (type === 'income' ? 'Salary' : 'Others');
+        const quantityRaw = Number(item?.quantity);
+        const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
+        const notes = String(item?.notes || '');
+        const dateISO = normalizeBridgeDateToISO(item?.date);
+        const amountInPHP = normalizeBridgeAmountToPHP(amount, currency);
+
+        let encrypted;
+        try {
+            encrypted = await encryptData({
+                desc,
+                merchant: null,
+                tags: [],
+                amt: amountInPHP,
+                originalAmt: amount,
+                originalCurrency: currency,
+                quantity,
+                notes,
+                type,
+                category,
+                date: dateISO,
+                importId: `bridge_queue:${queueId}`,
+                dedupeHash: `bridge_queue:${queueId}`,
+                deletedAt: null
+            });
+        } catch (error) {
+            console.error('[bridge-import] Failed to encrypt staged transaction:', error);
+            failed += 1;
+            continue;
+        }
+
+        db.transactions.push({
+            id: txId,
+            data: encrypted,
+            createdAt: Number.isFinite(Number(item?.createdAt)) ? Number(item.createdAt) : Date.now(),
+            lastModified: Date.now(),
+            deletedAt: null
+        });
+
+        existingIds.add(txId);
+        imported += 1;
+        importedIds.push(queueId);
+    }
+
+    let saveFailed = false;
+    if (importedIds.length > 0) {
+        try {
+            await saveDB(db);
+        } catch (error) {
+            saveFailed = true;
+            console.error('[bridge-import] Failed to persist imported bridge transactions:', error);
+        }
+    }
+
+    const idsToClear = [
+        ...duplicateIds,
+        ...(saveFailed ? [] : importedIds)
+    ];
+
+    let cleared = 0;
+    if (idsToClear.length > 0 && typeof bridge.clearFinancePendingTransactions === 'function') {
+        try {
+            cleared = await bridge.clearFinancePendingTransactions(idsToClear);
+        } catch (error) {
+            console.error('[bridge-import] Failed to clear bridge queue entries:', error);
+            cleared = 0;
+        }
+    }
+
+    return {
+        checked: pending.length,
+        imported,
+        skipped,
+        failed,
+        cleared,
+        saveFailed
+    };
+}

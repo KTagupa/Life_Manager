@@ -1,0 +1,725 @@
+        // =============================================
+        // SECTION 6: RENDERERS
+        // =============================================
+        function renderTransactions(items) {
+            const list = document.getElementById('transaction-list');
+            const debtNames = new Set((window.allDecryptedDebts || []).map(d => String(d?.name || '').trim()).filter(Boolean));
+
+            list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No transactions found.</div>';
+
+            items.forEach(i => {
+                const isDebtCashIn = typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(i);
+                const isDebtInc = i.type === 'debt_increase' || isDebtCashIn;
+                const isInc = i.type === 'income' && !isDebtCashIn;
+                const isCardPayment = i.type === 'credit_card_payment';
+                const isInstallmentPay = typeof isInstallmentPayment === 'function' ? isInstallmentPayment(i) : i.type === 'installment_payment';
+                const isCardCharge = typeof isCreditCardCharge === 'function' ? isCreditCardCharge(i) : false;
+                const isDebtPayment = i.type === 'expense' && debtNames.has(String(i.category || '').trim());
+                const isToday = isTxAssignedToToday(i);
+                const encodedTxId = encodeInlineArg(i.id);
+                const safeDesc = escapeHTML(i.desc || 'Untitled');
+                const safeCategory = escapeHTML(i.category || 'Uncategorized');
+                const initials = escapeHTML(i.category ? i.category.substring(0, 2).toUpperCase() : '??');
+                const displayDate = new Date(i.date).toLocaleDateString();
+                const safeCardName = escapeHTML((typeof getTxCreditCardName === 'function' ? getTxCreditCardName(i) : '') || '');
+
+                const div = document.createElement('div');
+                div.className = `recent-movement-item p-4 flex items-center justify-between group transition-colors cursor-pointer ${isToday ? 'recent-movement-item--today' : 'hover:bg-slate-50'}`;
+                div.onclick = (e) => {
+                    if (e.target.closest('button')) return;
+                    openTransactionModal(i.id);
+                };
+
+                const currencyBadge = i.originalCurrency && i.originalCurrency !== 'PHP'
+                    ? `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold">${escapeHTML(i.originalCurrency)}</span>`
+                    : '';
+                const creditCardBadge = isCardCharge && safeCardName
+                    ? `<span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">CARD • ${safeCardName}</span>`
+                    : isCardPayment && safeCardName
+                        ? `<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">PAYMENT • ${safeCardName}</span>`
+                        : '';
+                const debtPaymentBadge = isDebtPayment
+                    ? '<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">DEBT PAYMENT</span>'
+                    : '';
+                const debtIncreaseBadge = isDebtInc
+                    ? `<span class="text-[9px] ${isDebtCashIn ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'} px-1.5 py-0.5 rounded font-bold">${isDebtCashIn ? 'DEBT + CASH' : 'DEBT ONLY'}</span>`
+                    : '';
+                const installmentBadge = isInstallmentPay
+                    ? '<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">BNPL PAYMENT</span>'
+                    : '';
+                const badges = [currencyBadge, creditCardBadge, installmentBadge, debtPaymentBadge, debtIncreaseBadge].filter(Boolean).join(' ');
+
+                // Icon & Color Logic
+                let iconBg, iconText, amountColor, sign, amountText;
+                if (isInc) {
+                    iconBg = 'bg-emerald-50'; iconText = 'text-emerald-600';
+                    amountColor = 'text-emerald-600'; sign = '+';
+                } else if (isDebtInc) {
+                    iconBg = isDebtCashIn ? 'bg-emerald-50' : 'bg-blue-50';
+                    iconText = isDebtCashIn ? 'text-emerald-600' : 'text-blue-600';
+                    amountColor = isDebtCashIn ? 'text-emerald-600' : 'text-blue-600';
+                    sign = isDebtCashIn ? '+' : '';
+                } else if (isCardCharge) {
+                    iconBg = 'bg-blue-50'; iconText = 'text-blue-600';
+                    amountColor = 'text-blue-600'; sign = '';
+                } else if (isCardPayment) {
+                    iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
+                    amountColor = 'text-rose-600'; sign = '-';
+                } else if (isInstallmentPay) {
+                    iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
+                    amountColor = 'text-rose-600'; sign = '-';
+                } else {
+                    iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
+                    amountColor = 'text-rose-600'; sign = '-';
+                }
+                amountText = (isDebtInc && !isDebtCashIn) || isCardCharge ? fmt(i.amt) : `${sign}${fmt(i.amt)}`;
+
+                div.innerHTML = `
+                    <div class="flex items-center gap-4">
+                        <div class="recent-movement-badge w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${iconBg} ${iconText}">
+                            ${initials}
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-800">${safeDesc}${badges ? ` ${badges}` : ''}</p>
+                            <p class="recent-movement-meta text-[10px] uppercase font-bold text-slate-400 tracking-widest">${displayDate} • ${safeCategory}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <p class="font-bold ${amountColor}">${amountText}</p>
+                        <button onclick="deleteItem('transactions', decodeURIComponent('${encodedTxId}'))" class="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>`;
+                list.appendChild(div);
+            });
+
+            const metrics = computeSummaryMetrics(window.allDecryptedTransactions || [], metricScope, {
+                filteredTransactions: window.filteredTransactions || items
+            });
+            renderSummaryCards(metrics);
+
+            // Calculate trends
+            calculateTrends();
+
+            // Update Budget Inputs UI to include Debt categories if any
+            populateBudgetInputs();
+            lucide.createIcons();
+        }
+
+        function buildDebtAndLentAggregates(transactions) {
+            const debtPaidByCategory = Object.create(null);
+            const debtBorrowedByCategory = Object.create(null);
+            const lentExpensesByCategory = Object.create(null);
+            const lentIncomeByCategory = Object.create(null);
+
+            (transactions || []).forEach(t => {
+                const category = (t && typeof t.category === 'string') ? t.category : '';
+                if (!category) return;
+
+                const amt = Number(t.amt) || 0;
+                if (amt <= 0) return;
+
+                if (t.type === 'expense') {
+                    debtPaidByCategory[category] = (debtPaidByCategory[category] || 0) + amt;
+                    if (category.startsWith('Lent: ')) {
+                        lentExpensesByCategory[category] = (lentExpensesByCategory[category] || 0) + amt;
+                    }
+                    return;
+                }
+
+                const debtBorrowDelta = typeof getDebtBorrowLiabilityDelta === 'function'
+                    ? getDebtBorrowLiabilityDelta(t)
+                    : 0;
+
+                if (debtBorrowDelta > 0) {
+                    debtBorrowedByCategory[category] = (debtBorrowedByCategory[category] || 0) + debtBorrowDelta;
+                }
+
+                if (t.type === 'income' && category.startsWith('Lent: ')) {
+                    lentIncomeByCategory[category] = (lentIncomeByCategory[category] || 0) + amt;
+                }
+            });
+
+            return {
+                debtPaidByCategory,
+                debtBorrowedByCategory,
+                lentExpensesByCategory,
+                lentIncomeByCategory
+            };
+        }
+
+        function formatElectricityRate(rateInPhp, unit, decimals = 2) {
+            const converted = convertToDisplayCurrency(Math.max(0, Number(rateInPhp) || 0), 'PHP', activeCurrency);
+            const symbols = { PHP: '₱', USD: '$', JPY: '¥' };
+            return `${symbols[activeCurrency] || ''}${converted.toLocaleString(undefined, {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            })}/${unit}`;
+        }
+
+        async function renderDebts(items) {
+            const list = document.getElementById('debt-list');
+            list.innerHTML = '';
+
+            const decryptedDebts = (await Promise.all(items.map(async i => {
+                const d = await decryptData(i.data);
+                return d ? { ...d, id: i.id } : null;
+            }))).filter(x => x);
+
+            // Store for category usage
+            window.allDecryptedDebts = decryptedDebts;
+
+            if (decryptedDebts.length === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No debts tracked. Good job!</div>';
+                return;
+            }
+
+            // Calculate paid amounts from transaction history (Expenses with category == Debt Name)
+            // Note: We use all transactions (historical), not just filtered ones, to show true debt progress
+            const allTrans = window.allDecryptedTransactions || [];
+            const {
+                debtPaidByCategory,
+                debtBorrowedByCategory
+            } = buildDebtAndLentAggregates(allTrans);
+
+            decryptedDebts.forEach(d => {
+                const safeDebtName = escapeHTML(d.name || 'Debt');
+                const encodedDebtId = encodeInlineArg(d.id);
+                const paid = debtPaidByCategory[d.name] || 0;
+                const borrowedMore = debtBorrowedByCategory[d.name] || 0;
+
+                const totalDebt = d.amount + borrowedMore;
+                const percentage = totalDebt > 0 ? Math.min(100, Math.round((paid / totalDebt) * 100)) : 100;
+                const remaining = Math.max(0, totalDebt - paid);
+
+                if (remaining <= 0.01 && percentage >= 100) return; // Hide completed debts
+
+                const div = document.createElement('div');
+                div.className = "group relative cursor-pointer hover:bg-slate-50 p-2 -mx-2 rounded-xl transition-colors";
+                div.onclick = (e) => {
+                    if (e.target.closest('button')) return;
+                    openUpdateDebtModal(d.id);
+                };
+                div.innerHTML = `
+                        <div class="flex justify-between items-end mb-1">
+                            <div>
+                                <p class="text-sm font-bold text-slate-700">${safeDebtName}</p>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                                    Paid: ${fmt(paid)} / ${fmt(totalDebt)}
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-black text-rose-600">${percentage}%</span>
+                                <button onclick="deleteItem('debts', decodeURIComponent('${encodedDebtId}'))" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
+                                    <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-rose-500 rounded-full" style="width: ${percentage}%"></div>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-1 italic text-right">${fmt(remaining)} left</p>
+                    `;
+                list.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        async function renderCreditCards(items) {
+            const list = document.getElementById('credit-card-list');
+            if (!list) return;
+            list.innerHTML = '';
+
+            const decrypted = (await Promise.all((items || []).map(async item => {
+                const data = await decryptData(item.data);
+                return data ? { ...data, id: item.id } : null;
+            }))).filter(Boolean);
+
+            window.allDecryptedCreditCards = decrypted;
+
+            if (decrypted.length === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No credit cards tracked yet.</div>';
+                return;
+            }
+
+            const outstandingMap = typeof computeCreditCardOutstandingMapAsOf === 'function'
+                ? computeCreditCardOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
+                : new Map();
+
+            decrypted.forEach(card => {
+                const safeName = escapeHTML(card.name || 'Credit Card');
+                const safeLast4 = escapeHTML(card.last4 || '');
+                const outstanding = Number(outstandingMap.get(card.id) || 0);
+                const limit = Number(card.limit || 0);
+                const dueDay = Number(card.paymentDueDay || 0);
+                const utilizationPct = limit > 0 ? Math.min(100, Math.max(0, (outstanding / limit) * 100)) : 0;
+                const utilizationLabel = limit > 0
+                    ? `${utilizationPct.toFixed(0)}% of ${fmt(limit)}`
+                    : 'No limit set';
+                const dueLabel = dueDay > 0
+                    ? `Due every ${dueDay}${typeof getDaySuffix === 'function' ? getDaySuffix(dueDay) : 'th'}${card.paymentReminderPaused ? ' • reminder paused' : ''}`
+                    : 'No payment reminder set';
+                const encodedCardId = encodeInlineArg(card.id);
+
+                const div = document.createElement('div');
+                div.className = 'p-4 bg-slate-50 rounded-2xl border border-slate-200';
+                div.innerHTML = `
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-bold text-slate-800">${safeName}${safeLast4 ? ` <span class="text-[11px] text-slate-400">•••• ${safeLast4}</span>` : ''}</p>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">Outstanding ${fmt(outstanding)}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="openCreditCardPaymentModal(decodeURIComponent('${encodedCardId}'))"
+                                class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Payment</button>
+                            <button onclick="openCreditCardModal(decodeURIComponent('${encodedCardId}'))"
+                                class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-amber-500 rounded-full" style="width:${utilizationPct}%"></div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1">${escapeHTML(utilizationLabel)}</p>
+                        <p class="text-[10px] text-slate-400 mt-1">${escapeHTML(dueLabel)}</p>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+
+            lucide.createIcons();
+        }
+
+        function getInstallmentPaymentTransactions(planId) {
+            const targetId = String(planId || '').trim();
+            if (!targetId) return [];
+            return (window.allDecryptedTransactions || [])
+                .filter(tx => tx && tx.type === 'installment_payment' && String(tx.installmentPlanId || '').trim() === targetId)
+                .sort((a, b) => getTxTimestamp(b) - getTxTimestamp(a));
+        }
+
+        function getInstallmentHistoricalPayments(plan) {
+            return normalizeInstallmentHistoricalPaymentsForRender(plan?.historicalPayments || []);
+        }
+
+        function normalizeInstallmentHistoricalPaymentsForRender(payments = []) {
+            return (Array.isArray(payments) ? payments : [])
+                .map(payment => ({
+                    ...payment,
+                    amount: Math.max(0, Number(payment?.amount || 0))
+                }))
+                .filter(payment => payment.amount > 0)
+                .sort((a, b) => Date.parse(b.date || b.createdAt || '') - Date.parse(a.date || a.createdAt || ''));
+        }
+
+        function getInstallmentNextDueLabel(plan) {
+            const dueDay = Number(plan?.dueDay || 0);
+            const count = Math.max(0, Math.round(Number(plan?.installmentCount || 0)));
+            const paymentsMade = getInstallmentPaymentTransactions(plan?.id).length + getInstallmentHistoricalPayments(plan).length;
+            if (!dueDay) return 'No due day set';
+            if (count > 0 && paymentsMade >= count) return 'Plan complete';
+            return `Due every ${dueDay}${typeof getDaySuffix === 'function' ? getDaySuffix(dueDay) : 'th'}`;
+        }
+
+        async function renderInstallmentPlans(items) {
+            const list = document.getElementById('installment-plan-list');
+            if (!list) return;
+            list.innerHTML = '';
+
+            const decrypted = (await Promise.all((items || []).map(async item => {
+                const data = await decryptData(item.data);
+                return data ? { ...data, id: item.id } : null;
+            }))).filter(Boolean);
+
+            window.allDecryptedInstallmentPlans = decrypted;
+
+            if (decrypted.length === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No installment plans tracked yet.</div>';
+                return;
+            }
+
+            const outstandingMap = typeof computeInstallmentOutstandingMapAsOf === 'function'
+                ? computeInstallmentOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
+                : new Map();
+
+            const rows = decrypted.map(plan => {
+                const safeName = escapeHTML(plan.name || 'Installment Plan');
+                const safeProvider = escapeHTML(plan.provider || 'BNPL / installment');
+                const feeTotal = Math.max(0, Number(plan.feeTotal || 0));
+                const total = Math.max(0, Number(plan.totalAmount || 0));
+                const monthly = Math.max(0, Number(plan.monthlyAmount || 0));
+                const outstanding = outstandingMap.has(plan.id)
+                    ? Math.max(0, Number(outstandingMap.get(plan.id) || 0))
+                    : total;
+                const paid = Math.max(0, total - outstanding);
+                const progressPct = total > 0 ? Math.min(100, Math.max(0, (paid / total) * 100)) : 0;
+                const paymentRows = getInstallmentPaymentTransactions(plan.id);
+                const historicalPayments = getInstallmentHistoricalPayments(plan);
+                const historicalFees = historicalPayments.reduce((sum, payment) => sum + Math.max(0, Number(payment.feeAmount || 0)), 0);
+                const transactionFees = paymentRows.reduce((sum, tx) => sum + Math.max(0, Number(tx.installmentFeeAmount || 0)), 0);
+                const feesPaid = historicalFees + transactionFees;
+                const paymentCount = paymentRows.length + historicalPayments.length;
+                const installmentCount = Math.max(0, Math.round(Number(plan.installmentCount || 0)));
+                const encodedPlanId = encodeInlineArg(plan.id);
+                const isComplete = outstanding <= 0.01;
+                const statusLabel = isComplete
+                    ? 'Complete'
+                    : `${paymentCount}${installmentCount ? ` / ${installmentCount}` : ''} payments`;
+
+                return {
+                    plan,
+                    safeName,
+                    safeProvider,
+                    feeTotal,
+                    total,
+                    monthly,
+                    outstanding,
+                    paid,
+                    progressPct,
+                    historicalPayments,
+                    feesPaid,
+                    installmentCount,
+                    encodedPlanId,
+                    statusLabel,
+                    isComplete
+                };
+            });
+
+            const activeRows = rows.filter(row => !row.isComplete);
+            const completedRows = rows.filter(row => row.isComplete);
+
+            activeRows.forEach(row => {
+                const div = document.createElement('div');
+                div.className = 'p-4 bg-slate-50 rounded-2xl border border-slate-200';
+                div.innerHTML = `
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-sm font-bold text-slate-800 break-words">${row.safeName}</p>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${row.safeProvider}</p>
+                            <p class="text-[10px] text-slate-500 mt-1">Remaining ${fmt(row.outstanding)} of ${fmt(row.total)}</p>
+                            ${row.feeTotal > 0 ? `<p class="text-[10px] text-violet-500 mt-1">Fees paid ${fmt(row.feesPaid)} of ${fmt(row.feeTotal)}</p>` : ''}
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button onclick="openInstallmentPaymentModal(decodeURIComponent('${row.encodedPlanId}'))"
+                                class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Payment</button>
+                            <button onclick="openInstallmentPaymentModal(decodeURIComponent('${row.encodedPlanId}'), { recordOnly: true })"
+                                class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200">Previous</button>
+                            <button onclick="openInstallmentPlanModal(decodeURIComponent('${row.encodedPlanId}'))"
+                                class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
+                            <button onclick="deleteItem('installment_plans', decodeURIComponent('${row.encodedPlanId}'))"
+                                class="text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-violet-500 rounded-full" style="width:${row.progressPct}%"></div>
+                        </div>
+                        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
+                            <span>${escapeHTML(row.statusLabel)}</span>
+                            ${row.historicalPayments.length ? `<span>${row.historicalPayments.length} previous</span>` : ''}
+                            <span>${escapeHTML(getInstallmentNextDueLabel(row.plan))}</span>
+                            ${row.monthly > 0 ? `<span>${fmt(row.monthly)} / payment</span>` : ''}
+                            ${row.feeTotal > 0 && row.installmentCount > 0 ? `<span>${fmt(row.feeTotal / row.installmentCount)} fee / payment</span>` : ''}
+                        </div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+
+            if (completedRows.length) {
+                const completedWrap = document.createElement('details');
+                completedWrap.className = 'group rounded-2xl border border-slate-200 bg-slate-50/70';
+                completedWrap.innerHTML = `
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-500">
+                        <span>Completed (${completedRows.length})</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180"></i>
+                    </summary>
+                    <div class="border-t border-slate-200 p-3 space-y-2"></div>
+                `;
+                const completedList = completedWrap.querySelector('div');
+                completedRows.forEach(row => {
+                    const item = document.createElement('div');
+                    item.className = 'rounded-xl border border-slate-200 bg-white/70 px-3 py-3';
+                    item.innerHTML = `
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-bold text-slate-600 break-words">${row.safeName}</p>
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${row.safeProvider}</p>
+                                <p class="text-[10px] font-black uppercase tracking-wider text-emerald-700 mt-1">Paid in full</p>
+                                <p class="text-[10px] text-slate-500 mt-1">Total paid ${fmt(row.paid)}</p>
+                                ${row.feeTotal > 0 ? `<p class="text-[10px] text-violet-500 mt-1">Fees paid ${fmt(row.feesPaid)} of ${fmt(row.feeTotal)}</p>` : ''}
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button onclick="openInstallmentPlanModal(decodeURIComponent('${row.encodedPlanId}'))"
+                                    class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
+                                <button onclick="deleteItem('installment_plans', decodeURIComponent('${row.encodedPlanId}'))"
+                                    class="text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                            </div>
+                        </div>
+                        <div class="mt-3 h-1.5 bg-emerald-100 rounded-full overflow-hidden">
+                            <div class="h-full bg-emerald-500 rounded-full" style="width:100%"></div>
+                        </div>
+                    `;
+                    completedList.appendChild(item);
+                });
+                list.appendChild(completedWrap);
+            }
+
+            lucide.createIcons();
+        }
+
+        async function renderLent(items) {
+            const list = document.getElementById('lent-list');
+            list.innerHTML = '';
+
+            const decryptedLent = (await Promise.all(items.map(async i => {
+                const d = await decryptData(i.data);
+                return d ? { ...d, id: i.id } : null;
+            }))).filter(x => x);
+
+            window.allDecryptedLent = decryptedLent;
+
+            if (decryptedLent.length === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No money lent out.</div>';
+                return;
+            }
+
+            const allTrans = window.allDecryptedTransactions || [];
+            const {
+                lentExpensesByCategory,
+                lentIncomeByCategory
+            } = buildDebtAndLentAggregates(allTrans);
+
+            decryptedLent.forEach(l => {
+                const safeLentName = escapeHTML(l.name || 'Lent');
+                const encodedLentId = encodeInlineArg(l.id);
+                const lentCategory = `Lent: ${l.name}`;
+                const expenses = lentExpensesByCategory[lentCategory] || 0;
+                const income = lentIncomeByCategory[lentCategory] || 0;
+
+                const balance = expenses - income;
+
+                const div = document.createElement('div');
+                div.className = "group relative bg-slate-50 p-3 rounded-2xl border border-slate-100";
+                div.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-sm font-bold text-slate-700">${safeLentName}</p>
+                            <p class="text-[10px] text-slate-400 font-bold">Total Lent: ${fmt(expenses)} | Repaid: ${fmt(income)}</p>
+                        </div>
+                        <div class="text-right flex items-center gap-3">
+                            <div>
+                                <p class="text-xs font-bold text-slate-400 uppercase">Balance</p>
+                                <p class="font-black ${balance > 0 ? 'text-emerald-600' : 'text-slate-400'}">${fmt(balance)}</p>
+                            </div>
+                            <button onclick="deleteItem('lent', decodeURIComponent('${encodedLentId}'))" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        async function renderBills(items) {
+            const list = document.getElementById('bill-list');
+            list.innerHTML = '';
+            const decrypted = (await Promise.all(items.map(async i => {
+                const d = await decryptData(i.data);
+                return d ? { ...normalizeBillDataShape(d), id: i.id } : null;
+            }))).filter(x => x);
+            window.allDecryptedBills = decrypted;
+
+            if (decrypted.length === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No bills set.</div>';
+                return;
+            }
+
+            decrypted.forEach(b => {
+                const encodedBillId = encodeInlineArg(b.id);
+                const safeBillName = escapeHTML(b.name || 'Bill');
+                const safeBillDay = Number.isFinite(Number(b.day)) ? Number(b.day) : 1;
+                const isPaused = !!b.paused;
+                const isElectricity = b.billType === 'electricity';
+                const latestCycle = isElectricity ? getLatestElectricityBillCycle(b) : null;
+                const statusLabel = latestCycle
+                    ? (latestCycle.status === 'paid'
+                        ? (latestCycle.paidBy === 'family_other' ? 'Paid by Family' : 'Paid by Me')
+                        : 'Unpaid')
+                    : 'No cycles yet';
+                const statusClasses = latestCycle
+                    ? (latestCycle.status === 'paid'
+                        ? (latestCycle.paidBy === 'family_other'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-emerald-100 text-emerald-700')
+                        : 'bg-amber-100 text-amber-700')
+                    : 'bg-slate-100 text-slate-500';
+                const typeBadge = isElectricity
+                    ? '<span class="text-[10px] align-middle bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">Electricity</span>'
+                    : '';
+                const amountLabel = isElectricity && latestCycle ? fmt(latestCycle.amount) : fmt(b.amt);
+                const div = document.createElement('div');
+                div.className = `p-3 bg-slate-50 rounded-2xl border group cursor-pointer transition-colors ${isPaused ? 'border-amber-300 hover:border-amber-400' : isElectricity ? 'border-amber-200 hover:border-amber-300' : 'hover:border-indigo-300'}`;
+                div.onclick = (e) => { if (!e.target.closest('button')) openBillModal(b.id); };
+
+                if (isElectricity) {
+                    div.innerHTML = `
+                        <div class="flex items-start justify-between gap-4">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold text-slate-400 uppercase">Day ${safeBillDay}</p>
+                                <div class="mt-1 flex flex-wrap items-center gap-2">
+                                    <p class="font-bold ${isPaused ? 'text-amber-700' : 'text-slate-800'} text-base leading-tight break-words">${safeBillName}</p>
+                                    <span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide whitespace-nowrap">Electricity</span>
+                                    ${isPaused ? '<span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide whitespace-nowrap">Paused</span>' : ''}
+                                </div>
+                            </div>
+                            <div class="shrink-0 text-right">
+                                <p class="text-xs font-bold text-slate-400 uppercase">Latest</p>
+                                <p class="font-black text-slate-700 text-lg leading-none mt-1">${amountLabel}</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 rounded-2xl border border-amber-100 bg-white/80 p-3">
+                            ${latestCycle ? `
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="text-[10px] font-black uppercase tracking-wider text-amber-700">${escapeHTML(formatBillingMonthLabel(latestCycle.billingMonth))}</span>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${statusClasses} whitespace-nowrap">${escapeHTML(statusLabel)}</span>
+                                </div>
+                                <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div class="rounded-xl bg-slate-50 px-3 py-2">
+                                        <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Usage</p>
+                                        <p class="text-sm font-bold text-slate-700 mt-1">${latestCycle.kwhUsed.toLocaleString(undefined, { maximumFractionDigits: 2 })} kWh</p>
+                                    </div>
+                                    <div class="rounded-xl bg-slate-50 px-3 py-2">
+                                        <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400">Rate</p>
+                                        <p class="text-sm font-bold text-slate-700 mt-1">${formatElectricityRate(latestCycle.ratePerKwh, 'kWh', 2)}</p>
+                                        <p class="text-[11px] text-slate-400 mt-1">${formatElectricityRate(latestCycle.ratePerWh, 'Wh', 4)}</p>
+                                    </div>
+                                </div>
+                            ` : `
+                                <p class="text-[11px] text-slate-400">No electricity bill cycles recorded yet.</p>
+                            `}
+                        </div>
+
+                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                            <button onclick="openBillPaymentTrigger(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 whitespace-nowrap">Pay</button>
+                            <button onclick="openElectricityCycleModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 whitespace-nowrap">${latestCycle ? 'Record Bill' : 'Add Cycle'}</button>
+                            <button onclick="openElectricityHistoryModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap">History</button>
+                            <button onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'} whitespace-nowrap">${isPaused ? 'Resume' : 'Pause'}</button>
+                            <button onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="ml-auto text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                    return;
+                }
+
+                div.innerHTML = `
+                    <div class="min-w-0 flex-1 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                        <p class="text-xs font-bold text-slate-400 uppercase">Day ${safeBillDay}</p>
+                        <p class="font-bold ${isPaused ? 'text-amber-700' : 'text-slate-800'} break-words">${safeBillName} ${typeBadge}${isPaused ? ' <span class="text-[10px] align-middle bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">PAUSED</span>' : ''}</p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="font-bold text-slate-500">${amountLabel}</span>
+                            <button onclick="openBillPaymentTrigger(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 whitespace-nowrap">Pay</button>
+                            <button onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'} whitespace-nowrap">${isPaused ? 'Resume' : 'Pause'}</button>
+                            <button onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        function renderBudgets(items) {
+            const container = document.getElementById('budget-breakdown');
+            const hasBudgets = Object.values(budgets).some(v => v > 0);
+            if (!hasBudgets) {
+                container.innerHTML = '<p class="text-xs text-slate-400 italic text-center">Set budgets to see progress.</p>';
+                return;
+            }
+
+            const metrics = computeSummaryMetrics(window.allDecryptedTransactions || [], metricScope, {
+                scopeTransactions: items,
+                filteredTransactions: window.filteredTransactions || []
+            });
+            const actuals = metrics.categoryExpenses;
+
+            container.innerHTML = '';
+            Object.entries(budgets).forEach(([cat, limit]) => {
+                if (!limit) return;
+                const spent = actuals[cat] || 0;
+                const pct = Math.min((spent / limit) * 100, 100);
+                const isOver = spent > limit;
+                const safeCat = escapeHTML(cat);
+
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <div class="flex justify-between text-xs font-bold mb-1">
+                        <span class="text-slate-600">${safeCat}</span>
+                        <span class="${isOver ? 'text-rose-500' : 'text-slate-400'}">${fmt(spent)} / ${fmt(limit)}</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full transition-all duration-500 ${isOver ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${pct}%"></div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function loadAndRenderWishlist() {
+            const decrypted = (await Promise.all(rawWishlist.map(async i => {
+                const d = await decryptData(i.data);
+                return d ? { ...d, id: i.id } : null;
+            }))).filter(x => x).sort((a, b) => new Date(a.targetDate || a.createdAt) - new Date(b.targetDate || b.createdAt));
+
+            window.allDecryptedWishlist = decrypted;
+            renderWishlist(decrypted);
+        }
+
+        function renderWishlist(items) {
+            const list = document.getElementById('wishlist-list');
+            if (!list) return;
+
+            if (!items || items.length === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-4">No wishlist items yet.</div>';
+                return;
+            }
+
+            list.innerHTML = '';
+            items.forEach(i => {
+                const amountLabel = i.amt ? fmt(i.amt) : '—';
+                const categoryLabel = i.category ? i.category : 'Uncategorized';
+                const targetDate = i.targetDate ? new Date(i.targetDate).toLocaleDateString() : 'No date set';
+                const encodedWishlistId = encodeInlineArg(i.id);
+                const safeDesc = escapeHTML(i.desc || 'Wishlist item');
+                const safeCategory = escapeHTML(categoryLabel);
+                const safeTargetDate = escapeHTML(targetDate);
+
+                const div = document.createElement('div');
+                div.className = 'p-3 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all group cursor-pointer';
+                div.onclick = (e) => {
+                    if (e.target.closest('button')) return;
+                    openWishlistModal(i.id);
+                };
+                div.innerHTML = `
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="flex-1">
+                            <p class="font-bold text-slate-800">${safeDesc}</p>
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${safeCategory} • ${safeTargetDate}</p>
+                            <p class="text-xs text-slate-500 mt-1">Planned: ${amountLabel}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="convertWishlistToExpense(decodeURIComponent('${encodedWishlistId}'))" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">Convert</button>
+                            <button onclick="deleteWishlistItem(decodeURIComponent('${encodedWishlistId}'))" class="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+
+            lucide.createIcons();
+        }

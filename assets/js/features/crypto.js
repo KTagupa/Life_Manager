@@ -1,0 +1,4734 @@
+        // =============================================
+        // SECTION 4: CRYPTO / INVESTING MODULE
+        // =============================================
+
+        let cryptoComputationCache = {
+            sourceRef: null,
+            length: -1,
+            decryptedTxs: null,
+            chronologicalTxs: null,
+            pendingDecryptPromise: null,
+            holdingsByMethod: new Map()
+        };
+        let editingCryptoTransactionState = null;
+
+        function invalidateCryptoComputationCache() {
+            cryptoComputationCache.sourceRef = null;
+            cryptoComputationCache.length = -1;
+            cryptoComputationCache.decryptedTxs = null;
+            cryptoComputationCache.chronologicalTxs = null;
+            cryptoComputationCache.pendingDecryptPromise = null;
+            cryptoComputationCache.holdingsByMethod = new Map();
+        }
+
+        function ensureCryptoComputationCacheFresh() {
+            const source = rawCrypto || [];
+            if (cryptoComputationCache.sourceRef !== source || cryptoComputationCache.length !== source.length) {
+                cryptoComputationCache.sourceRef = source;
+                cryptoComputationCache.length = source.length;
+                cryptoComputationCache.decryptedTxs = null;
+                cryptoComputationCache.chronologicalTxs = null;
+                cryptoComputationCache.pendingDecryptPromise = null;
+                cryptoComputationCache.holdingsByMethod = new Map();
+            }
+        }
+
+        function normalizeCostBasisMethod(method) {
+            if (method === 'average') return 'avg';
+            return method || 'fifo';
+        }
+
+        const FINANCE_COINGECKO_DEMO_API_KEY_STORAGE_KEY = 'finance_coingecko_demo_api_key_v1';
+        const CARDANO_NETWORK_ID = 'cardano';
+        const MINSWAP_DEX_ID = 'minswap-cardano';
+        const MINSWAP_API_BASE_URL = 'https://api-mainnet-prod.minswap.org';
+        const MINSWAP_PROTOCOLS = ['Minswap', 'MinswapV2', 'MinswapStable'];
+
+        function getFinanceCoinGeckoDemoApiKey() {
+            try {
+                return String(localStorage.getItem(FINANCE_COINGECKO_DEMO_API_KEY_STORAGE_KEY) || '').trim();
+            } catch (_error) {
+                return '';
+            }
+        }
+
+        function setFinanceCoinGeckoDemoApiKey(apiKey) {
+            const value = String(apiKey || '').trim();
+            if (!value) throw new Error('Paste a CoinGecko Demo API key first.');
+            localStorage.setItem(FINANCE_COINGECKO_DEMO_API_KEY_STORAGE_KEY, value);
+            renderFinanceCoinGeckoDemoApiKeyControl();
+            if (typeof showToast === 'function') showToast('CoinGecko Demo API key saved locally');
+            return value;
+        }
+
+        function clearFinanceCoinGeckoDemoApiKey() {
+            localStorage.removeItem(FINANCE_COINGECKO_DEMO_API_KEY_STORAGE_KEY);
+            renderFinanceCoinGeckoDemoApiKeyControl();
+            if (typeof showToast === 'function') showToast('CoinGecko Demo API key cleared');
+        }
+
+        function saveFinanceCoinGeckoDemoApiKeyFromInput() {
+            const input = document.getElementById('coingecko-demo-api-key');
+            try {
+                setFinanceCoinGeckoDemoApiKey(input?.value || '');
+                if (input) input.value = '';
+            } catch (error) {
+                alert(error?.message || 'Could not save CoinGecko API key.');
+            }
+        }
+
+        function renderFinanceCoinGeckoDemoApiKeyControl() {
+            const status = document.getElementById('coingecko-demo-api-key-status');
+            if (!status) return;
+            const key = getFinanceCoinGeckoDemoApiKey();
+            status.innerText = key
+                ? `Saved locally (${key.slice(0, 4)}...${key.slice(-4)})`
+                : 'Optional legacy setting; Minswap uses the public Minswap API now';
+        }
+
+        function normalizeCardanoAssetAddress(address) {
+            return String(address || '').trim().toLowerCase();
+        }
+
+        function normalizeMinswapLpAssetReference(value) {
+            let candidate = String(value || '').trim().toLowerCase();
+            if (!candidate) return '';
+            candidate = candidate.replace(/[()]/g, '').replace(/\s+/g, '');
+            const prefix = `lp:${CARDANO_NETWORK_ID}:${MINSWAP_DEX_ID}:`;
+            if (candidate.startsWith(prefix)) {
+                candidate = candidate.slice(prefix.length);
+            }
+            if (candidate.includes('.')) {
+                const parts = candidate.split('.');
+                if (parts.length !== 2 || !parts.every(part => /^[0-9a-f]+$/.test(part))) return '';
+                candidate = parts.join('');
+            }
+            return /^[0-9a-f]{57,}$/.test(candidate) ? candidate : '';
+        }
+
+        function makeMinswapAssetAddress(asset) {
+            if (!asset) return '';
+            const policyId = normalizeCardanoAssetAddress(asset.currency_symbol || asset.policy_id || '');
+            const tokenName = normalizeCardanoAssetAddress(asset.token_name || '');
+            if (!policyId && !tokenName) return '0x';
+            return `${policyId}${tokenName}`;
+        }
+
+        function getMinswapAssetSymbol(asset, fallback = '') {
+            return String(asset?.metadata?.ticker || asset?.metadata?.name || fallback || '').trim();
+        }
+
+        function getMinswapAssetName(asset, fallback = '') {
+            return String(asset?.metadata?.name || asset?.metadata?.ticker || fallback || '').trim();
+        }
+
+        function makeCardanoTokenId(address) {
+            const normalized = normalizeCardanoAssetAddress(address);
+            return normalized ? `${CARDANO_NETWORK_ID}:${normalized}` : '';
+        }
+
+        function parseCardanoTokenId(tokenId) {
+            const value = String(tokenId || '').trim();
+            if (!value.startsWith(`${CARDANO_NETWORK_ID}:`)) return null;
+            const address = normalizeCardanoAssetAddress(value.slice(`${CARDANO_NETWORK_ID}:`.length));
+            return address ? { network: CARDANO_NETWORK_ID, address } : null;
+        }
+
+        function makeMinswapLpTokenId(poolAddress) {
+            const normalized = normalizeMinswapLpAssetReference(poolAddress) || normalizeCardanoAssetAddress(poolAddress);
+            return normalized ? `lp:${CARDANO_NETWORK_ID}:${MINSWAP_DEX_ID}:${normalized}` : '';
+        }
+
+        function parseMinswapLpTokenId(tokenId) {
+            const value = String(tokenId || '').trim();
+            const prefix = `lp:${CARDANO_NETWORK_ID}:${MINSWAP_DEX_ID}:`;
+            if (!value.startsWith(prefix)) return null;
+            const poolAddress = normalizeMinswapLpAssetReference(value) || normalizeCardanoAssetAddress(value.slice(prefix.length));
+            return poolAddress ? { network: CARDANO_NETWORK_ID, dex: MINSWAP_DEX_ID, poolAddress } : null;
+        }
+
+        function isCardanoTokenId(tokenId) {
+            return !!parseCardanoTokenId(tokenId);
+        }
+
+        function isMinswapLpTokenId(tokenId) {
+            return !!parseMinswapLpTokenId(tokenId);
+        }
+
+        function getCryptoAssetFieldPrefix(type = 'source') {
+            return type === 'target' ? 'c-target-token' : 'c-token';
+        }
+
+        function getCryptoAssetMetadata(type = 'source') {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            const meta = {
+                assetType: document.getElementById(`${prefix}-asset-type`)?.value || '',
+                network: document.getElementById(`${prefix}-network`)?.value || '',
+                dex: document.getElementById(`${prefix}-dex`)?.value || '',
+                poolAddress: document.getElementById(`${prefix}-pool-address`)?.value || '',
+                poolName: document.getElementById(`${prefix}-pool-name`)?.value || '',
+                lpTokenSupply: document.getElementById(`${prefix}-lp-token-supply`)?.value || '',
+                manualLpPrice: document.getElementById(`${prefix}-lp-manual-price`)?.value || '',
+                manualLpPriceCurrency: document.getElementById(`${prefix}-lp-manual-price-currency`)?.value || '',
+                baseToken: document.getElementById(`${prefix}-base-token`)?.value || '',
+                quoteToken: document.getElementById(`${prefix}-quote-token`)?.value || ''
+            };
+            if (meta.assetType !== 'lp_pool') {
+                delete meta.lpTokenSupply;
+                delete meta.manualLpPrice;
+                delete meta.manualLpPriceCurrency;
+            }
+            return meta;
+        }
+
+        function clearCryptoAssetMetadata(type = 'source') {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            ['asset-type', 'network', 'dex', 'pool-address', 'pool-name', 'lp-token-supply', 'lp-manual-price', 'base-token', 'quote-token'].forEach(field => {
+                const el = document.getElementById(`${prefix}-${field}`);
+                if (el) el.value = '';
+            });
+            const manualPriceCurrencyEl = document.getElementById(`${prefix}-lp-manual-price-currency`);
+            if (manualPriceCurrencyEl) manualPriceCurrencyEl.value = 'PHP';
+            const previewEl = document.getElementById(type === 'target' ? 'c-target-lp-price-preview' : 'c-lp-price-preview');
+            if (previewEl) previewEl.innerText = '';
+            updateCryptoLpSupplyVisibility(type);
+        }
+
+        function setCryptoSearchMode(type = 'source') {
+            const isTarget = type === 'target';
+            const idInput = document.getElementById(isTarget ? 'c-target-token-id' : 'c-token-id');
+            const symbolInput = document.getElementById(isTarget ? 'c-target-token-symbol' : 'c-token-symbol');
+            const results = document.getElementById(isTarget ? 'target-token-search-results' : 'token-search-results');
+            if (idInput) idInput.value = '';
+            if (symbolInput) symbolInput.value = '';
+            if (results) {
+                results.innerHTML = '';
+                results.classList.add('hidden');
+            }
+            clearCryptoAssetMetadata(type);
+        }
+
+        function applyCryptoAssetMetadata(type, metadata = {}) {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            const map = {
+                'asset-type': metadata.assetType || '',
+                network: metadata.network || '',
+                dex: metadata.dex || '',
+                'pool-address': metadata.poolAddress || '',
+                'pool-name': metadata.poolName || '',
+                'lp-token-supply': metadata.lpTokenSupply || '',
+                'lp-manual-price': metadata.manualLpPrice || '',
+                'lp-manual-price-currency': metadata.manualLpPriceCurrency || '',
+                'base-token': metadata.baseToken || '',
+                'quote-token': metadata.quoteToken || ''
+            };
+            Object.entries(map).forEach(([field, value]) => {
+                const el = document.getElementById(`${prefix}-${field}`);
+                if (el) el.value = value;
+            });
+            updateCryptoLpSupplyVisibility(type);
+            calcCryptoLpManualPricePreview(type);
+        }
+
+        function updateCryptoLpSupplyVisibility(type = 'source') {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            const assetType = document.getElementById(`${prefix}-asset-type`)?.value || '';
+            const containerId = type === 'target' ? 'c-target-lp-supply-container' : 'c-lp-supply-container';
+            const container = document.getElementById(containerId);
+            if (container) container.classList.toggle('hidden', assetType !== 'lp_pool');
+        }
+
+        function buildCryptoTxMetadata(type = 'source') {
+            const meta = getCryptoAssetMetadata(type);
+            const payload = {};
+            ['assetType', 'network', 'dex', 'poolAddress', 'poolName', 'baseToken', 'quoteToken'].forEach(key => {
+                const value = String(meta[key] || '').trim();
+                if (value) payload[key] = value;
+            });
+            if (meta.assetType === 'lp_pool') {
+                const supply = Number(meta.lpTokenSupply);
+                if (Number.isFinite(supply) && supply > 0) payload.lpTokenSupply = supply;
+                const manualPrice = Number(meta.manualLpPrice);
+                const manualCurrency = String(meta.manualLpPriceCurrency || 'PHP').trim().toUpperCase();
+                if (Number.isFinite(manualPrice) && manualPrice > 0) {
+                    payload.manualLpPrice = manualPrice;
+                    payload.manualLpPriceCurrency = manualCurrency;
+                    const manualPhpPrice = convertToDisplayCurrency(manualPrice, manualCurrency, 'PHP');
+                    if (Number.isFinite(manualPhpPrice) && manualPhpPrice > 0) {
+                        payload.manualLpPhpPrice = manualPhpPrice;
+                    }
+                }
+            }
+            return payload;
+        }
+
+        function getLatestLpTokenSupplyFromTransactions(tokenId, txs = []) {
+            const related = (txs || [])
+                .filter(tx => String(tx?.tokenId || '').trim() === String(tokenId || '').trim())
+                .sort((a, b) => Date.parse(b?.date) - Date.parse(a?.date));
+            for (const tx of related) {
+                const supply = Number(tx?.lpTokenSupply);
+                if (Number.isFinite(supply) && supply > 0) return supply;
+            }
+            return 0;
+        }
+
+        function buildManualCryptoPriceCacheEntryFromMetadata(metadata = {}, now = Date.now()) {
+            const manualPrice = Number(metadata.manualLpPrice || 0);
+            const manualCurrency = String(metadata.manualLpPriceCurrency || 'PHP').trim().toUpperCase();
+            if (!(manualPrice > 0)) return null;
+            const usd = convertToDisplayCurrency(manualPrice, manualCurrency, 'USD');
+            if (!Number.isFinite(usd) || usd <= 0) return null;
+            return buildCryptoPriceCacheEntryFromUsd(usd, now, {
+                source: 'manual_lp_price',
+                manualCurrency,
+                manualPrice,
+                manualPhpPrice: Number(metadata.manualLpPhpPrice || convertToDisplayCurrency(manualPrice, manualCurrency, 'PHP')) || undefined
+            });
+        }
+
+        function chunkCryptoArray(items, size) {
+            const chunks = [];
+            for (let i = 0; i < items.length; i += size) {
+                chunks.push(items.slice(i, i + size));
+            }
+            return chunks;
+        }
+
+        function buildCryptoPriceCacheEntryFromUsd(usdPrice, now, extra = {}) {
+            const usd = Number(usdPrice);
+            if (!Number.isFinite(usd) || usd <= 0) return null;
+            const php = convertToDisplayCurrency(usd, 'USD', 'PHP');
+            const jpy = convertToDisplayCurrency(usd, 'USD', 'JPY');
+            return {
+                php,
+                usd,
+                jpy,
+                price: php,
+                updated: now,
+                ...extra
+            };
+        }
+
+        async function fetchMinswapJson(url, options = {}, label = 'Minswap request') {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) throw new Error(`${label} failed`);
+                return response.json();
+            } catch (error) {
+                if (String(error?.message || '').includes('Failed to fetch')) {
+                    throw new Error(`${label} was blocked by the browser. Direct LP-id paste still works, but live Minswap search/pricing needs a CORS-safe proxy or fallback source.`);
+                }
+                throw error;
+            }
+        }
+
+        async function fetchCoinGeckoSimplePriceUpdates(ids, now) {
+            const updates = {};
+            for (const chunk of chunkCryptoArray(ids, 100)) {
+                if (!chunk.length) continue;
+                const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${chunk.map(encodeURIComponent).join(',')}&vs_currencies=php,usd,jpy`);
+                if (!res.ok) throw new Error('CoinGecko simple price fetch failed');
+                const data = await res.json();
+                Object.keys(data || {}).forEach(id => {
+                    updates[id] = {
+                        php: data[id].php,
+                        usd: data[id].usd,
+                        jpy: data[id].jpy,
+                        price: data[id].php,
+                        updated: now,
+                        source: 'coingecko_simple'
+                    };
+                });
+            }
+            return updates;
+        }
+
+        function getCachedAdaPhpRate() {
+            const price = Number(cryptoPrices?.cardano?.php ?? cryptoPrices?.cardano?.price ?? 0);
+            return Number.isFinite(price) && price > 0 ? price : 0;
+        }
+
+        async function ensureCryptoAdaPriceForConversion() {
+            const cached = getCachedAdaPhpRate();
+            const updated = Number(cryptoPrices?.cardano?.updated || 0);
+            if (cached > 0 && Date.now() - updated < 60 * 60 * 1000) return true;
+
+            try {
+                if (typeof updateExchangeRates === 'function') {
+                    await updateExchangeRates();
+                }
+                const updates = await fetchCoinGeckoSimplePriceUpdates(['cardano'], Date.now());
+                if (!updates.cardano) return false;
+                const db = await getDB();
+                db.crypto_prices = db.crypto_prices || {};
+                db.crypto_prices.cardano = updates.cardano;
+                await persistLocalDBSnapshot(db);
+                cryptoPrices = db.crypto_prices || {};
+                return getCachedAdaPhpRate() > 0;
+            } catch (error) {
+                console.warn('Could not refresh ADA price for crypto currency conversion.', error);
+                return false;
+            }
+        }
+
+        async function fetchCardanoTokenPriceUpdates(cardanoTokenIds, now) {
+            const updates = {};
+            const entries = cardanoTokenIds
+                .map(id => ({ id, parsed: parseCardanoTokenId(id) }))
+                .filter(entry => entry.parsed?.address);
+            const nativeAdaEntries = entries.filter(entry => entry.parsed.address === '0x');
+            const minswapEntries = entries.filter(entry => entry.parsed.address !== '0x');
+
+            if (nativeAdaEntries.length > 0) {
+                const adaUpdates = await fetchCoinGeckoSimplePriceUpdates(['cardano'], now);
+                const adaPrice = adaUpdates.cardano;
+                if (adaPrice) {
+                    nativeAdaEntries.forEach(entry => {
+                        updates[entry.id] = {
+                            ...adaPrice,
+                            source: 'coingecko_simple_native_cardano',
+                            network: CARDANO_NETWORK_ID,
+                            tokenAddress: entry.parsed.address
+                        };
+                    });
+                }
+            }
+
+            for (const entry of minswapEntries) {
+                const data = await fetchMinswapJson(
+                    `${MINSWAP_API_BASE_URL}/v1/assets/${encodeURIComponent(entry.parsed.address)}/metrics?currency=usd`,
+                    {},
+                    'Minswap Cardano token price fetch'
+                );
+                const cacheEntry = buildCryptoPriceCacheEntryFromUsd(Number(data?.price), now, {
+                    source: 'minswap_asset_metrics',
+                    network: CARDANO_NETWORK_ID,
+                    tokenAddress: entry.parsed.address,
+                    tokenName: getMinswapAssetName(data?.asset),
+                    tokenSymbol: getMinswapAssetSymbol(data?.asset),
+                    liquidityUsd: Number(data?.liquidity || 0) || undefined
+                });
+                if (cacheEntry) updates[entry.id] = cacheEntry;
+            }
+            return updates;
+        }
+
+        async function fetchMinswapLpPriceUpdates(lpTokenIds, allTxs, now) {
+            const updates = {};
+            const entries = lpTokenIds
+                .map(id => ({
+                    id,
+                    parsed: parseMinswapLpTokenId(id),
+                    lpTokenSupply: getLatestLpTokenSupplyFromTransactions(id, allTxs)
+                }))
+                .filter(entry => entry.parsed?.poolAddress && entry.lpTokenSupply > 0);
+
+            for (const entry of entries) {
+                const data = await fetchMinswapJson(
+                    `${MINSWAP_API_BASE_URL}/v1/pools/${encodeURIComponent(entry.parsed.poolAddress)}/metrics?currency=usd`,
+                    {},
+                    'Minswap LP pool fetch'
+                );
+                const reserveUsd = Number(data?.liquidity_currency || data?.liquidity || 0);
+                if (!Number.isFinite(reserveUsd) || reserveUsd <= 0) continue;
+                const lpPriceUsd = reserveUsd / entry.lpTokenSupply;
+                const baseSymbol = getMinswapAssetSymbol(data?.asset_a, makeMinswapAssetAddress(data?.asset_a));
+                const quoteSymbol = getMinswapAssetSymbol(data?.asset_b, makeMinswapAssetAddress(data?.asset_b));
+                const cacheEntry = buildCryptoPriceCacheEntryFromUsd(lpPriceUsd, now, {
+                    source: 'minswap_pool_metrics',
+                    network: CARDANO_NETWORK_ID,
+                    dex: MINSWAP_DEX_ID,
+                    protocol: data?.type || '',
+                    poolAddress: entry.parsed.poolAddress,
+                    poolName: `${baseSymbol || '?'}-${quoteSymbol || '?'} LP`,
+                    reserveUsd,
+                    lpTokenSupply: entry.lpTokenSupply,
+                    baseToken: baseSymbol,
+                    quoteToken: quoteSymbol
+                });
+                if (cacheEntry) updates[entry.id] = cacheEntry;
+            }
+            return updates;
+        }
+
+        async function fetchMinswapPoolSearch(query) {
+            const directPoolAddress = normalizeMinswapLpAssetReference(query);
+            if (directPoolAddress) {
+                const pool = await fetchMinswapJson(
+                    `${MINSWAP_API_BASE_URL}/v1/pools/${encodeURIComponent(directPoolAddress)}/metrics?currency=usd`,
+                    {},
+                    'Minswap LP pool lookup'
+                );
+                return {
+                    search_after: undefined,
+                    pool_metrics: [pool]
+                };
+            }
+
+            return fetchMinswapJson(`${MINSWAP_API_BASE_URL}/v1/pools/metrics`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    term: query,
+                    only_verified: false,
+                    limit: 12,
+                    sort_field: 'liquidity',
+                    sort_direction: 'desc',
+                    protocols: MINSWAP_PROTOCOLS,
+                    currency: 'usd'
+                })
+            }, 'Minswap pool search');
+        }
+
+        const CRYPTO_CONVERSION_LAB_STORAGE_KEY = 'finance_crypto_conversion_lab_v1';
+        let cryptoConversionLabState = null;
+
+        function makeCryptoConversionLabId(prefix = 'ccl') {
+            return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+        }
+
+        function getCryptoConversionLabSupportedCurrencies() {
+            return ['PHP', 'USD', 'JPY'];
+        }
+
+        function getCryptoConversionDefaultCurrency() {
+            const candidate = String(activeCurrency || 'PHP').trim().toUpperCase();
+            return getCryptoConversionLabSupportedCurrencies().includes(candidate) ? candidate : 'PHP';
+        }
+
+        function createCryptoConversionScenarioName(index) {
+            const safeIndex = Number(index) || 0;
+            return safeIndex < 26 ? `Route ${String.fromCharCode(65 + safeIndex)}` : `Route ${safeIndex + 1}`;
+        }
+
+        function createCryptoConversionLeg(overrides = {}) {
+            return {
+                id: overrides.id || makeCryptoConversionLabId('leg'),
+                fromTokenId: String(overrides.fromTokenId || '').trim(),
+                fromTokenSymbol: String(overrides.fromTokenSymbol || '').trim(),
+                fromTokenName: String(overrides.fromTokenName || '').trim(),
+                fromSearchText: String(overrides.fromSearchText || '').trim(),
+                fromResults: Array.isArray(overrides.fromResults) ? overrides.fromResults : [],
+                fromResultsError: String(overrides.fromResultsError || '').trim(),
+                toTokenId: String(overrides.toTokenId || '').trim(),
+                toTokenSymbol: String(overrides.toTokenSymbol || '').trim(),
+                toTokenName: String(overrides.toTokenName || '').trim(),
+                toSearchText: String(overrides.toSearchText || '').trim(),
+                toResults: Array.isArray(overrides.toResults) ? overrides.toResults : [],
+                toResultsError: String(overrides.toResultsError || '').trim(),
+                mode: String(overrides.mode || 'market').trim() === 'manual' ? 'manual' : 'market',
+                manualRate: String(overrides.manualRate || '').trim(),
+                feePct: String(overrides.feePct ?? '0').trim() || '0',
+                slippagePct: String(overrides.slippagePct ?? '0').trim() || '0'
+            };
+        }
+
+        function createCryptoConversionScenario(overrides = {}, index = 0) {
+            const providedLegs = Array.isArray(overrides.legs) ? overrides.legs : [];
+            return {
+                id: overrides.id || makeCryptoConversionLabId('scenario'),
+                name: String(overrides.name || createCryptoConversionScenarioName(index)).trim() || createCryptoConversionScenarioName(index),
+                startAmount: String(overrides.startAmount || '').trim(),
+                quoteCurrency: getCryptoConversionLabSupportedCurrencies().includes(String(overrides.quoteCurrency || '').trim().toUpperCase())
+                    ? String(overrides.quoteCurrency).trim().toUpperCase()
+                    : getCryptoConversionDefaultCurrency(),
+                legs: providedLegs.length
+                    ? providedLegs.map((leg, legIndex) => createCryptoConversionLeg(leg, legIndex))
+                    : [createCryptoConversionLeg()]
+            };
+        }
+
+        function buildDefaultCryptoConversionLabState() {
+            return {
+                scenarios: [
+                    createCryptoConversionScenario({ name: 'Route A' }, 0),
+                    createCryptoConversionScenario({ name: 'Route B' }, 1)
+                ]
+            };
+        }
+
+        function sanitizeCryptoConversionLabState(rawState) {
+            const source = rawState && typeof rawState === 'object' ? rawState : {};
+            const scenarios = Array.isArray(source.scenarios)
+                ? source.scenarios.map((scenario, index) => createCryptoConversionScenario({
+                    ...scenario,
+                    legs: Array.isArray(scenario?.legs)
+                        ? scenario.legs.map(leg => createCryptoConversionLeg(leg))
+                        : []
+                }, index))
+                : [];
+            return {
+                scenarios: scenarios.length ? scenarios : buildDefaultCryptoConversionLabState().scenarios
+            };
+        }
+
+        function serializeCryptoConversionLabState() {
+            const state = cryptoConversionLabState || buildDefaultCryptoConversionLabState();
+            return {
+                scenarios: (state.scenarios || []).map((scenario, index) => ({
+                    id: scenario.id || makeCryptoConversionLabId('scenario'),
+                    name: String(scenario.name || createCryptoConversionScenarioName(index)).trim(),
+                    startAmount: String(scenario.startAmount || '').trim(),
+                    quoteCurrency: getCryptoConversionLabSupportedCurrencies().includes(String(scenario.quoteCurrency || '').trim().toUpperCase())
+                        ? String(scenario.quoteCurrency).trim().toUpperCase()
+                        : getCryptoConversionDefaultCurrency(),
+                    legs: (Array.isArray(scenario.legs) ? scenario.legs : []).map(leg => ({
+                        id: leg.id || makeCryptoConversionLabId('leg'),
+                        fromTokenId: String(leg.fromTokenId || '').trim(),
+                        fromTokenSymbol: String(leg.fromTokenSymbol || '').trim(),
+                        fromTokenName: String(leg.fromTokenName || '').trim(),
+                        fromSearchText: String(leg.fromSearchText || '').trim(),
+                        toTokenId: String(leg.toTokenId || '').trim(),
+                        toTokenSymbol: String(leg.toTokenSymbol || '').trim(),
+                        toTokenName: String(leg.toTokenName || '').trim(),
+                        toSearchText: String(leg.toSearchText || '').trim(),
+                        mode: String(leg.mode || 'market').trim() === 'manual' ? 'manual' : 'market',
+                        manualRate: String(leg.manualRate || '').trim(),
+                        feePct: String(leg.feePct ?? '0').trim() || '0',
+                        slippagePct: String(leg.slippagePct ?? '0').trim() || '0'
+                    }))
+                }))
+            };
+        }
+
+        function ensureCryptoConversionLabState() {
+            if (cryptoConversionLabState) return cryptoConversionLabState;
+            try {
+                const raw = localStorage.getItem(CRYPTO_CONVERSION_LAB_STORAGE_KEY);
+                cryptoConversionLabState = sanitizeCryptoConversionLabState(raw ? JSON.parse(raw) : null);
+            } catch (error) {
+                console.warn('Failed to load crypto conversion lab state.', error);
+                cryptoConversionLabState = buildDefaultCryptoConversionLabState();
+            }
+            return cryptoConversionLabState;
+        }
+
+        function persistCryptoConversionLabState() {
+            try {
+                localStorage.setItem(CRYPTO_CONVERSION_LAB_STORAGE_KEY, JSON.stringify(serializeCryptoConversionLabState()));
+            } catch (error) {
+                console.warn('Failed to persist crypto conversion lab state.', error);
+            }
+        }
+
+        function getCryptoConversionScenarioById(scenarioId) {
+            ensureCryptoConversionLabState();
+            return (cryptoConversionLabState.scenarios || []).find(scenario => scenario.id === scenarioId) || null;
+        }
+
+        function getCryptoConversionLegById(scenarioId, legId) {
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            if (!scenario) return null;
+            return (scenario.legs || []).find(leg => leg.id === legId) || null;
+        }
+
+        function getCryptoConversionSearchInputId(scenarioId, legId, side) {
+            return `crypto-conv-${scenarioId}-${legId}-${side}-search`;
+        }
+
+        function getCryptoConversionFieldId(scenarioId, field, legId = '') {
+            return `crypto-conv-${scenarioId}-${legId || 'scenario'}-${field}`;
+        }
+
+        function getCryptoConversionTrackedTokenIds() {
+            ensureCryptoConversionLabState();
+            const tracked = new Set();
+            (cryptoConversionLabState?.scenarios || []).forEach(scenario => {
+                (scenario?.legs || []).forEach(leg => {
+                    const fromTokenId = String(leg?.fromTokenId || '').trim();
+                    const toTokenId = String(leg?.toTokenId || '').trim();
+                    if (fromTokenId) tracked.add(fromTokenId);
+                    if (toTokenId) tracked.add(toTokenId);
+                });
+            });
+            return tracked;
+        }
+
+        function captureCryptoConversionLabViewState(mount) {
+            const activeEl = document.activeElement;
+            const activeInsideLab = !!(activeEl && mount && mount.contains(activeEl));
+            let selectionStart = null;
+            let selectionEnd = null;
+
+            if (activeInsideLab) {
+                try {
+                    if (typeof activeEl.selectionStart === 'number') selectionStart = activeEl.selectionStart;
+                    if (typeof activeEl.selectionEnd === 'number') selectionEnd = activeEl.selectionEnd;
+                } catch (_error) {
+                    selectionStart = null;
+                    selectionEnd = null;
+                }
+            }
+
+            return {
+                scrollTop: mount ? mount.scrollTop : 0,
+                activeId: activeInsideLab ? String(activeEl.id || '').trim() : '',
+                selectionStart,
+                selectionEnd
+            };
+        }
+
+        function restoreCryptoConversionLabViewState(mount, viewState) {
+            if (!mount || !viewState) return;
+            mount.scrollTop = Number(viewState.scrollTop || 0);
+
+            if (!viewState.activeId) return;
+            const nextActiveEl = document.getElementById(viewState.activeId);
+            if (!nextActiveEl) return;
+
+            try {
+                nextActiveEl.focus({ preventScroll: true });
+            } catch (_error) {
+                nextActiveEl.focus();
+            }
+
+            try {
+                if (typeof viewState.selectionStart === 'number' && typeof viewState.selectionEnd === 'number' && typeof nextActiveEl.setSelectionRange === 'function') {
+                    nextActiveEl.setSelectionRange(viewState.selectionStart, viewState.selectionEnd);
+                }
+            } catch (_error) {
+                // Number inputs do not always support selection ranges; focus restoration is enough.
+            }
+        }
+
+        function getCryptoPriceValueInCurrency(cacheEntry, fromCurrency, toCurrency) {
+            const normalizedFrom = String(fromCurrency || '').trim().toUpperCase();
+            const normalizedTo = String(toCurrency || '').trim().toUpperCase();
+            const raw = Number(cacheEntry?.[normalizedFrom.toLowerCase()]);
+            if (!Number.isFinite(raw) || raw <= 0) return 0;
+            if (normalizedFrom === normalizedTo) return raw;
+            return convertToDisplayCurrency(raw, normalizedFrom, normalizedTo);
+        }
+
+        function getCryptoConversionQuotePrice(tokenId, currency) {
+            const normalizedTokenId = String(tokenId || '').trim();
+            if (!normalizedTokenId) return 0;
+
+            const normalizedCurrency = getCryptoConversionLabSupportedCurrencies().includes(String(currency || '').trim().toUpperCase())
+                ? String(currency).trim().toUpperCase()
+                : 'PHP';
+            const cache = cryptoPrices?.[normalizedTokenId];
+            if (!cache || typeof cache !== 'object') return 0;
+
+            const direct = Number(cache[normalizedCurrency.toLowerCase()]);
+            if (Number.isFinite(direct) && direct > 0) return direct;
+
+            const fallbacks = ['USD', 'PHP', 'JPY'];
+            for (const fallbackCurrency of fallbacks) {
+                const converted = getCryptoPriceValueInCurrency(cache, fallbackCurrency, normalizedCurrency);
+                if (Number.isFinite(converted) && converted > 0) return converted;
+            }
+
+            const fallbackPhp = Number(cache.price || cache.php);
+            if (!Number.isFinite(fallbackPhp) || fallbackPhp <= 0) return 0;
+
+            return normalizedCurrency === 'PHP'
+                ? fallbackPhp
+                : convertToDisplayCurrency(fallbackPhp, 'PHP', normalizedCurrency);
+        }
+
+        function getCryptoConversionTokenLabel(tokenId, symbol, name, fallbackText = '') {
+            const safeSymbol = String(symbol || '').trim().toUpperCase();
+            if (safeSymbol) return safeSymbol;
+            const safeName = String(name || '').trim();
+            if (safeName) return safeName;
+            const safeTokenId = String(tokenId || '').trim();
+            if (safeTokenId) return safeTokenId;
+            return String(fallbackText || '').trim() || 'Token';
+        }
+
+        function formatCryptoConversionTokenAmount(amount) {
+            const numeric = Number(amount);
+            if (!Number.isFinite(numeric)) return '--';
+            return numeric.toLocaleString(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 8
+            });
+        }
+
+        function formatCryptoConversionQuote(amount, currency) {
+            const numeric = Number(amount);
+            if (!Number.isFinite(numeric)) return '--';
+            return formatCurrency(numeric, currency);
+        }
+
+        function buildCryptoConversionScenarioRouteText(scenario) {
+            const legs = Array.isArray(scenario?.legs) ? scenario.legs : [];
+            const labels = [];
+            legs.forEach((leg, index) => {
+                const fromLabel = getCryptoConversionTokenLabel(leg.fromTokenId, leg.fromTokenSymbol, leg.fromTokenName, leg.fromSearchText);
+                const toLabel = getCryptoConversionTokenLabel(leg.toTokenId, leg.toTokenSymbol, leg.toTokenName, leg.toSearchText);
+                if (index === 0 && leg.fromTokenId) labels.push(fromLabel);
+                if (leg.toTokenId) labels.push(toLabel);
+            });
+            return labels.length ? labels.join(' -> ') : 'Set tokens to build a route';
+        }
+
+        function calculateCryptoConversionScenario(scenario) {
+            const quoteCurrency = getCryptoConversionLabSupportedCurrencies().includes(String(scenario?.quoteCurrency || '').trim().toUpperCase())
+                ? String(scenario.quoteCurrency).trim().toUpperCase()
+                : getCryptoConversionDefaultCurrency();
+            const startAmount = Number(scenario?.startAmount);
+            const legs = Array.isArray(scenario?.legs) ? scenario.legs : [];
+
+            if (!Number.isFinite(startAmount) || startAmount <= 0) {
+                return {
+                    valid: false,
+                    quoteCurrency,
+                    routeText: buildCryptoConversionScenarioRouteText(scenario),
+                    message: 'Enter a starting token amount to simulate this route.'
+                };
+            }
+
+            if (!legs.length) {
+                return {
+                    valid: false,
+                    quoteCurrency,
+                    routeText: buildCryptoConversionScenarioRouteText(scenario),
+                    message: 'Add at least one conversion leg.'
+                };
+            }
+
+            const legResults = [];
+            const warnings = [];
+            let currentAmount = startAmount;
+            let currentTokenId = '';
+            let currentTokenLabel = '';
+            let initialTokenId = '';
+            let initialTokenLabel = '';
+
+            for (let index = 0; index < legs.length; index += 1) {
+                const leg = legs[index];
+                const fromTokenId = String(leg?.fromTokenId || '').trim();
+                const toTokenId = String(leg?.toTokenId || '').trim();
+                const fromLabel = getCryptoConversionTokenLabel(fromTokenId, leg?.fromTokenSymbol, leg?.fromTokenName, leg?.fromSearchText);
+                const toLabel = getCryptoConversionTokenLabel(toTokenId, leg?.toTokenSymbol, leg?.toTokenName, leg?.toSearchText);
+
+                if (!fromTokenId || !toTokenId) {
+                    return {
+                        valid: false,
+                        quoteCurrency,
+                        routeText: buildCryptoConversionScenarioRouteText(scenario),
+                        message: `Leg ${index + 1} needs both a source token and a destination token.`
+                    };
+                }
+
+                if (index === 0) {
+                    initialTokenId = fromTokenId;
+                    initialTokenLabel = fromLabel;
+                    currentTokenId = fromTokenId;
+                    currentTokenLabel = fromLabel;
+                } else if (fromTokenId !== currentTokenId) {
+                    return {
+                        valid: false,
+                        quoteCurrency,
+                        routeText: buildCryptoConversionScenarioRouteText(scenario),
+                        message: `Leg ${index + 1} should start from ${currentTokenLabel}, the output of leg ${index}.`
+                    };
+                }
+
+                const feePct = Math.max(0, Number(leg?.feePct || 0));
+                const slippagePct = Math.max(0, Number(leg?.slippagePct || 0));
+                const mode = String(leg?.mode || 'market').trim() === 'manual' ? 'manual' : 'market';
+
+                let rate = 0;
+                let fromPrice = null;
+                let toPrice = null;
+
+                if (mode === 'manual') {
+                    rate = Number(leg?.manualRate);
+                    if (!Number.isFinite(rate) || rate <= 0) {
+                        return {
+                            valid: false,
+                            quoteCurrency,
+                            routeText: buildCryptoConversionScenarioRouteText(scenario),
+                            message: `Leg ${index + 1} needs a valid manual rate.`
+                        };
+                    }
+                    fromPrice = getCryptoConversionQuotePrice(fromTokenId, quoteCurrency);
+                    toPrice = getCryptoConversionQuotePrice(toTokenId, quoteCurrency);
+                    if (Number.isFinite(fromPrice) && fromPrice > 0 && (!Number.isFinite(toPrice) || toPrice <= 0)) {
+                        warnings.push(`Leg ${index + 1}: ${toLabel} has no cached ${quoteCurrency} price, so end value is partial.`);
+                    }
+                } else {
+                    fromPrice = getCryptoConversionQuotePrice(fromTokenId, quoteCurrency);
+                    toPrice = getCryptoConversionQuotePrice(toTokenId, quoteCurrency);
+                    if (!Number.isFinite(fromPrice) || fromPrice <= 0 || !Number.isFinite(toPrice) || toPrice <= 0) {
+                        return {
+                            valid: false,
+                            quoteCurrency,
+                            routeText: buildCryptoConversionScenarioRouteText(scenario),
+                            message: `Leg ${index + 1} needs cached ${quoteCurrency} prices for both ${fromLabel} and ${toLabel}.`
+                        };
+                    }
+                    rate = fromPrice / toPrice;
+                }
+
+                const grossOutput = currentAmount * rate;
+                const feeMultiplier = Math.max(0, 1 - (feePct / 100));
+                const slippageMultiplier = Math.max(0, 1 - (slippagePct / 100));
+                const netOutput = grossOutput * feeMultiplier * slippageMultiplier;
+                const dragAmount = grossOutput - netOutput;
+                const toPriceForQuote = Number.isFinite(toPrice) && toPrice > 0 ? toPrice : getCryptoConversionQuotePrice(toTokenId, quoteCurrency);
+                const estimatedDragQuote = Number.isFinite(toPriceForQuote) && toPriceForQuote > 0 ? dragAmount * toPriceForQuote : null;
+
+                if (!Number.isFinite(netOutput) || netOutput < 0) {
+                    return {
+                        valid: false,
+                        quoteCurrency,
+                        routeText: buildCryptoConversionScenarioRouteText(scenario),
+                        message: `Leg ${index + 1} could not be computed with the current values.`
+                    };
+                }
+
+                legResults.push({
+                    index,
+                    fromTokenId,
+                    toTokenId,
+                    fromLabel,
+                    toLabel,
+                    inputAmount: currentAmount,
+                    mode,
+                    rate,
+                    fromPrice,
+                    toPrice,
+                    grossOutput,
+                    outputAmount: netOutput,
+                    feePct,
+                    slippagePct,
+                    dragAmount,
+                    estimatedDragQuote
+                });
+
+                currentAmount = netOutput;
+                currentTokenId = toTokenId;
+                currentTokenLabel = toLabel;
+            }
+
+            const finalTokenId = currentTokenId;
+            const finalTokenLabel = currentTokenLabel;
+            const finalPrice = getCryptoConversionQuotePrice(finalTokenId, quoteCurrency);
+            const estimatedFinalValue = Number.isFinite(finalPrice) && finalPrice > 0 ? currentAmount * finalPrice : null;
+            const startPrice = getCryptoConversionQuotePrice(initialTokenId, quoteCurrency);
+            const estimatedStartValue = Number.isFinite(startPrice) && startPrice > 0 ? startAmount * startPrice : null;
+            const totalDragQuote = legResults.reduce((sum, leg) => {
+                return sum + (Number.isFinite(leg.estimatedDragQuote) ? leg.estimatedDragQuote : 0);
+            }, 0);
+
+            return {
+                valid: true,
+                quoteCurrency,
+                routeText: buildCryptoConversionScenarioRouteText(scenario),
+                initialTokenId,
+                initialTokenLabel,
+                startAmount,
+                finalTokenId,
+                finalTokenLabel,
+                finalAmount: currentAmount,
+                effectiveRate: startAmount > 0 ? currentAmount / startAmount : 0,
+                estimatedStartValue,
+                estimatedFinalValue,
+                totalDragQuote,
+                legResults,
+                warnings
+            };
+        }
+
+        function summarizeCryptoConversionComparisons(results) {
+            const validResults = (results || []).filter(result => result && result.valid);
+            const invalidResults = (results || []).filter(result => result && !result.valid);
+            if (!validResults.length) {
+                return {
+                    mode: 'empty',
+                    title: 'No comparable routes yet',
+                    body: 'Set a start token amount plus at least one valid leg in any scenario to compare outcomes.',
+                    rows: [],
+                    blockedRows: invalidResults
+                };
+            }
+
+            const sameFinalToken = validResults.every(result => result.finalTokenId && result.finalTokenId === validResults[0].finalTokenId);
+            if (sameFinalToken) {
+                const rankedRows = [...validResults].sort((a, b) => (Number(b.finalAmount) || 0) - (Number(a.finalAmount) || 0));
+                const best = rankedRows.reduce((winner, result) => {
+                    return !winner || result.finalAmount > winner.finalAmount ? result : winner;
+                }, null);
+                return {
+                    mode: 'token',
+                    title: `Best output: ${best?.scenarioName || 'Route'} (${formatCryptoConversionTokenAmount(best?.finalAmount || 0)} ${best?.finalTokenLabel || ''})`,
+                    body: `All valid scenarios end in ${best?.finalTokenLabel || 'the same token'}, so comparison is based on final token amount.`,
+                    rows: rankedRows,
+                    blockedRows: invalidResults,
+                    bestScenarioId: best?.scenarioId || ''
+                };
+            }
+
+            const everyScenarioValued = validResults.every(result => Number.isFinite(result.estimatedFinalValue));
+            if (everyScenarioValued) {
+                const rankedRows = [...validResults].sort((a, b) => (Number(b.estimatedFinalValue) || 0) - (Number(a.estimatedFinalValue) || 0));
+                const best = rankedRows.reduce((winner, result) => {
+                    return !winner || result.estimatedFinalValue > winner.estimatedFinalValue ? result : winner;
+                }, null);
+                return {
+                    mode: 'quote',
+                    title: `Best estimated value: ${best?.scenarioName || 'Route'} (${formatCryptoConversionQuote(best?.estimatedFinalValue || 0, best?.quoteCurrency || 'PHP')})`,
+                    body: `Scenarios end in different tokens, so comparison uses estimated ending value in ${best?.quoteCurrency || 'PHP'}.`,
+                    rows: rankedRows,
+                    blockedRows: invalidResults,
+                    bestScenarioId: best?.scenarioId || ''
+                };
+            }
+
+            const rankedRows = [...validResults].sort((a, b) => {
+                const aValue = Number.isFinite(a.estimatedFinalValue) ? Number(a.estimatedFinalValue) : Number(a.finalAmount) || 0;
+                const bValue = Number.isFinite(b.estimatedFinalValue) ? Number(b.estimatedFinalValue) : Number(b.finalAmount) || 0;
+                return bValue - aValue;
+            });
+            return {
+                mode: 'mixed',
+                title: 'Per-route results only',
+                body: 'Some scenarios end in different tokens and are missing cached prices, so they cannot be ranked fairly yet.',
+                rows: rankedRows,
+                blockedRows: invalidResults,
+                bestScenarioId: rankedRows[0]?.scenarioId || ''
+            };
+        }
+
+        function openCryptoConversionLab() {
+            ensureCryptoConversionLabState();
+            document.getElementById('crypto-conversion-lab-modal').classList.remove('hidden');
+            renderCryptoConversionLab();
+        }
+
+        async function openCryptoConversionLabFromLock() {
+            try {
+                if (typeof updateExchangeRates === 'function') {
+                    await updateExchangeRates();
+                }
+            } catch (error) {
+                console.warn('Could not refresh exchange rates before opening conversion lab.', error);
+            }
+            openCryptoConversionLab();
+        }
+
+        function resetCryptoConversionLab() {
+            cryptoConversionLabState = buildDefaultCryptoConversionLabState();
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+            if (typeof showToast === 'function') showToast('Conversion lab reset');
+        }
+
+        function updateCryptoConversionScenarioField(scenarioId, field, value) {
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            if (!scenario) return;
+            if (field === 'quoteCurrency') {
+                scenario.quoteCurrency = getCryptoConversionLabSupportedCurrencies().includes(String(value || '').trim().toUpperCase())
+                    ? String(value).trim().toUpperCase()
+                    : getCryptoConversionDefaultCurrency();
+            } else if (field === 'startAmount') {
+                scenario.startAmount = String(value || '').trim();
+            }
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function updateCryptoConversionLegField(scenarioId, legId, field, value) {
+            const leg = getCryptoConversionLegById(scenarioId, legId);
+            if (!leg) return;
+            if (field === 'mode') {
+                leg.mode = String(value || '').trim() === 'manual' ? 'manual' : 'market';
+            } else if (['manualRate', 'feePct', 'slippagePct'].includes(field)) {
+                leg[field] = String(value || '').trim();
+            }
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function addCryptoConversionScenario() {
+            const state = ensureCryptoConversionLabState();
+            state.scenarios.push(createCryptoConversionScenario({}, state.scenarios.length));
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function duplicateCryptoConversionScenario(scenarioId) {
+            const state = ensureCryptoConversionLabState();
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            if (!scenario) return;
+            const copy = createCryptoConversionScenario({
+                ...scenario,
+                id: null,
+                name: `${scenario.name || 'Route'} Copy`,
+                legs: (scenario.legs || []).map(leg => ({
+                    ...leg,
+                    id: null,
+                    fromResults: [],
+                    toResults: [],
+                    fromResultsError: '',
+                    toResultsError: ''
+                }))
+            }, state.scenarios.length);
+            state.scenarios.push(copy);
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function removeCryptoConversionScenario(scenarioId) {
+            const state = ensureCryptoConversionLabState();
+            if ((state.scenarios || []).length <= 1) {
+                if (typeof showToast === 'function') showToast('Keep at least one route in the lab');
+                return;
+            }
+            state.scenarios = state.scenarios.filter(scenario => scenario.id !== scenarioId);
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function addCryptoConversionLeg(scenarioId) {
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            if (!scenario) return;
+            const lastLeg = (scenario.legs || [])[scenario.legs.length - 1] || null;
+            scenario.legs.push(createCryptoConversionLeg({
+                fromTokenId: String(lastLeg?.toTokenId || '').trim(),
+                fromTokenSymbol: String(lastLeg?.toTokenSymbol || '').trim(),
+                fromTokenName: String(lastLeg?.toTokenName || '').trim(),
+                fromSearchText: String(lastLeg?.toTokenName || lastLeg?.toTokenSymbol || lastLeg?.toTokenId || '').trim()
+            }));
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function removeCryptoConversionLeg(scenarioId, legId) {
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            if (!scenario) return;
+            if ((scenario.legs || []).length <= 1) {
+                if (typeof showToast === 'function') showToast('Each route needs at least one leg');
+                return;
+            }
+            scenario.legs = scenario.legs.filter(leg => leg.id !== legId);
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        async function searchCryptoConversionToken(scenarioId, legId, side) {
+            const leg = getCryptoConversionLegById(scenarioId, legId);
+            if (!leg) return;
+
+            const input = document.getElementById(getCryptoConversionSearchInputId(scenarioId, legId, side));
+            const query = String(input?.value || '').trim();
+            if (!query) {
+                if (typeof showToast === 'function') showToast('Type a token name or id first');
+                return;
+            }
+
+            const resultsKey = side === 'to' ? 'toResults' : 'fromResults';
+            const errorKey = side === 'to' ? 'toResultsError' : 'fromResultsError';
+            const textKey = side === 'to' ? 'toSearchText' : 'fromSearchText';
+
+            leg[textKey] = query;
+            leg[resultsKey] = [{ loading: true }];
+            leg[errorKey] = '';
+            renderCryptoConversionLab();
+
+            try {
+                const response = await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error('Search failed');
+                const data = await response.json();
+                leg[resultsKey] = Array.isArray(data?.coins)
+                    ? data.coins.slice(0, 8).map(coin => ({
+                        id: String(coin.id || '').trim(),
+                        symbol: String(coin.symbol || '').trim(),
+                        name: String(coin.name || '').trim(),
+                        image: String(coin.large || coin.thumb || '').trim()
+                    }))
+                    : [];
+                leg[errorKey] = leg[resultsKey].length ? '' : 'No tokens found.';
+            } catch (error) {
+                console.error('Crypto conversion lab token search failed.', error);
+                leg[resultsKey] = [];
+                leg[errorKey] = 'Search failed. Try again.';
+            }
+
+            renderCryptoConversionLab();
+        }
+
+        function selectCryptoConversionToken(scenarioId, legId, side, tokenIdEncoded, symbolEncoded, nameEncoded) {
+            const scenario = getCryptoConversionScenarioById(scenarioId);
+            const leg = getCryptoConversionLegById(scenarioId, legId);
+            if (!scenario || !leg) return;
+
+            const tokenId = decodeURIComponent(tokenIdEncoded);
+            const symbol = decodeURIComponent(symbolEncoded);
+            const name = decodeURIComponent(nameEncoded);
+            const isTo = side === 'to';
+            const prefix = isTo ? 'to' : 'from';
+
+            const previousToTokenId = leg.toTokenId;
+            leg[`${prefix}TokenId`] = tokenId;
+            leg[`${prefix}TokenSymbol`] = symbol;
+            leg[`${prefix}TokenName`] = name;
+            leg[`${prefix}SearchText`] = name || symbol || tokenId;
+            leg[`${prefix}Results`] = [];
+            leg[`${prefix}ResultsError`] = '';
+
+            if (isTo) {
+                const legIndex = (scenario.legs || []).findIndex(candidate => candidate.id === legId);
+                const nextLeg = legIndex >= 0 ? scenario.legs[legIndex + 1] : null;
+                if (nextLeg && (!nextLeg.fromTokenId || nextLeg.fromTokenId === previousToTokenId)) {
+                    nextLeg.fromTokenId = tokenId;
+                    nextLeg.fromTokenSymbol = symbol;
+                    nextLeg.fromTokenName = name;
+                    nextLeg.fromSearchText = name || symbol || tokenId;
+                }
+            }
+
+            persistCryptoConversionLabState();
+            renderCryptoConversionLab();
+        }
+
+        function renderCryptoConversionTokenResults(scenarioId, leg, side) {
+            const results = side === 'to' ? leg.toResults : leg.fromResults;
+            const errorText = side === 'to' ? leg.toResultsError : leg.fromResultsError;
+            if (!Array.isArray(results) || (!results.length && !errorText)) return '';
+
+            if (results[0]?.loading) {
+                return '<div class="mt-2 rounded-2xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-slate-500">Searching CoinGecko...</div>';
+            }
+
+            if (!results.length) {
+                return `<div class="mt-2 rounded-2xl border border-slate-800 bg-slate-950/90 p-3 text-xs text-rose-300">${escapeHTML(errorText || 'No results.')}</div>`;
+            }
+
+            return `
+                <div class="mt-2 rounded-2xl border border-slate-800 bg-slate-950/95 overflow-hidden">
+                    ${results.map(result => {
+                        const tokenIdEncoded = encodeInlineArg(result.id);
+                        const symbolEncoded = encodeInlineArg(result.symbol);
+                        const nameEncoded = encodeInlineArg(result.name);
+                        const imageMarkup = result.image
+                            ? `<img src="${escapeAttr(result.image)}" alt="" class="w-6 h-6 rounded-full border border-slate-700 object-cover">`
+                            : '<div class="w-6 h-6 rounded-full border border-slate-700 bg-slate-800"></div>';
+                        return `
+                            <button type="button"
+                                onclick="selectCryptoConversionToken('${scenarioId}', '${leg.id}', '${side}', '${tokenIdEncoded}', '${symbolEncoded}', '${nameEncoded}')"
+                                class="w-full px-3 py-2.5 flex items-center gap-3 text-left hover:bg-slate-900 transition-colors border-b border-slate-900 last:border-b-0">
+                                ${imageMarkup}
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-200">${escapeHTML(result.name || result.id)}</p>
+                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">${escapeHTML(result.symbol || result.id)}</p>
+                                </div>
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function renderCryptoConversionLab() {
+            const mount = document.getElementById('crypto-conversion-lab-body');
+            if (!mount) return;
+            const viewState = captureCryptoConversionLabViewState(mount);
+
+            const state = ensureCryptoConversionLabState();
+            const scenarioResults = (state.scenarios || []).map((scenario, index) => ({
+                scenarioId: scenario.id,
+                scenarioName: scenario.name || createCryptoConversionScenarioName(index),
+                ...calculateCryptoConversionScenario(scenario)
+            }));
+            const comparison = summarizeCryptoConversionComparisons(scenarioResults);
+
+            mount.innerHTML = `
+                <div class="space-y-5">
+                    <div class="grid gap-4 xl:grid-cols-[1.1fr,0.9fr]">
+                        <div class="rounded-3xl border border-slate-800 bg-slate-900/60 p-5">
+                            <p class="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">How To Use</p>
+                            <div class="mt-3 grid gap-3 md:grid-cols-3">
+                                <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                                    <p class="text-xs font-bold text-slate-200">1. Set route</p>
+                                    <p class="text-xs text-slate-500 mt-2">Choose a starting token amount, then build one or more conversion legs.</p>
+                                </div>
+                                <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                                    <p class="text-xs font-bold text-slate-200">2. Pick pricing</p>
+                                    <p class="text-xs text-slate-500 mt-2">Use cached market prices or override a leg with your own manual pair rate.</p>
+                                </div>
+                                <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                                    <p class="text-xs font-bold text-slate-200">3. Compare outcomes</p>
+                                    <p class="text-xs text-slate-500 mt-2">See which route leaves you with the best final amount or estimated ending value.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="rounded-3xl border border-cyan-900/70 bg-cyan-950/40 p-5">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-cyan-300">Comparison</p>
+                                    <h4 class="text-lg font-bold text-white mt-2">${escapeHTML(comparison.title)}</h4>
+                                    <p class="text-sm text-cyan-100/75 mt-2">${escapeHTML(comparison.body)}</p>
+                                </div>
+                                <button type="button" onclick="addCryptoConversionScenario()"
+                                    class="shrink-0 px-3 py-2 rounded-xl bg-cyan-400/10 hover:bg-cyan-400/20 border border-cyan-400/20 text-xs font-bold text-cyan-200">
+                                    + Add Route
+                                </button>
+                            </div>
+                            <div class="mt-4 space-y-2">
+                                ${comparison.rows.length ? comparison.rows.map(result => {
+                                    const isBestRow = comparison.bestScenarioId && result.scenarioId === comparison.bestScenarioId;
+                                    const valueText = comparison.mode === 'quote' && Number.isFinite(result.estimatedFinalValue)
+                                        ? formatCryptoConversionQuote(result.estimatedFinalValue, result.quoteCurrency)
+                                        : `${formatCryptoConversionTokenAmount(result.finalAmount)} ${escapeHTML(result.finalTokenLabel || '')}`;
+                                    const helperText = comparison.mode === 'quote'
+                                        ? escapeHTML(result.routeText || '')
+                                        : `Ends with ${escapeHTML(result.finalTokenLabel || 'token')}`;
+                                    const rowClass = isBestRow
+                                        ? 'border-yellow-500/40 bg-yellow-500/10'
+                                        : 'border-cyan-900/70 bg-slate-950/50';
+                                    const titleClass = isBestRow ? 'text-yellow-100' : 'text-white';
+                                    const helperClass = isBestRow ? 'text-yellow-200/80' : 'text-slate-400';
+                                    const valueClass = isBestRow ? 'text-yellow-200' : 'text-cyan-200';
+                                    return `
+                                        <div class="rounded-2xl border ${rowClass} px-4 py-3 flex items-center justify-between gap-3">
+                                            <div>
+                                                <p class="text-sm font-semibold ${titleClass}">${escapeHTML(result.scenarioName || 'Route')}${isBestRow ? ' • Ideal' : ''}</p>
+                                                <p class="text-[11px] ${helperClass} mt-1">${helperText}</p>
+                                            </div>
+                                            <p class="text-sm font-bold ${valueClass}">${valueText}</p>
+                                        </div>
+                                    `;
+                                }).join('') : `
+                                    <div class="rounded-2xl border border-dashed border-cyan-900/70 bg-slate-950/40 px-4 py-5 text-sm text-slate-400">
+                                        Add a valid route below to see comparison results here.
+                                    </div>
+                                `}
+                                ${comparison.blockedRows?.length ? `
+                                    <div class="pt-2 space-y-2">
+                                        ${comparison.blockedRows.map(result => `
+                                            <div class="rounded-2xl border border-amber-900/60 bg-amber-950/20 px-4 py-3">
+                                                <p class="text-sm font-semibold text-amber-100">${escapeHTML(result.scenarioName || 'Route')} not compared yet</p>
+                                                <p class="text-[11px] text-amber-200/80 mt-1">${escapeHTML(result.message || 'This route still needs more input.')}</p>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    ${(state.scenarios || []).map((scenario, scenarioIndex) => {
+                        const result = scenarioResults[scenarioIndex];
+                        const routeText = result?.routeText || buildCryptoConversionScenarioRouteText(scenario);
+                        const statusTone = result?.valid ? 'border-slate-800 bg-slate-900/65' : 'border-amber-900/50 bg-amber-950/20';
+                        const summaryTitle = result?.valid
+                            ? `${formatCryptoConversionTokenAmount(result.finalAmount)} ${escapeHTML(result.finalTokenLabel || '')}`
+                            : 'Incomplete route';
+                        const summaryBody = result?.valid
+                            ? `Effective rate: 1 ${escapeHTML(result.initialTokenLabel || '')} = ${formatCryptoConversionTokenAmount(result.effectiveRate)} ${escapeHTML(result.finalTokenLabel || '')}`
+                            : escapeHTML(result?.message || 'Complete the route to simulate it.');
+                        return `
+                            <div class="rounded-3xl border ${statusTone} p-5">
+                                <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                    <div>
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <span class="inline-flex items-center rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">${escapeHTML(scenario.name || createCryptoConversionScenarioName(scenarioIndex))}</span>
+                                            <span class="inline-flex items-center rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-[11px] font-semibold text-slate-400">${escapeHTML(routeText)}</span>
+                                        </div>
+                                        <h4 class="text-xl font-bold text-white mt-3">${summaryTitle}</h4>
+                                        <p class="text-sm text-slate-400 mt-2">${summaryBody}</p>
+                                        ${result?.valid && Number.isFinite(result?.estimatedFinalValue) ? `
+                                            <p class="text-xs text-cyan-300 mt-2">Estimated ending value: ${formatCryptoConversionQuote(result.estimatedFinalValue, result.quoteCurrency)}</p>
+                                        ` : ''}
+                                        ${Array.isArray(result?.warnings) && result.warnings.length ? `
+                                            <div class="mt-3 space-y-1">
+                                                ${result.warnings.map(warning => `<p class="text-xs text-amber-300">${escapeHTML(warning)}</p>`).join('')}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" onclick="duplicateCryptoConversionScenario('${scenario.id}')"
+                                            class="px-3 py-2 rounded-xl bg-slate-950/80 hover:bg-slate-950 border border-slate-800 text-xs font-bold text-slate-300">
+                                            Duplicate
+                                        </button>
+                                        <button type="button" onclick="removeCryptoConversionScenario('${scenario.id}')"
+                                            class="px-3 py-2 rounded-xl bg-slate-950/80 hover:bg-slate-950 border border-slate-800 text-xs font-bold text-rose-300">
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="grid gap-4 lg:grid-cols-[280px,1fr] mt-5">
+                                    <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 space-y-4">
+                                        <div>
+                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Start Token Amount</label>
+                                            <input id="${getCryptoConversionFieldId(scenario.id, 'start-amount')}" type="text" inputmode="decimal" value="${escapeAttr(scenario.startAmount || '')}"
+                                                oninput="updateCryptoConversionScenarioField('${scenario.id}', 'startAmount', this.value)"
+                                                class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500">
+                                            <p class="text-[11px] text-slate-500 mt-2">This is the amount of the first token in the route, not a fiat amount.</p>
+                                        </div>
+                                        <div>
+                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Compare In</label>
+                                            <select id="${getCryptoConversionFieldId(scenario.id, 'quote-currency')}" onchange="updateCryptoConversionScenarioField('${scenario.id}', 'quoteCurrency', this.value)"
+                                                class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500">
+                                                ${getCryptoConversionLabSupportedCurrencies().map(currency => `
+                                                    <option value="${currency}" ${scenario.quoteCurrency === currency ? 'selected' : ''}>${currency}</option>
+                                                `).join('')}
+                                            </select>
+                                            <p class="text-[11px] text-slate-500 mt-2">Used only to value and compare routes when market prices are available.</p>
+                                        </div>
+                                        <div class="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
+                                            <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Quick Read</p>
+                                            ${result?.valid ? `
+                                                <div class="mt-3 space-y-2 text-sm">
+                                                    <div class="flex items-center justify-between gap-3">
+                                                        <span class="text-slate-400">Start</span>
+                                                        <span class="font-semibold text-slate-200">${formatCryptoConversionTokenAmount(result.startAmount)} ${escapeHTML(result.initialTokenLabel || '')}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-between gap-3">
+                                                        <span class="text-slate-400">Finish</span>
+                                                        <span class="font-semibold text-white">${formatCryptoConversionTokenAmount(result.finalAmount)} ${escapeHTML(result.finalTokenLabel || '')}</span>
+                                                    </div>
+                                                    <div class="flex items-center justify-between gap-3">
+                                                        <span class="text-slate-400">Drag</span>
+                                                        <span class="font-semibold text-amber-300">${Number.isFinite(result.totalDragQuote) ? formatCryptoConversionQuote(result.totalDragQuote, result.quoteCurrency) : '--'}</span>
+                                                    </div>
+                                                </div>
+                                            ` : `
+                                                <p class="text-sm text-slate-400 mt-3">${escapeHTML(result?.message || 'Fill in the route details to calculate.')}</p>
+                                            `}
+                                        </div>
+                                    </div>
+
+                                    <div class="space-y-3">
+                                        ${(scenario.legs || []).map((leg, legIndex) => {
+                                            const fromLabel = getCryptoConversionTokenLabel(leg.fromTokenId, leg.fromTokenSymbol, leg.fromTokenName, leg.fromSearchText);
+                                            const toLabel = getCryptoConversionTokenLabel(leg.toTokenId, leg.toTokenSymbol, leg.toTokenName, leg.toSearchText);
+                                            const legResult = Array.isArray(result?.legResults) ? result.legResults[legIndex] : null;
+                                            const manualRateLabel = `1 ${fromLabel} =`;
+                                            const manualRateSuffix = toLabel;
+                                            const marketRateText = legResult?.mode === 'market'
+                                                ? `Implied rate: 1 ${escapeHTML(fromLabel)} = ${formatCryptoConversionTokenAmount(legResult.rate)} ${escapeHTML(toLabel)}`
+                                                : '';
+                                            return `
+                                                <div class="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
+                                                    <div class="flex items-center justify-between gap-3 mb-4">
+                                                        <div>
+                                                            <p class="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Leg ${legIndex + 1}</p>
+                                                            <p class="text-sm font-semibold text-white mt-1">${escapeHTML(fromLabel)} -> ${escapeHTML(toLabel)}</p>
+                                                        </div>
+                                                        <button type="button" onclick="removeCryptoConversionLeg('${scenario.id}', '${leg.id}')"
+                                                            class="px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-[11px] font-bold text-rose-300">
+                                                            Remove
+                                                        </button>
+                                                    </div>
+
+                                                    <div class="grid gap-4 xl:grid-cols-2">
+                                                        <div class="relative">
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">From Token</label>
+                                                            <div class="flex gap-2">
+                                                                <input id="${getCryptoConversionSearchInputId(scenario.id, leg.id, 'from')}" type="text"
+                                                                    value="${escapeAttr(leg.fromSearchText || leg.fromTokenName || leg.fromTokenSymbol || leg.fromTokenId || '')}"
+                                                                    class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500"
+                                                                    placeholder="Search token">
+                                                                <button type="button" onclick="searchCryptoConversionToken('${scenario.id}', '${leg.id}', 'from')"
+                                                                    class="px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold text-slate-300">
+                                                                    Search
+                                                                </button>
+                                                            </div>
+                                                            ${renderCryptoConversionTokenResults(scenario.id, leg, 'from')}
+                                                        </div>
+                                                        <div class="relative">
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">To Token</label>
+                                                            <div class="flex gap-2">
+                                                                <input id="${getCryptoConversionSearchInputId(scenario.id, leg.id, 'to')}" type="text"
+                                                                    value="${escapeAttr(leg.toSearchText || leg.toTokenName || leg.toTokenSymbol || leg.toTokenId || '')}"
+                                                                    class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500"
+                                                                    placeholder="Search token">
+                                                                <button type="button" onclick="searchCryptoConversionToken('${scenario.id}', '${leg.id}', 'to')"
+                                                                    class="px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold text-slate-300">
+                                                                    Search
+                                                                </button>
+                                                            </div>
+                                                            ${renderCryptoConversionTokenResults(scenario.id, leg, 'to')}
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="grid gap-4 lg:grid-cols-[190px,1fr,120px,120px] mt-4">
+                                                        <div>
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Pricing Mode</label>
+                                                            <select onchange="updateCryptoConversionLegField('${scenario.id}', '${leg.id}', 'mode', this.value)"
+                                                                class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500">
+                                                                <option value="market" ${leg.mode !== 'manual' ? 'selected' : ''}>Cached Market</option>
+                                                                <option value="manual" ${leg.mode === 'manual' ? 'selected' : ''}>Manual Rate</option>
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">${leg.mode === 'manual' ? escapeHTML(manualRateLabel) : 'Market Inputs'}</label>
+                                                            ${leg.mode === 'manual' ? `
+                                                                <div class="flex items-center gap-2">
+                                                                    <input id="${getCryptoConversionFieldId(scenario.id, 'manual-rate', leg.id)}" type="text" inputmode="decimal" value="${escapeAttr(leg.manualRate || '')}"
+                                                                        oninput="updateCryptoConversionLegField('${scenario.id}', '${leg.id}', 'manualRate', this.value)"
+                                                                        class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500"
+                                                                        placeholder="0.00">
+                                                                    <span class="text-xs font-semibold text-slate-400">${escapeHTML(manualRateSuffix)}</span>
+                                                                </div>
+                                                            ` : `
+                                                                <div class="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 h-full">
+                                                                    <p class="text-sm font-semibold text-white">${marketRateText || 'Uses cached token prices in the selected valuation currency.'}</p>
+                                                                    <p class="text-xs text-slate-500 mt-2">
+                                                                        ${legResult?.mode === 'market'
+                                                                            ? `${escapeHTML(fromLabel)}: ${formatCryptoConversionQuote(legResult.fromPrice, scenario.quoteCurrency)} • ${escapeHTML(toLabel)}: ${formatCryptoConversionQuote(legResult.toPrice, scenario.quoteCurrency)}`
+                                                                            : 'Refresh market prices if a token is missing.'}
+                                                                    </p>
+                                                                </div>
+                                                            `}
+                                                        </div>
+                                                        <div>
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Fee %</label>
+                                                            <input id="${getCryptoConversionFieldId(scenario.id, 'fee-pct', leg.id)}" type="text" inputmode="decimal" value="${escapeAttr(leg.feePct || '0')}"
+                                                                oninput="updateCryptoConversionLegField('${scenario.id}', '${leg.id}', 'feePct', this.value)"
+                                                                class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500">
+                                                        </div>
+                                                        <div>
+                                                            <label class="text-[11px] font-bold uppercase tracking-wide text-slate-500 block mb-2">Slippage %</label>
+                                                            <input id="${getCryptoConversionFieldId(scenario.id, 'slippage-pct', leg.id)}" type="text" inputmode="decimal" value="${escapeAttr(leg.slippagePct || '0')}"
+                                                                oninput="updateCryptoConversionLegField('${scenario.id}', '${leg.id}', 'slippagePct', this.value)"
+                                                                class="w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-cyan-500">
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="mt-4 rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
+                                                        ${legResult ? `
+                                                            <div class="grid gap-3 md:grid-cols-4">
+                                                                <div>
+                                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Input</p>
+                                                                    <p class="text-sm font-semibold text-slate-200 mt-1">${formatCryptoConversionTokenAmount(legResult.inputAmount)} ${escapeHTML(legResult.fromLabel)}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Gross Output</p>
+                                                                    <p class="text-sm font-semibold text-slate-200 mt-1">${formatCryptoConversionTokenAmount(legResult.grossOutput)} ${escapeHTML(legResult.toLabel)}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Net Output</p>
+                                                                    <p class="text-sm font-semibold text-white mt-1">${formatCryptoConversionTokenAmount(legResult.outputAmount)} ${escapeHTML(legResult.toLabel)}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Estimated Drag</p>
+                                                                    <p class="text-sm font-semibold text-amber-300 mt-1">${Number.isFinite(legResult.estimatedDragQuote) ? formatCryptoConversionQuote(legResult.estimatedDragQuote, scenario.quoteCurrency) : '--'}</p>
+                                                                </div>
+                                                            </div>
+                                                        ` : `
+                                                            <p class="text-sm text-slate-500">This leg will populate once its tokens and pricing inputs are valid.</p>
+                                                        `}
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('')}
+
+                                        <button type="button" onclick="addCryptoConversionLeg('${scenario.id}')"
+                                            class="w-full rounded-2xl border border-dashed border-slate-700 bg-slate-950/30 px-4 py-3 text-sm font-bold text-slate-300 hover:bg-slate-950/50">
+                                            + Add Another Leg
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+
+            if (window.lucide) window.lucide.createIcons();
+            restoreCryptoConversionLabViewState(mount, viewState);
+        }
+
+
+        function openCryptoPortfolio() {
+            document.getElementById('crypto-portfolio-modal').classList.remove('hidden');
+            renderFinanceCoinGeckoDemoApiKeyControl();
+            renderCryptoPortfolio();
+        }
+
+        function openCryptoRebalancingCalculator() {
+            const modal = document.getElementById('crypto-rebalancer-modal');
+            const frame = document.getElementById('crypto-rebalancer-frame');
+            if (frame && !frame.getAttribute('src')) {
+                frame.setAttribute('src', frame.dataset.src || '');
+            }
+            if (modal) modal.classList.remove('hidden');
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        function closeCryptoRebalancingCalculator() {
+            const modal = document.getElementById('crypto-rebalancer-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function getCryptoTxSearchLabel(tx) {
+            return String(tx?.poolName || tx?.symbol || tx?.tokenId || '').trim();
+        }
+
+        function getCryptoSearchModeForTokenId(tokenId) {
+            return isMinswapLpTokenId(tokenId) || isCardanoTokenId(tokenId) ? 'minswap' : 'coingecko';
+        }
+
+        function populateCryptoTransactionSide(type, tx = {}) {
+            const isTarget = type === 'target';
+            const searchInput = document.getElementById(isTarget ? 'c-target-token-search' : 'c-token-search');
+            const idInput = document.getElementById(isTarget ? 'c-target-token-id' : 'c-token-id');
+            const symbolInput = document.getElementById(isTarget ? 'c-target-token-symbol' : 'c-token-symbol');
+            const modeInput = document.getElementById(isTarget ? 'c-target-token-search-mode' : 'c-token-search-mode');
+            if (searchInput) searchInput.value = getCryptoTxSearchLabel(tx);
+            if (idInput) idInput.value = String(tx.tokenId || '');
+            if (symbolInput) symbolInput.value = String(tx.symbol || tx.tokenId || '');
+            if (modeInput) modeInput.value = getCryptoSearchModeForTokenId(tx.tokenId);
+            applyCryptoAssetMetadata(type, {
+                assetType: tx.assetType || (isMinswapLpTokenId(tx.tokenId) ? 'lp_pool' : (isCardanoTokenId(tx.tokenId) ? 'cardano_token' : 'coingecko')),
+                network: tx.network || '',
+                dex: tx.dex || '',
+                poolAddress: tx.poolAddress || '',
+                poolName: tx.poolName || '',
+                lpTokenSupply: tx.lpTokenSupply || '',
+                manualLpPrice: tx.manualLpPrice || '',
+                manualLpPriceCurrency: tx.manualLpPriceCurrency || '',
+                baseToken: tx.baseToken || '',
+                quoteToken: tx.quoteToken || ''
+            });
+        }
+
+        async function openCryptoTransaction(txId = null) {
+            // Reset form
+            editingCryptoTransactionState = null;
+            document.getElementById('c-token-search').value = '';
+            document.getElementById('c-token-id').value = '';
+            document.getElementById('c-token-symbol').value = '';
+            document.getElementById('c-token-search-mode').value = 'coingecko';
+            document.getElementById('c-target-token-search').value = '';
+            document.getElementById('c-target-token-id').value = '';
+            document.getElementById('c-target-token-symbol').value = '';
+            document.getElementById('c-target-token-search-mode').value = 'coingecko';
+            document.getElementById('c-amount').value = '';
+            document.getElementById('c-target-amount').value = '';
+            document.getElementById('c-token-lp-token-supply').value = '';
+            document.getElementById('c-target-token-lp-token-supply').value = '';
+            const targetLpManualPrice = document.getElementById('c-target-token-lp-manual-price');
+            const targetLpManualPriceCurrency = document.getElementById('c-target-token-lp-manual-price-currency');
+            const targetLpPricePreview = document.getElementById('c-target-lp-price-preview');
+            if (targetLpManualPrice) targetLpManualPrice.value = '';
+            if (targetLpManualPriceCurrency) targetLpManualPriceCurrency.value = 'PHP';
+            if (targetLpPricePreview) targetLpPricePreview.innerText = '';
+            document.getElementById('c-price').value = '';
+            document.getElementById('c-notes').value = '';
+            document.getElementById('c-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('c-exchange').value = '';
+            document.getElementById('c-strategy').value = '';
+            document.getElementById('c-total-calc').innerText = fmt(0);
+            document.getElementById('c-total-base-preview').innerText = '';
+            clearCryptoAssetMetadata('source');
+            clearCryptoAssetMetadata('target');
+            setCType('buy');
+
+            const titleEl = document.getElementById('crypto-transaction-title');
+            const saveBtn = document.getElementById('btn-save-crypto-transaction');
+            if (titleEl) titleEl.innerText = 'Crypto Transaction';
+            if (saveBtn) saveBtn.innerText = 'Record Transaction';
+
+            if (txId) {
+                const allTxs = await getDecryptedCrypto();
+                const tx = allTxs.find(item => String(item.id || '') === String(txId));
+                if (!tx) {
+                    alert('Could not find that crypto transaction.');
+                    return;
+                }
+                const isSwapEdit = tx.type === 'swap_in' || tx.type === 'swap_out';
+                const supportedSingleTypes = ['buy', 'sell', 'airdrop'];
+                if (!isSwapEdit && !supportedSingleTypes.includes(tx.type)) {
+                    alert('This crypto transaction type cannot be edited in the form yet.');
+                    return;
+                }
+
+                if (isSwapEdit) {
+                    const swapRows = allTxs.filter(item => item.swapId && item.swapId === tx.swapId);
+                    const sourceTx = swapRows.find(item => item.type === 'swap_out');
+                    const targetTx = swapRows.find(item => item.type === 'swap_in');
+                    if (!sourceTx || !targetTx) {
+                        alert('Could not find the linked swap pair for this transaction.');
+                        return;
+                    }
+                    editingCryptoTransactionState = {
+                        mode: 'swap',
+                        sourceId: sourceTx.id,
+                        targetId: targetTx.id,
+                        swapId: tx.swapId
+                    };
+                    setCType('swap');
+                    populateCryptoTransactionSide('source', sourceTx);
+                    populateCryptoTransactionSide('target', targetTx);
+                    document.getElementById('c-amount').value = sourceTx.amount || '';
+                    document.getElementById('c-target-amount').value = targetTx.amount || '';
+                    document.getElementById('c-date').value = sourceTx.date ? new Date(sourceTx.date).toISOString().split('T')[0] : '';
+                    document.getElementById('c-exchange').value = sourceTx.exchange || targetTx.exchange || '';
+                    document.getElementById('c-strategy').value = sourceTx.strategy || targetTx.strategy || '';
+                    document.getElementById('c-notes').value = sourceTx.notes || targetTx.notes || '';
+                } else {
+                    editingCryptoTransactionState = { mode: 'single', id: tx.id, originalType: tx.type };
+                    setCType(tx.type);
+                    populateCryptoTransactionSide('source', tx);
+                    document.getElementById('c-amount').value = tx.amount || '';
+                    document.getElementById('c-price').value = tx.price || '';
+                    document.getElementById('c-currency').value = tx.currency || 'PHP';
+                    document.getElementById('c-date').value = tx.date ? new Date(tx.date).toISOString().split('T')[0] : '';
+                    document.getElementById('c-exchange').value = tx.exchange || '';
+                    document.getElementById('c-strategy').value = tx.strategy || '';
+                    document.getElementById('c-notes').value = tx.notes || '';
+                    calcCryptoTotal();
+                }
+                if (titleEl) titleEl.innerText = isSwapEdit ? 'Edit Crypto Swap' : 'Edit Crypto Transaction';
+                if (saveBtn) saveBtn.innerText = 'Save Changes';
+            }
+
+            document.getElementById('crypto-transaction-modal').classList.remove('hidden');
+        }
+
+        function setCType(t) {
+            document.getElementById('c-type').value = t;
+            const bB = document.getElementById('btn-c-buy');
+            const bS = document.getElementById('btn-c-sell');
+            const bW = document.getElementById('btn-c-swap');
+            const bA = document.getElementById('btn-c-airdrop');
+
+            // Reset classes
+            bB.className = "py-2 rounded-xl font-bold text-slate-400";
+            bS.className = "py-2 rounded-xl font-bold text-slate-400";
+            bW.className = "py-2 rounded-xl font-bold text-slate-400";
+            bA.className = "py-2 rounded-xl font-bold text-slate-400";
+
+            if (t === 'buy') bB.className = "py-2 rounded-xl font-bold bg-white text-emerald-600 shadow-sm";
+            else if (t === 'sell') bS.className = "py-2 rounded-xl font-bold bg-white text-rose-600 shadow-sm";
+            else if (t === 'swap') bW.className = "py-2 rounded-xl font-bold bg-white text-blue-600 shadow-sm";
+            else if (t === 'airdrop') bA.className = "py-2 rounded-xl font-bold bg-white text-amber-600 shadow-sm";
+
+            // Visibility Toggles
+            const isSwap = t === 'swap';
+            const isAirdrop = t === 'airdrop';
+            const priceContainer = document.getElementById('c-price-container');
+            const targetContainer = document.getElementById('c-swap-target-container');
+            const targetAmtContainer = document.getElementById('c-target-amount-container');
+            const totalContainer = document.getElementById('c-total-display-container');
+
+            if (isSwap) {
+                priceContainer.classList.add('hidden');
+                totalContainer.classList.add('hidden');
+                targetContainer.classList.remove('hidden');
+                targetAmtContainer.classList.remove('hidden');
+
+                document.getElementById('lbl-c-token').innerText = 'From Token (Sell)';
+                document.getElementById('lbl-c-amount').innerText = 'Sell Quantity';
+
+                // Adjust Grid to fit target amount
+                targetAmtContainer.parentElement.classList.remove('grid-cols-2');
+                targetAmtContainer.parentElement.classList.add('grid-cols-2');
+            } else if (isAirdrop) {
+                priceContainer.classList.add('hidden');
+                totalContainer.classList.add('hidden');
+                targetContainer.classList.add('hidden');
+                targetAmtContainer.classList.add('hidden');
+
+                document.getElementById('lbl-c-token').innerText = 'Token Name / ID';
+                document.getElementById('lbl-c-amount').innerText = 'Quantity';
+            } else {
+                priceContainer.classList.remove('hidden');
+                totalContainer.classList.remove('hidden');
+                targetContainer.classList.add('hidden');
+                targetAmtContainer.classList.add('hidden');
+
+                document.getElementById('lbl-c-token').innerText = 'Token Name / ID';
+                document.getElementById('lbl-c-amount').innerText = 'Quantity';
+            }
+        }
+
+        function buildMinswapIncludedTokenMap(included) {
+            const map = new Map();
+            (Array.isArray(included) ? included : []).forEach(item => {
+                if (item?.type !== 'token' || !item?.id) return;
+                map.set(item.id, item.attributes || {});
+            });
+            return map;
+        }
+
+        function getMinswapPoolRelationshipId(pool, key) {
+            return String(pool?.relationships?.[key]?.data?.id || '').trim();
+        }
+
+        function getMinswapTokenSummary(tokenId, includedMap) {
+            const attributes = includedMap.get(tokenId) || {};
+            const address = normalizeCardanoAssetAddress(attributes.address || tokenId.replace(/^cardano_/, ''));
+            const symbol = String(attributes.symbol || address || '').trim().toUpperCase();
+            const name = String(attributes.name || symbol || address || '').trim();
+            return {
+                address,
+                tokenId: makeCardanoTokenId(address),
+                symbol,
+                name,
+                image: String(attributes.image_url || '').trim()
+            };
+        }
+
+        function selectCryptoSearchAsset(type, tokenIdEncoded, symbolEncoded, labelEncoded, metadataEncoded = '') {
+            const isTarget = type === 'target';
+            const inputId = isTarget ? 'c-target-token-search' : 'c-token-search';
+            const resultsId = isTarget ? 'target-token-search-results' : 'token-search-results';
+            const idInputId = isTarget ? 'c-target-token-id' : 'c-token-id';
+            const symbolInputId = isTarget ? 'c-target-token-symbol' : 'c-token-symbol';
+
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            const symbol = decodeURIComponent(symbolEncoded || '');
+            const label = decodeURIComponent(labelEncoded || '') || symbol || tokenId;
+            let metadata = {};
+            if (metadataEncoded) {
+                try {
+                    metadata = JSON.parse(decodeURIComponent(metadataEncoded));
+                } catch (_error) {
+                    metadata = {};
+                }
+            }
+
+            document.getElementById(inputId).value = label;
+            document.getElementById(idInputId).value = tokenId;
+            document.getElementById(symbolInputId).value = symbol || tokenId;
+            applyCryptoAssetMetadata(type, metadata);
+            document.getElementById(resultsId)?.classList.add('hidden');
+        }
+
+        function buildMinswapSearchButton(type, tokenId, symbol, label, metadata, text, tone = 'slate') {
+            const toneClass = tone === 'cyan'
+                ? 'bg-cyan-50 text-cyan-700 border-cyan-100 hover:bg-cyan-100'
+                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100';
+            return `
+                <button type="button"
+                    onclick="selectCryptoSearchAsset('${type}', '${encodeInlineArg(tokenId)}', '${encodeInlineArg(symbol)}', '${encodeInlineArg(label)}', '${encodeInlineArg(JSON.stringify(metadata || {}))}')"
+                    class="px-2.5 py-1.5 rounded-lg border ${toneClass} text-[10px] font-black uppercase tracking-wide">
+                    ${escapeHTML(text)}
+                </button>
+            `;
+        }
+
+        function buildMinswapPoolSelection(pool) {
+            const baseAddress = makeMinswapAssetAddress(pool.asset_a);
+            const quoteAddress = makeMinswapAssetAddress(pool.asset_b);
+            const poolAddress = makeMinswapAssetAddress(pool.lp_asset);
+            const baseSymbol = getMinswapAssetSymbol(pool.asset_a, baseAddress === '0x' ? 'ADA' : baseAddress).toUpperCase();
+            const quoteSymbol = getMinswapAssetSymbol(pool.asset_b, quoteAddress === '0x' ? 'ADA' : quoteAddress).toUpperCase();
+            const baseName = getMinswapAssetName(pool.asset_a, baseSymbol);
+            const quoteName = getMinswapAssetName(pool.asset_b, quoteSymbol);
+            const poolName = `${baseSymbol || '?'}-${quoteSymbol || '?'} LP`;
+            const lpTokenId = makeMinswapLpTokenId(poolAddress);
+            const lpSymbol = `LP ${baseSymbol || '?'}-${quoteSymbol || '?'}`;
+            const baseTokenId = makeCardanoTokenId(baseAddress);
+            const quoteTokenId = makeCardanoTokenId(quoteAddress);
+            const commonMeta = {
+                network: CARDANO_NETWORK_ID,
+                dex: MINSWAP_DEX_ID,
+                protocol: pool.type || '',
+                poolAddress,
+                poolName,
+                baseToken: baseSymbol || baseTokenId,
+                quoteToken: quoteSymbol || quoteTokenId
+            };
+            return {
+                baseAddress,
+                quoteAddress,
+                poolAddress,
+                baseSymbol,
+                quoteSymbol,
+                baseName,
+                quoteName,
+                poolName,
+                lpTokenId,
+                lpSymbol,
+                baseTokenId,
+                quoteTokenId,
+                commonMeta,
+                reserve: Number(pool.liquidity_currency || pool.liquidity || 0),
+                protocolText: String(pool.type || 'Minswap').replace(/^Minswap$/, 'Minswap V1')
+            };
+        }
+
+        function selectMinswapLpPoolFromMetrics(type, pool, resDiv) {
+            const selection = buildMinswapPoolSelection(pool);
+            if (!selection.lpTokenId) return false;
+            const isTarget = type === 'target';
+            const inputId = isTarget ? 'c-target-token-search' : 'c-token-search';
+            const resultsId = isTarget ? 'target-token-search-results' : 'token-search-results';
+            const idInputId = isTarget ? 'c-target-token-id' : 'c-token-id';
+            const symbolInputId = isTarget ? 'c-target-token-symbol' : 'c-token-symbol';
+
+            document.getElementById(inputId).value = selection.poolName;
+            document.getElementById(idInputId).value = selection.lpTokenId;
+            document.getElementById(symbolInputId).value = selection.lpSymbol;
+            applyCryptoAssetMetadata(type, {
+                ...selection.commonMeta,
+                assetType: 'lp_pool'
+            });
+            const resultsEl = resDiv || document.getElementById(resultsId);
+            if (resultsEl) {
+                resultsEl.innerHTML = `<div class="p-3 text-xs text-emerald-700">LP id recognized and converted to ${escapeHTML(selection.lpTokenId)}.</div>`;
+            }
+            return true;
+        }
+
+        function selectMinswapLpReference(type, poolAddress, resDiv) {
+            const normalizedPoolAddress = normalizeMinswapLpAssetReference(poolAddress);
+            if (!normalizedPoolAddress) return false;
+            const isTarget = type === 'target';
+            const inputId = isTarget ? 'c-target-token-search' : 'c-token-search';
+            const resultsId = isTarget ? 'target-token-search-results' : 'token-search-results';
+            const idInputId = isTarget ? 'c-target-token-id' : 'c-token-id';
+            const symbolInputId = isTarget ? 'c-target-token-symbol' : 'c-token-symbol';
+            const lpTokenId = makeMinswapLpTokenId(normalizedPoolAddress);
+            const shortId = `${normalizedPoolAddress.slice(0, 10)}...${normalizedPoolAddress.slice(-10)}`;
+
+            document.getElementById(inputId).value = `Minswap LP ${shortId}`;
+            document.getElementById(idInputId).value = lpTokenId;
+            document.getElementById(symbolInputId).value = 'LP';
+            applyCryptoAssetMetadata(type, {
+                assetType: 'lp_pool',
+                network: CARDANO_NETWORK_ID,
+                dex: MINSWAP_DEX_ID,
+                poolAddress: normalizedPoolAddress,
+                poolName: 'Minswap LP'
+            });
+
+            const resultsEl = resDiv || document.getElementById(resultsId);
+            if (resultsEl) {
+                resultsEl.innerHTML = `<div class="p-3 text-xs text-emerald-700">LP id converted to ${escapeHTML(lpTokenId)}. Add the LP total supply before saving.</div>`;
+            }
+            return true;
+        }
+
+        function renderMinswapSearchResults(type, data, resDiv) {
+            const pools = (Array.isArray(data?.pool_metrics) ? data.pool_metrics : [])
+                .filter(pool => MINSWAP_PROTOCOLS.includes(String(pool?.type || '')))
+                .slice(0, 8);
+
+            if (!pools.length) {
+                resDiv.innerHTML = '<div class="p-3 text-xs text-slate-400">No Minswap pools found.</div>';
+                return;
+            }
+
+            resDiv.innerHTML = pools.map(pool => {
+                const selection = buildMinswapPoolSelection(pool);
+                const baseButton = selection.baseTokenId ? buildMinswapSearchButton(type, selection.baseTokenId, selection.baseSymbol, selection.baseName || selection.baseSymbol, {
+                    ...selection.commonMeta,
+                    assetType: 'cardano_token'
+                }, selection.baseSymbol || 'Base') : '';
+                const quoteButton = selection.quoteTokenId ? buildMinswapSearchButton(type, selection.quoteTokenId, selection.quoteSymbol, selection.quoteName || selection.quoteSymbol, {
+                    ...selection.commonMeta,
+                    assetType: 'cardano_token'
+                }, selection.quoteSymbol || 'Quote') : '';
+                const lpButton = selection.lpTokenId ? buildMinswapSearchButton(type, selection.lpTokenId, selection.lpSymbol, selection.poolName, {
+                    ...selection.commonMeta,
+                    assetType: 'lp_pool'
+                }, 'LP token', 'cyan') : '';
+                const reserveText = selection.reserve > 0 ? `$${selection.reserve.toLocaleString(undefined, { maximumFractionDigits: 0 })} liquidity` : 'Liquidity unavailable';
+
+                return `
+                    <div class="p-3 border-b border-slate-100 last:border-b-0">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-bold text-slate-800">${escapeHTML(selection.poolName)}</p>
+                                <p class="text-[10px] text-slate-400 mt-0.5">${escapeHTML(reserveText)} - ${escapeHTML(selection.protocolText)} Cardano</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mt-2">
+                            ${baseButton}
+                            ${quoteButton}
+                            ${lpButton}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function searchToken(type = 'source') {
+            const isTarget = type === 'target';
+            const inputId = isTarget ? 'c-target-token-search' : 'c-token-search';
+            const resultsId = isTarget ? 'target-token-search-results' : 'token-search-results';
+            const idInputId = isTarget ? 'c-target-token-id' : 'c-token-id';
+            const symbolInputId = isTarget ? 'c-target-token-symbol' : 'c-token-symbol';
+
+            const query = document.getElementById(inputId).value;
+            if (!query) return;
+            document.getElementById(idInputId).value = '';
+            document.getElementById(symbolInputId).value = '';
+            clearCryptoAssetMetadata(type);
+            const resDiv = document.getElementById(resultsId);
+            const mode = document.getElementById(isTarget ? 'c-target-token-search-mode' : 'c-token-search-mode')?.value || 'coingecko';
+            const directPoolAddress = normalizeMinswapLpAssetReference(query);
+            resDiv.innerHTML = `<div class="p-3 text-xs text-slate-400">Searching ${mode === 'minswap' || directPoolAddress ? 'Minswap pools' : 'CoinGecko'}...</div>`;
+            resDiv.classList.remove('hidden');
+
+            try {
+                if (mode === 'minswap' || directPoolAddress) {
+                    if (directPoolAddress && selectMinswapLpReference(type, directPoolAddress, resDiv)) {
+                        return;
+                    }
+                    const data = await fetchMinswapPoolSearch(query);
+                    const directPool = directPoolAddress && Array.isArray(data?.pool_metrics) ? data.pool_metrics[0] : null;
+                    if (directPool && selectMinswapLpPoolFromMetrics(type, directPool, resDiv)) {
+                        return;
+                    }
+                    renderMinswapSearchResults(type, data, resDiv);
+                    return;
+                }
+
+                const res = await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                const coins = data.coins.slice(0, 10);
+
+                resDiv.innerHTML = '';
+                if (coins.length === 0) {
+                    resDiv.innerHTML = '<div class="p-3 text-xs text-slate-400">No coins found.</div>';
+                    return;
+                }
+
+                coins.forEach(c => {
+                    const safeName = escapeHTML(c.name || '');
+                    const safeSymbol = escapeHTML(c.symbol || '');
+                    const safeLogo = encodeURI(c.large || '');
+                    const div = document.createElement('div');
+                    div.className = "p-3 hover:bg-slate-50 cursor-pointer flex items-center gap-3 border-b border-slate-50 last:border-0";
+                    div.onclick = () => {
+                        document.getElementById(inputId).value = c.name;
+                        document.getElementById(idInputId).value = c.id;
+                        document.getElementById(symbolInputId).value = c.symbol;
+                        applyCryptoAssetMetadata(type, { assetType: 'coingecko' });
+                        resDiv.classList.add('hidden');
+                    };
+                    div.innerHTML = `
+                        <img src="${safeLogo}" class="w-6 h-6 rounded-full">
+                        <div>
+                            <p class="text-sm font-bold text-slate-700">${safeName}</p>
+                            <p class="text-[10px] text-slate-400 font-bold uppercase">${safeSymbol}</p>
+                        </div>
+                    `;
+                    resDiv.appendChild(div);
+                });
+            } catch (e) {
+                const sourceLabel = mode === 'minswap' || directPoolAddress ? 'Minswap' : 'API';
+                resDiv.innerHTML = `<div class="p-3 text-xs text-rose-400">${escapeHTML(e?.message || `${sourceLabel} error. Try again.`)}</div>`;
+            }
+        }
+
+        function calcCryptoTotal() {
+            const amt = parseFloat(document.getElementById('c-amount').value) || 0;
+            const prc = parseFloat(document.getElementById('c-price').value) || 0;
+            const cur = String(document.getElementById('c-currency').value || 'PHP').trim().toUpperCase();
+
+            const total = amt * prc;
+            document.getElementById('c-total-calc').innerText = formatCurrency(total, cur);
+
+            const previewEl = document.getElementById('c-total-base-preview');
+            if (cur !== activeCurrency) {
+                const displayVal = convertToDisplayCurrency(total, cur, activeCurrency);
+                if (Number.isFinite(displayVal)) {
+                    previewEl.innerText = `≈ ${formatCurrency(displayVal, activeCurrency)} in ${activeCurrency}`;
+                } else if (cur === 'ADA') {
+                    previewEl.innerText = 'Refresh crypto prices first so the app has the ADA rate.';
+                } else {
+                    previewEl.innerText = '';
+                }
+            } else {
+                previewEl.innerText = '';
+            }
+        }
+
+        async function onCryptoPriceCurrencyChange() {
+            const cur = String(document.getElementById('c-currency')?.value || 'PHP').trim().toUpperCase();
+            if (cur === 'ADA') {
+                const previewEl = document.getElementById('c-total-base-preview');
+                if (previewEl && !getCachedAdaPhpRate()) {
+                    previewEl.innerText = 'Fetching ADA rate...';
+                }
+                await ensureCryptoAdaPriceForConversion();
+            }
+            calcCryptoTotal();
+        }
+
+        function calcCryptoLpManualPricePreview(type = 'target') {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            const price = parseFloat(document.getElementById(`${prefix}-lp-manual-price`)?.value || '');
+            const currency = String(document.getElementById(`${prefix}-lp-manual-price-currency`)?.value || 'PHP').trim().toUpperCase();
+            const amount = type === 'target'
+                ? parseFloat(document.getElementById('c-target-amount')?.value || '')
+                : parseFloat(document.getElementById('c-amount')?.value || '');
+            const previewEl = document.getElementById(type === 'target' ? 'c-target-lp-price-preview' : 'c-lp-price-preview');
+            if (!previewEl) return;
+            if (!Number.isFinite(price) || price <= 0) {
+                previewEl.innerText = '';
+                return;
+            }
+            const displayPrice = convertToDisplayCurrency(price, currency, activeCurrency);
+            const hasAmount = Number.isFinite(amount) && amount > 0;
+            const displayTotal = hasAmount ? convertToDisplayCurrency(price * amount, currency, activeCurrency) : NaN;
+            if (Number.isFinite(displayPrice)) {
+                previewEl.innerText = hasAmount && Number.isFinite(displayTotal)
+                    ? `≈ ${formatCurrency(displayPrice, activeCurrency)} per LP • ${formatCurrency(displayTotal, activeCurrency)} total`
+                    : `≈ ${formatCurrency(displayPrice, activeCurrency)} per LP`;
+            } else if (currency === 'ADA') {
+                previewEl.innerText = 'Fetching ADA rate...';
+            } else {
+                previewEl.innerText = '';
+            }
+        }
+
+        async function onCryptoLpManualPriceCurrencyChange(type = 'target') {
+            const prefix = getCryptoAssetFieldPrefix(type);
+            const currency = String(document.getElementById(`${prefix}-lp-manual-price-currency`)?.value || 'PHP').trim().toUpperCase();
+            if (currency === 'ADA' && !getCachedAdaPhpRate()) {
+                await ensureCryptoAdaPriceForConversion();
+            }
+            calcCryptoLpManualPricePreview(type);
+        }
+
+        async function ensureCryptoLpManualPriceReady(metadata, label = 'LP') {
+            const manualPrice = Number(metadata?.manualLpPrice || 0);
+            const manualCurrency = String(metadata?.manualLpPriceCurrency || '').trim().toUpperCase();
+            if (!(manualPrice > 0)) return true;
+            if (manualCurrency === 'ADA') {
+                const hasAdaRate = await ensureCryptoAdaPriceForConversion();
+                if (!hasAdaRate) {
+                    alert(`Could not fetch the ADA rate for the ${label} manual LP price. Leave optional LP price blank or use PHP/USD/JPY.`);
+                    return false;
+                }
+            }
+            const phpPrice = convertToDisplayCurrency(manualPrice, manualCurrency || 'PHP', 'PHP');
+            if (!Number.isFinite(phpPrice) || phpPrice <= 0) {
+                alert(`Could not convert the ${label} manual LP price. Leave it blank or use PHP/USD/JPY.`);
+                return false;
+            }
+            metadata.manualLpPhpPrice = phpPrice;
+            return true;
+        }
+
+        const CRYPTO_BUY_EXPENSE_CATEGORY = 'Investment';
+        const CRYPTO_BUY_EXPENSE_TX_PREFIX = 'crypto_buy_expense_';
+
+        function getCryptoBuyExpenseTransactionId(cryptoEntryId) {
+            return `${CRYPTO_BUY_EXPENSE_TX_PREFIX}${String(cryptoEntryId || '').trim()}`;
+        }
+
+        function isAutoCryptoBuyExpenseTx(tx) {
+            const txId = String(tx?.id || '').trim();
+            if (txId.startsWith(CRYPTO_BUY_EXPENSE_TX_PREFIX)) return true;
+
+            const source = String(tx?.autoGeneratedSource || '').trim().toLowerCase();
+            if (source === 'crypto_buy') return true;
+
+            const linkedCryptoId = String(tx?.linkedCryptoTransactionId || '').trim();
+            const linkedType = String(tx?.linkedCryptoTransactionType || '').trim().toLowerCase();
+            return !!linkedCryptoId && linkedType === 'buy';
+        }
+
+        function ensureCryptoInvestmentCategoryInDB(db) {
+            db.custom_categories = Array.isArray(db.custom_categories) ? db.custom_categories : [];
+            const hasCategory = [...standardCategories, ...db.custom_categories].some(name => {
+                return String(name || '').trim().toLowerCase() === CRYPTO_BUY_EXPENSE_CATEGORY.toLowerCase();
+            });
+            if (hasCategory) return false;
+            db.custom_categories.push(CRYPTO_BUY_EXPENSE_CATEGORY);
+            return true;
+        }
+
+        function buildCryptoBuyExpenseNotes(cryptoTx) {
+            const symbol = String(cryptoTx?.symbol || cryptoTx?.tokenId || '').trim().toUpperCase();
+            const amount = Number(cryptoTx?.amount || 0);
+            const price = Number(cryptoTx?.price || 0);
+            const currency = String(cryptoTx?.currency || 'PHP').trim().toUpperCase();
+            const exchange = String(cryptoTx?.exchange || '').trim();
+            const strategy = String(cryptoTx?.strategy || '').trim();
+            const originalNotes = String(cryptoTx?.notes || '').trim();
+
+            const lines = ['Auto-created from crypto buy.'];
+            if (Number.isFinite(amount) && amount > 0) {
+                let summary = `Quantity: ${amount} ${symbol || 'tokens'}`;
+                if (Number.isFinite(price) && price > 0) {
+                    summary += ` @ ${formatCurrency(price, currency)}/token`;
+                }
+                lines.push(summary);
+            }
+            if (exchange) lines.push(`Exchange: ${exchange}`);
+            if (strategy) lines.push(`Strategy: ${strategy}`);
+            if (originalNotes) lines.push(`Crypto notes: ${originalNotes}`);
+
+            return lines.join('\n');
+        }
+
+        function buildCryptoBuyExpensePayload(cryptoEntryId, cryptoTx) {
+            const entryId = String(cryptoEntryId || '').trim();
+            const symbol = String(cryptoTx?.symbol || cryptoTx?.tokenId || 'Crypto').trim().toUpperCase() || 'CRYPTO';
+            const supportedCurrency = ['PHP', 'USD', 'JPY'].includes(String(cryptoTx?.currency || '').trim().toUpperCase())
+                ? String(cryptoTx.currency).trim().toUpperCase()
+                : 'PHP';
+            const phpTotal = Math.max(0, Number(cryptoTx?.phpTotal ?? cryptoTx?.total ?? 0) || 0);
+            const rawOriginalSpend = Number(cryptoTx?.amount || 0) * Number(cryptoTx?.price || 0);
+            const originalSpend = Number.isFinite(rawOriginalSpend) && rawOriginalSpend > 0
+                ? rawOriginalSpend
+                : (supportedCurrency === 'PHP'
+                    ? phpTotal
+                    : convertToDisplayCurrency(phpTotal, 'PHP', supportedCurrency));
+            const expenseTxId = getCryptoBuyExpenseTransactionId(entryId);
+
+            return {
+                desc: `Crypto Buy: ${symbol}`,
+                merchant: String(cryptoTx?.exchange || '').trim() || null,
+                tags: ['crypto', 'investment'],
+                amt: phpTotal,
+                originalAmt: Math.max(0, Number(originalSpend || 0)),
+                originalCurrency: supportedCurrency,
+                quantity: 1,
+                notes: buildCryptoBuyExpenseNotes(cryptoTx),
+                type: 'expense',
+                category: CRYPTO_BUY_EXPENSE_CATEGORY,
+                paymentSource: 'cash',
+                creditCardId: null,
+                creditCardName: null,
+                date: cryptoTx?.date || new Date().toISOString(),
+                importId: `crypto_buy:${entryId}`,
+                dedupeHash: expenseTxId,
+                linkedCryptoTransactionId: entryId,
+                linkedCryptoTransactionType: 'buy',
+                autoGeneratedSource: 'crypto_buy',
+                deletedAt: null
+            };
+        }
+
+        async function syncCryptoBuyExpensesInDB(db) {
+            if (!db || typeof db !== 'object') {
+                return { db, changed: false, added: 0, restored: 0, removed: 0 };
+            }
+
+            db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
+            db.crypto = Array.isArray(db.crypto) ? db.crypto : [];
+
+            let changed = ensureCryptoInvestmentCategoryInDB(db);
+            let added = 0;
+            let restored = 0;
+            let removed = 0;
+
+            const existingTxIndexById = new Map();
+            db.transactions.forEach((item, index) => {
+                if (item?.id) existingTxIndexById.set(item.id, index);
+            });
+
+            const activeBuyIds = new Set();
+
+            for (const cryptoEntry of db.crypto) {
+                if (!cryptoEntry || cryptoEntry.deletedAt) continue;
+
+                let cryptoTx = null;
+                try {
+                    cryptoTx = await decryptData(cryptoEntry.data);
+                } catch (error) {
+                    console.error('Failed to decrypt crypto transaction for expense sync.', error);
+                    continue;
+                }
+
+                if (!cryptoTx || cryptoTx.type !== 'buy') continue;
+
+                const cryptoEntryId = String(cryptoEntry.id || '').trim();
+                if (!cryptoEntryId) continue;
+
+                activeBuyIds.add(cryptoEntryId);
+
+                const expenseTxId = getCryptoBuyExpenseTransactionId(cryptoEntryId);
+                const existingIndex = existingTxIndexById.get(expenseTxId);
+                const existingEntry = typeof existingIndex === 'number' ? db.transactions[existingIndex] : null;
+
+                if (existingEntry && !existingEntry.deletedAt) continue;
+
+                const encryptedExpense = await encryptData(buildCryptoBuyExpensePayload(cryptoEntryId, cryptoTx));
+                const nowTs = Date.now();
+                const nextEntry = {
+                    id: expenseTxId,
+                    data: encryptedExpense,
+                    createdAt: Number.isFinite(Number(existingEntry?.createdAt))
+                        ? Number(existingEntry.createdAt)
+                        : (Number.isFinite(Number(cryptoEntry.createdAt)) ? Number(cryptoEntry.createdAt) : nowTs),
+                    lastModified: nowTs,
+                    deletedAt: null
+                };
+
+                if (existingEntry && typeof existingIndex === 'number') {
+                    db.transactions[existingIndex] = {
+                        ...existingEntry,
+                        ...nextEntry
+                    };
+                    restored += 1;
+                } else {
+                    db.transactions.push(nextEntry);
+                    existingTxIndexById.set(expenseTxId, db.transactions.length - 1);
+                    added += 1;
+                }
+
+                changed = true;
+            }
+
+            const deletedAt = new Date().toISOString();
+            const lastModified = Date.now();
+            db.transactions = db.transactions.map(item => {
+                const txId = String(item?.id || '').trim();
+                if (!txId.startsWith(CRYPTO_BUY_EXPENSE_TX_PREFIX)) return item;
+
+                const linkedCryptoId = txId.slice(CRYPTO_BUY_EXPENSE_TX_PREFIX.length);
+                if (activeBuyIds.has(linkedCryptoId) || item.deletedAt) return item;
+
+                removed += 1;
+                changed = true;
+                return {
+                    ...item,
+                    deletedAt,
+                    lastModified
+                };
+            });
+
+            return { db, changed, added, restored, removed };
+        }
+
+        let cryptoDuplicateReviewState = {
+            issues: [],
+            signature: '',
+            checkedAt: 0,
+            autoExpenseCount: 0,
+            scannedExpenseCount: 0
+        };
+        let lastCryptoDuplicateReviewToastSignature = '';
+
+        function normalizeCryptoDuplicateReviewText(input) {
+            return String(input || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[^\w\s]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function getCryptoDuplicateReviewDateKey(tx) {
+            if (typeof getTxAssignedDateKey === 'function') {
+                return getTxAssignedDateKey(tx);
+            }
+            const rawDate = String(tx?.date || '').trim();
+            const matchedDate = rawDate.match(/^\d{4}-\d{2}-\d{2}/);
+            return matchedDate ? matchedDate[0] : '';
+        }
+
+        function parseCryptoDuplicateReviewDateKey(dateKey) {
+            const match = String(dateKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return NaN;
+            return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getTime();
+        }
+
+        function getCryptoDuplicateReviewDayGap(autoTx, manualTx) {
+            const autoTs = parseCryptoDuplicateReviewDateKey(getCryptoDuplicateReviewDateKey(autoTx));
+            const manualTs = parseCryptoDuplicateReviewDateKey(getCryptoDuplicateReviewDateKey(manualTx));
+            if (!Number.isFinite(autoTs) || !Number.isFinite(manualTs)) return Number.POSITIVE_INFINITY;
+            return Math.round(Math.abs(autoTs - manualTs) / (24 * 60 * 60 * 1000));
+        }
+
+        function buildCryptoDuplicateReviewText(tx) {
+            return normalizeCryptoDuplicateReviewText([
+                tx?.desc,
+                tx?.category,
+                tx?.notes,
+                tx?.merchant,
+                tx?.creditCardName
+            ].filter(Boolean).join(' '));
+        }
+
+        function buildCryptoDuplicateReviewHintTokens(autoTx) {
+            const stopWords = new Set([
+                'auto', 'created', 'from', 'quantity', 'token', 'tokens', 'notes', 'strategy',
+                'exchange', 'cash', 'bank', 'payment', 'with', 'the', 'and', 'for', 'buy'
+            ]);
+            return Array.from(new Set(
+                buildCryptoDuplicateReviewText(autoTx)
+                    .split(' ')
+                    .map(token => token.trim())
+                    .filter(token => token.length >= 2 && !stopWords.has(token) && !/^\d+$/.test(token))
+            ));
+        }
+
+        function buildCryptoDuplicateReviewCandidate(autoTx, manualTx) {
+            if (!autoTx || !manualTx) return null;
+            if (String(autoTx.id || '').trim() === String(manualTx.id || '').trim()) return null;
+            if (manualTx.type !== 'expense' || isAutoCryptoBuyExpenseTx(manualTx)) return null;
+
+            const autoAmount = Number(autoTx.amt || 0);
+            const manualAmount = Number(manualTx.amt || 0);
+            if (!Number.isFinite(autoAmount) || !Number.isFinite(manualAmount)) return null;
+
+            const amountDiff = Math.abs(autoAmount - manualAmount);
+            if (amountDiff > 0.01) return null;
+
+            const autoDateKey = getCryptoDuplicateReviewDateKey(autoTx);
+            const manualDateKey = getCryptoDuplicateReviewDateKey(manualTx);
+            const sameDay = !!autoDateKey && autoDateKey === manualDateKey;
+            const dayGap = sameDay ? 0 : getCryptoDuplicateReviewDayGap(autoTx, manualTx);
+            if (!sameDay && dayGap > 1) return null;
+
+            const manualText = buildCryptoDuplicateReviewText(manualTx);
+            const manualCategory = normalizeCryptoDuplicateReviewText(manualTx?.category);
+            const hintTokens = buildCryptoDuplicateReviewHintTokens(autoTx);
+            const matchedHints = hintTokens.filter(token => manualText.includes(token)).slice(0, 3);
+            const hasCryptoWord = /\bcrypto\b/.test(manualText);
+            const investmentCategory = manualCategory === 'investment';
+
+            if (!sameDay && !investmentCategory && !hasCryptoWord && matchedHints.length === 0) {
+                return null;
+            }
+
+            let score = 0;
+            if (sameDay) score += 4;
+            else score += 2;
+            if (investmentCategory) score += 3;
+            if (hasCryptoWord) score += 2;
+            score += Math.min(2, matchedHints.length);
+
+            let confidence = 'low';
+            if (score >= 7) confidence = 'high';
+            else if (score >= 4) confidence = 'medium';
+
+            const reasons = [`Same amount ${fmt(autoAmount)}`];
+            if (sameDay) reasons.push(`Same date ${autoDateKey}`);
+            else reasons.push(`${dayGap}-day date gap`);
+            if (investmentCategory) reasons.push('Manual category is Investment');
+            if (hasCryptoWord) reasons.push('Manual text mentions crypto');
+            if (matchedHints.length) reasons.push(`Matched ${matchedHints.join(', ')}`);
+
+            return {
+                autoTx,
+                manualTx,
+                autoDateKey,
+                manualDateKey,
+                sameDay,
+                dayGap,
+                amountDiff,
+                confidence,
+                score,
+                reasons
+            };
+        }
+
+        function scanCryptoExpenseDuplicateReview(transactions = []) {
+            const activeExpenses = (transactions || []).filter(tx => tx && tx.type === 'expense');
+            const autoExpenses = activeExpenses.filter(isAutoCryptoBuyExpenseTx);
+            const manualExpenses = activeExpenses.filter(tx => !isAutoCryptoBuyExpenseTx(tx));
+            const candidateMatches = [];
+
+            manualExpenses.forEach(manualTx => {
+                autoExpenses.forEach(autoTx => {
+                    const candidate = buildCryptoDuplicateReviewCandidate(autoTx, manualTx);
+                    if (candidate) candidateMatches.push(candidate);
+                });
+            });
+
+            candidateMatches.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                if (a.dayGap !== b.dayGap) return a.dayGap - b.dayGap;
+                return getTxTimestamp(b.autoTx) - getTxTimestamp(a.autoTx);
+            });
+
+            const usedManualIds = new Set();
+            const issues = [];
+            candidateMatches.forEach(candidate => {
+                const manualId = String(candidate.manualTx?.id || '').trim();
+                if (!manualId || usedManualIds.has(manualId)) return;
+                usedManualIds.add(manualId);
+                issues.push(candidate);
+            });
+
+            const signature = issues
+                .map(issue => `${issue.autoTx.id}:${issue.manualTx.id}:${issue.confidence}`)
+                .sort()
+                .join('|');
+
+            return {
+                issues,
+                signature,
+                checkedAt: Date.now(),
+                autoExpenseCount: autoExpenses.length,
+                scannedExpenseCount: manualExpenses.length
+            };
+        }
+
+        function renderCryptoExpenseDuplicateReviewPanel() {
+            const panel = document.getElementById('crypto-duplicate-review-panel');
+            const eyebrowEl = document.getElementById('crypto-duplicate-review-eyebrow');
+            const titleEl = document.getElementById('crypto-duplicate-review-title');
+            const summaryEl = document.getElementById('crypto-duplicate-review-summary');
+            const listEl = document.getElementById('crypto-duplicate-review-list');
+            if (!panel || !eyebrowEl || !titleEl || !summaryEl || !listEl) return;
+
+            const issues = cryptoDuplicateReviewState.issues || [];
+            const autoCount = Number(cryptoDuplicateReviewState.autoExpenseCount || 0);
+            const manualCount = Number(cryptoDuplicateReviewState.scannedExpenseCount || 0);
+
+            if (autoCount <= 0) {
+                panel.classList.add('hidden');
+                listEl.innerHTML = '';
+                return;
+            }
+
+            panel.classList.remove('hidden');
+
+            if (issues.length > 0) {
+                panel.className = 'finance-glass-panel rounded-3xl border border-amber-200 bg-amber-50/90 shadow-sm p-4 md:p-5';
+                eyebrowEl.className = 'text-[11px] font-black uppercase tracking-[0.18em] text-amber-700';
+                titleEl.className = 'text-lg font-bold text-amber-950 mt-1';
+                summaryEl.className = 'text-sm text-amber-900/80 mt-1';
+                titleEl.innerText = `${issues.length} likely duplicate crypto expense${issues.length === 1 ? '' : 's'} found`;
+                summaryEl.innerText = `Matched ${issues.length} manual expense${issues.length === 1 ? '' : 's'} against ${autoCount} auto-created crypto-buy expense${autoCount === 1 ? '' : 's'}. Review before deleting anything.`;
+                listEl.classList.remove('hidden');
+                listEl.innerHTML = issues.map(issue => {
+                    const autoDesc = escapeHTML(issue.autoTx?.desc || 'Auto crypto expense');
+                    const manualDesc = escapeHTML(issue.manualTx?.desc || 'Manual expense');
+                    const manualCategory = escapeHTML(issue.manualTx?.category || 'Uncategorized');
+                    const confidenceTone = issue.confidence === 'high'
+                        ? 'bg-rose-100 text-rose-700'
+                        : (issue.confidence === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-700');
+                    const reasonText = escapeHTML(issue.reasons.join(' • '));
+                    const manualId = escapeAttr(issue.manualTx?.id || '');
+                    const autoId = escapeAttr(issue.autoTx?.id || '');
+                    return `
+                        <div class="rounded-2xl border border-amber-200 bg-white/90 p-3">
+                            <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <p class="text-sm font-bold text-slate-800">${manualDesc}</p>
+                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${confidenceTone}">${escapeHTML(issue.confidence)}</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 mt-1">Manual expense • ${manualCategory} • ${issue.manualDateKey || 'Unknown date'} • ${fmt(issue.manualTx?.amt || 0)}</p>
+                                    <p class="text-[11px] text-slate-500 mt-1">Auto crypto expense • ${autoDesc} • ${issue.autoDateKey || 'Unknown date'} • ${fmt(issue.autoTx?.amt || 0)}</p>
+                                    <p class="text-[11px] text-amber-800 mt-2">${reasonText}</p>
+                                </div>
+                                <div class="flex flex-wrap gap-2 shrink-0">
+                                    <button type="button" onclick="openTransactionModal('${manualId}')"
+                                        class="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700">
+                                        Open Manual
+                                    </button>
+                                    <button type="button" onclick="openTransactionModal('${autoId}')"
+                                        class="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700">
+                                        Open Auto
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                return;
+            }
+
+            panel.className = 'finance-glass-panel rounded-3xl border border-emerald-200 bg-emerald-50/80 shadow-sm p-4 md:p-5';
+            eyebrowEl.className = 'text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700';
+            titleEl.className = 'text-lg font-bold text-emerald-950 mt-1';
+            summaryEl.className = 'text-sm text-emerald-900/80 mt-1';
+            titleEl.innerText = 'No likely duplicate crypto expenses found';
+            summaryEl.innerText = `Checked ${autoCount} auto-created crypto-buy expense${autoCount === 1 ? '' : 's'} against ${manualCount} other expense${manualCount === 1 ? '' : 's'}. Total Balance can still be lower now because crypto buys are counted as cash outflows by design.`;
+            listEl.classList.add('hidden');
+            listEl.innerHTML = '';
+        }
+
+        async function refreshCryptoExpenseDuplicateReview(options = {}) {
+            const { notify = false, forceToast = false } = options || {};
+            cryptoDuplicateReviewState = scanCryptoExpenseDuplicateReview(window.allDecryptedTransactions || []);
+            renderCryptoExpenseDuplicateReviewPanel();
+
+            if (typeof showToast === 'function' && notify) {
+                const issueCount = cryptoDuplicateReviewState.issues.length;
+                if (issueCount > 0) {
+                    if (forceToast || cryptoDuplicateReviewState.signature !== lastCryptoDuplicateReviewToastSignature) {
+                        showToast(`Review ${issueCount} likely duplicate crypto expense${issueCount === 1 ? '' : 's'}`);
+                        lastCryptoDuplicateReviewToastSignature = cryptoDuplicateReviewState.signature;
+                    }
+                } else if (forceToast) {
+                    showToast(
+                        cryptoDuplicateReviewState.autoExpenseCount > 0
+                            ? 'No likely duplicate crypto expenses found'
+                            : 'No auto crypto-buy expenses to review'
+                    );
+                }
+            }
+
+            return cryptoDuplicateReviewState;
+        }
+
+        async function saveCryptoTransaction() {
+            const tokenId = document.getElementById('c-token-id').value;
+            const tokenSymbol = document.getElementById('c-token-symbol').value;
+            const amount = parseFloat(document.getElementById('c-amount').value);
+            const notes = document.getElementById('c-notes').value;
+            const dateVal = document.getElementById('c-date').value;
+            const type = document.getElementById('c-type').value;
+            const exchange = document.getElementById('c-exchange').value;
+            const strategy = document.getElementById('c-strategy').value;
+            const date = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
+
+            const db = await getDB();
+            db.crypto = Array.isArray(db.crypto) ? db.crypto : [];
+            const editState = editingCryptoTransactionState ? { ...editingCryptoTransactionState } : null;
+            if (editState?.mode === 'swap' && type !== 'swap') {
+                alert('Swap edits must remain swaps. Delete and re-record if you need a different transaction type.');
+                return;
+            }
+            if (editState?.mode === 'single' && type !== editState.originalType) {
+                alert('Transaction type changes are not supported while editing. Delete and re-record if you need a different type.');
+                return;
+            }
+
+            if (type === 'swap') {
+                const targetTokenId = document.getElementById('c-target-token-id').value;
+                const targetTokenSymbol = document.getElementById('c-target-token-symbol').value;
+                const targetAmount = parseFloat(document.getElementById('c-target-amount').value);
+                const sourceMetadata = buildCryptoTxMetadata('source');
+                const targetMetadata = buildCryptoTxMetadata('target');
+
+                if (!tokenId || !amount || !targetTokenId || !targetAmount) { alert("Please fill details"); return; }
+                if (targetMetadata.assetType === 'lp_pool' && (!Number.isFinite(Number(targetMetadata.lpTokenSupply)) || Number(targetMetadata.lpTokenSupply) <= 0)) {
+                    alert("Enter the total LP token supply for the received Minswap LP asset.");
+                    return;
+                }
+                if (sourceMetadata.assetType === 'lp_pool' && (!Number.isFinite(Number(sourceMetadata.lpTokenSupply)) || Number(sourceMetadata.lpTokenSupply) <= 0)) {
+                    alert("Enter the total LP token supply for the source Minswap LP asset.");
+                    return;
+                }
+                if (!await ensureCryptoLpManualPriceReady(sourceMetadata, 'source LP')) return;
+                if (!await ensureCryptoLpManualPriceReady(targetMetadata, 'received LP')) return;
+
+                const swapId = editState?.mode === 'swap'
+                    ? editState.swapId
+                    : Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+
+                // Transaction 1: Swap Out (Sell Source)
+                // We use 'swap_out' type. It behaves like sell but doesn't trigger realized P/L
+                const txOut = {
+                    tokenId,
+                    symbol: tokenSymbol || tokenId,
+                    amount,
+                    price: 0, // Calculated dynamically during swap logic or can be estimated
+                    currency: 'PHP',
+                    phpPrice: 0,
+                    phpTotal: 0,
+                    total: 0,
+                    type: 'swap_out',
+                    swapId,
+                    linkedToken: targetTokenSymbol,
+                    ...sourceMetadata,
+                    notes, exchange, strategy, date
+                };
+
+                // Transaction 2: Swap In (Buy Target)
+                // We use 'swap_in' type. It inherits cost basis from swap_out.
+                const txIn = {
+                    tokenId: targetTokenId,
+                    symbol: targetTokenSymbol || targetTokenId,
+                    amount: targetAmount,
+                    price: 0,
+                    currency: 'PHP',
+                    phpPrice: 0,
+                    phpTotal: 0, // Will be set equal to cost basis of txOut
+                    total: 0,
+                    type: 'swap_in',
+                    swapId,
+                    linkedToken: tokenSymbol,
+                    ...targetMetadata,
+                    notes, exchange, strategy, date
+                };
+
+                if (editState?.mode === 'swap') {
+                    const sourceIndex = db.crypto.findIndex(item => item.id === editState.sourceId);
+                    const targetIndex = db.crypto.findIndex(item => item.id === editState.targetId);
+                    if (sourceIndex < 0 || targetIndex < 0) {
+                        alert('Could not update the linked swap rows.');
+                        return;
+                    }
+                    db.crypto[sourceIndex] = {
+                        ...db.crypto[sourceIndex],
+                        data: await encryptData(txOut),
+                        deletedAt: null
+                    };
+                    db.crypto[targetIndex] = {
+                        ...db.crypto[targetIndex],
+                        data: await encryptData(txIn),
+                        deletedAt: null
+                    };
+                } else {
+                    db.crypto.push({ id: swapId + '_out', data: await encryptData(txOut), deletedAt: null });
+                    db.crypto.push({ id: swapId + '_in', data: await encryptData(txIn), deletedAt: null });
+                }
+                const targetManualPriceCache = buildManualCryptoPriceCacheEntryFromMetadata(targetMetadata);
+                if (targetManualPriceCache) {
+                    db.crypto_prices = db.crypto_prices || {};
+                    db.crypto_prices[targetTokenId] = {
+                        ...targetManualPriceCache,
+                        network: targetMetadata.network || CARDANO_NETWORK_ID,
+                        dex: targetMetadata.dex || MINSWAP_DEX_ID,
+                        poolAddress: targetMetadata.poolAddress || '',
+                        poolName: targetMetadata.poolName || '',
+                        lpTokenSupply: targetMetadata.lpTokenSupply || undefined
+                    };
+                }
+
+            } else {
+                const isAirdrop = type === 'airdrop';
+                const price = isAirdrop ? 0 : parseFloat(document.getElementById('c-price').value);
+                const currency = isAirdrop ? 'PHP' : document.getElementById('c-currency').value;
+                const sourceMetadata = buildCryptoTxMetadata('source');
+
+                if (!tokenId || !amount || (!isAirdrop && !price)) { alert("Please fill details"); return; }
+                if (sourceMetadata.assetType === 'lp_pool' && (!Number.isFinite(Number(sourceMetadata.lpTokenSupply)) || Number(sourceMetadata.lpTokenSupply) <= 0)) {
+                    alert("Enter the total LP token supply for this Minswap LP asset.");
+                    return;
+                }
+                if (!await ensureCryptoLpManualPriceReady(sourceMetadata, 'LP')) return;
+                if (currency === 'ADA') {
+                    const hasAdaRate = await ensureCryptoAdaPriceForConversion();
+                    if (!hasAdaRate) {
+                        alert('Could not fetch the ADA rate. Enter the LP price in PHP/USD/JPY for now.');
+                        return;
+                    }
+                }
+
+                // Convert to PHP for base storage consistency
+                const phpPrice = isAirdrop ? 0 : convertToDisplayCurrency(price, currency, 'PHP');
+                if (!isAirdrop && !Number.isFinite(phpPrice)) {
+                    alert(currency === 'ADA'
+                        ? 'Refresh crypto prices first so the app has the ADA rate, or enter the price in PHP/USD/JPY.'
+                        : 'Could not convert this price currency.');
+                    return;
+                }
+                const phpTotal = isAirdrop ? 0 : (amount * phpPrice);
+
+                // Store transaction
+                const txData = {
+                    tokenId,
+                    symbol: tokenSymbol || tokenId,
+                    amount,
+                    price,
+                    currency,
+                    phpPrice,
+                    phpTotal,
+                    total: phpTotal, // Maintain compatibility with existing logic which uses .total as PHP
+                    type,
+                    ...sourceMetadata,
+                    notes,
+                    exchange,
+                    strategy,
+                    date: date
+                };
+                const encrypted = await encryptData(txData);
+                if (editState?.mode === 'single') {
+                    const itemIndex = db.crypto.findIndex(item => item.id === editState.id);
+                    if (itemIndex < 0) {
+                        alert('Could not update that crypto transaction.');
+                        return;
+                    }
+                    db.crypto[itemIndex] = {
+                        ...db.crypto[itemIndex],
+                        data: encrypted,
+                        deletedAt: null
+                    };
+                } else {
+                    db.crypto.push({
+                        id: Date.now().toString(36),
+                        data: encrypted,
+                        deletedAt: null
+                    });
+                }
+            }
+
+            editingCryptoTransactionState = null;
+            toggleModal('crypto-transaction-modal');
+
+            await syncCryptoBuyExpensesInDB(db);
+            await saveDB(db);
+
+            rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
+            rawTransactions = (db.transactions || []).filter(t => !t.deletedAt);
+            invalidateCryptoComputationCache();
+            await loadFromStorage();
+        }
+
+        async function getDecryptedCrypto() {
+            ensureCryptoComputationCacheFresh();
+            if (cryptoComputationCache.decryptedTxs) {
+                return cryptoComputationCache.decryptedTxs;
+            }
+            if (cryptoComputationCache.pendingDecryptPromise) {
+                return cryptoComputationCache.pendingDecryptPromise;
+            }
+
+            cryptoComputationCache.pendingDecryptPromise = Promise.all((rawCrypto || []).map(async item => {
+                const d = await decryptData(item.data);
+                return d ? { ...d, id: item.id } : null;
+            })).then(txs => txs
+                .filter(x => x)
+                .sort((a, b) => new Date(b.date) - new Date(a.date)));
+
+            try {
+                const decrypted = await cryptoComputationCache.pendingDecryptPromise;
+                cryptoComputationCache.decryptedTxs = decrypted;
+                // Sort: oldest first for math, but we return sorted by date (newest first) for display usually
+                // Here we return newest first
+                return decrypted;
+            } finally {
+                cryptoComputationCache.pendingDecryptPromise = null;
+            }
+        }
+
+        function getCryptoProcessingRank(tx) {
+            const type = String(tx?.type || '').trim();
+            if (type === 'swap_out') return 0;
+            if (type === 'swap_in') return 2;
+            return 1;
+        }
+
+        function sortCryptoTransactionsChronologically(txs) {
+            return [...(txs || [])]
+                .map((tx, index) => ({ tx, index }))
+                .sort((a, b) => {
+                    const timeDiff = Date.parse(a.tx?.date) - Date.parse(b.tx?.date);
+                    if (Number.isFinite(timeDiff) && timeDiff !== 0) return timeDiff;
+
+                    const rankDiff = getCryptoProcessingRank(a.tx) - getCryptoProcessingRank(b.tx);
+                    if (rankDiff !== 0) return rankDiff;
+
+                    return a.index - b.index;
+                })
+                .map(entry => entry.tx);
+        }
+
+        function calculateWeightedHoldingDays(lots) {
+            const now = Date.now();
+            let weightedDays = 0;
+            let totalAmount = 0;
+
+            (lots || []).forEach(lot => {
+                if (!lot || lot.amount <= 0.000001) return;
+                const lotTime = new Date(lot.date).getTime();
+                if (!Number.isFinite(lotTime)) return;
+
+                const ageDays = Math.max(0, (now - lotTime) / (1000 * 60 * 60 * 24));
+                weightedDays += lot.amount * ageDays;
+                totalAmount += lot.amount;
+            });
+
+            return totalAmount > 0 ? (weightedDays / totalAmount) : 0;
+        }
+
+        function normalizeCryptoInterestEntry(entry) {
+            const rewards = Array.isArray(entry?.rewards) ? entry.rewards : [];
+            return {
+                enabled: !!entry?.enabled,
+                rewards: rewards
+                    .map(reward => {
+                        const rewardTokenId = String(reward?.tokenId || '').trim();
+                        if (!rewardTokenId) return null;
+                        const parsedAmount = Number(reward?.amount);
+                        return {
+                            tokenId: rewardTokenId,
+                            symbol: String(reward?.symbol || rewardTokenId).trim() || rewardTokenId,
+                            amount: Number.isFinite(parsedAmount) ? Math.max(parsedAmount, 0) : 0
+                        };
+                    })
+                    .filter(Boolean),
+                lastModified: Number.isFinite(Number(entry?.lastModified)) ? Number(entry.lastModified) : 0
+            };
+        }
+
+        function getCryptoInterestEntry(tokenId) {
+            const source = cryptoInterestByToken && typeof cryptoInterestByToken === 'object' ? cryptoInterestByToken : {};
+            return normalizeCryptoInterestEntry(source[tokenId]);
+        }
+
+        function setCryptoInterestEntry(tokenId, nextEntry) {
+            cryptoInterestByToken = cryptoInterestByToken && typeof cryptoInterestByToken === 'object' ? cryptoInterestByToken : {};
+            cryptoInterestByToken[tokenId] = normalizeCryptoInterestEntry(nextEntry);
+        }
+
+        let cryptoInterestPersistTimer = null;
+        let cryptoInterestPersistInFlight = false;
+        let cryptoInterestPersistQueued = false;
+        let cryptoInterestRenderQueued = false;
+        let cryptoPortfolioRenderContext = null;
+        let activeCryptoHoldingDetailTokenId = '';
+        const cryptoInterestRenderTokenIds = new Set();
+
+        async function persistCryptoInterestStateNow() {
+            const db = await getDB();
+            db.crypto_interest = cryptoInterestByToken && typeof cryptoInterestByToken === 'object' ? cryptoInterestByToken : {};
+            const saved = await saveDB(db);
+            cryptoInterestByToken = saved.crypto_interest || {};
+        }
+
+        async function flushCryptoInterestPersistence() {
+            if (cryptoInterestPersistInFlight) {
+                cryptoInterestPersistQueued = true;
+                return;
+            }
+
+            cryptoInterestPersistInFlight = true;
+            try {
+                do {
+                    cryptoInterestPersistQueued = false;
+                    await persistCryptoInterestStateNow();
+                } while (cryptoInterestPersistQueued);
+            } catch (error) {
+                console.error('Failed to persist crypto interest settings.', error);
+            } finally {
+                cryptoInterestPersistInFlight = false;
+            }
+        }
+
+        function scheduleCryptoInterestPersistence(delayMs = 250) {
+            cryptoInterestPersistQueued = true;
+            if (cryptoInterestPersistTimer) clearTimeout(cryptoInterestPersistTimer);
+            cryptoInterestPersistTimer = setTimeout(() => {
+                cryptoInterestPersistTimer = null;
+                flushCryptoInterestPersistence();
+            }, Math.max(0, delayMs));
+        }
+
+        function queueCryptoInterestRender(tokenId) {
+            if (tokenId) {
+                cryptoInterestRenderTokenIds.add(tokenId);
+            }
+            if (cryptoInterestRenderQueued) return;
+
+            cryptoInterestRenderQueued = true;
+            requestAnimationFrame(() => {
+                cryptoInterestRenderQueued = false;
+                const tokenIds = Array.from(cryptoInterestRenderTokenIds);
+                cryptoInterestRenderTokenIds.clear();
+
+                (async () => {
+                    if (tokenIds.length === 0) {
+                        await renderCryptoPortfolio();
+                        return;
+                    }
+
+                    let needsFullRender = false;
+                    for (const id of tokenIds) {
+                        const updated = await renderCryptoHoldingCardByTokenId(id);
+                        if (!updated) {
+                            needsFullRender = true;
+                            break;
+                        }
+                    }
+
+                    if (needsFullRender) {
+                        await renderCryptoPortfolio();
+                    }
+                })().catch(error => {
+                    console.error('Failed to render crypto portfolio after interest update.', error);
+                });
+            });
+        }
+
+        async function setCryptoInterestEnabled(tokenIdEncoded, checked) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            if (!tokenId) return;
+            const current = getCryptoInterestEntry(tokenId);
+            setCryptoInterestEntry(tokenId, {
+                ...current,
+                enabled: !!checked,
+                lastModified: Date.now()
+            });
+            queueCryptoInterestRender(tokenId);
+            scheduleCryptoInterestPersistence(0);
+        }
+
+        async function addCryptoInterestReward(tokenIdEncoded) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            if (!tokenId) return;
+            const current = getCryptoInterestEntry(tokenId);
+            const nextRewards = [...(current.rewards || []), { tokenId, symbol: tokenId, amount: 0 }];
+            setCryptoInterestEntry(tokenId, {
+                ...current,
+                enabled: true,
+                rewards: nextRewards,
+                lastModified: Date.now()
+            });
+            queueCryptoInterestRender(tokenId);
+            scheduleCryptoInterestPersistence();
+        }
+
+        async function updateCryptoInterestRewardToken(tokenIdEncoded, rewardIndexRaw, rewardTokenId) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            const rewardIndex = Number(rewardIndexRaw);
+            const cleanedRewardTokenId = String(rewardTokenId || '').trim();
+            if (!tokenId || !Number.isInteger(rewardIndex) || rewardIndex < 0 || !cleanedRewardTokenId) return;
+
+            const current = getCryptoInterestEntry(tokenId);
+            const nextRewards = [...(current.rewards || [])];
+            if (!nextRewards[rewardIndex]) return;
+            nextRewards[rewardIndex] = {
+                ...nextRewards[rewardIndex],
+                tokenId: cleanedRewardTokenId,
+                symbol: cleanedRewardTokenId
+            };
+            setCryptoInterestEntry(tokenId, {
+                ...current,
+                rewards: nextRewards,
+                lastModified: Date.now()
+            });
+            queueCryptoInterestRender(tokenId);
+            scheduleCryptoInterestPersistence();
+        }
+
+        async function updateCryptoInterestRewardAmount(tokenIdEncoded, rewardIndexRaw, amountRaw) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            const rewardIndex = Number(rewardIndexRaw);
+            if (!tokenId || !Number.isInteger(rewardIndex) || rewardIndex < 0) return;
+
+            const current = getCryptoInterestEntry(tokenId);
+            const nextRewards = [...(current.rewards || [])];
+            if (!nextRewards[rewardIndex]) return;
+            const parsedAmount = Number(amountRaw);
+            nextRewards[rewardIndex] = {
+                ...nextRewards[rewardIndex],
+                amount: Number.isFinite(parsedAmount) ? Math.max(parsedAmount, 0) : 0
+            };
+            setCryptoInterestEntry(tokenId, {
+                ...current,
+                rewards: nextRewards,
+                lastModified: Date.now()
+            });
+            queueCryptoInterestRender(tokenId);
+            scheduleCryptoInterestPersistence(350);
+        }
+
+        async function removeCryptoInterestReward(tokenIdEncoded, rewardIndexRaw) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            const rewardIndex = Number(rewardIndexRaw);
+            if (!tokenId || !Number.isInteger(rewardIndex) || rewardIndex < 0) return;
+
+            const current = getCryptoInterestEntry(tokenId);
+            const nextRewards = (current.rewards || []).filter((_, idx) => idx !== rewardIndex);
+            setCryptoInterestEntry(tokenId, {
+                ...current,
+                rewards: nextRewards,
+                lastModified: Date.now()
+            });
+            queueCryptoInterestRender(tokenId);
+            scheduleCryptoInterestPersistence();
+        }
+
+        function buildCryptoTokenUniverse(holdings, txs) {
+            const map = new Map();
+            Object.entries(holdings || {}).forEach(([id, h]) => {
+                if (!id) return;
+                const symbol = String(h?.symbol || id).toUpperCase();
+                map.set(id, symbol);
+            });
+            (txs || []).forEach(tx => {
+                if (!tx?.tokenId) return;
+                const symbol = String(tx.symbol || tx.tokenId).toUpperCase();
+                if (!map.has(tx.tokenId)) map.set(tx.tokenId, symbol);
+            });
+            Object.values(cryptoInterestByToken || {}).forEach(cfg => {
+                (cfg?.rewards || []).forEach(reward => {
+                    if (!reward?.tokenId) return;
+                    const symbol = String(reward.symbol || reward.tokenId).toUpperCase();
+                    if (!map.has(reward.tokenId)) map.set(reward.tokenId, symbol);
+                });
+            });
+
+            return Array.from(map.entries())
+                .map(([id, symbol]) => ({ id, symbol }))
+                .sort((a, b) => a.symbol.localeCompare(b.symbol) || a.id.localeCompare(b.id));
+        }
+
+        function buildCryptoInterestRewardTokenOptions(tokenUniverse, selectedTokenId) {
+            const selected = String(selectedTokenId || '').trim();
+            const hasSelected = !!selected && tokenUniverse.some(opt => opt.id === selected);
+            const options = hasSelected || !selected
+                ? tokenUniverse
+                : [{ id: selected, symbol: selected.toUpperCase() }, ...tokenUniverse];
+
+            return options.map(opt => {
+                const safeId = escapeAttr(opt.id);
+                const safeLabel = `${escapeHTML(opt.symbol)} (${escapeHTML(opt.id)})`;
+                const isSelected = opt.id === selected ? 'selected' : '';
+                return `<option value="${safeId}" ${isSelected}>${safeLabel}</option>`;
+            }).join('');
+        }
+
+        function calculateCryptoInterestApy(tokenId, holding, interestEntry) {
+            const weightedHoldingDays = calculateWeightedHoldingDays(holding?.lots || []);
+            const principal = Number(holding?.totalCost || 0);
+            const holdingAmount = Number(holding?.amount || 0);
+            const normalizedTokenId = String(tokenId || '').trim().toLowerCase();
+            const rewards = Array.isArray(interestEntry?.rewards) ? interestEntry.rewards : [];
+            let earnedValue = 0;
+            let hasAmount = false;
+            let missingPriceCount = 0;
+            let sameTokenEarnedAmount = 0;
+            let otherTokenRewardCount = 0;
+
+            rewards.forEach(reward => {
+                const amount = Number(reward?.amount || 0);
+                if (!Number.isFinite(amount) || amount <= 0) return;
+                hasAmount = true;
+                const rewardTokenId = String(reward?.tokenId || '').trim();
+                const isSameTokenReward = !!normalizedTokenId && rewardTokenId.toLowerCase() === normalizedTokenId;
+                if (isSameTokenReward) {
+                    sameTokenEarnedAmount += amount;
+                } else {
+                    otherTokenRewardCount += 1;
+                }
+                const price = Number(cryptoPrices?.[reward.tokenId]?.price || 0);
+                if (price > 0) {
+                    earnedValue += amount * price;
+                } else {
+                    missingPriceCount += 1;
+                }
+            });
+
+            if (weightedHoldingDays <= 0) {
+                return { status: 'invalid', message: 'Holding time is too short to annualize APY.' };
+            }
+            if (!hasAmount) {
+                return { status: 'pending', message: 'Enter earned amounts to compute APY.' };
+            }
+            if (principal <= 0) {
+                if (sameTokenEarnedAmount <= 0) {
+                    return { status: 'invalid', message: 'No invested value yet for APY computation.' };
+                }
+                if (holdingAmount <= 0) {
+                    return { status: 'invalid', message: 'No token balance available for same-token APY computation.' };
+                }
+
+                const years = weightedHoldingDays / 365;
+                const periodReturnPct = (sameTokenEarnedAmount / holdingAmount) * 100;
+                const apyPct = years > 0 ? (periodReturnPct / years) : 0;
+                const sameTokenPrice = Number(cryptoPrices?.[tokenId]?.price || 0);
+
+                return {
+                    status: 'ok',
+                    basis: 'token',
+                    earnedValue: sameTokenPrice > 0 ? sameTokenEarnedAmount * sameTokenPrice : 0,
+                    earnedValueAvailable: sameTokenPrice > 0,
+                    earnedTokenAmount: sameTokenEarnedAmount,
+                    principalTokenAmount: holdingAmount,
+                    rewardSymbol: holding?.symbol || tokenId,
+                    apyPct,
+                    periodReturnPct,
+                    weightedHoldingDays,
+                    missingPriceCount,
+                    otherTokenRewardCount
+                };
+            }
+            if (earnedValue <= 0) {
+                return { status: 'pending', message: 'Missing reward token prices. Refresh crypto prices first.' };
+            }
+
+            const years = weightedHoldingDays / 365;
+            const periodReturnPct = (earnedValue / principal) * 100;
+            const apyPct = years > 0 ? (periodReturnPct / years) : 0;
+
+            return {
+                status: 'ok',
+                basis: 'value',
+                earnedValue,
+                earnedValueAvailable: true,
+                apyPct,
+                periodReturnPct,
+                weightedHoldingDays,
+                missingPriceCount
+            };
+        }
+
+        async function calculateHoldings(method = 'fifo') {
+            const normalizedMethod = normalizeCostBasisMethod(method);
+            ensureCryptoComputationCacheFresh();
+            const cached = cryptoComputationCache.holdingsByMethod.get(normalizedMethod);
+            if (cached) return cached;
+
+            const txs = await getDecryptedCrypto();
+            const holdings = {};
+            // holdings structure: 
+            // { 'bitcoin': { amount: 0, totalCost: 0, realizedPL: 0, symbol: 'BTC', lots: [] } }
+
+            // Process oldest first while preserving same-day entry order and swap direction.
+            const sorted = cryptoComputationCache.chronologicalTxs || sortCryptoTransactionsChronologically(txs);
+            cryptoComputationCache.chronologicalTxs = sorted;
+            const pendingSwaps = {}; // Stores cost basis for swaps: { swapId: totalCostTransferred }
+
+            sorted.forEach(tx => {
+                if (!holdings[tx.tokenId]) {
+                    holdings[tx.tokenId] = {
+                        amount: 0,
+                        totalCost: 0,
+                        realizedPL: 0,
+                        symbol: tx.symbol,
+                        lots: [] // For FIFO/LIFO tracking: { amount, price, date }
+                    };
+                }
+                const h = holdings[tx.tokenId];
+
+                if (tx.type === 'buy' || tx.type === 'airdrop' || tx.type === 'staking_reward' || tx.type === 'reconcile_in' || tx.type === 'transfer_in') {
+                    const lotSourceType = tx.type === 'airdrop'
+                        ? 'airdrop'
+                        : (tx.type === 'staking_reward' ? 'staking_reward' : (tx.type === 'reconcile_in' ? 'reconcile' : (tx.type === 'transfer_in' ? 'transfer' : 'buy')));
+                    h.amount += tx.amount;
+                    h.totalCost += tx.total;
+                    h.lots.push({
+                        amount: tx.amount,
+                        price: tx.phpPrice,
+                        total: tx.total,
+                        date: tx.date,
+                        sourceType: lotSourceType,
+                        sourceSymbol: tx.symbol
+                    });
+
+                } else if (tx.type === 'sell' || tx.type === 'swap_out' || tx.type === 'reconcile_out' || tx.type === 'network_fee' || tx.type === 'transfer_out') {
+                    // Sell or Swap Out Logic
+                    let costOfSold = 0;
+                    let remainingToSell = tx.amount;
+                    let soldAmount = 0;
+
+                    if (normalizedMethod === 'avg') {
+                        const totalAmountBeforeSell = h.amount;
+                        soldAmount = Math.min(tx.amount, totalAmountBeforeSell);
+                        const avgPrice = totalAmountBeforeSell > 0 ? (h.totalCost / totalAmountBeforeSell) : 0;
+                        costOfSold = avgPrice * soldAmount;
+                        h.totalCost -= costOfSold;
+
+                        // Keep lot ages meaningful for holding-time metrics by reducing each lot proportionally.
+                        if (totalAmountBeforeSell > 0 && h.lots.length > 0) {
+                            const remainingRatio = Math.max((totalAmountBeforeSell - soldAmount) / totalAmountBeforeSell, 0);
+                            h.lots = h.lots
+                                .map(lot => {
+                                    const newAmount = lot.amount * remainingRatio;
+                                    return {
+                                        ...lot,
+                                        amount: newAmount,
+                                        total: newAmount * lot.price
+                                    };
+                                })
+                                .filter(lot => lot.amount > 0.000001);
+                        }
+
+                        // Recalculate from remaining lots to minimize floating-point drift.
+                        h.totalCost = h.lots.reduce((sum, l) => sum + (l.amount * l.price), 0);
+                    } else {
+                        // FIFO/LIFO
+                        while (remainingToSell > 0.000001 && h.lots.length > 0) {
+                            const lotIndex = normalizedMethod === 'fifo' ? 0 : h.lots.length - 1;
+                            const lot = h.lots[lotIndex];
+
+                            if (lot.amount <= remainingToSell) {
+                                costOfSold += (lot.amount * lot.price);
+                                remainingToSell -= lot.amount;
+                                soldAmount += lot.amount;
+                                h.lots.splice(lotIndex, 1);
+                            } else {
+                                const lotCost = remainingToSell * lot.price;
+                                costOfSold += lotCost;
+                                lot.amount -= remainingToSell;
+                                soldAmount += remainingToSell;
+                                remainingToSell = 0;
+                            }
+                        }
+                        // Recalculate total cost from remaining lots to prevent drift
+                        h.totalCost = h.lots.reduce((sum, l) => sum + (l.amount * l.price), 0);
+                    }
+
+                    h.amount -= soldAmount;
+
+                    if (tx.type === 'sell') {
+                        h.realizedPL += (tx.total - costOfSold);
+                    } else if (tx.type === 'swap_out') {
+                        // For swap, we defer the P/L.
+                        // We store the 'costOfSold' (which is the cost basis of the tokens leaving)
+                        // to be applied to the incoming token.
+                        if (tx.swapId) {
+                            pendingSwaps[tx.swapId] = (pendingSwaps[tx.swapId] || 0) + costOfSold;
+                        }
+                    }
+
+                } else if (tx.type === 'swap_in') {
+                    // Swap In Logic
+                    const transferredCost = pendingSwaps[tx.swapId] || 0;
+
+                    h.amount += tx.amount;
+                    h.totalCost += transferredCost; // Add the transferred cost basis
+
+                    // The "price" effectively becomes (Transferred Cost / New Amount)
+                    const effectivePrice = tx.amount > 0 ? (transferredCost / tx.amount) : 0;
+
+                    h.lots.push({
+                        amount: tx.amount,
+                        price: effectivePrice,
+                        total: transferredCost,
+                        date: tx.date,
+                        sourceType: 'swap',
+                        sourceSymbol: tx.linkedToken || tx.symbol
+                    });
+
+                    if (tx.swapId) delete pendingSwaps[tx.swapId];
+                }
+            });
+
+            cryptoComputationCache.holdingsByMethod.set(normalizedMethod, holdings);
+            return holdings;
+        }
+
+	        async function fetchCryptoPrices() {
+            let holdings = {};
+            let allTxs = [];
+            const canReadVaultHoldings = !!cryptoKey || !!previewMode;
+            if (canReadVaultHoldings) {
+                try {
+                    holdings = await calculateHoldings();
+                    allTxs = await getDecryptedCrypto();
+                } catch (error) {
+                    console.warn('Could not calculate holdings for crypto price refresh.', error);
+                    holdings = {};
+                    allTxs = [];
+                }
+            }
+
+            try {
+                if (typeof updateExchangeRates === 'function') {
+                    await updateExchangeRates();
+                }
+            } catch (error) {
+                console.warn('Exchange rate refresh failed before crypto price fetch.', error);
+            }
+
+            const trackedIds = new Set(Object.keys(holdings).filter(k => holdings[k].amount > 0.000001));
+            Object.values(cryptoInterestByToken || {}).forEach(entry => {
+                if (!entry?.enabled) return;
+                (entry.rewards || []).forEach(reward => {
+                    const rewardTokenId = String(reward?.tokenId || '').trim();
+                    if (rewardTokenId) trackedIds.add(rewardTokenId);
+                });
+            });
+            getCryptoConversionTrackedTokenIds().forEach(tokenId => trackedIds.add(tokenId));
+            const ids = Array.from(trackedIds);
+            const statusEl = document.getElementById('crypto-last-updated');
+
+            if (ids.length === 0) {
+                if (statusEl) statusEl.innerText = "No assets, rewards, or route tokens to track";
+                return;
+            }
+
+            // FIX: Target the button by ID, then finding the SVG (since Lucide replaces <i> with <svg>)
+            const btn = document.getElementById('btn-refresh-crypto');
+            const icon = btn ? btn.querySelector('svg') : null;
+
+	            if (icon) icon.classList.add('animate-spin');
+	            if (statusEl) statusEl.innerText = canReadVaultHoldings ? "Updating prices..." : "Updating route prices...";
+
+	            try {
+                    const normalIds = ids.filter(id => !isCardanoTokenId(id) && !isMinswapLpTokenId(id));
+                    const cardanoTokenIds = ids.filter(id => isCardanoTokenId(id));
+                    const lpTokenIds = ids.filter(id => isMinswapLpTokenId(id));
+                    const now = Date.now();
+                    const priceUpdates = {};
+                    const warnings = [];
+
+                    if (normalIds.length > 0) {
+                        Object.assign(priceUpdates, await fetchCoinGeckoSimplePriceUpdates(normalIds, now));
+                    }
+
+                    if (cardanoTokenIds.length > 0) {
+                        Object.assign(priceUpdates, await fetchCardanoTokenPriceUpdates(cardanoTokenIds, now));
+                    }
+                    if (lpTokenIds.length > 0) {
+                        const lpIdsWithSupply = lpTokenIds.filter(id => getLatestLpTokenSupplyFromTransactions(id, allTxs) > 0);
+                        const missingSupplyCount = lpTokenIds.length - lpIdsWithSupply.length;
+                        if (missingSupplyCount > 0) {
+                            warnings.push(`${missingSupplyCount} Minswap LP holding${missingSupplyCount === 1 ? '' : 's'} missing total LP supply.`);
+                        }
+                        const manualLpIds = lpIdsWithSupply.filter(id => {
+                            const cache = cryptoPrices?.[id];
+                            return cache?.source === 'manual_lp_price' && Number(cache?.price || 0) > 0;
+                        });
+                        manualLpIds.forEach(id => {
+                            priceUpdates[id] = {
+                                ...cryptoPrices[id],
+                                updated: now
+                            };
+                        });
+                        const lpIdsNeedingFetch = lpIdsWithSupply.filter(id => !manualLpIds.includes(id));
+                        if (manualLpIds.length > 0) {
+                            warnings.push(`Using manual LP price for ${manualLpIds.length} Minswap LP holding${manualLpIds.length === 1 ? '' : 's'}.`);
+                        }
+                        if (lpIdsNeedingFetch.length > 0) {
+                            try {
+                                Object.assign(priceUpdates, await fetchMinswapLpPriceUpdates(lpIdsNeedingFetch, allTxs, now));
+                            } catch (error) {
+                                warnings.push(error?.message || 'Minswap LP price refresh failed.');
+                            }
+                        }
+                    }
+
+	                // Update cache locally only (avoid Firestore upload on price refresh)
+	                const db = await getDB();
+                    db.crypto_prices = db.crypto_prices || {};
+	                Object.keys(priceUpdates).forEach(id => {
+	                    db.crypto_prices[id] = priceUpdates[id];
+	                });
+		                await persistLocalDBSnapshot(db);
+		                cryptoPrices = db.crypto_prices || {};
+		                renderCryptoPortfolio();
+                        if (!document.getElementById('crypto-conversion-lab-modal')?.classList.contains('hidden')) {
+                            renderCryptoConversionLab();
+                        }
+                        if (warnings.length) {
+                            const message = warnings.join(' ');
+                            if (statusEl) statusEl.innerText = `Prices updated with warning: ${message}`;
+                            if (typeof showToast === 'function') showToast(message);
+                        }
+		            } catch (e) {
+	                console.error(e);
+	                if (statusEl) statusEl.innerText = "Update Failed";
+	                alert(e?.message || "Could not fetch prices. The free API might be rate-limited. Please try again in a minute.");
+	            } finally {
+                if (icon) icon.classList.remove('animate-spin');
+            }
+        }
+
+        async function renderCryptoWidget() {
+            const holdings = await calculateHoldings();
+            let totalVal = 0;
+            let unrealizedPL = 0;
+
+            Object.entries(holdings).forEach(([id, h]) => {
+                if (h.amount <= 0.000001) return;
+                const currentPrice = cryptoPrices[id]?.price || 0; // Use cached price
+                const val = h.amount * currentPrice;
+                const avgPrice = h.totalCost / h.amount;
+
+                if (currentPrice > 0) {
+                    totalVal += val;
+                    unrealizedPL += (currentPrice - avgPrice) * h.amount;
+                } else {
+                    // Fallback: value at cost if no price
+                    totalVal += h.totalCost;
+                }
+            });
+
+            document.getElementById('crypto-total-display').innerText = fmt(totalVal);
+            const plSpan = document.getElementById('crypto-pnl-display');
+            plSpan.innerText = (unrealizedPL >= 0 ? '+' : '') + fmt(unrealizedPL);
+            plSpan.className = `text-xs font-bold ${unrealizedPL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+        }
+
+        let cryptoTargetLossesOnly = true;
+        let cryptoTargetByToken = {};
+
+        function setCryptoTargetLossesOnly(checked) {
+            cryptoTargetLossesOnly = !!checked;
+            renderCryptoPortfolio();
+        }
+
+        function setCryptoTokenTarget(tokenIdEncoded, value) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            if (!tokenId) return;
+            const parsed = parseFloat(value);
+            if (!Number.isFinite(parsed)) {
+                delete cryptoTargetByToken[tokenId];
+            } else {
+                cryptoTargetByToken[tokenId] = parsed;
+            }
+            renderCryptoPortfolio();
+        }
+
+        function clearCryptoTokenTarget(tokenIdEncoded) {
+            const tokenId = decodeURIComponent(tokenIdEncoded || '');
+            if (!tokenId) return;
+            delete cryptoTargetByToken[tokenId];
+            renderCryptoPortfolio();
+        }
+
+        function getCryptoTokenTargetPct(tokenId, defaultPct) {
+            const override = cryptoTargetByToken[tokenId];
+            return Number.isFinite(override) ? override : defaultPct;
+        }
+
+        function simulateRemainingLotsAfterSell(lots, sellAmount, method) {
+            const arr = (lots || [])
+                .filter(lot => lot && lot.amount > 0.000001)
+                .map(lot => ({ amount: lot.amount, price: lot.price }));
+            let remainingToSell = Math.max(0, sellAmount);
+
+            while (remainingToSell > 0.000001 && arr.length > 0) {
+                const lotIndex = method === 'lifo' ? arr.length - 1 : 0;
+                const lot = arr[lotIndex];
+                const sold = Math.min(lot.amount, remainingToSell);
+                lot.amount -= sold;
+                remainingToSell -= sold;
+                if (lot.amount <= 0.000001) {
+                    arr.splice(lotIndex, 1);
+                }
+            }
+
+            const remainingAmount = arr.reduce((sum, lot) => sum + lot.amount, 0);
+            const remainingCost = arr.reduce((sum, lot) => sum + (lot.amount * lot.price), 0);
+            return { remainingAmount, remainingCost };
+        }
+
+        function calculateSellNeededForTargetUnrealizedPct(holding, currentPrice, targetPct, taxMethod) {
+            const amount = holding?.amount || 0;
+            const totalCost = holding?.totalCost || 0;
+            const currentValue = amount * currentPrice;
+            const unrealized = currentValue - totalCost;
+            const currentPct = totalCost > 0 ? (unrealized / totalCost) * 100 : 0;
+            const target = targetPct;
+
+            if (!Number.isFinite(currentPrice) || currentPrice <= 0 || amount <= 0.000001 || totalCost <= 0) {
+                return { status: 'invalid', message: 'Needs current price and holding data.' };
+            }
+            if (unrealized <= 0) {
+                return { status: 'impossible', message: 'Sell target is only for positions currently in gain.' };
+            }
+            if (!Number.isFinite(target) || target <= 0) {
+                return { status: 'impossible', message: 'For gains, target must be above 0%.' };
+            }
+            if (target > currentPct + 1e-9) {
+                return { status: 'impossible', message: 'Selling cannot increase unrealized gain %.' };
+            }
+            if (Math.abs(target - currentPct) < 1e-6) {
+                return { status: 'at_target', requiredSell: 0 };
+            }
+
+            // Under average cost, partial sells keep unrealized % unchanged.
+            if (taxMethod === 'avg') {
+                return { status: 'impossible', message: 'With average cost, selling does not change unrealized gain %.' };
+            }
+
+            const lots = holding.lots || [];
+            const evaluatePct = (sellAmount) => {
+                const sim = simulateRemainingLotsAfterSell(lots, sellAmount, taxMethod);
+                if (sim.remainingAmount <= 0.000001 || sim.remainingCost <= 0.000001) {
+                    return null;
+                }
+                const remainingValue = sim.remainingAmount * currentPrice;
+                return ((remainingValue - sim.remainingCost) / sim.remainingCost) * 100;
+            };
+
+            const maxSell = Math.max(0, amount - 0.000001);
+            if (maxSell <= 0) {
+                return { status: 'impossible', message: 'Not enough amount to simulate a sell target.' };
+            }
+
+            let prevSell = 0;
+            let prevPct = currentPct;
+            let bestSell = 0;
+            let bestPct = currentPct;
+            let bestDiff = Math.abs(currentPct - target);
+            const steps = 240;
+            let crossing = null;
+
+            for (let i = 1; i <= steps; i++) {
+                const sell = (maxSell * i) / steps;
+                const pct = evaluatePct(sell);
+                if (!Number.isFinite(pct)) continue;
+
+                const diff = Math.abs(pct - target);
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    bestSell = sell;
+                    bestPct = pct;
+                }
+
+                const crossed = (prevPct - target) * (pct - target) <= 0;
+                if (!crossing && crossed) {
+                    crossing = { lowSell: prevSell, highSell: sell, lowPct: prevPct, highPct: pct };
+                    break;
+                }
+
+                prevSell = sell;
+                prevPct = pct;
+            }
+
+            if (crossing) {
+                let lo = crossing.lowSell;
+                let hi = crossing.highSell;
+                let bestMid = (lo + hi) / 2;
+                for (let i = 0; i < 28; i++) {
+                    const mid = (lo + hi) / 2;
+                    const midPct = evaluatePct(mid);
+                    if (!Number.isFinite(midPct)) break;
+                    bestMid = mid;
+                    if (Math.abs(midPct - target) < 0.0001) break;
+                    const loPct = evaluatePct(lo);
+                    if (!Number.isFinite(loPct)) break;
+                    if ((loPct - target) * (midPct - target) <= 0) hi = mid;
+                    else lo = mid;
+                }
+                const matchedPct = evaluatePct(bestMid);
+                return { status: 'sell', requiredSell: bestMid * currentPrice, requiredSellAmount: bestMid, matchedPct };
+            }
+
+            if (bestDiff <= 0.1) {
+                return { status: 'sell', requiredSell: bestSell * currentPrice, requiredSellAmount: bestSell, matchedPct: bestPct, approximate: true };
+            }
+
+            return { status: 'impossible', message: 'Target not reachable by selling under current lot order.' };
+        }
+
+        function calculateAdjustmentForTargetUnrealized(totalCost, currentValue, targetPct) {
+            if (!Number.isFinite(totalCost) || totalCost <= 0 || !Number.isFinite(currentValue) || currentValue < 0) {
+                return { status: 'invalid', message: 'Not enough data yet.' };
+            }
+
+            const unrealized = currentValue - totalCost;
+            const currentRatio = unrealized / totalCost;
+            const targetRatio = targetPct / 100;
+
+            if (!Number.isFinite(targetRatio)) {
+                return { status: 'invalid', message: 'Invalid target percentage.' };
+            }
+
+            if (Math.abs(unrealized) < 1e-9) {
+                if (Math.abs(targetRatio) < 1e-9) {
+                    return { status: 'at_target', requiredAmount: 0, action: 'none', currentRatio, targetRatio };
+                }
+                return {
+                    status: 'impossible',
+                    message: 'At break-even. Price movement is needed to move away from 0%.',
+                    currentRatio,
+                    targetRatio
+                };
+            }
+
+            if (Math.abs(targetRatio) < 1e-9) {
+                return {
+                    status: 'impossible',
+                    message: '0% cannot be reached with a finite buy at the same price.',
+                    currentRatio,
+                    targetRatio
+                };
+            }
+
+            // Adjustments at current price move unrealized % toward 0 while keeping its sign.
+            if (unrealized < 0) {
+                if (targetRatio >= 0) {
+                    return {
+                        status: 'impossible',
+                        message: 'For a losing position, target must stay below 0%.',
+                        currentRatio,
+                        targetRatio
+                    };
+                }
+                if (targetRatio < currentRatio - 1e-9) {
+                    return {
+                        status: 'impossible',
+                        message: 'Target is deeper loss than current. Buying only improves % toward 0.',
+                        currentRatio,
+                        targetRatio
+                    };
+                }
+            } else {
+                if (targetRatio <= 0) {
+                    return {
+                        status: 'impossible',
+                        message: 'For a winning position, target must stay above 0%.',
+                        currentRatio,
+                        targetRatio
+                    };
+                }
+                if (targetRatio > currentRatio + 1e-9) {
+                    return {
+                        status: 'impossible',
+                        message: 'Selling at current price cannot increase gain %.',
+                        currentRatio,
+                        targetRatio
+                    };
+                }
+            }
+
+            if (Math.abs(targetRatio - currentRatio) < 1e-9) {
+                return { status: 'at_target', requiredAmount: 0, action: 'none', currentRatio, targetRatio };
+            }
+
+            // For loss case, compute buy needed using adjusted denominator.
+            if (unrealized < 0) {
+                const requiredBuy = (unrealized / targetRatio) - totalCost;
+                if (!Number.isFinite(requiredBuy) || requiredBuy < 0) {
+                    return { status: 'impossible', message: 'Target cannot be reached by buying at current price.', currentRatio, targetRatio };
+                }
+                return { status: 'buy', requiredAmount: requiredBuy, action: 'buy', currentRatio, targetRatio };
+            }
+
+            // Portfolio-level gains are lot-dependent; we handle sell targets at per-token level.
+            return {
+                status: 'impossible',
+                message: 'For gain-side sell targets, use per-token calculations below.',
+                currentRatio,
+                targetRatio
+            };
+        }
+
+        function getCryptoHoldingCardDomId(tokenId) {
+            return `crypto-holding-card-${encodeInlineArg(tokenId)}`;
+        }
+
+        function getCurrentCryptoPortfolioControls() {
+            let taxMethod = document.getElementById('cost-basis-method')?.value || 'fifo';
+            if (taxMethod === 'average') taxMethod = 'avg';
+            const targetPctRaw = parseFloat(document.getElementById('cp-target-unrealized-pct')?.value);
+            const targetUnrealizedPct = Number.isFinite(targetPctRaw) ? targetPctRaw : -5;
+            return { taxMethod, targetUnrealizedPct };
+        }
+
+        function formatCryptoTokenAmountText(amount, digits = 8) {
+            const numericAmount = Number(amount);
+            if (!Number.isFinite(numericAmount)) {
+                return Number(0).toFixed(Math.max(0, digits));
+            }
+            return numericAmount.toLocaleString('en-US', {
+                minimumFractionDigits: Math.max(0, digits),
+                maximumFractionDigits: Math.max(0, digits)
+            });
+        }
+
+        function normalizeCryptoRunningBalance(amount) {
+            const numericAmount = Number(amount);
+            if (!Number.isFinite(numericAmount)) return 0;
+            return Math.abs(numericAmount) < 0.00000001 ? 0 : numericAmount;
+        }
+
+        function getCryptoTransactionTokenDelta(tx) {
+            const amount = Number(tx?.amount || 0);
+            if (!Number.isFinite(amount)) return 0;
+
+            if (tx?.type === 'buy' || tx?.type === 'airdrop' || tx?.type === 'staking_reward' || tx?.type === 'swap_in' || tx?.type === 'reconcile_in' || tx?.type === 'transfer_in') return amount;
+            if (tx?.type === 'sell' || tx?.type === 'swap_out' || tx?.type === 'reconcile_out' || tx?.type === 'network_fee' || tx?.type === 'transfer_out') return -amount;
+            return 0;
+        }
+
+        function getCryptoTransactionDisplayMeta(tx) {
+            const isBuy = tx?.type === 'buy';
+            const isAirdrop = tx?.type === 'airdrop';
+            const isStaking = tx?.type === 'stake_out' || tx?.type === 'stake_in' || tx?.type === 'staking_reward';
+            const isSwap = tx?.type === 'swap_in' || tx?.type === 'swap_out';
+            const isAdjustment = tx?.type === 'reconcile_in' || tx?.type === 'reconcile_out' || tx?.type === 'network_fee' || tx?.type === 'transfer_in' || tx?.type === 'transfer_out' || isStaking;
+            const roninImportClass = String(tx?.ronin?.importClassification || '').trim();
+
+            let icon = isBuy ? 'arrow-down-left' : 'arrow-up-right';
+            let colorClass = isBuy ? 'bg-emerald-900/30 text-emerald-400' : 'bg-rose-900/30 text-rose-400';
+            let actionText = isBuy ? 'Bought' : 'Sold';
+            let balanceChangeLabel = 'Token delta';
+            let detailText = `${new Date(tx.date).toLocaleDateString()} ${!isSwap && !isAirdrop && !isAdjustment ? '- ' + formatCurrency(tx.price, tx.currency || 'PHP') + '/token' : ''}`;
+            let totalText = !isSwap && !isAirdrop && !isAdjustment ? formatCurrency(tx.price * tx.amount, tx.currency || 'PHP') : '';
+
+            if (isSwap) {
+                icon = 'refresh-cw';
+                colorClass = 'bg-blue-900/30 text-blue-400';
+                if (tx.type === 'swap_out') actionText = `Swapped ${String(tx.symbol || tx.tokenId || '').toUpperCase()} for ${tx.linkedToken || '?'}`;
+                else actionText = `Received ${String(tx.symbol || tx.tokenId || '').toUpperCase()} (Swap)`;
+                balanceChangeLabel = tx.type === 'swap_out' ? 'Sent out in swap' : 'Received from swap';
+            } else if (isAirdrop) {
+                icon = 'gift';
+                colorClass = 'bg-amber-900/30 text-amber-300';
+                actionText = roninImportClass === 'staking_reward' ? 'Staking Reward' : 'Airdropped';
+                if (roninImportClass === 'staking_reward') {
+                    detailText = `${new Date(tx.date).toLocaleDateString()} - Ronin staking import`;
+                    totalText = 'Zero-cost reward import';
+                    balanceChangeLabel = 'Staking reward in';
+                }
+            } else if (tx.type === 'staking_reward') {
+                icon = 'sprout';
+                colorClass = 'bg-emerald-900/30 text-emerald-300';
+                actionText = 'Staking Reward';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - Ronin staking import`;
+                totalText = 'Zero-cost reward import';
+                balanceChangeLabel = 'Staking reward in';
+            } else if (tx.type === 'stake_out') {
+                icon = 'lock';
+                colorClass = 'bg-sky-900/30 text-sky-300';
+                actionText = 'Staked / Delegated';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - Ronin staking import`;
+                totalText = 'Moved to staking, not sold';
+                balanceChangeLabel = 'Staking movement';
+            } else if (tx.type === 'stake_in') {
+                icon = 'unlock';
+                colorClass = 'bg-cyan-900/30 text-cyan-300';
+                actionText = 'Unstaked';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - Ronin staking import`;
+                totalText = 'Moved out of staking';
+                balanceChangeLabel = 'Staking movement';
+            } else if (tx.type === 'network_fee') {
+                icon = 'flame';
+                colorClass = 'bg-amber-900/30 text-amber-300';
+                actionText = roninImportClass === 'staking_fee' ? 'Staking Fee' : 'Network Fee';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - ${tx?.ronin ? 'Ronin import' : 'XRPL reconciliation'}`;
+                totalText = 'Non-tax balance adjustment';
+                balanceChangeLabel = roninImportClass === 'staking_fee' ? 'Staking fee deducted' : 'Network fee deducted';
+            } else if (tx.type === 'reconcile_in') {
+                icon = 'scale';
+                colorClass = 'bg-cyan-900/30 text-cyan-300';
+                actionText = 'Reconciled In';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - XRPL balance correction`;
+                totalText = 'Zero-cost adjustment';
+                balanceChangeLabel = 'Balance correction in';
+            } else if (tx.type === 'reconcile_out') {
+                icon = 'scale';
+                colorClass = 'bg-orange-900/30 text-orange-300';
+                actionText = 'Reconciled Out';
+                detailText = `${new Date(tx.date).toLocaleDateString()} - XRPL balance correction`;
+                totalText = 'No sale/P&L';
+                balanceChangeLabel = 'Balance correction out';
+            } else if (tx.type === 'transfer_in') {
+                icon = 'log-in';
+                colorClass = 'bg-cyan-900/30 text-cyan-300';
+                actionText = roninImportClass === 'unstake'
+                    ? 'Unstaked'
+                    : (roninImportClass === 'restake' ? 'Restaked In' : 'Transferred In');
+                detailText = `${new Date(tx.date).toLocaleDateString()} - ${tx?.ronin ? 'Ronin import' : 'XRPL ledger import'}`;
+                totalText = roninImportClass === 'unstake' ? 'Balance-only unstake' : 'Balance-only import';
+                balanceChangeLabel = roninImportClass === 'unstake' ? 'Unstake in' : 'Transfer in';
+            } else if (tx.type === 'transfer_out') {
+                icon = 'log-out';
+                colorClass = 'bg-orange-900/30 text-orange-300';
+                actionText = roninImportClass === 'stake'
+                    ? 'Staked / Delegated'
+                    : (roninImportClass === 'restake' ? 'Restaked Out' : 'Transferred Out');
+                detailText = `${new Date(tx.date).toLocaleDateString()} - ${tx?.ronin ? 'Ronin import' : 'XRPL ledger import'}`;
+                totalText = roninImportClass === 'stake' ? 'Balance-only staking outflow' : 'No sale/P&L';
+                balanceChangeLabel = roninImportClass === 'stake' ? 'Staked out' : 'Transfer out';
+            }
+
+            return { isBuy, isAirdrop, isSwap, isAdjustment, icon, colorClass, actionText, detailText, totalText, balanceChangeLabel };
+        }
+
+        function buildCryptoHoldingTransactionHistory(tokenId, txs) {
+            const relatedTxs = sortCryptoTransactionsChronologically(
+                (txs || []).filter(tx => String(tx?.tokenId || '').trim() === String(tokenId || '').trim())
+            );
+            let runningBalance = 0;
+
+            return relatedTxs.map(tx => {
+                const delta = getCryptoTransactionTokenDelta(tx);
+                runningBalance = normalizeCryptoRunningBalance(runningBalance + delta);
+                return {
+                    tx,
+                    delta,
+                    runningBalance
+                };
+            });
+        }
+
+        function closeCryptoHoldingDetail() {
+            activeCryptoHoldingDetailTokenId = '';
+            document.getElementById('crypto-holding-detail-modal')?.classList.add('hidden');
+        }
+
+        async function openCryptoHoldingDetail(tokenId) {
+            const normalizedTokenId = String(tokenId || '').trim();
+            if (!normalizedTokenId) return;
+
+            activeCryptoHoldingDetailTokenId = normalizedTokenId;
+            document.getElementById('crypto-holding-detail-modal')?.classList.remove('hidden');
+            await renderCryptoHoldingDetail();
+        }
+
+        async function renderCryptoHoldingDetail() {
+            const modal = document.getElementById('crypto-holding-detail-modal');
+            const tokenId = String(activeCryptoHoldingDetailTokenId || '').trim();
+            if (!modal || modal.classList.contains('hidden') || !tokenId) return;
+
+            const { taxMethod } = getCurrentCryptoPortfolioControls();
+            const holdings = cryptoPortfolioRenderContext?.holdings || await calculateHoldings(taxMethod);
+            const allTxs = cryptoPortfolioRenderContext?.allTxs || await getDecryptedCrypto();
+            const history = buildCryptoHoldingTransactionHistory(tokenId, allTxs);
+            const holding = holdings[tokenId] || {
+                amount: 0,
+                totalCost: 0,
+                realizedPL: 0,
+                symbol: history[history.length - 1]?.tx?.symbol || tokenId,
+                lots: []
+            };
+
+            const symbol = String(holding.symbol || history[history.length - 1]?.tx?.symbol || tokenId).toUpperCase();
+            const currentPrice = Number(cryptoPrices?.[tokenId]?.price || 0);
+            const currentValue = currentPrice > 0 ? holding.amount * currentPrice : 0;
+            const unrealized = currentPrice > 0 ? currentValue - Number(holding.totalCost || 0) : 0;
+            const avgPrice = holding.amount > 0 ? Number(holding.totalCost || 0) / holding.amount : 0;
+            const latestEntry = history[history.length - 1] || null;
+
+            const titleEl = document.getElementById('crypto-detail-title');
+            const subtitleEl = document.getElementById('crypto-detail-subtitle');
+            const balanceEl = document.getElementById('crypto-detail-balance');
+            const balanceSubEl = document.getElementById('crypto-detail-balance-sub');
+            const valueEl = document.getElementById('crypto-detail-value');
+            const valueSubEl = document.getElementById('crypto-detail-value-sub');
+            const costBasisEl = document.getElementById('crypto-detail-cost-basis');
+            const costBasisSubEl = document.getElementById('crypto-detail-cost-basis-sub');
+            const pnlEl = document.getElementById('crypto-detail-pnl');
+            const pnlSubEl = document.getElementById('crypto-detail-pnl-sub');
+            const historySummaryEl = document.getElementById('crypto-detail-history-summary');
+            const historyCountEl = document.getElementById('crypto-detail-history-count');
+            const historyList = document.getElementById('crypto-detail-history-list');
+
+            if (!titleEl || !subtitleEl || !balanceEl || !balanceSubEl || !valueEl || !valueSubEl ||
+                !costBasisEl || !costBasisSubEl || !pnlEl || !pnlSubEl || !historySummaryEl ||
+                !historyCountEl || !historyList) {
+                return;
+            }
+
+            titleEl.innerText = `${symbol} Details`;
+            subtitleEl.innerText = `${tokenId} • ${history.length} transaction${history.length === 1 ? '' : 's'}${latestEntry ? ` • Last activity ${new Date(latestEntry.tx.date).toLocaleDateString()}` : ''}`;
+
+            balanceEl.innerHTML = `${formatCryptoTokenAmountHTML(holding.amount)} <span class="text-sm font-medium text-slate-400">${escapeHTML(symbol)}</span>`;
+            balanceSubEl.innerText = `${history.length > 0 ? `Balance after latest activity: ${formatCryptoTokenAmountText(latestEntry?.runningBalance || 0)}` : 'Held now'}`;
+
+            valueEl.innerText = currentPrice > 0 ? fmt(currentValue) : 'Needs Update';
+            valueSubEl.innerText = currentPrice > 0
+                ? `${fmt(currentPrice)} per token`
+                : 'Refresh crypto prices to value this holding';
+
+            costBasisEl.innerText = fmt(Number(holding.totalCost || 0));
+            costBasisSubEl.innerText = holding.amount > 0
+                ? `Average entry ${fmt(avgPrice)}`
+                : 'No current balance left in this asset';
+
+            const pnlText = currentPrice > 0
+                ? `${unrealized >= 0 ? '+' : ''}${fmt(unrealized)}`
+                : 'Price unavailable';
+            pnlEl.innerText = pnlText;
+            pnlEl.className = `text-xl font-bold mt-1 ${currentPrice <= 0 ? 'text-slate-300' : (unrealized >= 0 ? 'text-emerald-400' : 'text-rose-400')}`;
+            pnlSubEl.innerText = `Realized ${Number(holding.realizedPL || 0) >= 0 ? '+' : ''}${fmt(Number(holding.realizedPL || 0))}`;
+
+            historySummaryEl.innerText = history.length > 0
+                ? 'Running balance is shown after each transaction so you can follow the position over time.'
+                : 'No saved transactions found for this asset.';
+            historyCountEl.innerText = `${history.length} transaction${history.length === 1 ? '' : 's'}`;
+
+            historyList.innerHTML = '';
+            if (history.length === 0) {
+                historyList.innerHTML = '<div class="text-center py-10 text-slate-600 text-sm">No transactions found for this asset.</div>';
+            } else {
+                history.forEach(entry => {
+                    const { tx, delta, runningBalance } = entry;
+                    const meta = getCryptoTransactionDisplayMeta(tx);
+                    const safeActionText = escapeHTML(meta.actionText);
+                    const safeTokenSymbol = escapeHTML(String(tx.symbol || tx.tokenId || symbol).toUpperCase());
+                    const encodedTxId = encodeInlineArg(tx.id || '');
+                    const noteBits = [
+                        tx.exchange ? `Exchange: ${tx.exchange}` : '',
+                        tx.strategy ? `Strategy: ${tx.strategy}` : '',
+                        tx.notes ? tx.notes : ''
+                    ].filter(Boolean);
+                    const noteMarkup = noteBits.length > 0
+                        ? `<p class="text-[11px] text-slate-500 mt-2">${escapeHTML(noteBits.join(' • '))}</p>`
+                        : '';
+                    const deltaTone = delta >= 0 ? 'text-emerald-300' : 'text-rose-300';
+                    const deltaPrefix = delta >= 0 ? '+' : '';
+
+                    const div = document.createElement('div');
+                    div.className = 'bg-slate-900/70 border border-slate-800 rounded-2xl p-4';
+                    div.innerHTML = `
+                        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full flex items-center justify-center ${meta.colorClass}">
+                                        <i data-lucide="${meta.icon}" class="w-4 h-4"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-bold text-slate-200 mobile-text-clip">${safeActionText} ${!meta.isSwap ? safeTokenSymbol : ''}</p>
+                                        <p class="text-[11px] text-slate-500">${meta.detailText}</p>
+                                    </div>
+                                    <button type="button" title="Edit transaction" onclick="openCryptoTransaction(decodeURIComponent('${encodedTxId}'))"
+                                        class="ml-auto text-slate-600 hover:text-cyan-300 transition-colors">
+                                        <i data-lucide="edit-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                                ${noteMarkup}
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:min-w-[360px]">
+                                <div class="bg-slate-950/80 rounded-xl px-3 py-2 border border-slate-800">
+                                    <p class="text-[10px] font-bold uppercase text-slate-500">Transaction Value</p>
+                                    <p class="text-sm font-bold text-slate-200 mt-1">${meta.totalText || '--'}</p>
+                                    <p class="text-[11px] text-slate-500 mt-1">${formatCryptoTokenAmountText(tx.amount)} tokens</p>
+                                </div>
+                                <div class="bg-slate-950/80 rounded-xl px-3 py-2 border border-slate-800">
+                                    <p class="text-[10px] font-bold uppercase text-slate-500">Balance Change</p>
+                                    <p class="text-sm font-bold ${deltaTone} mt-1">${deltaPrefix}${formatCryptoTokenAmountText(delta)}</p>
+                                    <p class="text-[11px] text-slate-500 mt-1">${escapeHTML(meta.balanceChangeLabel || 'Token delta')}</p>
+                                </div>
+                                <div class="bg-slate-950/80 rounded-xl px-3 py-2 border border-slate-800">
+                                    <p class="text-[10px] font-bold uppercase text-slate-500">Balance After</p>
+                                    <p class="text-sm font-bold text-cyan-300 mt-1">${formatCryptoTokenAmountText(runningBalance)}</p>
+                                    <p class="text-[11px] text-slate-500 mt-1">${safeTokenSymbol} held after this entry</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    historyList.appendChild(div);
+                });
+            }
+
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        function formatCryptoTokenAmountHTML(amount) {
+            const numericAmount = Number(amount);
+            if (!Number.isFinite(numericAmount)) {
+                return '<span class="text-slate-500">0.<span class="text-slate-600">00000000</span></span>';
+            }
+
+            const isNegative = numericAmount < 0;
+            const absoluteAmount = Math.abs(numericAmount);
+            const [integerPart, decimalPartRaw] = absoluteAmount.toFixed(8).split('.');
+            const decimalPart = decimalPartRaw || '00000000';
+            const formattedInteger = Number(integerPart).toLocaleString('en-US');
+
+            const lastNonZeroIndex = (() => {
+                for (let index = decimalPart.length - 1; index >= 0; index -= 1) {
+                    if (decimalPart[index] !== '0') return index;
+                }
+                return -1;
+            })();
+
+            let decimalMarkup = '';
+            if (lastNonZeroIndex === -1) {
+                decimalMarkup = `<span class="text-slate-600">${decimalPart}</span>`;
+            } else {
+                const significant = decimalPart.slice(0, lastNonZeroIndex + 1);
+                const trailing = decimalPart.slice(lastNonZeroIndex + 1);
+
+                decimalMarkup += significant;
+                if (trailing) decimalMarkup += `<span class="text-slate-600">${trailing}</span>`;
+            }
+
+            return `${isNegative ? '-' : ''}${formattedInteger}.<span>${decimalMarkup}</span>`;
+        }
+
+        function summarizeCryptoHoldingSources(lots) {
+            const swapSymbols = new Set();
+            let swapCost = 0;
+            let airdropAmount = 0;
+            let reconcileAmount = 0;
+            let transferAmount = 0;
+
+            (lots || []).forEach(lot => {
+                if (!lot || lot.amount <= 0.000001) return;
+                const lotCost = Math.max(0, (Number(lot.amount) || 0) * (Number(lot.price) || 0));
+                if (lot.sourceType === 'swap') {
+                    swapCost += lotCost;
+                    const sourceSymbol = String(lot.sourceSymbol || '').trim().toUpperCase();
+                    if (sourceSymbol) swapSymbols.add(sourceSymbol);
+                } else if (lot.sourceType === 'airdrop') {
+                    airdropAmount += Math.max(0, Number(lot.amount) || 0);
+                } else if (lot.sourceType === 'reconcile') {
+                    reconcileAmount += Math.max(0, Number(lot.amount) || 0);
+                } else if (lot.sourceType === 'transfer') {
+                    transferAmount += Math.max(0, Number(lot.amount) || 0);
+                }
+            });
+
+            return {
+                swapCost,
+                airdropAmount,
+                reconcileAmount,
+                transferAmount,
+                directCost: Math.max(0, (lots || []).reduce((sum, lot) => {
+                    if (!lot || lot.amount <= 0.000001) return sum;
+                    return sum + Math.max(0, (Number(lot.amount) || 0) * (Number(lot.price) || 0));
+                }, 0) - swapCost),
+                swapSymbols: Array.from(swapSymbols)
+            };
+        }
+
+        function createCryptoHoldingCardElement({
+            id,
+            h,
+            currentPrice,
+            value,
+            avgPrice,
+            unrealized,
+            pnlPct,
+            weightedHoldingDays,
+            taxMethod,
+            targetUnrealizedPct,
+            tokenUniverse
+        }) {
+            const safeSymbol = escapeHTML((h.symbol || '').toUpperCase());
+            const safeTokenId = escapeHTML(id);
+            const encodedTokenId = encodeInlineArg(id);
+            const tokenTargetPct = getCryptoTokenTargetPct(id, targetUnrealizedPct);
+            const showTokenTarget = !cryptoTargetLossesOnly || unrealized < 0;
+            const sourceSummary = summarizeCryptoHoldingSources(h.lots);
+            const formattedAmount = formatCryptoTokenAmountHTML(h.amount);
+            let tokenTargetUI = '';
+            let tokenTargetNote = '';
+            let sourceNote = '';
+            const hasCostBasis = Number(h?.totalCost || 0) > 0;
+
+            if (sourceSummary.swapCost > 0.01) {
+                const swapFrom = sourceSummary.swapSymbols.length > 0 ? ` from ${escapeHTML(sourceSummary.swapSymbols.join(', '))}` : '';
+                if (sourceSummary.directCost > 0.01) {
+                    sourceNote = `<p class="text-[10px] text-sky-300 mt-0.5">Swap-derived cost basis: ${fmt(sourceSummary.swapCost)}${swapFrom}</p>`;
+                } else {
+                    sourceNote = `<p class="text-[10px] text-sky-300 mt-0.5">Acquired via swap${swapFrom} • carrying ${fmt(sourceSummary.swapCost)} original cost basis</p>`;
+                }
+            }
+            if (sourceSummary.airdropAmount > 0.000001) {
+                const airdropNote = `<p class="text-[10px] text-amber-300 mt-0.5">Includes ${Number(sourceSummary.airdropAmount).toFixed(8)} airdropped tokens at zero cost basis</p>`;
+                sourceNote = sourceNote ? `${sourceNote}${airdropNote}` : airdropNote;
+            }
+            if (sourceSummary.reconcileAmount > 0.000001) {
+                const reconcileNote = `<p class="text-[10px] text-cyan-300 mt-0.5">Includes ${Number(sourceSummary.reconcileAmount).toFixed(8)} reconciliation tokens at zero cost basis</p>`;
+                sourceNote = sourceNote ? `${sourceNote}${reconcileNote}` : reconcileNote;
+            }
+            if (sourceSummary.transferAmount > 0.000001) {
+                const transferNote = `<p class="text-[10px] text-cyan-300 mt-0.5">Includes ${Number(sourceSummary.transferAmount).toFixed(8)} ledger-imported transfer tokens at zero cost basis</p>`;
+                sourceNote = sourceNote ? `${sourceNote}${transferNote}` : transferNote;
+            }
+
+            if (showTokenTarget) {
+                tokenTargetUI = `
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-[10px] text-slate-500">Target %</span>
+                        <input type="number" step="0.1" value="${tokenTargetPct.toFixed(1)}"
+                            onchange="setCryptoTokenTarget('${encodedTokenId}', this.value)"
+                            class="w-16 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-right text-slate-300 outline-none focus:border-cyan-500">
+                        <button onclick="clearCryptoTokenTarget('${encodedTokenId}')"
+                            class="text-[10px] text-slate-500 hover:text-slate-300">reset</button>
+                    </div>
+                `;
+            }
+
+            if (currentPrice <= 0) {
+                tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Needs latest price to estimate target action.</p>';
+            } else if (!hasCostBasis) {
+                tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Zero-cost holding. Target calculator is unavailable without cost basis.</p>';
+            } else if (!showTokenTarget && unrealized > 0) {
+                tokenTargetNote = '<p class="text-[10px] text-slate-500 mt-0.5">Enable gains in toggle above to compute sell target for this token.</p>';
+            } else {
+                const targetCalc = unrealized < 0
+                    ? calculateAdjustmentForTargetUnrealized(h.totalCost, value, tokenTargetPct)
+                    : calculateSellNeededForTargetUnrealizedPct(h, currentPrice, tokenTargetPct, taxMethod);
+
+                if (targetCalc.status === 'buy') {
+                    const tokensToBuy = targetCalc.requiredAmount / currentPrice;
+                    tokenTargetNote = `<p class="text-[10px] text-cyan-400 mt-0.5">Target ${tokenTargetPct.toFixed(1)}%: Buy ${fmt(targetCalc.requiredAmount)} (${tokensToBuy.toFixed(4)} tokens)</p>`;
+                } else if (targetCalc.status === 'sell') {
+                    const amountText = targetCalc.requiredSellAmount?.toFixed(4) || '0.0000';
+                    const approxPrefix = targetCalc.approximate ? '~' : '';
+                    tokenTargetNote = `<p class="text-[10px] text-amber-400 mt-0.5">Target ${tokenTargetPct.toFixed(1)}%: Sell ${approxPrefix}${fmt(targetCalc.requiredSell)} (${approxPrefix}${amountText} tokens)</p>`;
+                } else if (targetCalc.status === 'at_target') {
+                    tokenTargetNote = `<p class="text-[10px] text-emerald-400 mt-0.5">Already at target ${tokenTargetPct.toFixed(1)}%.</p>`;
+                } else {
+                    const safeMsg = escapeHTML(targetCalc.message || 'Target is not reachable at current price.');
+                    tokenTargetNote = `<p class="text-[10px] text-slate-500 mt-0.5">${safeMsg}</p>`;
+                }
+            }
+
+            const interestEntry = getCryptoInterestEntry(id);
+            let interestMarkup = `
+                <div class="mt-2 pt-2 border-t border-slate-700/70">
+                    <label class="inline-flex items-center gap-2 text-[11px] text-slate-300">
+                        <input type="checkbox" ${interestEntry.enabled ? 'checked' : ''}
+                            onchange="setCryptoInterestEnabled('${encodedTokenId}', this.checked)"
+                            class="accent-cyan-500">
+                        Earns interest
+                    </label>
+            `;
+
+            if (interestEntry.enabled) {
+                const rewardRows = interestEntry.rewards.map((reward, rewardIdx) => {
+                    const rewardTokenOptions = buildCryptoInterestRewardTokenOptions(tokenUniverse, reward.tokenId);
+                    return `
+                        <div class="grid grid-cols-[minmax(0,1fr)_110px_auto] gap-2 mt-2 items-center">
+                            <select onchange="updateCryptoInterestRewardToken('${encodedTokenId}', ${rewardIdx}, this.value)"
+                                class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200 outline-none focus:border-cyan-500">
+                                ${rewardTokenOptions}
+                            </select>
+                            <input type="number" step="any" min="0" value="${escapeAttr(reward.amount)}"
+                                onchange="updateCryptoInterestRewardAmount('${encodedTokenId}', ${rewardIdx}, this.value)"
+                                placeholder="Earned"
+                                class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-right text-slate-200 outline-none focus:border-cyan-500">
+                            <button onclick="removeCryptoInterestReward('${encodedTokenId}', ${rewardIdx})"
+                                class="text-[10px] text-rose-400 hover:text-rose-300">remove</button>
+                        </div>
+                    `;
+                }).join('');
+
+                const interestApy = calculateCryptoInterestApy(id, h, interestEntry);
+                let interestSummary = '';
+                if (interestApy.status === 'ok') {
+                    if (interestApy.basis === 'token') {
+                        const rewardSymbol = escapeHTML(String(interestApy.rewardSymbol || h.symbol || id).toUpperCase());
+                        const earnedValueText = interestApy.earnedValueAvailable
+                            ? ` • Earned value: ${fmt(interestApy.earnedValue)}`
+                            : '';
+                        const missingNote = !interestApy.earnedValueAvailable
+                            ? '<p class="text-[10px] text-slate-500 mt-0.5">No current price; APY uses same-token amounts only.</p>'
+                            : '';
+                        const excludedNote = interestApy.otherTokenRewardCount > 0
+                            ? `<p class="text-[10px] text-amber-300 mt-0.5">${interestApy.otherTokenRewardCount} non-matching reward token(s) excluded from zero-cost token APY.</p>`
+                            : '';
+                        interestSummary = `
+                            <p class="text-[10px] text-cyan-300 mt-2">Token APY so far: ${interestApy.apyPct.toFixed(2)}%</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Earned: ${interestApy.earnedTokenAmount.toFixed(8)} ${rewardSymbol} • Period token return: ${interestApy.periodReturnPct.toFixed(2)}% • Weighted hold: ${interestApy.weightedHoldingDays.toFixed(1)}d${earnedValueText}</p>
+                            ${missingNote}
+                            ${excludedNote}
+                        `;
+                    } else {
+                        const missingNote = interestApy.missingPriceCount > 0
+                            ? `<p class="text-[10px] text-amber-300 mt-0.5">${interestApy.missingPriceCount} reward token(s) missing price and excluded.</p>`
+                            : '';
+                        interestSummary = `
+                            <p class="text-[10px] text-cyan-300 mt-2">APY so far: ${interestApy.apyPct.toFixed(2)}%</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Earned value: ${fmt(interestApy.earnedValue)} • Period return: ${interestApy.periodReturnPct.toFixed(2)}% • Weighted hold: ${interestApy.weightedHoldingDays.toFixed(1)}d</p>
+                            ${missingNote}
+                        `;
+                    }
+                } else {
+                    const safeApyMsg = escapeHTML(interestApy.message || 'Add reward amounts to estimate APY.');
+                    interestSummary = `<p class="text-[10px] text-slate-500 mt-2">${safeApyMsg}</p>`;
+                }
+
+                interestMarkup += `
+                    <div class="mt-2 bg-slate-900/60 border border-slate-700/70 rounded-lg p-2">
+                        <p class="text-[10px] text-slate-400">Reward Tokens and Amount Earned So Far</p>
+                        ${rewardRows || '<p class="text-[10px] text-slate-500 mt-2">No reward tokens yet.</p>'}
+                        <button onclick="addCryptoInterestReward('${encodedTokenId}')"
+                            class="mt-2 text-[10px] text-cyan-400 hover:text-cyan-300">+ add reward token</button>
+                        ${interestSummary}
+                    </div>
+                `;
+            }
+
+            interestMarkup += '</div>';
+
+            const div = document.createElement('div');
+            div.id = getCryptoHoldingCardDomId(id);
+            div.dataset.tokenId = id;
+            div.tabIndex = 0;
+            div.setAttribute('role', 'button');
+            div.setAttribute('aria-label', `Open ${safeSymbol} details`);
+            div.className = "bg-slate-800 p-4 rounded-2xl flex items-center justify-between border border-slate-700 cursor-pointer transition-colors hover:border-cyan-500/60 hover:bg-slate-800/90 focus:outline-none focus:ring-2 focus:ring-cyan-500/40";
+            div.innerHTML = `
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h4 class="font-bold text-white">${safeSymbol}</h4>
+                        <span class="text-[10px] bg-slate-700 text-slate-400 px-1.5 rounded">${safeTokenId}</span>
+                    </div>
+                    <p class="text-sm font-semibold text-slate-200 mt-1 font-mono tabular-nums">${formattedAmount} <span class="text-[11px] font-medium text-slate-400">tokens</span></p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Avg entry: ${fmt(avgPrice)}</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5">Cost basis: ${fmt(h.totalCost)} • Avg hold: ${weightedHoldingDays.toFixed(1)} days</p>
+                    ${sourceNote}
+                    <p class="text-[10px] text-slate-500 mt-0.5">${taxMethod.toUpperCase()} Basis</p>
+                    ${tokenTargetUI}
+                    ${tokenTargetNote}
+                    ${interestMarkup}
+                </div>
+                <div class="text-right">
+                    <p class="font-bold text-white">${currentPrice > 0 ? fmt(value) : 'Needs Update'}</p>
+                    <p class="text-xs font-bold ${hasCostBasis ? (unrealized >= 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-500'}">
+                        ${currentPrice > 0 && hasCostBasis ? pnlPct.toFixed(1) + '%' : '--'}
+                    </p>
+                    <p class="text-[10px] text-slate-500">${unrealized >= 0 ? '+' : ''}${fmt(unrealized)}</p>
+                    <p class="text-[10px] text-cyan-300 mt-2">Click card for details</p>
+                </div>
+            `;
+            div.addEventListener('click', event => {
+                if (event.target.closest('button, input, select, textarea, label, a')) return;
+                openCryptoHoldingDetail(id);
+            });
+            div.addEventListener('keydown', event => {
+                if (event.target.closest('button, input, select, textarea, label, a')) return;
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                openCryptoHoldingDetail(id);
+            });
+            return div;
+        }
+
+        async function renderCryptoHoldingCardByTokenId(tokenId) {
+            const list = document.getElementById('crypto-holdings-list');
+            const existing = document.getElementById(getCryptoHoldingCardDomId(tokenId));
+            if (!list || !existing) return false;
+            if (!cryptoPortfolioRenderContext?.holdings || !cryptoPortfolioRenderContext.holdings[tokenId]) return false;
+
+            const h = cryptoPortfolioRenderContext.holdings[tokenId];
+            if (!h || h.amount <= 0.000001) return false;
+
+            const { taxMethod, targetUnrealizedPct } = getCurrentCryptoPortfolioControls();
+            const tokenUniverse = buildCryptoTokenUniverse(
+                cryptoPortfolioRenderContext.holdings,
+                cryptoPortfolioRenderContext.allTxs || []
+            );
+            const cache = cryptoPrices[tokenId];
+            const currentPrice = cache?.price || 0;
+            const value = h.amount * currentPrice;
+            const avgPrice = h.amount > 0 ? h.totalCost / h.amount : 0;
+            const unrealized = currentPrice > 0 ? (value - h.totalCost) : 0;
+            const pnlPct = h.totalCost > 0 ? (unrealized / h.totalCost) * 100 : 0;
+            const weightedHoldingDays = calculateWeightedHoldingDays(h.lots);
+
+            const updatedEl = createCryptoHoldingCardElement({
+                id: tokenId,
+                h,
+                currentPrice,
+                value,
+                avgPrice,
+                unrealized,
+                pnlPct,
+                weightedHoldingDays,
+                taxMethod,
+                targetUnrealizedPct,
+                tokenUniverse
+            });
+            existing.replaceWith(updatedEl);
+            return true;
+        }
+
+        const CRYPTO_NETWORK_PANEL_COLLAPSE_STORAGE_KEY = 'finance_crypto_network_panel_collapsed_v2';
+
+        function getCryptoNetworkPanelCollapseState() {
+            try {
+                const raw = localStorage.getItem(CRYPTO_NETWORK_PANEL_COLLAPSE_STORAGE_KEY);
+                const parsed = raw ? JSON.parse(raw) : {};
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (error) {
+                console.warn('Could not read crypto network panel collapse state.', error);
+                return {};
+            }
+        }
+
+        function saveCryptoNetworkPanelCollapseState(state) {
+            try {
+                localStorage.setItem(CRYPTO_NETWORK_PANEL_COLLAPSE_STORAGE_KEY, JSON.stringify(state || {}));
+            } catch (error) {
+                console.warn('Could not save crypto network panel collapse state.', error);
+            }
+        }
+
+        function applyCryptoNetworkPanelCollapseState(network, collapsed = null) {
+            const key = String(network || '').trim();
+            if (!key) return;
+            const body = document.querySelector(`[data-crypto-network-body="${key}"]`);
+            const toggle = document.querySelector(`[data-crypto-network-toggle="${key}"]`);
+            const state = getCryptoNetworkPanelCollapseState();
+            const isCollapsed = typeof collapsed === 'boolean' ? collapsed : state[key] !== false;
+
+            if (body) body.classList.toggle('hidden', isCollapsed);
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', String(!isCollapsed));
+                const label = toggle.querySelector('[data-crypto-network-toggle-label]');
+                const icon = toggle.querySelector('[data-crypto-network-toggle-icon]');
+                if (label) label.innerText = isCollapsed ? 'Expand' : 'Collapse';
+                if (icon) icon.classList.toggle('rotate-180', isCollapsed);
+            }
+        }
+
+        function toggleCryptoNetworkPanel(network) {
+            const key = String(network || '').trim();
+            if (!key) return;
+            const state = getCryptoNetworkPanelCollapseState();
+            const isCurrentlyCollapsed = state[key] !== false;
+            state[key] = !isCurrentlyCollapsed;
+            saveCryptoNetworkPanelCollapseState(state);
+            applyCryptoNetworkPanelCollapseState(key, state[key]);
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        function initializeCryptoNetworkPanels() {
+            document.querySelectorAll('[data-crypto-network-panel]').forEach(panel => {
+                const network = panel.getAttribute('data-crypto-network-panel');
+                applyCryptoNetworkPanelCollapseState(network);
+            });
+        }
+
+        async function renderCryptoPortfolio() {
+            const { taxMethod, targetUnrealizedPct } = getCurrentCryptoPortfolioControls();
+            const lossesOnlyEl = document.getElementById('cp-target-losses-only');
+            if (lossesOnlyEl) lossesOnlyEl.checked = cryptoTargetLossesOnly;
+            const holdings = await calculateHoldings(taxMethod);
+            const allTxs = await getDecryptedCrypto();
+            const tokenUniverse = buildCryptoTokenUniverse(holdings, allTxs);
+            cryptoPortfolioRenderContext = { holdings, allTxs };
+            const list = document.getElementById('crypto-holdings-list');
+            list.innerHTML = '';
+
+            let totalVal = 0, totalInvested = 0, totalRealized = 0, totalUnrealized = 0;
+            let lastUpdate = 0;
+            let pricedTargetValue = 0, pricedTargetCost = 0, unpricedTargetCount = 0;
+
+            let bestPerf = { symbol: '-', pct: -Infinity };
+            let worstPerf = { symbol: '-', pct: Infinity };
+
+            // RENDER HOLDINGS
+            Object.entries(holdings).forEach(([id, h]) => {
+                if (h.amount <= 0.000001 && Math.abs(h.realizedPL) < 1) return;
+
+                const cache = cryptoPrices[id];
+                const currentPrice = cache?.price || 0;
+                if (cache?.updated > lastUpdate) lastUpdate = cache.updated;
+
+                const value = h.amount * currentPrice;
+                const avgPrice = h.amount > 0 ? h.totalCost / h.amount : 0;
+                const unrealized = currentPrice > 0 ? (value - h.totalCost) : 0;
+                const pnlPct = h.totalCost > 0 ? (unrealized / h.totalCost) * 100 : 0;
+                const weightedHoldingDays = calculateWeightedHoldingDays(h.lots);
+
+                if (h.amount > 0.000001) {
+                    totalVal += value;
+                    totalInvested += h.totalCost;
+                    totalUnrealized += unrealized;
+                    if (currentPrice > 0) {
+                        pricedTargetValue += value;
+                        pricedTargetCost += h.totalCost;
+                    } else {
+                        unpricedTargetCount += 1;
+                    }
+
+                    // Track Best/Worst
+                    if (h.totalCost > 0) {
+                        if (pnlPct > bestPerf.pct) bestPerf = { symbol: h.symbol, pct: pnlPct };
+                        if (pnlPct < worstPerf.pct) worstPerf = { symbol: h.symbol, pct: pnlPct };
+                    }
+                }
+                totalRealized += h.realizedPL;
+
+                if (h.amount > 0.000001) {
+                    const div = createCryptoHoldingCardElement({
+                        id,
+                        h,
+                        currentPrice,
+                        value,
+                        avgPrice,
+                        unrealized,
+                        pnlPct,
+                        weightedHoldingDays,
+                        taxMethod,
+                        targetUnrealizedPct,
+                        tokenUniverse
+                    });
+                    list.appendChild(div);
+                }
+            });
+
+            // RENDER HISTORY
+            const historyList = document.getElementById('crypto-history-list');
+            historyList.innerHTML = '';
+
+            if (allTxs.length === 0) {
+                historyList.innerHTML = '<div class="text-slate-600 text-xs italic">No history available.</div>';
+            } else {
+                allTxs.forEach(tx => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center py-2 px-2 hover:bg-slate-800 rounded-lg group";
+                    const meta = getCryptoTransactionDisplayMeta(tx);
+                    const safeActionText = escapeHTML(meta.actionText);
+                    const safeTokenSymbol = escapeHTML((tx.symbol || tx.tokenId || '').toUpperCase());
+                    const encodedTxId = encodeInlineArg(tx.id);
+
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3">
+                             <div class="w-8 h-8 rounded-full flex items-center justify-center ${meta.colorClass}">
+                                 <i data-lucide="${meta.icon}" class="w-4 h-4"></i>
+                             </div>
+                             <div>
+                                 <p class="text-sm font-bold text-slate-300 mobile-text-clip">${safeActionText} ${!meta.isSwap ? safeTokenSymbol : ''}</p>
+                                 <p class="text-[10px] text-slate-500">${meta.detailText}</p>
+                             </div>
+                        </div>
+                         <div class="flex items-center gap-3">
+                              <div class="text-right">
+                                  <p class="text-sm font-bold text-slate-300">${meta.totalText}</p>
+                                  <p class="text-[10px] text-slate-500">${tx.amount} tokens</p>
+                              </div>
+                             <button type="button" title="Edit transaction" onclick="openCryptoTransaction(decodeURIComponent('${encodedTxId}'))" class="text-slate-600 hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i data-lucide="edit-2" class="w-4 h-4"></i>
+                             </button>
+                             <button onclick="deleteItem('crypto', decodeURIComponent('${encodedTxId}'), 'Delete this crypto transaction? This can be restored from Undo.')" class="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                             </button>
+                        </div>
+                     `;
+                    historyList.appendChild(div);
+                });
+            }
+
+            if (!document.getElementById('crypto-holding-detail-modal')?.classList.contains('hidden') && activeCryptoHoldingDetailTokenId) {
+                await renderCryptoHoldingDetail();
+            }
+
+            if (window.lucide) window.lucide.createIcons();
+
+            // Update Header Stats
+            document.getElementById('cp-current-val').innerText = fmt(totalVal);
+            document.getElementById('cp-invested').innerText = fmt(totalInvested);
+
+            const rEl = document.getElementById('cp-realized');
+            rEl.innerText = (totalRealized >= 0 ? '+' : '') + fmt(totalRealized);
+            rEl.className = `text-xl font-bold mt-1 ${totalRealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            const uEl = document.getElementById('cp-unrealized');
+            uEl.innerText = (totalUnrealized >= 0 ? '+' : '') + fmt(totalUnrealized);
+            uEl.className = `text-xl font-bold mt-1 ${totalUnrealized >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            const currentPctEl = document.getElementById('cp-target-current-pct');
+            const actionLabelEl = document.getElementById('cp-target-action-label');
+            const neededBuyEl = document.getElementById('cp-target-needed-buy');
+            const helperEl = document.getElementById('cp-target-helper');
+            if (currentPctEl && neededBuyEl && helperEl && actionLabelEl) {
+                if (pricedTargetCost > 0) {
+                    const targetCalc = calculateAdjustmentForTargetUnrealized(pricedTargetCost, pricedTargetValue, targetUnrealizedPct);
+                    const currentPct = ((pricedTargetValue - pricedTargetCost) / pricedTargetCost) * 100;
+                    currentPctEl.innerText = `${currentPct >= 0 ? '+' : ''}${currentPct.toFixed(2)}%`;
+                    currentPctEl.className = `text-sm font-bold mt-1 ${currentPct >= 0 ? 'text-emerald-300' : 'text-rose-300'}`;
+                    const missingPriceSuffix = unpricedTargetCount > 0 ? ` ${unpricedTargetCount} holding(s) skipped (no price).` : '';
+
+                    actionLabelEl.innerText = currentPct < 0 ? 'Needed Buy' : (currentPct > 0 ? 'Needed Sell' : 'Needed Action');
+
+                    if (targetCalc.status === 'buy') {
+                        neededBuyEl.innerText = fmt(targetCalc.requiredAmount);
+                        neededBuyEl.className = 'text-sm font-bold text-cyan-300 mt-1';
+                        helperEl.innerText = `Buy at current prices to move unrealized P/L toward ${targetUnrealizedPct.toFixed(1)}%.${missingPriceSuffix}`;
+                    } else if (targetCalc.status === 'at_target') {
+                        neededBuyEl.innerText = fmt(0);
+                        neededBuyEl.className = 'text-sm font-bold text-emerald-300 mt-1';
+                        helperEl.innerText = `Portfolio is already at ${targetUnrealizedPct.toFixed(1)}%.${missingPriceSuffix}`;
+                    } else {
+                        neededBuyEl.innerText = '--';
+                        neededBuyEl.className = 'text-sm font-bold text-slate-400 mt-1';
+                        helperEl.innerText = (targetCalc.message || 'Target is not reachable with the current assumptions.') + missingPriceSuffix;
+                    }
+                } else {
+                    actionLabelEl.innerText = 'Needed Action';
+                    currentPctEl.innerText = '--';
+                    currentPctEl.className = 'text-sm font-bold mt-1 text-slate-400';
+                    neededBuyEl.innerText = '--';
+                    neededBuyEl.className = 'text-sm font-bold text-slate-400 mt-1';
+                    helperEl.innerText = 'Add holdings first to use this calculator.';
+                }
+            }
+
+            // ROI & Best/Worst
+            const roi = totalInvested > 0 ? ((totalVal - totalInvested) / totalInvested) * 100 : 0;
+            const roiEl = document.getElementById('cp-roi');
+            if (roiEl) {
+                roiEl.innerText = (roi >= 0 ? '+' : '') + roi.toFixed(1) + '%';
+                roiEl.className = `text-lg font-bold ${roi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+            }
+
+            const bestEl = document.getElementById('cp-best-perf') || document.getElementById('cp-best');
+            if (bestEl) bestEl.innerText = bestPerf.symbol !== '-' ? `${bestPerf.symbol} (${bestPerf.pct > 0 ? '+' : ''}${bestPerf.pct.toFixed(0)}%)` : '-';
+
+            const worstEl = document.getElementById('cp-worst-perf') || document.getElementById('cp-worst');
+            if (worstEl) worstEl.innerText = worstPerf.symbol !== '-' ? `${worstPerf.symbol} (${worstPerf.pct > 0 ? '+' : ''}${worstPerf.pct.toFixed(0)}%)` : '-';
+
+            const timeStr = lastUpdate > 0 ? new Date(lastUpdate).toLocaleTimeString() : 'Never';
+            document.getElementById('crypto-last-updated').innerText = `Prices updated: ${timeStr}`;
+
+            // Keep the main portfolio UI responsive even if a secondary widget fails.
+            try {
+                await renderCryptoWidget();
+            } catch (error) {
+                console.error('Crypto widget render failed:', error);
+            }
+            try {
+                renderCryptoAllocationChart(holdings);
+            } catch (error) {
+                console.error('Crypto allocation chart render failed:', error);
+            }
+            try {
+                await renderInvestmentGoals();
+            } catch (error) {
+                console.error('Crypto investment goals render failed:', error);
+            }
+            try {
+                calculateTaxSummary(holdings);
+            } catch (error) {
+                console.error('Crypto tax summary render failed:', error);
+            }
+            try {
+                if (typeof renderXrplReconcilePanel === 'function') {
+                    await renderXrplReconcilePanel();
+                }
+            } catch (error) {
+                console.error('XRPL reconciliation panel render failed:', error);
+            }
+            try {
+                if (typeof renderRoninReconcilePanel === 'function') {
+                    await renderRoninReconcilePanel();
+                }
+            } catch (error) {
+                console.error('Ronin reconciliation panel render failed:', error);
+            }
+
+            try {
+                initializeCryptoNetworkPanels();
+            } catch (error) {
+                console.error('Crypto network panel collapse render failed:', error);
+            }
+
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        function renderCryptoAllocationChart(holdings) {
+            const ctx = document.getElementById('cryptoAllocationChart');
+            if (!ctx) return;
+
+            if (cryptoAllocationChart) {
+                cryptoAllocationChart.destroy();
+            }
+
+            const labels = [];
+            const data = [];
+            const colors = ['#6366f1', '#10b981', '#f43f5e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'];
+
+            Object.entries(holdings).forEach(([id, h]) => {
+                if (h.amount <= 0.000001) return;
+                const currentPrice = cryptoPrices[id]?.price || 0;
+                const value = h.amount * currentPrice;
+                if (value > 0) {
+                    labels.push(h.symbol.toUpperCase());
+                    data.push(value);
+                }
+            });
+
+            cryptoAllocationChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors.slice(0, data.length),
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true, font: { size: 10 }, color: '#94a3b8' } }
+                    },
+                    cutout: '70%'
+                }
+            });
+        }
+
+        // --- INVESTMENT GOALS ---
+        function openGoalModal() {
+            document.getElementById('goal-name').value = '';
+            document.getElementById('goal-target').value = '';
+            document.getElementById('goal-date').value = '';
+            toggleModal('goal-modal');
+        }
+
+        async function saveInvestmentGoal() {
+            const name = document.getElementById('goal-name').value;
+            const target = parseFloat(document.getElementById('goal-target').value);
+            const date = document.getElementById('goal-date').value;
+
+            if (!name || !target) return;
+
+            const newGoal = {
+                id: 'goal_' + Date.now(),
+                name,
+                targetAmount: target,
+                targetDate: date,
+                createdAt: new Date().toISOString()
+            };
+
+            investmentGoals.push(newGoal);
+
+            // Save to DB
+            const db = await getDB();
+            db.investment_goals = investmentGoals;
+            await saveDB(db);
+
+            toggleModal('goal-modal');
+            renderInvestmentGoals();
+        }
+
+        async function deleteGoal(id) {
+            if (!confirm('Delete this goal?')) return;
+            investmentGoals = investmentGoals.filter(g => g.id !== id);
+
+            const db = await getDB();
+            db.investment_goals = investmentGoals;
+            await saveDB(db);
+
+            renderInvestmentGoals();
+        }
+
+        async function renderInvestmentGoals() {
+            const list = document.getElementById('investment-goals-list');
+            if (!list) return;
+
+            list.innerHTML = '';
+
+            if (investmentGoals.length === 0) {
+                list.innerHTML = '<div class="text-center py-4 text-slate-600 text-sm">No goals set. Add one to track your progress!</div>';
+                return;
+            }
+
+            // Calculate current total crypto value for progress checking
+            // In a real app, you might want goals to link to specific assets, but for now we track against total portfolio value
+            const holdings = await calculateHoldings();
+            let currentTotalValue = 0;
+            Object.entries(holdings).forEach(([id, h]) => {
+                const price = cryptoPrices[id]?.price || 0;
+                currentTotalValue += h.amount * price;
+            });
+
+            investmentGoals.forEach(g => {
+                const progress = Math.min((currentTotalValue / g.targetAmount) * 100, 100);
+                const isMet = currentTotalValue >= g.targetAmount;
+                const dateStr = g.targetDate ? new Date(g.targetDate).toLocaleDateString() : 'No deadline';
+                const safeGoalName = escapeHTML(g.name || 'Goal');
+                const safeGoalDate = escapeHTML(dateStr);
+                const encodedGoalId = encodeInlineArg(g.id);
+
+                const div = document.createElement('div');
+                div.className = "bg-slate-900/40 p-3 rounded-xl border border-slate-700/50 relative group";
+                div.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <div>
+                            <p class="font-bold text-slate-300 text-sm">${safeGoalName}</p>
+                            <p class="text-[10px] text-slate-500">Target: ${fmt(g.targetAmount)} • ${safeGoalDate}</p>
+                        </div>
+                        <button onclick="deleteGoal(decodeURIComponent('${encodedGoalId}'))" class="text-slate-500 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                    <div class="relative h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div class="absolute top-0 left-0 h-full ${isMet ? 'bg-emerald-500' : 'bg-amber-500'} transition-all duration-1000" style="width: ${progress}%"></div>
+                    </div>
+                    <div class="flex justify-between mt-1">
+                        <span class="text-[10px] text-slate-500">${progress.toFixed(1)}%</span>
+                        <span class="text-[10px] ${isMet ? 'text-emerald-400 font-bold' : 'text-slate-500'}">${isMet ? 'GOAL MET! 🎉' : fmt(g.targetAmount - currentTotalValue) + ' to go'}</span>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        // --- TAX & METRICS ---
+        function calculateTaxSummary(holdings) {
+            let totalGains = 0;
+            let totalLosses = 0;
+
+            Object.values(holdings).forEach(h => {
+                if (h.realizedPL > 0) totalGains += h.realizedPL;
+                else totalLosses += Math.abs(h.realizedPL);
+            });
+
+            const net = totalGains - totalLosses;
+
+            document.getElementById('tax-gains').innerText = fmt(totalGains);
+            document.getElementById('tax-losses').innerText = fmt(totalLosses);
+
+            const netEl = document.getElementById('tax-net');
+            netEl.innerText = (net >= 0 ? '+' : '-') + fmt(Math.abs(net));
+            netEl.className = `text-sm font-bold mt-1 ${net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+        }
