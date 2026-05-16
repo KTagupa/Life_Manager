@@ -8,7 +8,7 @@ let habits = [];
 let notes = [];
 let reminders = [];
 let projects = [];
-let dataModelVersion = 3;
+let dataModelVersion = 4;
 let aiUrgencyConfig = {
     mode: 'shadow',
     enabled: true,
@@ -18,7 +18,7 @@ let aiUrgencyConfig = {
     semanticProvider: 'heuristic'
 };
 
-const DATA_MODEL_VERSION = 3;
+const DATA_MODEL_VERSION = 4;
 const PROJECT_STATUS_VALUES = ['active', 'paused', 'completed', 'archived'];
 const PROJECT_ORIGIN_VALUES = ['manual', 'ai', 'migrated'];
 const TASK_REFLECTION_OUTCOME_VALUES = ['on_target', 'harder', 'easier'];
@@ -640,14 +640,20 @@ function createGoal(text) {
 function createNoteObject(title, body = "", taskId = null) {
     title = (title || 'New Note').toString().trim();
     body = (body || '').toString();
+    const now = Date.now();
+    const taskIds = taskId ? [String(taskId)] : [];
+    const links = taskIds.map(id => ({ type: 'task', id, createdAt: now }));
 
     return {
-        id: 'note_' + Date.now() + Math.random().toString(36).substr(2, 5),
+        id: 'note_' + now + Math.random().toString(36).substr(2, 5),
         title: title || "New Note",
         body: body,
-        taskIds: taskId ? [String(taskId)] : [],
+        taskIds: taskIds,
+        links: links,
         isPinned: false,
-        timestamp: Date.now()
+        timestamp: now,
+        createdAt: now,
+        updatedAt: now
     };
 }
 
@@ -744,6 +750,11 @@ function migrateStateData(rawState) {
 
     if (Array.isArray(state.nodes)) state.nodes.forEach(normalizeTaskRecord);
     if (Array.isArray(state.archivedNodes)) state.archivedNodes.forEach(normalizeTaskRecord);
+    if (typeof normalizeInboxItem === 'function') {
+        state.inbox = (Array.isArray(state.inbox) ? state.inbox : [])
+            .map((item, index) => normalizeInboxItem(item, index))
+            .filter(item => item && item.title);
+    }
 
     state.dataModelVersion = DATA_MODEL_VERSION;
     return state;
@@ -1149,6 +1160,12 @@ function sanitizeLoadedData() {
     // Run task cleanup
     nodes.forEach(sanitizeTask);
     archivedNodes.forEach(sanitizeTask);
+    if (!Array.isArray(inbox)) inbox = [];
+    if (typeof normalizeInboxItem === 'function') {
+        inbox = inbox
+            .map((item, index) => normalizeInboxItem(item, index))
+            .filter(item => item && item.title);
+    }
 
     // --- PROJECTS CLEANUP ---
     projects = normalizeProjectCollection(projects);

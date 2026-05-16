@@ -704,11 +704,11 @@ function setupContextualMenu() {
 
     document.addEventListener('mouseup', (e) => {
         // 1. Check if clicking inside the menu itself - do nothing
-        if (menu.contains(e.target)) return;
+        if (menu && menu.contains(e.target)) return;
 
         // 2. Check Note Editor Selection
         const noteInput = document.getElementById('note-body-input');
-        if (!noteInput.classList.contains('hidden') && noteInput.contains(e.target)) {
+        if (noteInput && !noteInput.classList.contains('hidden') && noteInput.contains(e.target)) {
             const text = noteInput.value.substring(noteInput.selectionStart, noteInput.selectionEnd).trim();
             if (text) {
                 currentSelectionText = text;
@@ -734,12 +734,12 @@ function setupContextualMenu() {
         }
 
         // 4. Default: Hide menu if no valid selection or click outside
-        menu.style.display = 'none';
+        if (menu) menu.style.display = 'none';
     });
 
     // Hide on scroll or resize to prevent floating menu in wrong place
-    window.addEventListener('scroll', () => { menu.style.display = 'none'; }, true);
-    window.addEventListener('resize', () => { menu.style.display = 'none'; });
+    window.addEventListener('scroll', () => { if (menu) menu.style.display = 'none'; }, true);
+    window.addEventListener('resize', () => { if (menu) menu.style.display = 'none'; });
 }
 
 function showContextMenu(x, y) {

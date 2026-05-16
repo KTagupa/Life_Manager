@@ -806,6 +806,14 @@
 
         <div  class="layout-group-54">
             <input type="text" id="note-search-input" placeholder="Search notes or tags..." oninput="renderNotesList()">
+            <div class="note-quick-capture">
+                <div id="note-context-label" class="note-context-label">No selected task context</div>
+                <div class="note-quick-capture-row">
+                    <input type="text" id="note-quick-capture-input" placeholder="Capture note for current context..."
+                        onkeydown="handleQuickCaptureKeydown(event)">
+                    <button class="btn note-quick-capture-btn" onclick="createQuickContextNote()">Capture</button>
+                </div>
+            </div>
             <div id="note-tags-filter"  class="layout-group-55 note-filter-controls"></div>
             <div class="ai-note-selection-row">
                 <div id="ai-note-selection-summary">AI context selection: 0 full note(s), 0 block(s)</div>
@@ -817,7 +825,8 @@
         <div class="panel-list" id="notes-list-container"></div>
 
         <div  class="layout-group-57">
-            <button class=" layout-group-58"  onclick="createNewNote()">+ New Independent Note</button>
+            <button id="new-linked-note-btn" class="layout-group-58" onclick="createNewLinkedNote()">+ New Linked Note</button>
+            <button class="layout-group-58" onclick="createNewNote()">+ New Note</button>
             <a class=" layout-group-59" href="notes/index.html"
                 >Open
                 Full Notes Page ↗</a>
@@ -1064,7 +1073,7 @@
                 </div>
 
                 <div class=" layout-group-72" id="note-linked-habits-list" >
-                    <span class="note-linked-label">Linked Habits:</span>
+                    <span class="note-linked-label">Linked Habits/Context:</span>
                     <!-- Linked habit tags render here -->
                 </div>
                 <div class="note-footer-status-group">
@@ -1211,6 +1220,15 @@
                 <span>Quick Capture Inbox</span>
             </div>
             <button class="modal-close-btn" onclick="closeInboxModal()">✕</button>
+        </div>
+
+        <div class="inbox-recommend-panel">
+            <div class="inbox-recommend-controls">
+                <button id="inbox-shuffle-btn" class="inbox-recommend-btn" onclick="recommendInboxShuffle()">Shuffle 3</button>
+                <button id="inbox-smart-btn" class="inbox-recommend-btn" onclick="recommendInboxSmart()">Smart 3</button>
+            </div>
+            <div id="inbox-recommend-status" class="inbox-recommend-status"></div>
+            <div id="inbox-recommend-results" class="inbox-recommend-results"></div>
         </div>
 
         <div class=" layout-group-76" id="inbox-modal-list" >
@@ -1794,6 +1812,7 @@
 
     <div id="notification">State Saved</div>
     <script defer src="assets/js/db.js"></script>
+    <script defer src="assets/js/notesCore.js"></script>
     <script defer src="assets/js/notesRepository.js"></script>
     <script defer src="assets/js/notesSync.js"></script>
     <script defer src="assets/js/utils.js"></script>

@@ -104,9 +104,13 @@ function getNoteLinkMetrics(noteOrId) {
         habitCount: 0,
         goalIds: [],
         goalCount: 0,
+        projectIds: [],
+        projectCount: 0,
         urgentTaskCount: 0,
         hasTaskLinks: false,
         hasHabitLinks: false,
+        hasProjectLinks: false,
+        hasGoalLinks: false,
         hasAnyLinks: false,
         isMixedLinks: false
     };
@@ -119,7 +123,11 @@ function getNoteLinkMetrics(noteOrId) {
     const activeTaskMap = new Map(activeTasks.map(task => [task.id, task]));
     const archivedTaskMap = new Map(archivedTasks.map(task => [task.id, task]));
 
-    const rawTaskIds = Array.isArray(note.taskIds) ? note.taskIds : [];
+    const universalLinks = window.NotesCore && typeof window.NotesCore.normalizeLinks === 'function'
+        ? window.NotesCore.normalizeLinks(note)
+        : [];
+    const linkedTaskIds = universalLinks.filter(link => link.type === 'task').map(link => link.id);
+    const rawTaskIds = Array.isArray(note.taskIds) ? [...note.taskIds, ...linkedTaskIds] : linkedTaskIds;
     const taskIds = Array.from(new Set(rawTaskIds.filter(Boolean)))
         .filter(taskId => activeTaskMap.has(taskId) || archivedTaskMap.has(taskId));
 
@@ -131,26 +139,39 @@ function getNoteLinkMetrics(noteOrId) {
         !task.completed && !!task._isUrgent
     ).length;
 
-    const goalIds = Array.from(new Set(
-        taskIds.flatMap(taskId => {
+    const linkedGoalIds = universalLinks.filter(link => link.type === 'goal').map(link => link.id);
+    const goalIds = Array.from(new Set([
+        ...linkedGoalIds,
+        ...taskIds.flatMap(taskId => {
             const task = activeTaskMap.get(taskId) || archivedTaskMap.get(taskId);
             return (task && Array.isArray(task.goalIds)) ? task.goalIds.filter(Boolean) : [];
         })
-    ));
+    ]));
+
+    const linkedProjectIds = universalLinks.filter(link => link.type === 'project').map(link => link.id);
+    const taskProjectIds = taskIds
+        .map(taskId => activeTaskMap.get(taskId) || archivedTaskMap.get(taskId))
+        .map(task => task && task.projectId)
+        .filter(Boolean);
+    const projectIds = Array.from(new Set([...linkedProjectIds, ...taskProjectIds]));
 
     const habitsList = Array.isArray(habits) ? habits : [];
+    const linkedHabitIds = universalLinks.filter(link => link.type === 'habit').map(link => link.id);
     const habitIds = Array.from(new Set(
-        habitsList
+        linkedHabitIds.concat(habitsList
             .filter(habit => {
                 if (!habit || !habit.id) return false;
                 if (typeof isHabitArchived === 'function' && isHabitArchived(habit)) return false;
                 return Array.isArray(habit.noteIds) && habit.noteIds.includes(note.id);
             })
-            .map(habit => habit.id)
+            .map(habit => habit.id))
     ));
 
     const hasTaskLinks = taskIds.length > 0;
     const hasHabitLinks = habitIds.length > 0;
+    const hasProjectLinks = projectIds.length > 0;
+    const hasGoalLinks = goalIds.length > 0;
+    const linkTypeCount = [hasTaskLinks, hasHabitLinks, hasProjectLinks, hasGoalLinks].filter(Boolean).length;
 
     return {
         noteId: note.id,
@@ -160,11 +181,15 @@ function getNoteLinkMetrics(noteOrId) {
         habitCount: habitIds.length,
         goalIds: goalIds,
         goalCount: goalIds.length,
+        projectIds: projectIds,
+        projectCount: projectIds.length,
         urgentTaskCount: urgentTaskCount,
         hasTaskLinks: hasTaskLinks,
         hasHabitLinks: hasHabitLinks,
-        hasAnyLinks: hasTaskLinks || hasHabitLinks,
-        isMixedLinks: hasTaskLinks && hasHabitLinks
+        hasProjectLinks: hasProjectLinks,
+        hasGoalLinks: hasGoalLinks,
+        hasAnyLinks: linkTypeCount > 0,
+        isMixedLinks: linkTypeCount > 1
     };
 }
 

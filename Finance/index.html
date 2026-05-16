@@ -445,17 +445,17 @@
             class="finance-glass-panel rounded-3xl border border-slate-200 bg-white shadow-sm p-4 md:p-5">
             <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-4">
                 <div>
-                    <p class="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">Crypto Toolkit</p>
-                    <h3 class="text-lg font-black text-slate-900 mt-1">Portfolio and Rebalancing</h3>
-                    <p class="text-sm text-slate-500 mt-1">Use one place for crypto holdings, ledger reconciliation, and fee-aware rebalance planning.</p>
+                    <p class="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">Finance Toolkit</p>
+                    <h3 class="text-lg font-black text-slate-900 mt-1">Portfolio, Rebalancing, and FX Spread Checks</h3>
+                    <p class="text-sm text-slate-500 mt-1">Use one place for crypto holdings, fee-aware rebalance planning, and currency opportunity scans.</p>
                 </div>
                 <span class="inline-flex w-fit items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-indigo-600">
                     <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-                    Two tools
+                    Three tools
                 </span>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <button type="button" onclick="openCryptoPortfolio()"
                     class="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-6 text-left text-white shadow-xl shadow-slate-200 transition-all hover:-translate-y-0.5 hover:shadow-2xl">
                     <div
@@ -513,6 +513,30 @@
                     </p>
                     <div class="relative z-10 mt-4 flex items-center gap-2 text-xs font-black text-blue-600">
                         <span>Open calculator</span>
+                        <i data-lucide="arrow-up-right" class="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"></i>
+                    </div>
+                </button>
+
+                <button type="button" onclick="openFxOpportunityLab()"
+                    class="group relative overflow-hidden rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-6 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-xl">
+                    <div class="relative z-10 flex items-start justify-between gap-4">
+                        <div class="flex items-center gap-2">
+                            <div class="rounded-xl border border-emerald-200 bg-white/80 p-2 text-emerald-600 shadow-sm">
+                                <i data-lucide="repeat-2" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-black text-slate-900">FX Spread Scanner</h2>
+                                <p class="text-[11px] font-bold uppercase tracking-wide text-emerald-600">Manual quotes</p>
+                            </div>
+                        </div>
+                        <span
+                            class="rounded-full border border-emerald-100 bg-white/75 px-2 py-1 text-xs font-bold text-emerald-700">Open</span>
+                    </div>
+                    <p class="relative z-10 mt-6 text-sm font-semibold leading-relaxed text-slate-600">
+                        Compare PHP, USD, and JPY exchange routes across banks, wallets, cards, and cash changers after fees.
+                    </p>
+                    <div class="relative z-10 mt-4 flex items-center gap-2 text-xs font-black text-emerald-700">
+                        <span>Scan spreads</span>
                         <i data-lucide="arrow-up-right" class="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"></i>
                     </div>
                 </button>
@@ -2419,6 +2443,36 @@
         </div>
     </div>
 
+    <!-- Modal: FX Opportunity Lab -->
+    <div id="fx-opportunity-lab-modal"
+        class="fixed inset-0 z-[142] bg-slate-950/90 backdrop-blur-lg hidden flex items-center justify-center p-3 md:p-5">
+        <div class="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl">
+            <div class="flex flex-col gap-3 border-b border-slate-800 p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <p class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Currency opportunity lab</p>
+                    <h3 class="mt-1 text-xl font-black text-white">FX Spread Scanner</h3>
+                    <p class="mt-1 text-xs text-slate-400">Compare PHP, USD, and JPY exchange paths with manual quotes and fees.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a href="assets/html/fx-opportunity-lab.html"
+                        target="_blank" rel="noopener"
+                        class="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-black text-emerald-200 hover:bg-slate-800">
+                        Open Full Page
+                    </a>
+                    <button type="button" onclick="closeFxOpportunityLab()"
+                        class="rounded-xl border border-slate-700 bg-slate-900 p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            <iframe id="fx-opportunity-lab-frame"
+                title="FX Spread Scanner"
+                data-src="assets/html/fx-opportunity-lab.html"
+                class="min-h-0 flex-1 border-0 bg-[#08111f]"
+                loading="lazy"></iframe>
+        </div>
+    </div>
+
     <!-- Modal: Ronin ERC-20 Activity Import -->
     <div id="ronin-import-modal"
         class="fixed inset-0 z-[143] bg-slate-950/90 backdrop-blur-lg hidden flex items-start justify-center p-4 overflow-y-auto">
@@ -3887,7 +3941,7 @@
     <!-- App Modules -->
     <script src="assets/js/features/xrpl.js?v=20260425a"></script>
     <script src="assets/js/features/ronin.js?v=20260425a"></script>
-    <script src="assets/js/features/crypto.js?v=20260510f"></script>
+    <script src="assets/js/features/crypto.js?v=20260515b"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
     <script src="assets/js/ui/renderers.js?v=20260515a"></script>
     <script src="assets/js/features/crud.js?v=20260515a"></script>

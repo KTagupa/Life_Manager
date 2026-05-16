@@ -1559,6 +1559,24 @@
             if (modal) modal.classList.add('hidden');
         }
 
+        function openFxOpportunityLab() {
+            const modal = document.getElementById('fx-opportunity-lab-modal');
+            const frame = document.getElementById('fx-opportunity-lab-frame');
+            if (frame && !frame.getAttribute('src')) {
+                frame.setAttribute('src', frame.dataset.src || '');
+            }
+            if (modal) modal.classList.remove('hidden');
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        function closeFxOpportunityLab() {
+            const modal = document.getElementById('fx-opportunity-lab-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        window.openFxOpportunityLab = openFxOpportunityLab;
+        window.closeFxOpportunityLab = closeFxOpportunityLab;
+
         function getCryptoTxSearchLabel(tx) {
             return String(tx?.poolName || tx?.symbol || tx?.tokenId || '').trim();
         }
@@ -2850,6 +2868,27 @@
             cryptoInterestByToken[tokenId] = normalizeCryptoInterestEntry(nextEntry);
         }
 
+        const CRYPTO_INTEREST_COMMON_REWARD_TOKENS = [
+            { id: 'bitcoin', symbol: 'BTC' },
+            { id: 'ethereum', symbol: 'ETH' },
+            { id: 'tether', symbol: 'USDT' },
+            { id: 'usd-coin', symbol: 'USDC' },
+            { id: 'dai', symbol: 'DAI' },
+            { id: 'binancecoin', symbol: 'BNB' },
+            { id: 'solana', symbol: 'SOL' },
+            { id: 'cardano', symbol: 'ADA' },
+            { id: 'ripple', symbol: 'XRP' },
+            { id: 'ronin', symbol: 'RON' },
+            { id: 'chainlink', symbol: 'LINK' },
+            { id: 'polkadot', symbol: 'DOT' },
+            { id: 'cosmos', symbol: 'ATOM' },
+            { id: 'avalanche-2', symbol: 'AVAX' },
+            { id: 'near', symbol: 'NEAR' },
+            { id: 'tron', symbol: 'TRX' },
+            { id: 'algorand', symbol: 'ALGO' },
+            { id: 'tezos', symbol: 'XTZ' }
+        ];
+
         let cryptoInterestPersistTimer = null;
         let cryptoInterestPersistInFlight = false;
         let cryptoInterestPersistQueued = false;
@@ -2957,10 +2996,36 @@
             scheduleCryptoInterestPersistence();
         }
 
+        function getCryptoInterestRewardSymbol(rewardTokenId) {
+            const tokenId = String(rewardTokenId || '').trim();
+            if (!tokenId) return '';
+            const common = CRYPTO_INTEREST_COMMON_REWARD_TOKENS.find(token => token.id === tokenId);
+            if (common?.symbol) return common.symbol;
+            const holdings = cryptoPortfolioRenderContext?.holdings || {};
+            if (holdings[tokenId]?.symbol) return String(holdings[tokenId].symbol).toUpperCase();
+            const tx = (cryptoPortfolioRenderContext?.allTxs || []).find(item => item?.tokenId === tokenId && item?.symbol);
+            if (tx?.symbol) return String(tx.symbol).toUpperCase();
+            for (const cfg of Object.values(cryptoInterestByToken || {})) {
+                const reward = (cfg?.rewards || []).find(item => item?.tokenId === tokenId && item?.symbol);
+                if (reward?.symbol) return String(reward.symbol).toUpperCase();
+            }
+            return tokenId;
+        }
+
+        function normalizeCryptoInterestRewardTokenId(rewardTokenId) {
+            const tokenId = String(rewardTokenId || '').trim();
+            if (!tokenId) return '';
+            const lower = tokenId.toLowerCase();
+            const common = CRYPTO_INTEREST_COMMON_REWARD_TOKENS.find(token => (
+                token.id.toLowerCase() === lower || token.symbol.toLowerCase() === lower
+            ));
+            return common?.id || tokenId;
+        }
+
         async function updateCryptoInterestRewardToken(tokenIdEncoded, rewardIndexRaw, rewardTokenId) {
             const tokenId = decodeURIComponent(tokenIdEncoded || '');
             const rewardIndex = Number(rewardIndexRaw);
-            const cleanedRewardTokenId = String(rewardTokenId || '').trim();
+            const cleanedRewardTokenId = normalizeCryptoInterestRewardTokenId(rewardTokenId);
             if (!tokenId || !Number.isInteger(rewardIndex) || rewardIndex < 0 || !cleanedRewardTokenId) return;
 
             const current = getCryptoInterestEntry(tokenId);
@@ -2969,7 +3034,7 @@
             nextRewards[rewardIndex] = {
                 ...nextRewards[rewardIndex],
                 tokenId: cleanedRewardTokenId,
-                symbol: cleanedRewardTokenId
+                symbol: getCryptoInterestRewardSymbol(cleanedRewardTokenId) || cleanedRewardTokenId
             };
             setCryptoInterestEntry(tokenId, {
                 ...current,
@@ -3018,32 +3083,48 @@
             scheduleCryptoInterestPersistence();
         }
 
+        function addCryptoTokenUniverseOption(map, id, symbol) {
+            const tokenId = String(id || '').trim();
+            if (!tokenId) return;
+            const tokenSymbol = String(symbol || tokenId).trim().toUpperCase() || tokenId.toUpperCase();
+            if (!map.has(tokenId)) map.set(tokenId, tokenSymbol);
+        }
+
+        function addCryptoSearchSelectionToTokenUniverse(map, type = 'source') {
+            const isTarget = type === 'target';
+            const id = document.getElementById(isTarget ? 'c-target-token-id' : 'c-token-id')?.value || '';
+            const symbol = document.getElementById(isTarget ? 'c-target-token-symbol' : 'c-token-symbol')?.value || '';
+            addCryptoTokenUniverseOption(map, id, symbol);
+        }
+
         function buildCryptoTokenUniverse(holdings, txs) {
             const map = new Map();
             Object.entries(holdings || {}).forEach(([id, h]) => {
-                if (!id) return;
-                const symbol = String(h?.symbol || id).toUpperCase();
-                map.set(id, symbol);
+                addCryptoTokenUniverseOption(map, id, h?.symbol || id);
             });
             (txs || []).forEach(tx => {
-                if (!tx?.tokenId) return;
-                const symbol = String(tx.symbol || tx.tokenId).toUpperCase();
-                if (!map.has(tx.tokenId)) map.set(tx.tokenId, symbol);
+                addCryptoTokenUniverseOption(map, tx?.tokenId, tx?.symbol || tx?.tokenId);
             });
             Object.values(cryptoInterestByToken || {}).forEach(cfg => {
                 (cfg?.rewards || []).forEach(reward => {
-                    if (!reward?.tokenId) return;
-                    const symbol = String(reward.symbol || reward.tokenId).toUpperCase();
-                    if (!map.has(reward.tokenId)) map.set(reward.tokenId, symbol);
+                    addCryptoTokenUniverseOption(map, reward?.tokenId, reward?.symbol || reward?.tokenId);
                 });
             });
+            CRYPTO_INTEREST_COMMON_REWARD_TOKENS.forEach(token => {
+                addCryptoTokenUniverseOption(map, token.id, token.symbol);
+            });
+            Object.entries(cryptoPrices || {}).forEach(([id]) => {
+                addCryptoTokenUniverseOption(map, id, id);
+            });
+            addCryptoSearchSelectionToTokenUniverse(map, 'source');
+            addCryptoSearchSelectionToTokenUniverse(map, 'target');
 
             return Array.from(map.entries())
                 .map(([id, symbol]) => ({ id, symbol }))
                 .sort((a, b) => a.symbol.localeCompare(b.symbol) || a.id.localeCompare(b.id));
         }
 
-        function buildCryptoInterestRewardTokenOptions(tokenUniverse, selectedTokenId) {
+        function buildCryptoInterestRewardTokenOptions(tokenUniverse, selectedTokenId, holdingTokenId = '') {
             const selected = String(selectedTokenId || '').trim();
             const hasSelected = !!selected && tokenUniverse.some(opt => opt.id === selected);
             const options = hasSelected || !selected
@@ -3054,7 +3135,8 @@
                 const safeId = escapeAttr(opt.id);
                 const safeLabel = `${escapeHTML(opt.symbol)} (${escapeHTML(opt.id)})`;
                 const isSelected = opt.id === selected ? 'selected' : '';
-                return `<option value="${safeId}" ${isSelected}>${safeLabel}</option>`;
+                const isHolding = opt.id === holdingTokenId ? 'data-same-token="true"' : '';
+                return `<option value="${safeId}" label="${escapeAttr(`${opt.symbol} (${opt.id})`)}" ${isSelected} ${isHolding}>${safeLabel}</option>`;
             }).join('');
         }
 
@@ -4139,13 +4221,20 @@
 
             if (interestEntry.enabled) {
                 const rewardRows = interestEntry.rewards.map((reward, rewardIdx) => {
-                    const rewardTokenOptions = buildCryptoInterestRewardTokenOptions(tokenUniverse, reward.tokenId);
+                    const rewardTokenListId = `crypto-interest-reward-options-${rewardIdx}-${encodedTokenId}`;
+                    const rewardTokenOptions = buildCryptoInterestRewardTokenOptions(tokenUniverse, reward.tokenId, id);
                     return `
                         <div class="grid grid-cols-[minmax(0,1fr)_110px_auto] gap-2 mt-2 items-center">
-                            <select onchange="updateCryptoInterestRewardToken('${encodedTokenId}', ${rewardIdx}, this.value)"
-                                class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200 outline-none focus:border-cyan-500">
-                                ${rewardTokenOptions}
-                            </select>
+                            <div>
+                                <input type="text" list="${escapeAttr(rewardTokenListId)}" value="${escapeAttr(reward.tokenId)}"
+                                    onchange="updateCryptoInterestRewardToken('${encodedTokenId}', ${rewardIdx}, this.value)"
+                                    onblur="updateCryptoInterestRewardToken('${encodedTokenId}', ${rewardIdx}, this.value)"
+                                    placeholder="CoinGecko id"
+                                    class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200 outline-none focus:border-cyan-500">
+                                <datalist id="${escapeAttr(rewardTokenListId)}">
+                                    ${rewardTokenOptions}
+                                </datalist>
+                            </div>
                             <input type="number" step="any" min="0" value="${escapeAttr(reward.amount)}"
                                 onchange="updateCryptoInterestRewardAmount('${encodedTokenId}', ${rewardIdx}, this.value)"
                                 placeholder="Earned"

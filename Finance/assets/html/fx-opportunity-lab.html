@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FX Opportunity Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #08111f;
+      --panel: #101a2b;
+      --panel-2: #142037;
+      --field: #0b1424;
+      --border: #22314d;
+      --border-strong: #345077;
+      --text: #edf4ff;
+      --muted: #94a3b8;
+      --faint: #607089;
+      --blue: #38bdf8;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #fb7185;
+      --radius: 10px;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    .app {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: 24px 18px 72px;
+    }
+
+    header {
+      display: grid;
+      gap: 12px;
+      padding: 18px 0 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(26px, 4vw, 38px);
+      letter-spacing: 0;
+      line-height: 1.05;
+    }
+
+    .subhead {
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .main-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    @media (min-width: 960px) {
+      .main-grid {
+        grid-template-columns: 390px minmax(0, 1fr);
+        align-items: start;
+      }
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-title {
+      display: grid;
+      gap: 3px;
+    }
+
+    .panel-title h2 {
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .panel-title p {
+      color: var(--faint);
+      font-size: 12px;
+    }
+
+    .panel-body {
+      padding: 16px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    @media (min-width: 640px) {
+      .form-grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .form-grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    input, select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--field);
+      color: var(--text);
+      padding: 10px 11px;
+      outline: none;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--border-strong);
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .btn {
+      min-height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #17243a;
+      color: var(--text);
+      padding: 9px 12px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+    }
+
+    .btn:hover {
+      background: #1b2d49;
+      border-color: var(--border-strong);
+      transform: translateY(-1px);
+    }
+
+    .btn.primary {
+      background: #0ea5e9;
+      border-color: #38bdf8;
+      color: #06111d;
+    }
+
+    .btn.ghost {
+      background: transparent;
+    }
+
+    .btn.danger {
+      color: #fecdd3;
+      border-color: rgba(251, 113, 133, 0.3);
+      background: rgba(251, 113, 133, 0.08);
+    }
+
+    .quote-list {
+      display: grid;
+      gap: 10px;
+      max-height: 58vh;
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .quote {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #0d1728;
+      padding: 12px;
+    }
+
+    .quote-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      align-items: end;
+    }
+
+    @media (min-width: 720px) {
+      .quote-grid {
+        grid-template-columns: 1.2fr 0.8fr 0.8fr 1fr 0.9fr 0.9fr 0.9fr auto;
+      }
+    }
+
+    .results {
+      display: grid;
+      gap: 14px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    @media (min-width: 760px) {
+      .summary-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+
+    .metric {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      min-width: 0;
+    }
+
+    .metric .label {
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .metric .value {
+      margin-top: 5px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 18px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+      background: #0d1728;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: #101b2e;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .mono {
+      font-family: "JetBrains Mono", monospace;
+      font-weight: 600;
+    }
+
+    .good { color: var(--green); }
+    .warn { color: var(--amber); }
+    .bad { color: var(--red); }
+    .muted { color: var(--muted); }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .pill.good {
+      border-color: rgba(34, 197, 94, 0.28);
+      background: rgba(34, 197, 94, 0.09);
+    }
+
+    .pill.warn {
+      border-color: rgba(245, 158, 11, 0.32);
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    .pill.bad {
+      border-color: rgba(251, 113, 133, 0.34);
+      background: rgba(251, 113, 133, 0.1);
+    }
+
+    .note {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(56, 189, 248, 0.07);
+      padding: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 18px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <p class="eyebrow">Currency Opportunity Lab</p>
+      <h1>FX Spread Scanner</h1>
+      <p class="subhead">Compare PHP, USD, and JPY exchange quotes across banks, wallets, cards, cash changers, or manual deals. The scanner ranks practical conversion routes and checks round trips after fixed and percentage fees.</p>
+    </header>
+
+    <section class="grid main-grid">
+      <div class="grid">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Scenario</h2>
+              <p>Amount, direction, and sensitivity.</p>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="form-grid two">
+              <div>
+                <label for="start-amount">Starting amount</label>
+                <input id="start-amount" type="number" min="0" step="any" value="50000">
+              </div>
+              <div>
+                <label for="start-currency">Starting currency</label>
+                <select id="start-currency">
+                  <option value="PHP">PHP</option>
+                  <option value="USD">USD</option>
+                  <option value="JPY">JPY</option>
+                </select>
+              </div>
+              <div>
+                <label for="target-currency">Target currency</label>
+                <select id="target-currency">
+                  <option value="USD">USD</option>
+                  <option value="PHP">PHP</option>
+                  <option value="JPY">JPY</option>
+                </select>
+              </div>
+              <div>
+                <label for="min-profit-pct">Opportunity threshold %</label>
+                <input id="min-profit-pct" type="number" min="0" step="any" value="0.3">
+              </div>
+            </div>
+            <div class="button-row">
+              <button class="btn primary" type="button" onclick="calculate()">Scan routes</button>
+              <button class="btn" type="button" onclick="addQuote()">Add quote</button>
+              <button class="btn ghost" type="button" onclick="loadSampleQuotes()">Reset sample</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Quote Input</h2>
+              <p>Rate means 1 unit of From gets this many To.</p>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="quote-list" class="quote-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Snapshot</h2>
+              <p>Best route, benchmark, and possible spread.</p>
+            </div>
+          </div>
+          <div class="panel-body results" id="summary">
+            <div class="empty">Add quotes or use the sample set, then scan routes.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Conversion Routes</h2>
+              <p>Direct and two-hop routes into the selected target.</p>
+            </div>
+          </div>
+          <div class="panel-body" id="conversion-results">
+            <div class="empty">No conversion scan yet.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Round Trip Scan</h2>
+              <p>Routes that start and end in your starting currency.</p>
+            </div>
+          </div>
+          <div class="panel-body" id="roundtrip-results">
+            <div class="empty">No round-trip scan yet.</div>
+          </div>
+        </div>
+
+        <div class="note">
+          This is a decision aid, not trading advice. Real fiat arbitrage can disappear through stale quotes, account limits, settlement delays, withdrawal fees, and buy/sell spread changes.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const CURRENCIES = ['PHP', 'USD', 'JPY'];
+    const SYMBOLS = { PHP: '\u20B1', USD: '$', JPY: '\u00A5' };
+    let quoteId = 0;
+
+    function currencyOptions(selected) {
+      return CURRENCIES.map(c => `<option value="${c}" ${c === selected ? 'selected' : ''}>${c}</option>`).join('');
+    }
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[m]));
+    }
+
+    function num(value, fallback = 0) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function fmt(amount, currency) {
+      const safe = CURRENCIES.includes(currency) ? currency : 'PHP';
+      const decimals = safe === 'JPY' ? 0 : 2;
+      return `${SYMBOLS[safe] || safe + ' '}${num(amount).toLocaleString(undefined, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      })}`;
+    }
+
+    function fmtPct(value) {
+      return `${num(value).toFixed(3)}%`;
+    }
+
+    function addQuote(data = {}) {
+      const id = quoteId++;
+      const wrap = document.createElement('div');
+      wrap.className = 'quote';
+      wrap.dataset.quoteId = String(id);
+      wrap.innerHTML = `
+        <div class="quote-grid">
+          <div>
+            <label for="source-${id}">Source</label>
+            <input id="source-${id}" data-field="source" value="${esc(data.source || '')}" placeholder="Wise, bank, card, cash changer">
+          </div>
+          <div>
+            <label for="from-${id}">From</label>
+            <select id="from-${id}" data-field="from">${currencyOptions(data.from || 'PHP')}</select>
+          </div>
+          <div>
+            <label for="to-${id}">To</label>
+            <select id="to-${id}" data-field="to">${currencyOptions(data.to || 'USD')}</select>
+          </div>
+          <div>
+            <label for="rate-${id}">Rate</label>
+            <input id="rate-${id}" data-field="rate" type="number" min="0" step="any" value="${esc(data.rate ?? '')}" placeholder="0">
+          </div>
+          <div>
+            <label for="fee-pct-${id}">Fee %</label>
+            <input id="fee-pct-${id}" data-field="feePct" type="number" min="0" step="any" value="${esc(data.feePct ?? 0)}">
+          </div>
+          <div>
+            <label for="fixed-fee-${id}">Fixed fee</label>
+            <input id="fixed-fee-${id}" data-field="fixedFee" type="number" min="0" step="any" value="${esc(data.fixedFee ?? 0)}">
+          </div>
+          <div>
+            <label for="fee-currency-${id}">Fee currency</label>
+            <select id="fee-currency-${id}" data-field="feeCurrency">${currencyOptions(data.feeCurrency || data.to || 'USD')}</select>
+          </div>
+          <button class="btn danger" type="button" onclick="removeQuote(${id})">Remove</button>
+        </div>
+      `;
+      document.getElementById('quote-list').appendChild(wrap);
+    }
+
+    function removeQuote(id) {
+      const el = document.querySelector(`[data-quote-id="${id}"]`);
+      if (el) el.remove();
+    }
+
+    function readQuotes() {
+      return Array.from(document.querySelectorAll('[data-quote-id]')).map((el) => {
+        const get = (field) => el.querySelector(`[data-field="${field}"]`)?.value;
+        return {
+          id: el.dataset.quoteId,
+          source: (get('source') || 'Manual quote').trim(),
+          from: get('from'),
+          to: get('to'),
+          rate: num(get('rate')),
+          feePct: Math.max(0, num(get('feePct'))),
+          fixedFee: Math.max(0, num(get('fixedFee'))),
+          feeCurrency: get('feeCurrency')
+        };
+      }).filter(q => q.from && q.to && q.from !== q.to && q.rate > 0);
+    }
+
+    function loadSampleQuotes() {
+      document.getElementById('quote-list').innerHTML = '';
+      quoteId = 0;
+      [
+        { source: 'Bank USD sell', from: 'PHP', to: 'USD', rate: 0.01715, feePct: 0.2, fixedFee: 0, feeCurrency: 'USD' },
+        { source: 'Wallet USD sell', from: 'PHP', to: 'USD', rate: 0.01725, feePct: 0.6, fixedFee: 0, feeCurrency: 'USD' },
+        { source: 'Cash changer USD buy', from: 'USD', to: 'PHP', rate: 57.95, feePct: 0, fixedFee: 0, feeCurrency: 'PHP' },
+        { source: 'Card JPY rate', from: 'PHP', to: 'JPY', rate: 2.71, feePct: 1.5, fixedFee: 0, feeCurrency: 'JPY' },
+        { source: 'Travel counter JPY', from: 'JPY', to: 'PHP', rate: 0.365, feePct: 0, fixedFee: 0, feeCurrency: 'PHP' },
+        { source: 'Broker USD to JPY', from: 'USD', to: 'JPY', rate: 156.8, feePct: 0.35, fixedFee: 0, feeCurrency: 'JPY' },
+        { source: 'Broker JPY to USD', from: 'JPY', to: 'USD', rate: 0.00631, feePct: 0.35, fixedFee: 0, feeCurrency: 'USD' }
+      ].forEach(addQuote);
+      calculate();
+    }
+
+    function feeInOutputCurrency(q, grossOutput, amountIn) {
+      const percentFee = grossOutput * (q.feePct / 100);
+      let fixedFee = q.fixedFee;
+      if (q.feeCurrency === q.from) fixedFee = q.fixedFee * q.rate;
+      if (q.feeCurrency !== q.from && q.feeCurrency !== q.to) fixedFee = 0;
+      const output = Math.max(0, grossOutput - percentFee - fixedFee);
+      return {
+        output,
+        feeOutput: grossOutput - output,
+        feeNote: q.feeCurrency === q.from
+          ? `${fmt(q.fixedFee, q.from)} fixed converted at quote rate`
+          : q.feeCurrency === q.to
+            ? `${fmt(q.fixedFee, q.to)} fixed`
+            : q.fixedFee > 0
+              ? 'Fixed fee ignored because currency is outside this pair'
+              : ''
+      };
+    }
+
+    function applyQuote(amount, q) {
+      const gross = amount * q.rate;
+      const fees = feeInOutputCurrency(q, gross, amount);
+      return {
+        input: amount,
+        output: fees.output,
+        grossOutput: gross,
+        feeOutput: fees.feeOutput,
+        feeNote: fees.feeNote,
+        quote: q
+      };
+    }
+
+    function quoteLabel(q) {
+      return `${q.source}: ${q.from}->${q.to} @ ${q.rate}`;
+    }
+
+    function buildPaths(quotes, start, target, maxLegs) {
+      const out = [];
+      function walk(currency, amount, legs, usedIds) {
+        if (legs.length > 0 && currency === target) {
+          out.push({ legs, output: amount });
+          return;
+        }
+        if (legs.length >= maxLegs) return;
+        quotes
+          .filter(q => q.from === currency && !usedIds.has(q.id))
+          .forEach((q) => {
+            const applied = applyQuote(amount, q);
+            if (applied.output <= 0) return;
+            walk(q.to, applied.output, [...legs, applied], new Set([...usedIds, q.id]));
+          });
+      }
+      walk(start, num(document.getElementById('start-amount').value), [], new Set());
+      return out.sort((a, b) => b.output - a.output);
+    }
+
+    function pathText(path) {
+      return path.legs.map(l => esc(l.quote.source)).join(' -> ');
+    }
+
+    function pathRates(path) {
+      return path.legs.map(l => `${l.quote.from}->${l.quote.to} ${l.quote.rate}`).join('<br>');
+    }
+
+    function pathFees(path) {
+      return path.legs.map(l => {
+        const q = l.quote;
+        const pct = q.feePct > 0 ? `${q.feePct}%` : '0%';
+        const fixed = q.fixedFee > 0 ? ` + ${fmt(q.fixedFee, q.feeCurrency)}` : '';
+        return `${esc(q.source)}: ${pct}${fixed}`;
+      }).join('<br>');
+    }
+
+    function renderTable(rows, currency, opts = {}) {
+      if (!rows.length) return '<div class="empty">No viable routes from the quotes entered.</div>';
+      const threshold = opts.threshold || 0;
+      const body = rows.map((r, idx) => {
+        const gainClass = r.gainPct >= threshold ? 'good' : r.gainPct > 0 ? 'warn' : 'bad';
+        const verdict = r.gainPct >= threshold ? 'Opportunity' : r.gainPct > 0 ? 'Thin' : 'Negative';
+        return `
+          <tr>
+            <td><span class="pill ${gainClass}">${idx + 1}. ${verdict}</span></td>
+            <td>${pathText(r)}</td>
+            <td class="mono">${pathRates(r)}</td>
+            <td class="mono">${fmt(r.output, currency)}</td>
+            <td class="${gainClass} mono">${r.gainPct >= 0 ? '+' : ''}${fmtPct(r.gainPct)}</td>
+            <td>${pathFees(r)}</td>
+          </tr>
+        `;
+      }).join('');
+      return `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Route</th>
+                <th>Rates</th>
+                <th>Net output</th>
+                <th>Spread</th>
+                <th>Fees</th>
+              </tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function calculate() {
+      const quotes = readQuotes();
+      const amount = Math.max(0, num(document.getElementById('start-amount').value));
+      const start = document.getElementById('start-currency').value;
+      const target = document.getElementById('target-currency').value;
+      const threshold = Math.max(0, num(document.getElementById('min-profit-pct').value));
+
+      if (!quotes.length || amount <= 0) {
+        document.getElementById('summary').innerHTML = '<div class="empty">Enter a positive amount and at least one valid quote.</div>';
+        document.getElementById('conversion-results').innerHTML = '<div class="empty">No conversion routes yet.</div>';
+        document.getElementById('roundtrip-results').innerHTML = '<div class="empty">No round-trip routes yet.</div>';
+        return;
+      }
+
+      const conversions = start === target ? [] : buildPaths(quotes, start, target, 2);
+      const bestConversion = conversions[0];
+      const baseline = conversions[conversions.length - 1] || bestConversion;
+      const conversionRows = conversions.map((r) => ({
+        ...r,
+        gainPct: baseline && baseline.output > 0 ? ((r.output - baseline.output) / baseline.output) * 100 : 0
+      }));
+
+      const roundTrips = buildPaths(quotes, start, start, 3).filter(p => p.legs.length >= 2);
+      const roundRows = roundTrips.map((r) => ({
+        ...r,
+        gainPct: amount > 0 ? ((r.output - amount) / amount) * 100 : 0
+      })).sort((a, b) => b.gainPct - a.gainPct);
+      const bestRound = roundRows[0];
+      const actionableRound = roundRows.filter(r => r.gainPct >= threshold).length;
+
+      document.getElementById('summary').innerHTML = `
+        <div class="summary-grid">
+          <div class="metric">
+            <div class="label">Start</div>
+            <div class="value">${fmt(amount, start)}</div>
+          </div>
+          <div class="metric">
+            <div class="label">Best target route</div>
+            <div class="value">${bestConversion ? fmt(bestConversion.output, target) : 'N/A'}</div>
+          </div>
+          <div class="metric">
+            <div class="label">Best round trip</div>
+            <div class="value ${bestRound && bestRound.gainPct > 0 ? 'good' : 'muted'}">${bestRound ? fmt(bestRound.output, start) : 'N/A'}</div>
+          </div>
+          <div class="metric">
+            <div class="label">Above threshold</div>
+            <div class="value ${actionableRound ? 'good' : 'muted'}">${actionableRound}</div>
+          </div>
+        </div>
+        <div class="note">
+          Conversion spread is measured against the weakest viable route into ${target}. Round-trip spread is measured against your original ${fmt(amount, start)}.
+        </div>
+      `;
+
+      document.getElementById('conversion-results').innerHTML = start === target
+        ? '<div class="empty">Pick a target currency different from the starting currency to compare conversion routes.</div>'
+        : renderTable(conversionRows, target, { threshold });
+      document.getElementById('roundtrip-results').innerHTML = renderTable(roundRows, start, { threshold });
+    }
+
+    loadSampleQuotes();
+  </script>
+</body>
+</html>

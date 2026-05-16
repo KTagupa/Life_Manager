@@ -476,24 +476,332 @@ function focusInboxItem(itemId) {
     return true;
 }
 
+let inboxRecommendationState = {
+    mode: '',
+    itemIds: [],
+    status: ''
+};
+let inboxRecommendationBusy = false;
+
+function normalizeInboxItem(item, index = 0) {
+    const rawObj = (item && typeof item === 'object') ? item : {};
+    const title = String(typeof item === 'string' ? item : (rawObj.title || '')).trim();
+    const fallbackSlug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40) || `item_${index}`;
+    const id = String(rawObj.id || '').trim() || `inbox_legacy_${fallbackSlug}`;
+    const rawRecommendedCount = Number(rawObj.recommendedCount);
+    const recommendedCount = Number.isFinite(rawRecommendedCount)
+        ? Math.max(0, Math.floor(rawRecommendedCount))
+        : 0;
+    const rawLastRecommendedAt = Number(rawObj.lastRecommendedAt);
+    const lastRecommendedAt = Number.isFinite(rawLastRecommendedAt) && rawLastRecommendedAt > 0
+        ? rawLastRecommendedAt
+        : null;
+    const rawAiScore = Number(rawObj.lastAiRelevanceScore);
+    const normalized = {
+        ...rawObj,
+        id,
+        title,
+        recommendedCount,
+        lastRecommendedAt,
+        lastAiRelevanceScore: Number.isFinite(rawAiScore)
+            ? Math.max(0, Math.min(100, rawAiScore))
+            : null,
+        lastAiRelevanceReason: typeof rawObj.lastAiRelevanceReason === 'string'
+            ? rawObj.lastAiRelevanceReason.trim().slice(0, 220)
+            : ''
+    };
+    return normalized;
+}
+
+function normalizeInboxCollection() {
+    if (!Array.isArray(inbox)) inbox = [];
+    inbox = inbox
+        .map((item, index) => normalizeInboxItem(item, index))
+        .filter(item => item && item.title);
+}
+
+function getInboxIndexById(itemId) {
+    const normalizedId = String(itemId || '');
+    return inbox.findIndex(item => item && item.id === normalizedId);
+}
+
+function getInboxRecommendationWeight(item, baseScore = 1) {
+    const count = Math.max(0, Number(item && item.recommendedCount) || 0);
+    const exposurePenalty = 1 / (1 + count * 0.15);
+    const lastShown = Number(item && item.lastRecommendedAt) || 0;
+    const ageMs = lastShown > 0 ? Date.now() - lastShown : Number.POSITIVE_INFINITY;
+    let recencyPenalty = 1;
+    if (ageMs < 24 * 60 * 60 * 1000) recencyPenalty = 0.55;
+    else if (ageMs < 7 * 24 * 60 * 60 * 1000) recencyPenalty = 0.8;
+    return Math.max(0.0001, Number(baseScore) || 1) * exposurePenalty * recencyPenalty;
+}
+
+function pickWeightedInboxItems(candidates, count) {
+    const pool = (Array.isArray(candidates) ? candidates : [])
+        .filter(entry => entry && entry.item)
+        .map(entry => ({
+            item: entry.item,
+            weight: getInboxRecommendationWeight(entry.item, entry.baseScore || 1)
+        }));
+    const picks = [];
+    const limit = Math.min(Math.max(0, count), pool.length);
+
+    while (picks.length < limit && pool.length > 0) {
+        const totalWeight = pool.reduce((sum, entry) => sum + entry.weight, 0);
+        let cursor = Math.random() * totalWeight;
+        let selectedIndex = pool.length - 1;
+        for (let i = 0; i < pool.length; i++) {
+            cursor -= pool[i].weight;
+            if (cursor <= 0) {
+                selectedIndex = i;
+                break;
+            }
+        }
+        const [selected] = pool.splice(selectedIndex, 1);
+        picks.push(selected.item);
+    }
+
+    return picks;
+}
+
+function setInboxRecommendationBusy(isBusy) {
+    inboxRecommendationBusy = Boolean(isBusy);
+    syncInboxRecommendationControls();
+}
+
+function syncInboxRecommendationControls() {
+    const shuffleBtn = document.getElementById('inbox-shuffle-btn');
+    const smartBtn = document.getElementById('inbox-smart-btn');
+    const disabled = inboxRecommendationBusy || !Array.isArray(inbox) || inbox.length === 0;
+    if (shuffleBtn) shuffleBtn.disabled = disabled;
+    if (smartBtn) {
+        smartBtn.disabled = disabled;
+        smartBtn.textContent = inboxRecommendationBusy ? 'Smart...' : 'Smart 3';
+    }
+}
+
+function getInboxItemsFromRecommendationState() {
+    const ids = Array.isArray(inboxRecommendationState.itemIds) ? inboxRecommendationState.itemIds : [];
+    return ids
+        .map(id => inbox.find(item => item && item.id === id))
+        .filter(Boolean);
+}
+
+function markInboxItemsRecommended(items) {
+    const now = Date.now();
+    const ids = new Set((Array.isArray(items) ? items : []).map(item => item && item.id).filter(Boolean));
+    inbox.forEach(item => {
+        if (!item || !ids.has(item.id)) return;
+        item.recommendedCount = Math.max(0, Number(item.recommendedCount) || 0) + 1;
+        item.lastRecommendedAt = now;
+    });
+    saveToStorage();
+}
+
+function getInboxActionArg(itemId) {
+    return escapeHtml(JSON.stringify(String(itemId || '')));
+}
+
+function renderInboxRecommendations(items, mode, options = {}) {
+    const resultEl = document.getElementById('inbox-recommend-results');
+    const statusEl = document.getElementById('inbox-recommend-status');
+    if (!resultEl || !statusEl) return;
+
+    const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+    const shouldMark = options.markShown !== false && safeItems.length > 0;
+    inboxRecommendationState = {
+        mode: mode || '',
+        itemIds: safeItems.map(item => item.id),
+        status: options.status || ''
+    };
+
+    if (shouldMark) markInboxItemsRecommended(safeItems);
+
+    if (safeItems.length === 0) {
+        resultEl.innerHTML = '';
+        statusEl.textContent = options.status || (inbox.length ? '' : 'No inbox items.');
+        syncInboxRecommendationControls();
+        return;
+    }
+
+    const modeLabel = mode === 'smart' ? 'Smart picks' : 'Shuffle picks';
+    statusEl.textContent = `${modeLabel}: ${safeItems.length} item${safeItems.length === 1 ? '' : 's'}`;
+    resultEl.innerHTML = safeItems.map(item => {
+        const actionId = getInboxActionArg(item.id);
+        const hasReminder = hasReminderForItem('inbox', item.id);
+        const reason = mode === 'smart' && item.lastAiRelevanceReason
+            ? `<div class="inbox-recommend-reason">${escapeHtml(item.lastAiRelevanceReason)}</div>`
+            : '';
+        return `
+            <div class="inbox-recommend-card" data-inbox-id="${escapeHtml(item.id)}">
+                <div class="inbox-recommend-title">${linkify(item.title)}</div>
+                ${reason}
+                <div class="inbox-actions">
+                    <span class="inbox-btn promote-btn" onclick="promoteInboxTaskById(${actionId})" title="Move to Board">⬆</span>
+                    <span class="inbox-btn promote-goal-btn" onclick="promoteInboxToGoalById(${actionId})" title="Move to Goals">🎯</span>
+                    <span class="inbox-btn reminder-btn ${hasReminder ? 'active' : ''}" onclick="openRemindersModal('inbox', ${actionId}); renderInboxModal();" title="Set Reminder">⏰</span>
+                    <span class="inbox-btn" style="color: var(--accent);" onclick="scheduleInboxItemById(${actionId})" title="Add to Agenda">📅</span>
+                    <span class="inbox-btn delete-btn" onclick="deleteInboxTaskById(${actionId})" title="Delete">✕</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+    syncInboxRecommendationControls();
+}
+
+function renderStoredInboxRecommendations() {
+    const items = getInboxItemsFromRecommendationState();
+    if (items.length === 0 && inboxRecommendationState.itemIds.length > 0) {
+        inboxRecommendationState = { mode: '', itemIds: [], status: '' };
+    }
+    renderInboxRecommendations(items, inboxRecommendationState.mode, {
+        markShown: false,
+        status: inboxRecommendationState.status
+    });
+}
+
+function recommendInboxShuffle() {
+    normalizeInboxCollection();
+    if (inbox.length === 0) {
+        renderInboxRecommendations([], 'shuffle', { markShown: false, status: 'No inbox items.' });
+        return;
+    }
+    const picks = pickWeightedInboxItems(inbox.map(item => ({ item, baseScore: 1 })), 3);
+    renderInboxRecommendations(picks, 'shuffle');
+}
+
+function extractInboxSmartTextFromGemini(data) {
+    return data
+        && data.candidates
+        && data.candidates[0]
+        && data.candidates[0].content
+        && data.candidates[0].content.parts
+        && data.candidates[0].content.parts[0]
+        ? String(data.candidates[0].content.parts[0].text || '')
+        : '';
+}
+
+function parseInboxSmartJson(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return null;
+    try {
+        return JSON.parse(raw);
+    } catch (error) {
+        const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (fencedMatch) {
+            try {
+                return JSON.parse(fencedMatch[1].trim());
+            } catch (innerError) {
+                // Continue to object extraction below.
+            }
+        }
+        const start = raw.indexOf('{');
+        const end = raw.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            try {
+                return JSON.parse(raw.slice(start, end + 1));
+            } catch (innerError) {
+                return null;
+            }
+        }
+    }
+    return null;
+}
+
+function buildInboxSmartGoalContext() {
+    const allGoals = typeof getAllGoalsFlat === 'function'
+        ? getAllGoalsFlat({ minYear: new Date().getFullYear(), includeSubgoals: true })
+        : [];
+    return allGoals.slice(0, 80).map(entry => ({
+        id: entry.goal && entry.goal.id,
+        text: entry.goal && entry.goal.text,
+        year: entry.year,
+        depth: entry.depth
+    })).filter(goal => goal.id && goal.text);
+}
+
+async function recommendInboxSmart() {
+    normalizeInboxCollection();
+    if (inbox.length === 0) {
+        renderInboxRecommendations([], 'smart', { markShown: false, status: 'No inbox items.' });
+        return;
+    }
+    if (typeof fetchGemini !== 'function' || typeof geminiApiKey === 'undefined' || !geminiApiKey) {
+        showNotification('Set your Gemini API key to use Smart 3.');
+        renderInboxRecommendations([], 'smart', { markShown: false, status: 'Smart 3 needs Gemini.' });
+        return;
+    }
+
+    setInboxRecommendationBusy(true);
+    const packet = {
+        inbox: inbox.map(item => ({ id: item.id, title: item.title })),
+        goals: buildInboxSmartGoalContext()
+    };
+    const prompt = `Score each inbox item for relevance to the provided current/future goals. Return only valid JSON in this exact shape: {"items":[{"id":"inbox_id","score":0,"reason":"short reason"}]}. Scores must be 0-100. Keep reasons under 14 words.\n\nCONTEXT:\n${JSON.stringify(packet)}`;
+    const payload = {
+        contents: [{ parts: [{ text: prompt }] }]
+    };
+
+    try {
+        const response = await fetchGemini(payload, 2, 800);
+        const parsed = parseInboxSmartJson(extractInboxSmartTextFromGemini(response));
+        const scoredItems = Array.isArray(parsed && parsed.items) ? parsed.items : [];
+        const byId = new Map(scoredItems.map(raw => [String(raw.id || ''), raw]));
+        const ranked = inbox.map(item => {
+            const raw = byId.get(item.id) || {};
+            const score = Math.max(0, Math.min(100, Number(raw.score) || 0));
+            item.lastAiRelevanceScore = score;
+            item.lastAiRelevanceReason = typeof raw.reason === 'string' ? raw.reason.trim().slice(0, 220) : '';
+            return { item, score };
+        }).sort((a, b) => b.score - a.score);
+
+        if (ranked.length === 0 || ranked.every(entry => entry.score <= 0)) {
+            throw new Error('Gemini did not return usable inbox scores.');
+        }
+
+        const poolSize = Math.min(ranked.length, Math.max(3, Math.ceil(ranked.length * 0.45)));
+        const pool = ranked.slice(0, poolSize).map(entry => ({
+            item: entry.item,
+            baseScore: Math.max(1, entry.score)
+        }));
+        const picks = pickWeightedInboxItems(pool, 3);
+        renderInboxRecommendations(picks, 'smart');
+    } catch (error) {
+        console.error('[inbox] Smart recommendations failed:', error);
+        showNotification(`Smart 3 failed: ${error.message}`);
+        renderInboxRecommendations([], 'smart', { markShown: false, status: 'Smart 3 failed.' });
+    } finally {
+        setInboxRecommendationBusy(false);
+    }
+}
+
 function renderInboxModal() {
     const list = document.getElementById('inbox-modal-list');
     if (!list) return;
+    normalizeInboxCollection();
     list.innerHTML = '';
+    syncInboxRecommendationControls();
 
     if (inbox.length === 0) {
         list.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:40px 20px; font-size: 13px;">📭<br><br>Your inbox is empty.<br>Capture ideas as they come!</div>';
+        renderStoredInboxRecommendations();
         return;
     }
 
     inbox.forEach((item, index) => {
         const hasReminder = hasReminderForItem('inbox', item.id);
+        const actionId = getInboxActionArg(item.id);
         const el = document.createElement('div');
         el.className = 'inbox-item';
         el.dataset.inboxId = item.id;
-        el.innerHTML = `<span>${linkify(item.title)}</span><div class="inbox-actions"><span class="inbox-btn promote-btn" onclick="promoteInboxTask(${index}); renderInboxModal();" title="Move to Board">⬆</span><span class="inbox-btn promote-goal-btn" onclick="promoteInboxToGoal(${index}); renderInboxModal();" title="Move to Goals">🎯</span><span class="inbox-btn reminder-btn ${hasReminder ? 'active' : ''}" onclick="openRemindersModal('inbox', '${item.id}'); renderInboxModal();" title="Set Reminder">⏰</span><span class="inbox-btn" style="color: var(--accent);" onclick="scheduleInboxItem(${index}); renderInboxModal();" title="Add to Agenda">📅</span><span class="inbox-btn delete-btn" onclick="deleteInboxTask(${index}); renderInboxModal();" title="Delete">✕</span></div>`;
+        el.innerHTML = `<span>${linkify(item.title)}</span><div class="inbox-actions"><span class="inbox-btn promote-btn" onclick="promoteInboxTaskById(${actionId})" title="Move to Board">⬆</span><span class="inbox-btn promote-goal-btn" onclick="promoteInboxToGoalById(${actionId})" title="Move to Goals">🎯</span><span class="inbox-btn reminder-btn ${hasReminder ? 'active' : ''}" onclick="openRemindersModal('inbox', ${actionId}); renderInboxModal();" title="Set Reminder">⏰</span><span class="inbox-btn" style="color: var(--accent);" onclick="scheduleInboxItemById(${actionId})" title="Add to Agenda">📅</span><span class="inbox-btn delete-btn" onclick="deleteInboxTaskById(${actionId})" title="Delete">✕</span></div>`;
         list.appendChild(el);
     });
+    renderStoredInboxRecommendations();
 }
 
 function addToInboxModal() {
@@ -501,7 +809,7 @@ function addToInboxModal() {
     if (!input) return;
     const val = input.value.trim();
     if (val) {
-        inbox.push({ id: 'inbox_' + Date.now(), title: val });
+        inbox.push(normalizeInboxItem({ id: 'inbox_' + Date.now(), title: val }, inbox.length));
         input.value = '';
         renderInboxModal();
         saveToStorage();
@@ -531,6 +839,20 @@ function deleteInboxTask(index) {
     renderInbox();
     saveToStorage();
 }
+
+function removeInboxRecommendationId(itemId) {
+    const normalizedId = String(itemId || '');
+    inboxRecommendationState.itemIds = (inboxRecommendationState.itemIds || [])
+        .filter(id => id !== normalizedId);
+}
+
+function deleteInboxTaskById(itemId) {
+    const index = getInboxIndexById(itemId);
+    if (index < 0) return;
+    removeInboxRecommendationId(itemId);
+    deleteInboxTask(index);
+}
+
 function promoteInboxTask(index) {
     const item = inbox[index];
     const worldX = (window.innerWidth / 2 - panX) / scale - 90;
@@ -540,6 +862,14 @@ function promoteInboxTask(index) {
     transferReminderAssignment('inbox', item.id, 'task', newNode.id, newNode.title);
     renderInbox(); updateCalculations(); render(); selectNode(newNode.id); saveToStorage();
 }
+
+function promoteInboxTaskById(itemId) {
+    const index = getInboxIndexById(itemId);
+    if (index < 0) return;
+    removeInboxRecommendationId(itemId);
+    promoteInboxTask(index);
+}
+
 function promoteInboxToGoal(index) {
     const item = inbox[index];
     if (!item) return;
@@ -552,6 +882,14 @@ function promoteInboxToGoal(index) {
     if (typeof toggleGoals === 'function') toggleGoals(true);
     saveToStorage();
 }
+
+function promoteInboxToGoalById(itemId) {
+    const index = getInboxIndexById(itemId);
+    if (index < 0) return;
+    removeInboxRecommendationId(itemId);
+    promoteInboxToGoal(index);
+}
+
 function scheduleInboxItem(index) {
     const item = inbox[index];
     if (!item) return;
@@ -597,13 +935,20 @@ function scheduleInboxItem(index) {
     showNotification(`"${item.title}" scheduled for ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
 }
 
+function scheduleInboxItemById(itemId) {
+    const index = getInboxIndexById(itemId);
+    if (index < 0) return;
+    scheduleInboxItem(index);
+    renderInboxModal();
+}
+
 function demoteToInbox() {
     if (!selectedNodeId) return;
     const node = nodes.find(n => n.id === selectedNodeId);
     if (!node) return;
 
     const newInboxId = 'inbox_' + Date.now();
-    inbox.push({ id: newInboxId, title: node.title });
+    inbox.push(normalizeInboxItem({ id: newInboxId, title: node.title }, inbox.length));
     if (typeof logTaskChange === 'function') {
         logTaskChange(node, 'Moved out of tasks and back to Inbox', { type: 'inbox' });
     }

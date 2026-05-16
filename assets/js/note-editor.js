@@ -2,25 +2,22 @@
 
 // Parse note body with legacy migration
 function parseNoteBody(note) {
+    if (window.NotesCore && typeof window.NotesCore.parseBlocks === 'function') {
+        return window.NotesCore.parseBlocks(note, { ensureOne: true });
+    }
     if (!note || !note.body) return [];
     try {
         const parsed = JSON.parse(note.body);
-        if (Array.isArray(parsed)) {
-            // Initialize bookmarkName if missing
-            parsed.forEach((b, index) => {
-                if (typeof b.id === 'undefined') b.id = Date.now() + Math.random() + index;
-                if (typeof b.bookmarkName === 'undefined') b.bookmarkName = "";
-            });
-            return parsed;
-        }
+        if (Array.isArray(parsed)) return parsed;
     } catch (e) { /* not JSON */ }
-
-    // Convert legacy string to single block
     return [{ id: Date.now() + Math.random(), text: note.body || "", colorIndex: 0, isEditing: true, bookmarkName: "" }];
 }
 
 // Serialize blocks to JSON for storage
 function serializeNoteBlocks() {
+    if (window.NotesCore && typeof window.NotesCore.serializeBlocks === 'function') {
+        return window.NotesCore.serializeBlocks(currentNoteBlocks);
+    }
     return JSON.stringify(currentNoteBlocks.map(b => ({
         id: b.id,
         text: b.text,
@@ -550,6 +547,9 @@ function linkTaskToNoteFromSearch(taskId) {
     if (!note.taskIds) note.taskIds = [];
     if (!note.taskIds.includes(taskId)) {
         note.taskIds.push(taskId);
+        if (window.NotesCore && typeof window.NotesCore.addEntityLink === 'function') {
+            window.NotesCore.addEntityLink(note, { type: 'task', id: taskId });
+        }
         triggerNoteSave();
         renderNoteLinkedTasksFooter();
     }
@@ -560,6 +560,9 @@ function unlinkTaskFromNoteFooter(taskId) {
     const note = notes.find(n => n.id === currentEditingNoteId);
     if (!note) return;
     note.taskIds = (note.taskIds || []).filter(id => id !== taskId);
+    if (window.NotesCore && typeof window.NotesCore.removeEntityLink === 'function') {
+        window.NotesCore.removeEntityLink(note, { type: 'task', id: taskId });
+    }
     triggerNoteSave();
     renderNoteLinkedTasksFooter();
     if (selectedNodeId === taskId) updateInspector();
@@ -601,11 +604,15 @@ function renderNoteLinkedItemsFooter() {
     // Render Linked Habits
     const habitsContainer = document.getElementById('note-linked-habits-list');
     if (habitsContainer && currentEditingNoteId) {
-        habitsContainer.innerHTML = '<span class="note-linked-label">Linked Habits:</span>';
+        habitsContainer.innerHTML = '<span class="note-linked-label">Linked Habits/Context:</span>';
 
         const linkedHabits = habits.filter(h => h.noteIds && h.noteIds.includes(currentEditingNoteId));
+        const note = notes.find(n => n.id === currentEditingNoteId);
+        const universalLinks = window.NotesCore && note
+            ? window.NotesCore.normalizeLinks(note).filter(link => link.type !== 'task' && link.type !== 'habit')
+            : [];
 
-        if (linkedHabits.length === 0) {
+        if (linkedHabits.length === 0 && universalLinks.length === 0) {
             habitsContainer.innerHTML += '<span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">None</span>';
         } else {
             linkedHabits.forEach(habit => {
@@ -617,7 +624,16 @@ function renderNoteLinkedItemsFooter() {
                 tag.innerHTML = `
                             <span onclick="closeNoteEditor(); toggleHabits();">✅ ${habit.title}</span>
                             <span class="unlink-btn" onclick="event.stopPropagation(); unlinkNoteFromHabit('${currentEditingNoteId}', '${habit.id}')">✕</span>
-                        `;
+                `;
+                habitsContainer.appendChild(tag);
+            });
+            universalLinks.forEach(link => {
+                const tag = document.createElement('div');
+                tag.className = 'note-task-tag';
+                tag.style.backgroundColor = 'rgba(79, 156, 249, 0.1)';
+                tag.style.borderColor = 'rgba(79, 156, 249, 0.22)';
+                tag.style.color = 'var(--accent)';
+                tag.innerText = `${link.type}: ${link.id}`;
                 habitsContainer.appendChild(tag);
             });
         }
@@ -699,6 +715,9 @@ function createTaskFromBlockSelection() {
             if (!note.taskIds) note.taskIds = [];
             if (!note.taskIds.includes(newNode.id)) {
                 note.taskIds.push(newNode.id);
+                if (window.NotesCore && typeof window.NotesCore.addEntityLink === 'function') {
+                    window.NotesCore.addEntityLink(note, { type: 'task', id: newNode.id });
+                }
                 renderNoteLinkedTasksFooter();
             }
         }

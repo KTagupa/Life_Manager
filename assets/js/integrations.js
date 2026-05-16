@@ -2162,25 +2162,50 @@ function mergeStates(local, remote) {
                 .replace(/^_+|_+$/g, '')
                 .slice(0, 40) || `item_${index}`;
             const id = explicitId || `inbox_legacy_${fallbackSlug}`;
+            const normalizedRaw = typeof normalizeInboxItem === 'function'
+                ? normalizeInboxItem({ ...rawObj, id, title }, index)
+                : {
+                    ...rawObj,
+                    id,
+                    title,
+                    recommendedCount: Math.max(0, Math.floor(Number(rawObj.recommendedCount) || 0)),
+                    lastRecommendedAt: Number(rawObj.lastRecommendedAt) > 0 ? Number(rawObj.lastRecommendedAt) : null,
+                    lastAiRelevanceScore: Number.isFinite(Number(rawObj.lastAiRelevanceScore)) ? Number(rawObj.lastAiRelevanceScore) : null,
+                    lastAiRelevanceReason: typeof rawObj.lastAiRelevanceReason === 'string' ? rawObj.lastAiRelevanceReason : ''
+                };
 
             const existing = byId.get(id);
             if (!existing) {
-                byId.set(id, {
-                    ...rawObj,
-                    id,
-                    title
-                });
+                byId.set(id, normalizedRaw);
                 return;
             }
 
             const preferredTitle = title.length >= String(existing.title || '').trim().length
                 ? title
                 : String(existing.title || '').trim();
+            const existingLastRecommendedAt = Number(existing.lastRecommendedAt) || 0;
+            const rawLastRecommendedAt = Number(normalizedRaw.lastRecommendedAt) || 0;
+            const existingHasAi = Number.isFinite(Number(existing.lastAiRelevanceScore));
+            const rawHasAi = Number.isFinite(Number(normalizedRaw.lastAiRelevanceScore));
+            const newerAiSource = rawHasAi && (!existingHasAi || rawLastRecommendedAt >= existingLastRecommendedAt)
+                ? normalizedRaw
+                : existing;
             byId.set(id, {
                 ...existing,
-                ...rawObj,
+                ...normalizedRaw,
                 id,
-                title: preferredTitle || title || String(existing.title || '').trim()
+                title: preferredTitle || title || String(existing.title || '').trim(),
+                recommendedCount: Math.max(
+                    Math.max(0, Number(existing.recommendedCount) || 0),
+                    Math.max(0, Number(normalizedRaw.recommendedCount) || 0)
+                ),
+                lastRecommendedAt: Math.max(existingLastRecommendedAt, rawLastRecommendedAt) || null,
+                lastAiRelevanceScore: newerAiSource.lastAiRelevanceScore !== undefined
+                    ? newerAiSource.lastAiRelevanceScore
+                    : null,
+                lastAiRelevanceReason: typeof newerAiSource.lastAiRelevanceReason === 'string'
+                    ? newerAiSource.lastAiRelevanceReason
+                    : ''
             });
         });
 

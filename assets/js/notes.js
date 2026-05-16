@@ -129,7 +129,7 @@ function initIndexNotesLiveSync() {
 window.syncNotesFromRepository = syncNotesFromRepository;
 window.initIndexNotesLiveSync = initIndexNotesLiveSync;
 
-const SIDE_NOTES_FILTER_MODES = new Set(['all', 'has-reminder', 'urgent-linked', 'recently-edited']);
+const SIDE_NOTES_FILTER_MODES = new Set(['all', 'context-linked', 'has-reminder', 'urgent-linked', 'recently-edited']);
 const SIDE_NOTES_RECENT_WINDOWS = new Set(['24h', '7d', '30d']);
 
 let sideNotesFilterMode = 'all';
@@ -152,6 +152,9 @@ function normalizeSideNotesTagFilter(tagValue) {
 }
 
 function extractSideNoteBodyText(note) {
+    if (window.NotesCore && typeof window.NotesCore.getPlainText === 'function') {
+        return window.NotesCore.getPlainText(note);
+    }
     if (!note || typeof note.body !== 'string') return '';
     try {
         const blocks = JSON.parse(note.body);
@@ -163,6 +166,9 @@ function extractSideNoteBodyText(note) {
 }
 
 function extractSideNoteTags(note) {
+    if (window.NotesCore && typeof window.NotesCore.extractTags === 'function') {
+        return window.NotesCore.extractTags(note);
+    }
     const text = extractSideNoteBodyText(note);
     const matches = text.match(/#[a-zA-Z0-9_-]+/g) || [];
     return Array.from(new Set(matches.map(tag => tag.toLowerCase())));
@@ -200,6 +206,84 @@ function noteHasUrgentLinksForSidePanel(note) {
         const task = activeTasks.find(item => item && item.id === taskId);
         return !!(task && !task.completed && (task._isUrgent || task.isManualUrgent));
     });
+}
+
+function getSelectedTaskForNotesContext() {
+    if (!selectedNodeId) return null;
+    return (Array.isArray(nodes) ? nodes : []).find(n => n && n.id === selectedNodeId)
+        || (Array.isArray(archivedNodes) ? archivedNodes : []).find(n => n && n.id === selectedNodeId)
+        || null;
+}
+
+function getActiveNotesContextLinks() {
+    const task = getSelectedTaskForNotesContext();
+    if (!task || !task.id) return [];
+
+    const links = [{ type: 'task', id: String(task.id) }];
+    const projectId = String(task.projectId || '').trim();
+    if (projectId) links.push({ type: 'project', id: projectId });
+    (Array.isArray(task.goalIds) ? task.goalIds : [])
+        .map(goalId => String(goalId || '').trim())
+        .filter(Boolean)
+        .forEach(goalId => links.push({ type: 'goal', id: goalId }));
+    return links;
+}
+
+function getNotesContextLabel() {
+    const task = getSelectedTaskForNotesContext();
+    if (!task) return '';
+    return task.title || 'Selected task';
+}
+
+function noteMatchesActiveContext(note) {
+    const links = getActiveNotesContextLinks();
+    if (!links.length || !note) return false;
+    if (window.NotesCore && typeof window.NotesCore.noteLinksTo === 'function') {
+        return links.some(link => window.NotesCore.noteLinksTo(note, link));
+    }
+    return links.some(link => link.type === 'task' && Array.isArray(note.taskIds) && note.taskIds.includes(link.id));
+}
+
+function applyContextLinksToNote(note, links = getActiveNotesContextLinks()) {
+    if (!note || !Array.isArray(links)) return note;
+    if (window.NotesCore && typeof window.NotesCore.addEntityLink === 'function') {
+        links.forEach(link => window.NotesCore.addEntityLink(note, link));
+        note.taskIds = window.NotesCore.syncTaskIdsFromLinks(note);
+        return note;
+    }
+
+    const taskLinks = links.filter(link => link.type === 'task').map(link => link.id);
+    note.taskIds = Array.from(new Set([...(Array.isArray(note.taskIds) ? note.taskIds : []), ...taskLinks]));
+    return note;
+}
+
+function getNoteLinksForPatch(note) {
+    if (!note || !window.NotesCore || typeof window.NotesCore.normalizeLinks !== 'function') return Array.isArray(note && note.links) ? note.links : [];
+    note.links = window.NotesCore.normalizeLinks(note);
+    note.taskIds = window.NotesCore.syncTaskIdsFromLinks(note);
+    return note.links;
+}
+
+function updateNotesContextCaptureState() {
+    const contextEl = document.getElementById('note-context-label');
+    const linkedBtn = document.getElementById('new-linked-note-btn');
+    const filterBtn = document.querySelector('[data-filter-mode="context-linked"]');
+    const label = getNotesContextLabel();
+    if (contextEl) {
+        contextEl.textContent = label ? `Context: ${label}` : 'No selected task context';
+    }
+    if (linkedBtn) {
+        linkedBtn.disabled = !label;
+        linkedBtn.title = label ? `Create note linked to ${label}` : 'Select a task to create a linked note';
+    }
+    if (filterBtn) {
+        filterBtn.disabled = !label;
+        filterBtn.title = label ? `Show notes linked to ${label}` : 'Select a task to filter by context';
+    }
+    if (!label && sideNotesFilterMode === 'context-linked') {
+        sideNotesFilterMode = 'all';
+        syncSideNotesFilterSliderState();
+    }
 }
 
 function updateSideNotesTagFilterOptions(tags) {
@@ -253,6 +337,7 @@ function ensureSideNotesFilterControls(noteList) {
 
         [
             { value: 'all', label: 'All', title: 'Show all notes' },
+            { value: 'context-linked', label: 'Context', title: 'Show notes linked to the selected task context' },
             { value: 'has-reminder', label: 'Reminders', title: 'Show notes with reminders' },
             { value: 'urgent-linked', label: 'Urgent', title: 'Show notes linked to urgent tasks' },
             { value: 'recently-edited', label: 'Recent', title: 'Show recently edited notes' }
@@ -312,6 +397,7 @@ function ensureSideNotesFilterControls(noteList) {
     syncSideNotesFilterSliderState();
     updateSideNotesTagFilterOptions(collectAllSideNoteTags(noteList));
     updateSideNotesRecentFilterControlState();
+    updateNotesContextCaptureState();
 }
 
 function togglePinNotePanel() {
@@ -531,40 +617,21 @@ window.jumpToTask = function (id) {
 
 // IMPROVED MARKDOWN ENGINE (Obsidian Style)
 function renderMarkdown(text) {
-    if (!text) return '';
+    const resolveWikiLink = (title) => {
+        const cleanTitle = String(title || '').replace(/^Note: /i, '').trim();
+        const targetNote = (Array.isArray(notes) ? notes : [])
+            .find(n => n && String(n.title || '').toLowerCase() === cleanTitle.toLowerCase());
+        if (targetNote) return { type: 'note', id: targetNote.id };
 
-    // Configure marked to handle single line breaks
-    marked.setOptions({
-        breaks: true,
-        gfm: true // GitHub Flavored Markdown
-    });
+        const targetTask = [...(Array.isArray(nodes) ? nodes : []), ...(Array.isArray(archivedNodes) ? archivedNodes : [])]
+            .find(n => n && (String(n.id || '') === cleanTitle || String(n.title || '').toLowerCase() === cleanTitle.toLowerCase()));
+        if (targetTask) return { type: 'task', id: targetTask.id };
+        return null;
+    };
 
-    // 1. Handle [[#BookmarkName]] (Jump Links)
-    let processedText = text.replace(/\[\[#(.*?)\]\]/g, (match, name) => {
-        const cleanName = name.trim();
-        return `<span class="bookmark-link" onclick="jumpToBookmarkByName('${cleanName.replace(/'/g, "\\'")}')">#${cleanName}</span>`;
-    });
-
-    // 2. Handle [[WikiLinks]] (Existing logic)
-    processedText = processedText.replace(/\[\[(.*?)\]\]/g, (match, title) => {
-        const cleanTitle = title.replace(/^Note: /, '').trim();
-        const target = notes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) ||
-            nodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase()) ||
-            archivedNodes.find(n => n.id === cleanTitle) || // Added ID fallback
-            archivedNodes.find(n => n.title.toLowerCase() === cleanTitle.toLowerCase());
-
-        if (target) {
-            const isNote = target.body !== undefined;
-            const color = isNote ? 'var(--accent)' : 'var(--ready-color)';
-            const action = isNote ? `openNoteEditor('${target.id}')` : `jumpToTask('${target.id}')`;
-            return `<span class="wiki-link" style="color:${color}; cursor:pointer; text-decoration:underline;" onclick="${action}">${title}</span>`;
-        } else {
-            return `<span style="color:#666; font-style:italic;">[[${title}]]</span>`;
-        }
-    });
-
-    // 2. Parse Markdown
-    let html = marked.parse(processedText);
+    let html = window.NotesCore && typeof window.NotesCore.renderMarkdownSafe === 'function'
+        ? window.NotesCore.renderMarkdownSafe(text || '_Empty_', { resolveWikiLink })
+        : marked.parse(String(text || '_Empty_'));
 
     // 3. Add Backlinks Section
     const backlinks = getBacklinks(currentEditingNoteId);
@@ -572,9 +639,9 @@ function renderMarkdown(text) {
         html += `<div style="margin-top:40px; padding-top:20px; border-top:1px solid #333;">
                         <h4 style="color:#666; font-size:12px; letter-spacing:1px;">BACKLINKS (MENTIONS)</h4>
                         ${backlinks.map(b => `
-                            <div class="note-card" style="padding:8px; margin-bottom:5px; font-size:12px;" onclick="${b.action}">
+                            <div class="note-card" data-note-backlink-type="${escapeHtml(b.type)}" data-note-backlink-id="${escapeHtml(b.id)}" style="padding:8px; margin-bottom:5px; font-size:12px;">
                                 <div style="color:var(--text-muted); font-size:10px;">${b.type}</div>
-                                <b>${b.title}</b>
+                                <b>${escapeHtml(b.title)}</b>
                             </div>
                         `).join('')}
                      </div>`;
@@ -582,6 +649,39 @@ function renderMarkdown(text) {
 
     return html;
 }
+
+function handleRenderedNoteLinkClick(event) {
+    const target = event.target instanceof Element
+        ? event.target.closest('[data-note-action], [data-note-backlink-id]')
+        : null;
+    if (!target) return;
+
+    const action = target.getAttribute('data-note-action');
+    if (action === 'bookmark') {
+        event.preventDefault();
+        jumpToBookmarkByName(target.getAttribute('data-bookmark-name') || '');
+        return;
+    }
+
+    if (action === 'wiki') {
+        const targetType = target.getAttribute('data-target-type');
+        const targetId = target.getAttribute('data-target-id');
+        if (!targetType || !targetId) return;
+        event.preventDefault();
+        if (targetType === 'note') openNoteEditor(targetId);
+        if (targetType === 'task') jumpToTask(targetId);
+        return;
+    }
+
+    const backlinkId = target.getAttribute('data-note-backlink-id');
+    const backlinkType = target.getAttribute('data-note-backlink-type');
+    if (!backlinkId || !backlinkType) return;
+    event.preventDefault();
+    if (backlinkType === 'NOTE') openNoteEditor(backlinkId);
+    if (backlinkType === 'TASK') jumpToTask(backlinkId);
+}
+
+document.addEventListener('click', handleRenderedNoteLinkClick);
 
 let noteImageLightboxLastFocus = null;
 
@@ -852,7 +952,7 @@ function getBacklinks(noteId) {
         if (n.id !== noteId) {
             const bodyText = getNoteBodyText(n.body);
             if (bodyText.includes(`[[${title}]]`)) {
-                results.push({ title: n.title, type: 'NOTE', action: `openNoteEditor('${n.id}')` });
+                results.push({ title: n.title, type: 'NOTE', id: n.id });
             }
         }
     });
@@ -860,7 +960,7 @@ function getBacklinks(noteId) {
     // Search in task descriptions
     nodes.forEach(n => {
         if (n.description && n.description.toLowerCase().includes(`[[${title}]]`)) {
-            results.push({ title: n.title, type: 'TASK', action: `jumpToTask('${n.id}')` });
+            results.push({ title: n.title, type: 'TASK', id: n.id });
         }
     });
 
@@ -903,6 +1003,9 @@ function createTaskFromSelection() {
                 if (!note.taskIds) note.taskIds = [];
                 if (!note.taskIds.includes(newNode.id)) {
                     note.taskIds.push(newNode.id);
+                    if (window.NotesCore && typeof window.NotesCore.addEntityLink === 'function') {
+                        window.NotesCore.addEntityLink(note, { type: 'task', id: newNode.id });
+                    }
                     renderNoteLinkedTasksFooter();
                 }
             }
@@ -955,6 +1058,11 @@ function createNoteFromSelection() {
 
     const newNote = createNoteObject(title, `${originText}${currentSelectionText}`);
     newNote.taskIds = parentTaskIDs;
+    parentTaskIDs.forEach(taskId => {
+        if (window.NotesCore && typeof window.NotesCore.addEntityLink === 'function') {
+            window.NotesCore.addEntityLink(newNote, { type: 'task', id: taskId });
+        }
+    });
     notes.push(newNote);
     persistCreatedNote(newNote).then(() => {
         syncNotesFromRepository({ render: true, preserveSelection: true });
@@ -1007,6 +1115,7 @@ function renderNotesList() {
             const searchMatch = title.includes(searchVal) || bodyTextLower.includes(searchVal);
             if (!searchMatch) return false;
 
+            if (normalizedFilterMode === 'context-linked' && !noteMatchesActiveContext(note)) return false;
             if (normalizedFilterMode === 'has-reminder' && !hasReminderForItem('note', note.id)) return false;
             if (normalizedFilterMode === 'urgent-linked' && !noteHasUrgentLinksForSidePanel(note)) return false;
             if (normalizedFilterMode === 'recently-edited' && !isSideNoteRecentlyEdited(note, normalizedRecentWindow)) return false;
@@ -1039,6 +1148,7 @@ function renderNotesList() {
                     habitCount: 0,
                     goalCount: 0,
                     goalIds: [],
+                    projectCount: 0,
                     urgentTaskCount: 0,
                     hasTaskLinks: Array.isArray(note.taskIds) && note.taskIds.length > 0,
                     hasHabitLinks: false,
@@ -1062,6 +1172,9 @@ function renderNotesList() {
             }
             if (linkMetrics.habitCount > 0) {
                 linkChips.push(`<span class="note-link-chip habit" title="${linkMetrics.habitCount} linked habit(s)">H:${linkMetrics.habitCount}</span>`);
+            }
+            if (linkMetrics.projectCount > 0) {
+                linkChips.push(`<span class="note-link-chip project" title="${linkMetrics.projectCount} linked project(s)">P:${linkMetrics.projectCount}</span>`);
             }
             if (linkMetrics.urgentTaskCount > 0) {
                 linkChips.push(`<span class="note-link-chip urgent" title="${linkMetrics.urgentTaskCount} linked urgent task(s)">⚠ ${linkMetrics.urgentTaskCount}</span>`);
@@ -1141,22 +1254,36 @@ function toggleCurrentNotePin() {
 
 // 1. UPDATED createNewNote
 // Prevents duplicates by immediately opening the modal
-function createNewNote(taskId = null) {
+function createNewNote(taskId = null, options = {}) {
     // Safe check for task ID
     const safeTaskId = (typeof taskId === 'string') ? taskId : null;
     let noteTitle = "New Note";
+    const contextLinks = options.linkToContext === true
+        ? getActiveNotesContextLinks()
+        : [];
 
     if (safeTaskId) {
         const task = nodes.find(n => n.id === safeTaskId) || archivedNodes.find(n => n.id === safeTaskId);
         if (task && task.title) {
             noteTitle = `Note for ${task.title}`;
         }
+    } else if (contextLinks.length) {
+        const task = getSelectedTaskForNotesContext();
+        if (task && task.title) noteTitle = `Note for ${task.title}`;
     }
 
-    const newNote = createNoteObject(noteTitle, "", safeTaskId);
+    const blankBody = window.NotesCore && typeof window.NotesCore.serializeBlocks === 'function'
+        ? window.NotesCore.serializeBlocks([{ text: '' }])
+        : "";
+    const newNote = createNoteObject(noteTitle, blankBody, safeTaskId);
+    if (contextLinks.length) applyContextLinksToNote(newNote, contextLinks);
+    if (safeTaskId && window.NotesCore && typeof window.NotesCore.addEntityLink === 'function') {
+        window.NotesCore.addEntityLink(newNote, { type: 'task', id: safeTaskId });
+    }
     notes.push(newNote);
-    if (safeTaskId) {
-        const task = nodes.find(n => n.id === safeTaskId) || archivedNodes.find(n => n.id === safeTaskId);
+    const logTaskId = safeTaskId || (contextLinks.find(link => link.type === 'task') || {}).id;
+    if (logTaskId) {
+        const task = nodes.find(n => n.id === logTaskId) || archivedNodes.find(n => n.id === logTaskId);
         if (task && typeof logTaskChange === 'function') {
             logTaskChange(task, `Created linked note: ${newNote.title || 'Untitled Note'}`, { type: 'note' });
         }
@@ -1179,6 +1306,50 @@ function createNewNote(taskId = null) {
 
     // Show confirmation
     showNotification("Note Created");
+}
+
+function createNewLinkedNote() {
+    const contextLinks = getActiveNotesContextLinks();
+    if (!contextLinks.length) {
+        showNotification("Select a task first to create a linked note.");
+        return;
+    }
+    createNewNote(null, { linkToContext: true });
+}
+
+function createQuickContextNote() {
+    const input = document.getElementById('note-quick-capture-input');
+    if (!input) return;
+    const text = String(input.value || '').trim();
+    if (!text) {
+        input.focus();
+        return;
+    }
+
+    const contextLinks = getActiveNotesContextLinks();
+    const title = text.length > 52 ? `${text.slice(0, 52)}...` : text;
+    const body = window.NotesCore && typeof window.NotesCore.serializeBlocks === 'function'
+        ? window.NotesCore.serializeBlocks([{ text }])
+        : text;
+    const taskLink = contextLinks.find(link => link.type === 'task');
+    const newNote = createNoteObject(title, body, taskLink ? taskLink.id : null);
+    applyContextLinksToNote(newNote, contextLinks);
+    notes.push(newNote);
+
+    persistCreatedNote(newNote).then(() => {
+        syncNotesFromRepository({ render: true, preserveSelection: true });
+    });
+    broadcastNotesChange('create', newNote.id);
+    saveToStorage();
+    input.value = '';
+    renderNotesList();
+    showNotification(contextLinks.length ? "Linked note captured" : "Note captured");
+}
+
+function handleQuickCaptureKeydown(event) {
+    if (event.key !== 'Enter' || event.shiftKey) return;
+    event.preventDefault();
+    createQuickContextNote();
 }
 
 // 2. UPDATED openNoteEditor
@@ -1308,10 +1479,14 @@ function saveCurrentNote() {
     note.title = document.getElementById('note-title-input').value;
     note.body = serializeNoteBlocks();
     note.timestamp = now;
+    const links = getNoteLinksForPatch(note);
     persistUpdatedNote(note.id, {
         title: note.title,
         body: note.body,
-        timestamp: note.timestamp
+        taskIds: Array.isArray(note.taskIds) ? [...note.taskIds] : [],
+        links,
+        timestamp: note.timestamp,
+        updatedAt: note.timestamp
     });
     broadcastNotesChange('update', note.id);
     saveToStorage();
@@ -1444,10 +1619,13 @@ function linkTaskToNote(taskId) {
     if (!note.taskIds) note.taskIds = [];
     if (!note.taskIds.includes(taskId)) {
         note.taskIds.push(taskId);
+        if (window.NotesCore && typeof window.NotesCore.addEntityLink === 'function') {
+            window.NotesCore.addEntityLink(note, { type: 'task', id: taskId });
+        }
         if (task && typeof logTaskChange === 'function') {
             logTaskChange(task, `Linked note: ${note.title || 'Untitled Note'}`, { type: 'note' });
         }
-        persistUpdatedNote(note.id, { taskIds: [...note.taskIds] });
+        persistUpdatedNote(note.id, { taskIds: [...note.taskIds], links: getNoteLinksForPatch(note) });
         broadcastNotesChange('update', note.id);
         saveToStorage();
         renderNoteLinkedTasks();
@@ -1461,10 +1639,13 @@ function unlinkTaskFromNote(taskId) {
     if (!note) return;
     const task = nodes.find(n => n.id === taskId) || archivedNodes.find(n => n.id === taskId);
     note.taskIds = (note.taskIds || []).filter(id => id !== taskId);
+    if (window.NotesCore && typeof window.NotesCore.removeEntityLink === 'function') {
+        window.NotesCore.removeEntityLink(note, { type: 'task', id: taskId });
+    }
     if (task && typeof logTaskChange === 'function') {
         logTaskChange(task, `Unlinked note: ${note.title || 'Untitled Note'}`, { type: 'note' });
     }
-    persistUpdatedNote(note.id, { taskIds: [...note.taskIds] });
+    persistUpdatedNote(note.id, { taskIds: [...note.taskIds], links: getNoteLinksForPatch(note) });
     broadcastNotesChange('update', note.id);
     saveToStorage();
     renderNoteLinkedTasks();
@@ -1480,10 +1661,13 @@ function linkNoteToTask(noteId, taskId) {
     if (!note.taskIds) note.taskIds = [];
     if (!note.taskIds.includes(taskId)) {
         note.taskIds.push(taskId);
+        if (window.NotesCore && typeof window.NotesCore.addEntityLink === 'function') {
+            window.NotesCore.addEntityLink(note, { type: 'task', id: taskId });
+        }
         if (task && typeof logTaskChange === 'function') {
             logTaskChange(task, `Linked note: ${note.title || 'Untitled Note'}`, { type: 'note' });
         }
-        persistUpdatedNote(note.id, { taskIds: [...note.taskIds] });
+        persistUpdatedNote(note.id, { taskIds: [...note.taskIds], links: getNoteLinksForPatch(note) });
         broadcastNotesChange('update', note.id);
         saveToStorage();
         updateInspector();
@@ -1494,10 +1678,15 @@ function linkNoteToTask(noteId, taskId) {
 function linkNoteToHabit(noteId, habitId) {
     if (!noteId || !habitId) return;
     const habit = habits.find(h => h.id === habitId);
+    const note = notes.find(n => n.id === noteId);
     if (!habit) return;
     if (!habit.noteIds) habit.noteIds = [];
     if (!habit.noteIds.includes(noteId)) {
         habit.noteIds.push(noteId);
+        if (note && window.NotesCore && typeof window.NotesCore.addEntityLink === 'function') {
+            window.NotesCore.addEntityLink(note, { type: 'habit', id: habitId });
+            persistUpdatedNote(note.id, { links: getNoteLinksForPatch(note), taskIds: [...(note.taskIds || [])] });
+        }
         saveToStorage();
         if (currentEditingNoteId === noteId) {
             renderNoteLinkedItemsFooter();
@@ -1512,9 +1701,14 @@ function linkNoteToHabit(noteId, habitId) {
 function unlinkNoteFromHabit(noteId, habitId) {
     if (!noteId || !habitId) return;
     const habit = habits.find(h => h.id === habitId);
+    const note = notes.find(n => n.id === noteId);
     if (!habit) return;
     if (!habit.noteIds) habit.noteIds = [];
     habit.noteIds = habit.noteIds.filter(id => id !== noteId);
+    if (note && window.NotesCore && typeof window.NotesCore.removeEntityLink === 'function') {
+        window.NotesCore.removeEntityLink(note, { type: 'habit', id: habitId });
+        persistUpdatedNote(note.id, { links: getNoteLinksForPatch(note), taskIds: [...(note.taskIds || [])] });
+    }
     saveToStorage();
     if (currentEditingNoteId === noteId) {
         renderNoteLinkedItemsFooter();

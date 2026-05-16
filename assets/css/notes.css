@@ -148,6 +148,12 @@
             background: rgba(16, 185, 129, 0.16);
         }
 
+        .note-link-chip.project {
+            color: #bfdbfe;
+            border-color: rgba(79, 156, 249, 0.58);
+            background: rgba(79, 156, 249, 0.14);
+        }
+
         .note-link-chip.urgent {
             color: #fbcfe8;
             border-color: rgba(199, 112, 136, 0.66);

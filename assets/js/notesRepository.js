@@ -108,8 +108,49 @@
     }
 
     function normalizeTaskIds(note) {
+        if (global.NotesCore && typeof global.NotesCore.normalizeTaskIds === 'function') {
+            return global.NotesCore.normalizeTaskIds(note);
+        }
         const rawTaskIds = Array.isArray(note.taskIds) ? note.taskIds : (note.taskId ? [note.taskId] : []);
-        return Array.from(new Set(rawTaskIds.filter(Boolean)));
+        return Array.from(new Set(rawTaskIds.map(id => String(id || '').trim()).filter(Boolean)));
+    }
+
+    function normalizeLinks(note, fallbackTimestamp) {
+        if (global.NotesCore && typeof global.NotesCore.normalizeLinks === 'function') {
+            return global.NotesCore.normalizeLinks(note);
+        }
+
+        const allowedTypes = new Set(['task', 'habit', 'goal', 'project']);
+        const createdAt = Number(note && note.createdAt) || Number(fallbackTimestamp) || Date.now();
+        const byKey = new Map();
+        const rawLinks = Array.isArray(note && note.links) ? note.links : [];
+
+        rawLinks.forEach((rawLink) => {
+            if (!rawLink || typeof rawLink !== 'object') return;
+            const type = String(rawLink.type || '').trim().toLowerCase();
+            const id = String(rawLink.id || '').trim();
+            if (!allowedTypes.has(type) || !id) return;
+            byKey.set(`${type}:${id}`, {
+                type,
+                id,
+                createdAt: Number(rawLink.createdAt) || createdAt
+            });
+        });
+
+        normalizeTaskIds(note || {}).forEach((taskId) => {
+            const key = `task:${taskId}`;
+            if (!byKey.has(key)) byKey.set(key, { type: 'task', id: taskId, createdAt });
+        });
+
+        return Array.from(byKey.values());
+    }
+
+    function serializeBlocksIfNeeded(noteData) {
+        if (noteData && typeof noteData.body === 'string') return noteData.body;
+        if (noteData && Array.isArray(noteData.blocks) && global.NotesCore && typeof global.NotesCore.serializeBlocks === 'function') {
+            return global.NotesCore.serializeBlocks(noteData.blocks);
+        }
+        return '';
     }
 
     function normalizeNote(noteData) {
@@ -122,10 +163,14 @@
             ? noteData.title.trim()
             : 'New Note';
 
-        const body = (noteData && typeof noteData.body === 'string') ? noteData.body : '';
+        const body = serializeBlocksIfNeeded(noteData);
         const isPinned = !!(noteData && noteData.isPinned);
         const timestamp = Number(noteData && noteData.timestamp) || now;
-        const taskIds = normalizeTaskIds(noteData || {});
+        const createdAt = Number(noteData && noteData.createdAt) || timestamp || now;
+        const updatedAt = Number(noteData && noteData.updatedAt) || timestamp || now;
+        const links = normalizeLinks(noteData || {}, timestamp || createdAt);
+        const linkTaskIds = links.filter(link => link.type === 'task').map(link => link.id);
+        const taskIds = Array.from(new Set([...normalizeTaskIds(noteData || {}), ...linkTaskIds]));
 
         return {
             ...(noteData || {}),
@@ -133,8 +178,11 @@
             title,
             body,
             taskIds,
+            links,
             isPinned,
-            timestamp
+            timestamp,
+            createdAt,
+            updatedAt
         };
     }
 
@@ -200,6 +248,9 @@
     }
 
     function extractBodySearchText(note) {
+        if (global.NotesCore && typeof global.NotesCore.getPlainText === 'function') {
+            return global.NotesCore.getPlainText(note);
+        }
         if (!note || typeof note.body !== 'string') return '';
         const rawBody = note.body;
 
