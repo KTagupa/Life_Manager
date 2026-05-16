@@ -35,7 +35,9 @@
         dirty: false,
         saveTimer: null,
         listControlsOpen: false,
-        detailsPanelOpen: false
+        detailsPanelOpen: false,
+        reviewDashboardOpen: false,
+        noteRemindersById: new Map()
     };
 
     const els = {
@@ -59,11 +61,15 @@
         detailsToggleBtn: null,
         detailsPanel: null,
         detailsSummary: null,
+        linkChipList: null,
         metaGrid: null,
         metaLinkedToggleBtn: null,
         metaBookmarkToggleBtn: null,
+        metaGraphToggleBtn: null,
         metaLinkedField: null,
         metaBookmarkField: null,
+        metaGraphField: null,
+        graphPanel: null,
         taskPicker: null,
         taskChipList: null,
         taskSearch: null,
@@ -82,6 +88,11 @@
         commandPaletteInput: null,
         commandPaletteList: null,
         commandPaletteCloseBtn: null,
+        reviewToggleBtn: null,
+        reviewDashboard: null,
+        reviewSummary: null,
+        reviewSections: null,
+        reviewRefreshBtn: null,
         shortcutsBtn: null,
         shortcutsOverlay: null,
         shortcutsWindow: null,
@@ -198,6 +209,9 @@
     }
 
     function normalizeTaskIds(taskIds) {
+        if (window.NotesCore && typeof window.NotesCore.normalizeTaskIds === 'function') {
+            return window.NotesCore.normalizeTaskIds(taskIds);
+        }
         if (!Array.isArray(taskIds)) return [];
         return Array.from(new Set(taskIds.filter(Boolean).map(String)));
     }
@@ -267,11 +281,17 @@
     }
 
     function noteHasBookmarks(note) {
+        if (window.NotesCore && typeof window.NotesCore.extractBookmarks === 'function') {
+            return window.NotesCore.extractBookmarks(note).length > 0;
+        }
         const blocks = parseNoteBody(note && note.body);
         return blocks.some(block => typeof block.bookmarkName === 'string' && block.bookmarkName.trim().length > 0);
     }
 
     function extractNoteTags(note) {
+        if (window.NotesCore && typeof window.NotesCore.extractTags === 'function') {
+            return window.NotesCore.extractTags(note);
+        }
         const blocks = parseNoteBody(note && note.body);
         const text = blocks.map(block => block.text || '').join('\n');
         const matches = text.match(/#[a-zA-Z0-9_-]+/g) || [];
@@ -290,6 +310,13 @@
         return taskIds.some(taskId => state.urgentTaskIds.has(String(taskId)));
     }
 
+    function getUniversalLinkCount(note) {
+        if (window.NotesCore && typeof window.NotesCore.normalizeLinks === 'function') {
+            return window.NotesCore.normalizeLinks(note).length;
+        }
+        return normalizeTaskIds(note && note.taskIds).length;
+    }
+
     function applyListFilter(notes) {
         const mode = normalizeFilterMode(state.activeListFilter);
         const tagFilter = normalizeTagFilterValue(state.activeTagFilter);
@@ -297,9 +324,9 @@
 
         return notes.filter((note) => {
             if (mode === 'pinned' && !note.isPinned) return false;
-            if (mode === 'linked' && normalizeTaskIds(note.taskIds).length === 0) return false;
+            if (mode === 'linked' && getUniversalLinkCount(note) === 0) return false;
             if (mode === 'bookmarked' && !noteHasBookmarks(note)) return false;
-            if (mode === 'unlinked' && normalizeTaskIds(note.taskIds).length > 0) return false;
+            if (mode === 'unlinked' && getUniversalLinkCount(note) > 0) return false;
             if (mode === 'has-reminder' && !state.noteReminderIds.has(String(note.id))) return false;
             if (mode === 'urgent-linked' && !noteLinksToUrgentTask(note)) return false;
             if (mode === 'recently-edited' && !isWithinRecentWindow(note.timestamp, recentWindow)) return false;
@@ -422,6 +449,9 @@
     }
 
     function normalizeBlock(raw, index) {
+        if (window.NotesCore && typeof window.NotesCore.normalizeBlock === 'function') {
+            return window.NotesCore.normalizeBlock(raw, index);
+        }
         const block = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? { ...raw } : {};
 
         if (typeof block.id === 'undefined' || block.id === null) block.id = makeBlockId(index);
@@ -438,10 +468,16 @@
     }
 
     function createEmptyBlock(text = '') {
+        if (window.NotesCore && typeof window.NotesCore.createEmptyBlock === 'function') {
+            return window.NotesCore.createEmptyBlock(text);
+        }
         return normalizeBlock({ text }, 0);
     }
 
     function parseNoteBody(noteBody) {
+        if (window.NotesCore && typeof window.NotesCore.parseBlocks === 'function') {
+            return window.NotesCore.parseBlocks(noteBody, { ensureOne: true });
+        }
         if (!noteBody || typeof noteBody !== 'string') return [createEmptyBlock('')];
 
         try {
@@ -458,6 +494,9 @@
     }
 
     function serializeBlocks() {
+        if (window.NotesCore && typeof window.NotesCore.serializeBlocks === 'function') {
+            return window.NotesCore.serializeBlocks(state.blocks);
+        }
         const normalizedBlocks = state.blocks.map((block, idx) => {
             const normalized = normalizeBlock(block, idx);
             return {
@@ -501,9 +540,11 @@
         }
 
         const linkedCount = state.selectedTaskIds.length;
+        const universalLinkCount = window.NotesCore ? window.NotesCore.normalizeLinks(note).length : linkedCount;
         const bookmarkCount = getBookmarkCount();
+        const graphCount = getGraphRelationshipCount(note);
         const pinLabel = note.isPinned ? 'Pinned' : 'Not pinned';
-        return `${linkedCount} linked task(s) • ${bookmarkCount} bookmark(s) • ${pinLabel}.`;
+        return `${linkedCount} linked task(s) • ${universalLinkCount} total link(s) • ${bookmarkCount} bookmark(s) • ${graphCount} graph item(s) • ${pinLabel}.`;
     }
 
     function updateDetailsToggleButton() {
@@ -518,6 +559,245 @@
         if (els.detailsSummary) {
             els.detailsSummary.textContent = getDetailsSummaryText();
         }
+        renderUniversalLinkChips();
+    }
+
+    function renderUniversalLinkChips() {
+        if (!els.linkChipList) return;
+        const note = getSelectedNote();
+        if (!note || !window.NotesCore || typeof window.NotesCore.normalizeLinks !== 'function') {
+            els.linkChipList.innerHTML = '<span class="task-chip-empty">No context links.</span>';
+            return;
+        }
+
+        const links = window.NotesCore.normalizeLinks(note);
+        if (!links.length) {
+            els.linkChipList.innerHTML = '<span class="task-chip-empty">No context links.</span>';
+            return;
+        }
+
+        els.linkChipList.innerHTML = links.map(link => {
+            const type = String(link.type || '').toUpperCase();
+            const id = String(link.id || '');
+            const label = link.type === 'task' ? getTaskLabel(id) : id;
+            return `<span class="task-chip note-universal-link-chip" title="${esc(id)}"><span class="task-chip-label">${esc(type)}: ${esc(label)}</span></span>`;
+        }).join('');
+    }
+
+    function getGraphSourceNote(note) {
+        if (!note || note.id !== state.selectedId) return note;
+        return Object.assign({}, note, {
+            title: els.title ? els.title.value : note.title,
+            body: serializeBlocks()
+        });
+    }
+
+    function findNoteByTitle(title) {
+        const normalized = String(title || '').replace(/^Note: /i, '').trim().toLowerCase();
+        if (!normalized) return null;
+        return state.allNotes.find(note => note && String(note.title || '').trim().toLowerCase() === normalized) || null;
+    }
+
+    function findTaskByTitleOrId(titleOrId) {
+        const normalized = String(titleOrId || '').replace(/^Task: /i, '').trim().toLowerCase();
+        if (!normalized) return null;
+        return state.taskOptions.find(task =>
+            String(task.id || '').toLowerCase() === normalized ||
+            String(task.title || '').trim().toLowerCase() === normalized
+        ) || null;
+    }
+
+    function extractWikiLinksFromNote(note) {
+        const sourceNote = getGraphSourceNote(note);
+        const text = getNoteFullText(sourceNote);
+        const links = [];
+        const pattern = /\[\[(.*?)\]\]/g;
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+            const rawTitle = String(match[1] || '').trim();
+            if (!rawTitle) continue;
+            if (rawTitle.startsWith('#')) {
+                const bookmarkName = rawTitle.slice(1).trim();
+                if (!bookmarkName) continue;
+                const bookmark = parseNoteBody(sourceNote && sourceNote.body).find(block =>
+                    String(block.bookmarkName || '').trim().toLowerCase() === bookmarkName.toLowerCase()
+                );
+                links.push({
+                    rawTitle,
+                    title: bookmarkName,
+                    type: bookmark ? 'bookmark' : 'unresolved-bookmark',
+                    id: bookmark ? String(bookmark.id) : bookmarkName
+                });
+                continue;
+            }
+            const cleanTitle = rawTitle.replace(/^Note: /i, '').trim();
+            const targetNote = findNoteByTitle(cleanTitle);
+            const targetTask = targetNote ? null : findTaskByTitleOrId(cleanTitle);
+            links.push({
+                rawTitle,
+                title: cleanTitle,
+                type: targetNote ? 'note' : (targetTask ? 'task' : 'unresolved'),
+                id: targetNote ? targetNote.id : (targetTask ? targetTask.id : cleanTitle)
+            });
+        }
+        return links;
+    }
+
+    function getIncomingBacklinks(targetNote) {
+        if (!targetNote || !targetNote.id) return [];
+        const targetTitle = String(targetNote.title || '').trim().toLowerCase();
+        if (!targetTitle) return [];
+
+        return state.allNotes
+            .filter(note => note && note.id !== targetNote.id)
+            .flatMap((note) => {
+                const links = extractWikiLinksFromNote(note)
+                    .filter(link => link.type === 'note' && link.id === targetNote.id);
+                if (!links.length) return [];
+                return [{
+                    noteId: note.id,
+                    title: note.title || '(Untitled)',
+                    count: links.length,
+                    preview: extractBodyPreview(note) || 'Mentions this note'
+                }];
+            });
+    }
+
+    function getEntityLinkLabel(link) {
+        const id = String(link && link.id || '');
+        if (!id) return '';
+        if (link.type === 'task') return getTaskLabel(id);
+        if (link.type === 'goal' && typeof window.getGoalTextById === 'function') return window.getGoalTextById(id) || id;
+        return id;
+    }
+
+    function buildNoteGraphData(note = getSelectedNote()) {
+        if (!note) {
+            return {
+                backlinks: [],
+                outgoing: [],
+                entities: [],
+                unresolved: [],
+                summary: []
+            };
+        }
+
+        const outgoing = extractWikiLinksFromNote(note);
+        const backlinks = getIncomingBacklinks(note);
+        const entities = window.NotesCore && typeof window.NotesCore.normalizeLinks === 'function'
+            ? window.NotesCore.normalizeLinks(note)
+            : normalizeTaskIds(note.taskIds).map(taskId => ({ type: 'task', id: taskId }));
+        const unresolved = outgoing.filter(link => link.type === 'unresolved' || link.type === 'unresolved-bookmark');
+        const connectedCount = backlinks.length + outgoing.filter(link => link.type !== 'unresolved' && link.type !== 'unresolved-bookmark').length + entities.length;
+        const summary = [
+            { label: 'Incoming', value: backlinks.length },
+            { label: 'Outgoing', value: outgoing.length },
+            { label: 'Entities', value: entities.length },
+            { label: 'Unresolved', value: unresolved.length },
+            { label: 'Status', value: connectedCount > 0 ? 'Connected' : 'Orphan' }
+        ];
+
+        return { backlinks, outgoing, entities, unresolved, summary };
+    }
+
+    function getGraphRelationshipCount(note = getSelectedNote()) {
+        const graph = buildNoteGraphData(note);
+        return graph.backlinks.length + graph.outgoing.length + graph.entities.length;
+    }
+
+    function renderGraphList(items, emptyText, renderItem) {
+        if (!items.length) return `<div class="empty-state">${esc(emptyText)}</div>`;
+        return items.map(renderItem).join('');
+    }
+
+    function renderNoteGraphPanel() {
+        if (!els.graphPanel) return;
+        const note = getSelectedNote();
+        if (!note) {
+            els.graphPanel.innerHTML = '<div class="empty-state">Select a note to inspect relationships.</div>';
+            return;
+        }
+
+        const graph = buildNoteGraphData(note);
+        const summaryText = graph.summary.map(item => `${item.label}: ${item.value}`).join(' | ');
+
+        els.graphPanel.innerHTML = `
+            <section class="note-graph-card wide">
+                <div class="note-graph-head">
+                    <span>Connection Summary</span>
+                    <span>${esc(summaryText)}</span>
+                </div>
+                <div class="note-graph-list">
+                    <div class="notes-muted">${esc(graph.summary.find(item => item.label === 'Status').value === 'Orphan'
+                        ? 'This note has no incoming mentions, outgoing resolved links, or entity links.'
+                        : 'This note has relationship context through note links or entity links.')}</div>
+                </div>
+            </section>
+            <section class="note-graph-card">
+                <div class="note-graph-head"><span>Incoming Backlinks</span><span>${graph.backlinks.length}</span></div>
+                <div class="note-graph-list">
+                    ${renderGraphList(graph.backlinks, 'No notes mention this note.', item => `
+                        <button type="button" class="note-graph-item" data-graph-note-id="${esc(item.noteId)}">
+                            <span class="note-graph-item-title">${esc(item.title)}</span>
+                            <span class="note-graph-item-meta">${esc(item.count)} mention(s) | ${esc(item.preview)}</span>
+                        </button>
+                    `)}
+                </div>
+            </section>
+            <section class="note-graph-card">
+                <div class="note-graph-head"><span>Outgoing Wiki Links</span><span>${graph.outgoing.length}</span></div>
+                <div class="note-graph-list">
+                    ${renderGraphList(graph.outgoing, 'No outgoing wiki links.', item => `
+                        <button type="button" class="note-graph-item" ${item.type === 'note' ? `data-graph-note-id="${esc(item.id)}"` : ''} ${item.type === 'task' ? `data-graph-task-id="${esc(item.id)}"` : ''} ${item.type === 'bookmark' ? `data-graph-bookmark-name="${esc(item.title)}"` : ''} ${(item.type === 'unresolved' || item.type === 'unresolved-bookmark') ? 'disabled' : ''}>
+                            <span class="note-graph-item-title">${esc(item.rawTitle)}</span>
+                            <span class="note-graph-item-meta">${esc((item.type === 'unresolved' || item.type === 'unresolved-bookmark') ? 'Unresolved' : `Resolved ${item.type}`)}</span>
+                        </button>
+                    `)}
+                </div>
+            </section>
+            <section class="note-graph-card wide">
+                <div class="note-graph-head"><span>Linked Entities</span><span>${graph.entities.length}</span></div>
+                <div class="note-graph-list">
+                    ${renderGraphList(graph.entities, 'No linked entities.', item => `
+                        <button type="button" class="note-graph-item" ${item.type === 'task' ? `data-graph-task-id="${esc(item.id)}"` : ''}>
+                            <span class="note-graph-item-title">${esc(String(item.type || '').toUpperCase())}: ${esc(getEntityLinkLabel(item))}</span>
+                            <span class="note-graph-item-meta">${esc(item.id)}</span>
+                        </button>
+                    `)}
+                </div>
+            </section>
+        `;
+
+        els.graphPanel.querySelectorAll('[data-graph-note-id]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const noteId = button.getAttribute('data-graph-note-id');
+                if (!noteId) return;
+                selectNote(noteId).catch((error) => {
+                    console.error('[notes-page] Failed to open graph note:', error);
+                    setStatus('Unable to open linked note.', true);
+                });
+            });
+        });
+
+        els.graphPanel.querySelectorAll('[data-graph-task-id]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const taskId = button.getAttribute('data-graph-task-id');
+                if (!taskId) return;
+                state.activeMetaPanel = 'tasks';
+                setActiveMetaPanel('tasks');
+                if (els.taskSearch) els.taskSearch.value = taskId;
+                setStatus(`Linked task: ${getTaskLabel(taskId)}`);
+            });
+        });
+
+        els.graphPanel.querySelectorAll('[data-graph-bookmark-name]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const bookmarkName = button.getAttribute('data-graph-bookmark-name');
+                if (!bookmarkName) return;
+                jumpToBookmarkByName(bookmarkName);
+                setStatus(`Jumped to bookmark: ${bookmarkName}`);
+            });
+        });
     }
 
     function setDetailsPanelOpen(open) {
@@ -536,6 +816,7 @@
             if (els.metaGrid) els.metaGrid.hidden = true;
             if (els.metaLinkedField) els.metaLinkedField.hidden = true;
             if (els.metaBookmarkField) els.metaBookmarkField.hidden = true;
+            if (els.metaGraphField) els.metaGraphField.hidden = true;
             closeTaskSuggestions();
             if (els.taskSearch) els.taskSearch.value = '';
         }
@@ -573,9 +854,206 @@
     }
 
     function extractBodyPreview(note) {
+        if (window.NotesCore && typeof window.NotesCore.getPlainText === 'function') {
+            return window.NotesCore.getPlainText(note).slice(0, 110);
+        }
         if (!note || typeof note.body !== 'string') return '';
         const blocks = parseNoteBody(note.body);
         return blocks.map(block => block.text || '').join(' ').replace(/\s+/g, ' ').trim().slice(0, 110);
+    }
+
+    function getNoteFullText(note) {
+        const blocks = parseNoteBody(note && note.body);
+        return blocks.map(block => block.text || '').join('\n');
+    }
+
+    function noteHasOpenCheckbox(note) {
+        return /(^|\n)\s*[-*]\s+\[\s\]/.test(getNoteFullText(note));
+    }
+
+    function getTaskOptionMap() {
+        return new Map(state.taskOptions.map(option => [String(option.id), option]));
+    }
+
+    function getLinkedCompletedTaskLabels(note, taskMap = getTaskOptionMap()) {
+        const taskIds = normalizeTaskIds(note && note.taskIds);
+        return taskIds
+            .map(taskId => taskMap.get(String(taskId)))
+            .filter(option => option && (option.completed || option.archived))
+            .map(option => `${option.title} (${option.archived ? 'archived' : 'completed'})`);
+    }
+
+    function parseReminderTimestamp(reminder) {
+        if (!reminder || !reminder.date) return null;
+        const time = reminder.allDay ? '09:00' : (reminder.time || '09:00');
+        const ts = new Date(`${reminder.date}T${time}:00`).getTime();
+        return Number.isFinite(ts) ? ts : null;
+    }
+
+    function getReviewReminderStatus(note) {
+        const reminder = state.noteRemindersById instanceof Map
+            ? state.noteRemindersById.get(String(note && note.id))
+            : null;
+        if (!reminder) return null;
+        if (reminder.paused) return null;
+        if (reminder.firedAt) return 'fired';
+
+        const dueTs = parseReminderTimestamp(reminder);
+        if (!dueTs) return 'has reminder';
+        const now = Date.now();
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        if (dueTs <= now) return 'due';
+        if (dueTs <= now + sevenDays) return 'due soon';
+        return null;
+    }
+
+    function getDaysSinceEdited(note) {
+        const ts = Number(note && note.timestamp);
+        if (!Number.isFinite(ts) || ts <= 0) return null;
+        return Math.floor((Date.now() - ts) / (24 * 60 * 60 * 1000));
+    }
+
+    function makeReviewItem(note, reason) {
+        return {
+            note,
+            noteId: note.id,
+            title: note.title || '(Untitled)',
+            preview: extractBodyPreview(note) || 'No content yet',
+            reason
+        };
+    }
+
+    function buildReviewBuckets() {
+        const taskMap = getTaskOptionMap();
+        const buckets = {
+            unlinked: [],
+            stale: [],
+            checkboxes: [],
+            completedTaskLinks: [],
+            reminders: []
+        };
+
+        state.allNotes.forEach((note) => {
+            if (!note || !note.id) return;
+
+            if (getUniversalLinkCount(note) === 0) {
+                buckets.unlinked.push(makeReviewItem(note, 'No linked tasks, habits, goals, or projects'));
+            }
+
+            const daysSinceEdited = getDaysSinceEdited(note);
+            if (daysSinceEdited !== null && daysSinceEdited >= 30) {
+                buckets.stale.push(makeReviewItem(note, `Edited ${daysSinceEdited} day(s) ago`));
+            }
+
+            if (noteHasOpenCheckbox(note)) {
+                buckets.checkboxes.push(makeReviewItem(note, 'Contains unchecked Markdown tasks'));
+            }
+
+            const completedTaskLabels = getLinkedCompletedTaskLabels(note, taskMap);
+            if (completedTaskLabels.length) {
+                buckets.completedTaskLinks.push(makeReviewItem(note, completedTaskLabels.slice(0, 2).join(', ')));
+            }
+
+            const reminderStatus = getReviewReminderStatus(note);
+            if (reminderStatus) {
+                buckets.reminders.push(makeReviewItem(note, `Reminder ${reminderStatus}`));
+            }
+        });
+
+        buckets.stale.sort((a, b) => (Number(a.note.timestamp) || 0) - (Number(b.note.timestamp) || 0));
+        buckets.reminders.sort((a, b) => {
+            const aTs = parseReminderTimestamp(state.noteRemindersById.get(String(a.noteId))) || Number.MAX_SAFE_INTEGER;
+            const bTs = parseReminderTimestamp(state.noteRemindersById.get(String(b.noteId))) || Number.MAX_SAFE_INTEGER;
+            return aTs - bTs;
+        });
+        return buckets;
+    }
+
+    function renderReviewDashboard() {
+        if (!els.reviewDashboard || !els.reviewSummary || !els.reviewSections) return;
+        if (!state.reviewDashboardOpen) {
+            els.reviewDashboard.hidden = true;
+            if (els.reviewToggleBtn) els.reviewToggleBtn.setAttribute('aria-expanded', 'false');
+            if (els.reviewToggleBtn) els.reviewToggleBtn.classList.remove('is-active');
+            return;
+        }
+
+        els.reviewDashboard.hidden = false;
+            if (els.reviewToggleBtn) {
+                els.reviewToggleBtn.setAttribute('aria-expanded', 'true');
+                els.reviewToggleBtn.classList.add('is-active');
+            }
+
+        const buckets = buildReviewBuckets();
+        const stats = [
+            { key: 'unlinked', label: 'Unlinked', value: buckets.unlinked.length },
+            { key: 'stale', label: 'Stale 30d+', value: buckets.stale.length },
+            { key: 'checkboxes', label: 'Open Checks', value: buckets.checkboxes.length },
+            { key: 'completedTaskLinks', label: 'Done Links', value: buckets.completedTaskLinks.length },
+            { key: 'reminders', label: 'Due Reminders', value: buckets.reminders.length }
+        ];
+
+        els.reviewSummary.innerHTML = stats.map(stat => `
+            <div class="notes-review-stat">
+                <div class="notes-review-stat-value">${esc(stat.value)}</div>
+                <div class="notes-review-stat-label">${esc(stat.label)}</div>
+            </div>
+        `).join('');
+
+        const sections = [
+            { key: 'unlinked', title: 'Unlinked Notes', empty: 'All notes have context links.' },
+            { key: 'stale', title: 'Stale Notes', empty: 'No notes are stale.' },
+            { key: 'checkboxes', title: 'Unchecked Checkboxes', empty: 'No open checkboxes found.' },
+            { key: 'completedTaskLinks', title: 'Linked To Completed Tasks', empty: 'No completed task links found.' },
+            { key: 'reminders', title: 'Due Or Fired Reminders', empty: 'No due note reminders.' }
+        ];
+
+        els.reviewSections.innerHTML = sections.map((section) => {
+            const items = buckets[section.key] || [];
+            const body = items.length
+                ? items.slice(0, 8).map(item => `
+                    <button type="button" class="notes-review-item" data-review-note-id="${esc(item.noteId)}">
+                        <span class="notes-review-item-title">${esc(item.title)}</span>
+                        <span class="notes-review-item-meta">${esc(item.reason)} | ${esc(item.preview)}</span>
+                    </button>
+                `).join('')
+                : `<div class="empty-state">${esc(section.empty)}</div>`;
+
+            return `
+                <section class="notes-review-section">
+                    <div class="notes-review-section-head">
+                        <span>${esc(section.title)}</span>
+                        <span>${items.length}</span>
+                    </div>
+                    <div class="notes-review-list">${body}</div>
+                </section>
+            `;
+        }).join('');
+
+        els.reviewSections.querySelectorAll('[data-review-note-id]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const noteId = button.getAttribute('data-review-note-id');
+                if (!noteId) return;
+                selectNote(noteId).catch((error) => {
+                    console.error('[notes-page] Failed to open review note:', error);
+                    setStatus('Unable to open review note.', true);
+                });
+            });
+        });
+    }
+
+    function setReviewDashboardOpen(open) {
+        state.reviewDashboardOpen = !!open;
+        if (els.reviewToggleBtn) {
+            els.reviewToggleBtn.classList.toggle('is-active', state.reviewDashboardOpen);
+            els.reviewToggleBtn.textContent = state.reviewDashboardOpen ? 'Hide Review' : 'Review';
+            els.reviewToggleBtn.setAttribute('aria-expanded', state.reviewDashboardOpen ? 'true' : 'false');
+        }
+        renderReviewDashboard();
+    }
+
+    function toggleReviewDashboard() {
+        setReviewDashboardOpen(!state.reviewDashboardOpen);
     }
 
     function renderList() {
@@ -598,7 +1076,7 @@
                     <div class="notes-list-item-preview">${preview}</div>
                     <div class="notes-list-item-meta">
                         <span>${esc(date)}</span>
-                        <span>${normalizeTaskIds(note.taskIds).length} linked task(s)</span>
+                        <span>${getUniversalLinkCount(note)} link(s)</span>
                     </div>
                 </div>
             `;
@@ -620,6 +1098,18 @@
     }
 
     function renderMarkdown(text) {
+        if (window.NotesCore && typeof window.NotesCore.renderMarkdownSafe === 'function') {
+            return window.NotesCore.renderMarkdownSafe(text || '_Empty_', {
+                resolveWikiLink: (title) => {
+                    const cleanTitle = String(title || '').replace(/^Note: /i, '').trim();
+                    const note = state.allNotes.find(item => item && String(item.title || '').toLowerCase() === cleanTitle.toLowerCase());
+                    if (note) return { type: 'note', id: note.id };
+                    const task = state.taskOptions.find(item => item && (item.id === cleanTitle || String(item.title || '').toLowerCase() === cleanTitle.toLowerCase()));
+                    if (task) return { type: 'task', id: task.id };
+                    return null;
+                }
+            });
+        }
         const source = String(text || '');
         if (window.marked && typeof window.marked.parse === 'function') {
             try {
@@ -815,6 +1305,7 @@
     function updateMetaToggleButtons() {
         const linkedCount = state.selectedTaskIds.length;
         const bookmarkCount = getBookmarkCount();
+        const graphCount = getGraphRelationshipCount();
         const activePanel = state.activeMetaPanel;
         const hasNote = !!getSelectedNote();
         const detailsOpen = state.detailsPanelOpen;
@@ -835,11 +1326,23 @@
             els.metaBookmarkToggleBtn.disabled = !hasNote;
         }
 
+        if (els.metaGraphToggleBtn) {
+            els.metaGraphToggleBtn.textContent = `Graph (${graphCount})`;
+            const expanded = detailsOpen && activePanel === 'graph';
+            els.metaGraphToggleBtn.classList.toggle('is-active', expanded);
+            els.metaGraphToggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            els.metaGraphToggleBtn.disabled = !hasNote;
+        }
+
+        if (detailsOpen && activePanel === 'graph') {
+            renderNoteGraphPanel();
+        }
+
         if (state.shortcutsHelpOpen) renderShortcutsHelp();
     }
 
     function setActiveMetaPanel(panel) {
-        const normalized = panel === 'tasks' || panel === 'bookmarks' ? panel : null;
+        const normalized = panel === 'tasks' || panel === 'bookmarks' || panel === 'graph' ? panel : null;
         state.activeMetaPanel = normalized;
 
         if (els.metaGrid) {
@@ -852,6 +1355,14 @@
 
         if (els.metaBookmarkField) {
             els.metaBookmarkField.hidden = !state.detailsPanelOpen || normalized !== 'bookmarks';
+        }
+
+        if (els.metaGraphField) {
+            els.metaGraphField.hidden = !state.detailsPanelOpen || normalized !== 'graph';
+        }
+
+        if (normalized === 'graph') {
+            renderNoteGraphPanel();
         }
 
         if (normalized !== 'tasks') {
@@ -879,6 +1390,12 @@
         if (nextPanel === 'bookmarks' && els.bookmarkJump) {
             window.requestAnimationFrame(() => els.bookmarkJump.focus());
         }
+        if (nextPanel === 'graph' && els.graphPanel) {
+            window.requestAnimationFrame(() => {
+                const firstGraphItem = els.graphPanel.querySelector('.note-graph-item:not([disabled])');
+                if (firstGraphItem) firstGraphItem.focus();
+            });
+        }
     }
 
     function isTypingTarget(target) {
@@ -905,6 +1422,8 @@
         const hasMultipleNotes = state.notes.length > 1;
         const linkedPanelOpen = state.activeMetaPanel === 'tasks';
         const bookmarksPanelOpen = state.activeMetaPanel === 'bookmarks';
+        const graphPanelOpen = state.activeMetaPanel === 'graph';
+        const reviewOpen = state.reviewDashboardOpen;
 
         return [
             {
@@ -922,6 +1441,14 @@
                 shortcut: 'Ctrl/Cmd+/',
                 keywords: 'help commands shortcuts',
                 run: () => openShortcutsHelp()
+            },
+            {
+                id: 'toggle-review-dashboard',
+                title: reviewOpen ? 'Hide Review Dashboard' : 'Show Review Dashboard',
+                meta: 'Review unlinked, stale, checkbox, reminder, and completed-task notes',
+                shortcut: 'Ctrl/Cmd+Shift+R',
+                keywords: 'review dashboard cleanup stale unlinked reminders checkboxes',
+                run: () => toggleReviewDashboard()
             },
             {
                 id: 'save-note',
@@ -980,6 +1507,16 @@
                 disabled: !hasSelectedNote,
                 disabledMessage: 'Select a note first.',
                 run: () => toggleMetaPanel('bookmarks')
+            },
+            {
+                id: 'toggle-graph-panel',
+                title: graphPanelOpen ? 'Hide Relationship Graph Panel' : 'Show Relationship Graph Panel',
+                meta: 'Inspect backlinks, outgoing wiki links, and linked entities',
+                shortcut: 'Ctrl/Cmd+Shift+G',
+                keywords: 'graph backlinks relationship outgoing wiki links entities orphan',
+                disabled: !hasSelectedNote,
+                disabledMessage: 'Select a note first.',
+                run: () => toggleMetaPanel('graph')
             },
             {
                 id: 'focus-note-title',
@@ -1363,6 +1900,18 @@
             return;
         }
 
+        if (isMod && event.shiftKey && lower === 'g') {
+            event.preventDefault();
+            executeActionCommandById('toggle-graph-panel', { closePalette: false }).catch(() => { });
+            return;
+        }
+
+        if (isMod && event.shiftKey && lower === 'r') {
+            event.preventDefault();
+            executeActionCommandById('toggle-review-dashboard', { closePalette: false }).catch(() => { });
+            return;
+        }
+
         if (event.altKey && event.shiftKey && key === 'ArrowDown') {
             event.preventDefault();
             executeActionCommandById('next-note', { closePalette: false }).catch(() => { });
@@ -1382,6 +1931,10 @@
             }
             if (state.detailsPanelOpen) {
                 setDetailsPanelOpen(false);
+                return;
+            }
+            if (state.reviewDashboardOpen) {
+                setReviewDashboardOpen(false);
             }
         }
     }
@@ -1449,9 +2002,12 @@
         });
 
         const noteReminderIds = new Set();
+        const noteRemindersById = new Map();
         reminders.forEach((reminder) => {
             if (!reminder || reminder.itemType !== 'note' || !reminder.itemId) return;
+            if (reminder.discarded || reminder.paused) return;
             noteReminderIds.add(String(reminder.itemId));
+            noteRemindersById.set(String(reminder.itemId), reminder);
         });
 
         const urgentTaskIds = new Set();
@@ -1462,9 +2018,11 @@
 
         state.taskOptions = nextOptions;
         state.noteReminderIds = noteReminderIds;
+        state.noteRemindersById = noteRemindersById;
         state.urgentTaskIds = urgentTaskIds;
         renderTaskChips();
         renderTaskSuggestions();
+        renderReviewDashboard();
 
         if (state.isReady && (state.activeListFilter === 'has-reminder' || state.activeListFilter === 'urgent-linked')) {
             applyListProjectionAndRender();
@@ -1650,6 +2208,11 @@
         });
     }
 
+    function refreshGraphPanelIfOpen() {
+        if (!state.detailsPanelOpen) return;
+        updateMetaToggleButtons();
+    }
+
     function renderBlocks() {
         if (!els.blocksContainer) return;
         const note = getSelectedNote();
@@ -1801,6 +2364,7 @@
                     preview.innerHTML = renderMarkdown(block.text);
                     enhanceRenderedMarkdown(preview);
                     syncSplitPaneHeights(textarea, preview);
+                    refreshGraphPanelIfOpen();
                     queueAutoSave();
                 });
                 editorPane.appendChild(textarea);
@@ -1815,6 +2379,7 @@
                 textarea.addEventListener('input', () => {
                     block.text = textarea.value;
                     autoResizeTextarea(textarea);
+                    refreshGraphPanelIfOpen();
                     queueAutoSave();
                 });
                 card.appendChild(textarea);
@@ -1842,6 +2407,7 @@
         state.lastSavedAt = null;
         hideConflictBanner();
         renderTaskChips();
+        renderUniversalLinkChips();
         closeTaskSuggestions();
         updateSaveIndicators();
         renderBlocks();
@@ -1934,6 +2500,7 @@
         const projection = recalculateVisibleNotes({ keepSelection, forceSelectId });
 
         renderList();
+        renderReviewDashboard();
         if (reloadEditor || projection.selectionChanged) loadSelectedNoteIntoEditor();
         updateCount();
 
@@ -1953,10 +2520,15 @@
         await flushPendingSave();
         const created = await repo.createNote({
             title: 'New Note',
-            body: JSON.stringify([createEmptyBlock('')]),
+            body: window.NotesCore
+                ? window.NotesCore.serializeBlocks([createEmptyBlock('')])
+                : JSON.stringify([createEmptyBlock('')]),
             taskIds: [],
+            links: [],
             isPinned: false,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            createdAt: Date.now(),
+            updatedAt: Date.now()
         });
 
         if (!created) return;
@@ -1994,7 +2566,11 @@
                 title: title || 'New Note',
                 body: serializeBlocks(),
                 taskIds,
-                timestamp: Date.now()
+                links: window.NotesCore
+                    ? window.NotesCore.normalizeLinks({ ...note, taskIds })
+                    : (Array.isArray(note.links) ? note.links : []),
+                timestamp: Date.now(),
+                updatedAt: Date.now()
             };
 
             const updated = await repo.updateNote(state.selectedId, patch);
@@ -2136,6 +2712,35 @@
         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
+    function jumpToBookmarkByName(name) {
+        const normalizedName = String(name || '').trim().toLowerCase();
+        if (!normalizedName) return;
+        const block = state.blocks.find(item => item.bookmarkName && item.bookmarkName.trim().toLowerCase() === normalizedName);
+        if (block) jumpToBookmark(block.id);
+    }
+
+    function handleRenderedNoteLinkClick(event) {
+        const target = event.target instanceof Element
+            ? event.target.closest('[data-note-action]')
+            : null;
+        if (!target) return;
+
+        const action = target.getAttribute('data-note-action');
+        if (action === 'bookmark') {
+            event.preventDefault();
+            jumpToBookmarkByName(target.getAttribute('data-bookmark-name') || '');
+            return;
+        }
+
+        if (action === 'wiki') {
+            const targetType = target.getAttribute('data-target-type');
+            const targetId = target.getAttribute('data-target-id');
+            if (!targetType || !targetId) return;
+            event.preventDefault();
+            if (targetType === 'note') selectNote(targetId).catch(() => { });
+        }
+    }
+
     function initLiveSync() {
         const sync = getSync();
         if (!sync || typeof sync.initNotesChannel !== 'function') return;
@@ -2255,6 +2860,12 @@
             });
         }
 
+        if (els.metaGraphToggleBtn) {
+            els.metaGraphToggleBtn.addEventListener('click', () => {
+                toggleMetaPanel('graph');
+            });
+        }
+
         if (els.addBlockBtn) {
             els.addBlockBtn.addEventListener('click', addBlock);
         }
@@ -2291,6 +2902,24 @@
                     console.error('[notes-page] Delete failed:', error);
                     setStatus('Delete failed.', true);
                 });
+            });
+        }
+
+        if (els.reviewToggleBtn) {
+            els.reviewToggleBtn.addEventListener('click', toggleReviewDashboard);
+        }
+
+        if (els.reviewRefreshBtn) {
+            els.reviewRefreshBtn.addEventListener('click', () => {
+                refreshTaskOptions()
+                    .then(() => {
+                        renderReviewDashboard();
+                        setStatus('Review refreshed.');
+                    })
+                    .catch((error) => {
+                        console.error('[notes-page] Review refresh failed:', error);
+                        setStatus('Review refresh failed.', true);
+                    });
             });
         }
 
@@ -2360,7 +2989,10 @@
         }
 
         if (els.title) {
-            els.title.addEventListener('input', queueAutoSave);
+            els.title.addEventListener('input', () => {
+                refreshGraphPanelIfOpen();
+                queueAutoSave();
+            });
         }
 
         if (els.taskSearch) {
@@ -2448,6 +3080,7 @@
             closeTaskSuggestions();
         });
 
+        document.addEventListener('click', handleRenderedNoteLinkClick);
         document.addEventListener('keydown', handleGlobalShortcuts);
 
         window.addEventListener('beforeunload', () => {
@@ -2484,11 +3117,15 @@
         els.detailsToggleBtn = document.getElementById('editor-details-toggle-btn');
         els.detailsPanel = document.getElementById('editor-details-panel');
         els.detailsSummary = document.getElementById('editor-details-summary');
+        els.linkChipList = document.getElementById('note-universal-link-list');
         els.metaGrid = document.getElementById('editor-meta-grid');
         els.metaLinkedToggleBtn = document.getElementById('meta-linked-toggle-btn');
         els.metaBookmarkToggleBtn = document.getElementById('meta-bookmark-toggle-btn');
+        els.metaGraphToggleBtn = document.getElementById('meta-graph-toggle-btn');
         els.metaLinkedField = document.getElementById('meta-linked-field');
         els.metaBookmarkField = document.getElementById('meta-bookmark-field');
+        els.metaGraphField = document.getElementById('meta-graph-field');
+        els.graphPanel = document.getElementById('note-graph-panel');
         els.taskPicker = document.getElementById('note-task-picker');
         els.taskChipList = document.getElementById('note-task-chip-list');
         els.taskSearch = document.getElementById('note-task-search');
@@ -2507,6 +3144,11 @@
         els.commandPaletteInput = document.getElementById('command-palette-input');
         els.commandPaletteList = document.getElementById('command-palette-list');
         els.commandPaletteCloseBtn = document.getElementById('command-palette-close-btn');
+        els.reviewToggleBtn = document.getElementById('notes-review-toggle-btn');
+        els.reviewDashboard = document.getElementById('notes-review-dashboard');
+        els.reviewSummary = document.getElementById('notes-review-summary');
+        els.reviewSections = document.getElementById('notes-review-sections');
+        els.reviewRefreshBtn = document.getElementById('notes-review-refresh-btn');
         els.shortcutsBtn = document.getElementById('notes-shortcuts-btn');
         els.shortcutsOverlay = document.getElementById('notes-shortcuts-overlay');
         els.shortcutsWindow = document.getElementById('notes-shortcuts-window');
@@ -2524,6 +3166,7 @@
         updateRecentFilterControlState();
         setListControlsOpen(false);
         setDetailsPanelOpen(false);
+        setReviewDashboardOpen(false);
         hideConflictBanner();
         updateSaveIndicators();
         updateMetaToggleButtons();
