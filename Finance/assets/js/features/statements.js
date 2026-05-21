@@ -153,20 +153,31 @@ function statementsComputeDebtOutstandingAsOf(endTs, transactions) {
     if (!debtList.length) return 0;
 
     const debtNameSet = new Set(debtList.map(d => String(d?.name || '').trim()).filter(Boolean));
+    const debtIdSet = new Set(debtList.map(d => String(d?.id || '').trim()).filter(Boolean));
     const relevant = (transactions || []).filter(tx => {
         const ts = getTxTimestamp(tx);
         if (!Number.isFinite(ts) || ts > endTs) return false;
-        return debtNameSet.has(String(tx?.category || '').trim());
+        const txDebtId = String(tx?.debtId || '').trim();
+        return (txDebtId && debtIdSet.has(txDebtId)) || debtNameSet.has(String(tx?.category || '').trim());
     });
 
     const aggregates = statementsBuildDebtAndLentAggregates(relevant);
+    const fallbackOwners = typeof buildDebtCategoryFallbackOwners === 'function'
+        ? buildDebtCategoryFallbackOwners(debtList)
+        : null;
     return debtList.reduce((sum, debt) => {
         const debtName = String(debt?.name || '').trim();
         if (!debtName) return sum;
 
         const base = Number(debt?.amount || 0);
-        const borrowed = Number(aggregates.debtBorrowedByCategory?.[debtName] || 0);
-        const paid = Number(aggregates.debtPaidByCategory?.[debtName] || 0);
+        const debtAmounts = typeof getDebtAggregateAmounts === 'function'
+            ? getDebtAggregateAmounts(debt, aggregates, fallbackOwners)
+            : {
+                paid: Number(aggregates.debtPaidByCategory?.[debtName] || 0),
+                borrowedMore: Number(aggregates.debtBorrowedByCategory?.[debtName] || 0)
+            };
+        const borrowed = debtAmounts.borrowedMore;
+        const paid = debtAmounts.paid;
         const outstanding = Math.max(0, base + borrowed - paid);
         return sum + outstanding;
     }, 0);

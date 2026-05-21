@@ -77,28 +77,40 @@ function computeCashBalanceAsOf(endTs, transactions) {
 }
 
 function computeDebtOutstandingAsOf(endTs, transactions) {
-    const debtNames = new Set((window.allDecryptedDebts || []).map(d => String(d.name || '').trim()).filter(Boolean));
-    if (!debtNames.size) return 0;
+    const debtList = window.allDecryptedDebts || [];
+    const debtNames = new Set(debtList.map(d => String(d.name || '').trim()).filter(Boolean));
+    const debtIds = new Set(debtList.map(d => String(d.id || '').trim()).filter(Boolean));
+    if (!debtNames.size && !debtIds.size) return 0;
 
     const relevant = (transactions || []).filter(tx => {
         const ts = getTxTimestamp(tx);
         if (!Number.isFinite(ts) || ts > endTs) return false;
-        return debtNames.has(String(tx.category || '').trim());
+        const txDebtId = String(tx.debtId || '').trim();
+        return (txDebtId && debtIds.has(txDebtId)) || debtNames.has(String(tx.category || '').trim());
     });
 
     const aggregates = typeof buildDebtAndLentAggregates === 'function'
         ? buildDebtAndLentAggregates(relevant)
         : { debtPaidByCategory: {}, debtBorrowedByCategory: {} };
+    const fallbackOwners = typeof buildDebtCategoryFallbackOwners === 'function'
+        ? buildDebtCategoryFallbackOwners(debtList)
+        : null;
 
-    return (window.allDecryptedDebts || []).reduce((sum, debt) => {
+    return debtList.reduce((sum, debt) => {
         const name = String(debt.name || '').trim();
         if (!name) return sum;
         const borrowDateTs = debt?.borrowDate ? Date.parse(debt.borrowDate) : NaN;
         const base = Number.isFinite(borrowDateTs) && borrowDateTs > endTs
             ? 0
             : (Number(debt.amount) || 0);
-        const borrowed = Number(aggregates.debtBorrowedByCategory?.[name] || 0);
-        const paid = Number(aggregates.debtPaidByCategory?.[name] || 0);
+        const debtAmounts = typeof getDebtAggregateAmounts === 'function'
+            ? getDebtAggregateAmounts(debt, aggregates, fallbackOwners)
+            : {
+                paid: Number(aggregates.debtPaidByCategory?.[name] || 0),
+                borrowedMore: Number(aggregates.debtBorrowedByCategory?.[name] || 0)
+            };
+        const borrowed = debtAmounts.borrowedMore;
+        const paid = debtAmounts.paid;
         const outstanding = Math.max(0, base + borrowed - paid);
         return sum + outstanding;
     }, 0);

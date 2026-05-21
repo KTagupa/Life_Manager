@@ -107,6 +107,10 @@
         function buildDebtAndLentAggregates(transactions) {
             const debtPaidByCategory = Object.create(null);
             const debtBorrowedByCategory = Object.create(null);
+            const debtPaidByUnlinkedCategory = Object.create(null);
+            const debtBorrowedByUnlinkedCategory = Object.create(null);
+            const debtPaidById = Object.create(null);
+            const debtBorrowedById = Object.create(null);
             const lentExpensesByCategory = Object.create(null);
             const lentIncomeByCategory = Object.create(null);
 
@@ -117,8 +121,14 @@
                 const amt = Number(t.amt) || 0;
                 if (amt <= 0) return;
 
+                const debtId = String(t.debtId || '').trim();
                 if (t.type === 'expense') {
                     debtPaidByCategory[category] = (debtPaidByCategory[category] || 0) + amt;
+                    if (debtId) {
+                        debtPaidById[debtId] = (debtPaidById[debtId] || 0) + amt;
+                    } else {
+                        debtPaidByUnlinkedCategory[category] = (debtPaidByUnlinkedCategory[category] || 0) + amt;
+                    }
                     if (category.startsWith('Lent: ')) {
                         lentExpensesByCategory[category] = (lentExpensesByCategory[category] || 0) + amt;
                     }
@@ -131,6 +141,11 @@
 
                 if (debtBorrowDelta > 0) {
                     debtBorrowedByCategory[category] = (debtBorrowedByCategory[category] || 0) + debtBorrowDelta;
+                    if (debtId) {
+                        debtBorrowedById[debtId] = (debtBorrowedById[debtId] || 0) + debtBorrowDelta;
+                    } else {
+                        debtBorrowedByUnlinkedCategory[category] = (debtBorrowedByUnlinkedCategory[category] || 0) + debtBorrowDelta;
+                    }
                 }
 
                 if (t.type === 'income' && category.startsWith('Lent: ')) {
@@ -141,8 +156,49 @@
             return {
                 debtPaidByCategory,
                 debtBorrowedByCategory,
+                debtPaidByUnlinkedCategory,
+                debtBorrowedByUnlinkedCategory,
+                debtPaidById,
+                debtBorrowedById,
                 lentExpensesByCategory,
                 lentIncomeByCategory
+            };
+        }
+
+        function normalizeDebtNameKey(name) {
+            return String(name || '').trim().toLowerCase();
+        }
+
+        function buildDebtCategoryFallbackOwners(debts = []) {
+            const owners = Object.create(null);
+            (debts || []).forEach(debt => {
+                const key = normalizeDebtNameKey(debt?.name);
+                if (!key || owners[key]) return;
+                owners[key] = String(debt?.id || '').trim();
+            });
+            return owners;
+        }
+
+        function canUseDebtCategoryFallback(debt, fallbackOwners = null) {
+            const debtId = String(debt?.id || '').trim();
+            const key = normalizeDebtNameKey(debt?.name);
+            if (!key) return false;
+            if (!fallbackOwners) return true;
+            return !fallbackOwners[key] || fallbackOwners[key] === debtId;
+        }
+
+        function getDebtAggregateAmounts(debt, aggregates = {}, fallbackOwners = null) {
+            const debtId = String(debt?.id || '').trim();
+            const debtName = String(debt?.name || '').trim();
+            const useCategoryFallback = canUseDebtCategoryFallback(debt, fallbackOwners);
+            const paidById = debtId ? Number(aggregates.debtPaidById?.[debtId] || 0) : 0;
+            const borrowedById = debtId ? Number(aggregates.debtBorrowedById?.[debtId] || 0) : 0;
+            const paidByCategory = useCategoryFallback ? Number(aggregates.debtPaidByUnlinkedCategory?.[debtName] || 0) : 0;
+            const borrowedByCategory = useCategoryFallback ? Number(aggregates.debtBorrowedByUnlinkedCategory?.[debtName] || 0) : 0;
+
+            return {
+                paid: paidById + paidByCategory,
+                borrowedMore: borrowedById + borrowedByCategory
             };
         }
 
@@ -172,19 +228,16 @@
                 return;
             }
 
-            // Calculate paid amounts from transaction history (Expenses with category == Debt Name)
-            // Note: We use all transactions (historical), not just filtered ones, to show true debt progress
+            // Use all historical transactions so debt progress stays true even when filters are active.
             const allTrans = window.allDecryptedTransactions || [];
-            const {
-                debtPaidByCategory,
-                debtBorrowedByCategory
-            } = buildDebtAndLentAggregates(allTrans);
+            const aggregates = buildDebtAndLentAggregates(allTrans);
+            const fallbackOwners = buildDebtCategoryFallbackOwners(decryptedDebts);
 
+            let renderedCount = 0;
             decryptedDebts.forEach(d => {
                 const safeDebtName = escapeHTML(d.name || 'Debt');
                 const encodedDebtId = encodeInlineArg(d.id);
-                const paid = debtPaidByCategory[d.name] || 0;
-                const borrowedMore = debtBorrowedByCategory[d.name] || 0;
+                const { paid, borrowedMore } = getDebtAggregateAmounts(d, aggregates, fallbackOwners);
 
                 const totalDebt = d.amount + borrowedMore;
                 const percentage = totalDebt > 0 ? Math.min(100, Math.round((paid / totalDebt) * 100)) : 100;
@@ -192,6 +245,7 @@
 
                 if (remaining <= 0.01 && percentage >= 100) return; // Hide completed debts
 
+                renderedCount += 1;
                 const div = document.createElement('div');
                 div.className = "group relative cursor-pointer hover:bg-slate-50 p-2 -mx-2 rounded-xl transition-colors";
                 div.onclick = (e) => {
@@ -220,6 +274,9 @@
                     `;
                 list.appendChild(div);
             });
+            if (renderedCount === 0) {
+                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No active debts. Completed debts stay in history.</div>';
+            }
             lucide.createIcons();
         }
 

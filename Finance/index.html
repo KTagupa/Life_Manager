@@ -619,7 +619,10 @@
             <!-- Left: Transactions & Tools -->
             <div class="lg:col-span-8 space-y-6">
                 <!-- Filters -->
-                <div class="finance-filter-toolbar finance-filter-toolbar--ledger-shell" data-finance-toolbar="ledger">
+                <div id="finance-card-ledger-search"
+                    class="finance-filter-toolbar finance-filter-toolbar--ledger-shell"
+                    data-finance-toolbar="ledger" data-finance-card-toolbar="ledger"
+                    data-finance-card-tone="ledger">
                     <label class="finance-search-field finance-search-field--ledger">
                         <span class="sr-only">Search transactions</span>
                         <span class="finance-search-wrap">
@@ -662,10 +665,13 @@
                     </div>
                 </div>
 
-                <div class="finance-glass-panel bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div id="finance-card-ledger"
+                    class="finance-glass-panel bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
+                    data-finance-card="ledger" data-finance-card-tone="ledger" tabindex="-1">
                     <div class="p-4 sm:p-6 border-b border-slate-100 flex flex-wrap items-center gap-3">
                         <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                             <h2 class="text-xl font-bold text-slate-800 shrink-0">Recent Movements</h2>
+                            <span class="finance-card-shortcut">Option + Space</span>
                             <div class="finance-inline-filter-group">
                                 <select id="report-scope" aria-label="Report filter" class="finance-inline-filter-select shrink-0">
                                     <option value="selected_period">Report: Selected</option>
@@ -764,10 +770,12 @@
                 </div>
 
                 <!-- Wishlist -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div id="finance-card-wishlist"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
+                    data-finance-card="wishlist" data-finance-card-tone="wishlist" tabindex="-1">
                     <div class="p-6 border-b border-slate-100 flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <div class="bg-indigo-50 text-indigo-600 p-2 rounded-xl">
+                            <div class="bg-indigo-50 text-indigo-600 p-2 rounded-xl" data-finance-card-icon>
                                 <i data-lucide="heart" class="w-5 h-5"></i>
                             </div>
                             <div>
@@ -786,16 +794,18 @@
                 </div>
 
                 <!-- Fixed Assets -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mt-6">
+                <div id="finance-card-assets"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mt-6"
+                    data-finance-card="assets" data-finance-card-tone="assets" tabindex="-1">
                     <div class="p-6 border-b border-slate-100 flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <div class="bg-blue-50 text-blue-600 p-2 rounded-xl">
+                            <div class="bg-blue-50 text-blue-600 p-2 rounded-xl" data-finance-card-icon>
                                 <i data-lucide="monitor" class="w-5 h-5"></i>
                             </div>
                             <div>
                                 <h2 class="text-xl font-bold text-slate-800">Fixed Assets</h2>
                                 <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">CapEx &
-                                    Depreciation</p>
+                                    Depreciation - Option + F</p>
                             </div>
                         </div>
                         <button onclick="openAssetModal()"
@@ -809,15 +819,17 @@
                 </div>
 
                 <!-- Installment / BNPL Section -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mt-6">
+                <div id="finance-card-installments"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mt-6"
+                    data-finance-card="installments" data-finance-card-tone="installments" tabindex="-1">
                     <div class="p-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
                         <div class="flex items-center gap-3">
-                            <div class="bg-violet-100 text-violet-600 p-2 rounded-xl">
+                            <div class="bg-violet-100 text-violet-600 p-2 rounded-xl" data-finance-card-icon>
                                 <i data-lucide="calendar-clock" class="w-5 h-5"></i>
                             </div>
                             <div>
                                 <h2 class="text-xl font-bold text-slate-800">Installment / BNPL</h2>
-                                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Plans, fees, and payoff tracking</p>
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Plans, fees, and payoff tracking - Option + I</p>
                             </div>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
@@ -845,13 +857,15 @@
             <div class="lg:col-span-4 space-y-6">
 
                 <!-- Insights Hub -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                <div id="finance-card-insights"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                    data-finance-card="insights" data-finance-card-tone="insights" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="font-bold text-slate-800 flex items-center gap-2" data-descriptor-key="insights hub">
                             <i data-lucide="sparkles" class="w-5 h-5 text-emerald-600"></i>
                             Insights Hub
                         </h2>
-                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Live</span>
+                        <span class="finance-card-shortcut">Option + H</span>
                     </div>
                     <div id="insights-panel" class="space-y-3">
                         <div class="text-xs text-slate-400">Insights will appear after transactions are loaded.</div>
@@ -859,14 +873,15 @@
                 </div>
 
                 <!-- Revenue Diversification -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                <div id="finance-card-revenue"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                    data-finance-card="revenue" data-finance-card-tone="revenue" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="font-bold text-slate-800 flex items-center gap-2" data-descriptor-key="revenue diversification">
                             <i data-lucide="git-branch" class="w-5 h-5 text-violet-600"></i>
                             Revenue Mix
                         </h2>
-                        <span
-                            class="text-[10px] font-black uppercase tracking-wider text-slate-400">Diversification</span>
+                        <span class="finance-card-shortcut">Option + R</span>
                     </div>
                     <div id="revenue-diversification-panel">
                         <div class="text-xs text-slate-400">Loading revenue analysis...</div>
@@ -874,17 +889,22 @@
                 </div>
 
                 <!-- Spending Trends Chart -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                <div id="finance-card-trends"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                    data-finance-card="trends" data-finance-card-tone="trends" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="font-bold text-slate-800 flex items-center gap-2">
                             <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
                             Monthly Trends
                         </h2>
-                        <select id="trend-period" onchange="renderTrendsChart()"
-                            class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none font-bold">
-                            <option value="6">Last 6 Months</option>
-                            <option value="12">Last 12 Months</option>
-                        </select>
+                        <div class="flex flex-wrap items-center justify-end gap-2">
+                            <span class="finance-card-shortcut">Option + T</span>
+                            <select id="trend-period" onchange="renderTrendsChart()"
+                                class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none font-bold">
+                                <option value="6">Last 6 Months</option>
+                                <option value="12">Last 12 Months</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="relative h-48 w-full">
                         <canvas id="trendsChart"></canvas>
@@ -892,16 +912,21 @@
                 </div>
 
                 <!-- Planning -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                <div id="finance-card-goals"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                    data-finance-card="goals" data-finance-card-tone="goals" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="font-bold text-slate-800 flex items-center gap-2">
                             <i data-lucide="target" class="w-5 h-5 text-indigo-600"></i>
                             Financial Goals
                         </h2>
-                        <button onclick="openPlanningModal()"
-                            class="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full transition-colors">
-                            Open Planner
-                        </button>
+                        <div class="flex flex-wrap items-center justify-end gap-2">
+                            <span class="finance-card-shortcut">Option + G</span>
+                            <button onclick="openPlanningModal()"
+                                class="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full transition-colors">
+                                Open Planner
+                            </button>
+                        </div>
                     </div>
                     <div id="goals-summary-list" class="space-y-2">
                         <div class="text-xs text-slate-400">No goals configured.</div>
@@ -909,18 +934,23 @@
                 </div>
 
                 <!-- Debts Section -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                <div id="finance-card-debts"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                    data-finance-card="debts" data-finance-card-tone="debts" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <div class="flex items-center gap-2">
-                            <div class="bg-rose-100 text-rose-600 p-1.5 rounded-lg">
+                            <div class="bg-rose-100 text-rose-600 p-1.5 rounded-lg" data-finance-card-icon>
                                 <i data-lucide="credit-card" class="w-4 h-4"></i>
                             </div>
                             <h2 class="font-bold text-slate-800">Debts to Pay</h2>
                         </div>
-                        <button onclick="openDebtModal()"
-                            class="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-3 py-1 rounded-full transition-colors">
-                            + Add
-                        </button>
+                        <div class="flex flex-wrap items-center justify-end gap-2">
+                            <span class="finance-card-shortcut">Option + D</span>
+                            <button onclick="openDebtModal()"
+                                class="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-3 py-1 rounded-full transition-colors">
+                                + Add
+                            </button>
+                        </div>
                     </div>
                     <div id="debt-list" class="space-y-4">
                         <div class="text-center text-xs text-slate-400 py-2">No debts tracked. Good job!</div>
@@ -928,18 +958,23 @@
                 </div>
 
                 <!-- Credit Cards Section -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                <div id="finance-card-credit-cards"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                    data-finance-card="credit-cards" data-finance-card-tone="credit-cards" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <div class="flex items-center gap-2">
-                            <div class="bg-amber-100 text-amber-600 p-1.5 rounded-lg">
+                            <div class="bg-amber-100 text-amber-600 p-1.5 rounded-lg" data-finance-card-icon>
                                 <i data-lucide="wallet-cards" class="w-4 h-4"></i>
                             </div>
                             <h2 class="font-bold text-slate-800">Credit Cards</h2>
                         </div>
-                        <button onclick="openCreditCardModal()"
-                            class="text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 px-3 py-1 rounded-full transition-colors">
-                            + Add
-                        </button>
+                        <div class="flex flex-wrap items-center justify-end gap-2">
+                            <span class="finance-card-shortcut">Option + C</span>
+                            <button onclick="openCreditCardModal()"
+                                class="text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 px-3 py-1 rounded-full transition-colors">
+                                + Add
+                            </button>
+                        </div>
                     </div>
                     <div id="credit-card-list" class="space-y-3">
                         <div class="text-center text-xs text-slate-400 py-2">No credit cards tracked yet.</div>
@@ -947,18 +982,23 @@
                 </div>
 
                 <!-- Money Lent Section (Receivables) -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                <div id="finance-card-lent"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                    data-finance-card="lent" data-finance-card-tone="lent" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <div class="flex items-center gap-2">
-                            <div class="bg-emerald-100 text-emerald-600 p-1.5 rounded-lg">
+                            <div class="bg-emerald-100 text-emerald-600 p-1.5 rounded-lg" data-finance-card-icon>
                                 <i data-lucide="hand-coins" class="w-4 h-4"></i>
                             </div>
                             <h2 class="font-bold text-slate-800">Money Lent</h2>
                         </div>
-                        <button onclick="toggleModal('lent-modal')"
-                            class="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full transition-colors">
-                            + Track Person
-                        </button>
+                        <div class="flex flex-wrap items-center justify-end gap-2">
+                            <span class="finance-card-shortcut">Option + L</span>
+                            <button onclick="toggleModal('lent-modal')"
+                                class="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full transition-colors">
+                                + Track Person
+                            </button>
+                        </div>
                     </div>
                     <div id="lent-list" class="space-y-4">
                         <div class="text-center text-xs text-slate-400 py-2">No money lent out.</div>
@@ -966,28 +1006,38 @@
                 </div>
 
                 <!-- Bills Section -->
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                <div id="finance-card-bills"
+                    class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                    data-finance-card="bills" data-finance-card-tone="bills" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <div class="flex items-center gap-2">
-                            <div class="bg-amber-100 text-amber-600 p-1.5 rounded-lg">
+                            <div class="bg-amber-100 text-amber-600 p-1.5 rounded-lg" data-finance-card-icon>
                                 <i data-lucide="bell" class="w-4 h-4"></i>
                             </div>
                             <h2 class="font-bold text-slate-800">Recurring Bills</h2>
                         </div>
-                        <button onclick="openBillModal()"
-                            class="text-slate-400 hover:text-indigo-600 transition-colors">
-                            <i data-lucide="plus" class="w-5 h-5"></i>
-                        </button>
+                        <div class="flex flex-wrap items-center justify-end gap-2">
+                            <span class="finance-card-shortcut">Option + B</span>
+                            <button onclick="openBillModal()"
+                                class="text-slate-400 hover:text-indigo-600 transition-colors">
+                                <i data-lucide="plus" class="w-5 h-5"></i>
+                            </button>
+                        </div>
                     </div>
                     <div id="bill-list" class="space-y-3"></div>
                 </div>
 
                 <!-- Analytics -->
-                <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
-                    <h2 class="text-lg font-bold mb-4 flex items-center gap-2 text-slate-800">
-                        <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-600"></i>
-                        Spend Breakdown
-                    </h2>
+                <div id="finance-card-spend"
+                    class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200"
+                    data-finance-card="spend" data-finance-card-tone="spend" tabindex="-1">
+                    <div class="flex justify-between items-center gap-3 mb-4">
+                        <h2 class="text-lg font-bold flex items-center gap-2 text-slate-800">
+                            <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-600"></i>
+                            Spend Breakdown
+                        </h2>
+                        <span class="finance-card-shortcut">Option + S</span>
+                    </div>
                     <div class="relative h-64 w-full mb-6">
                         <canvas id="spendChart"></canvas>
                     </div>
@@ -1001,14 +1051,15 @@
                 </div>
 
                 <!-- Budget Variance Analysis -->
-                <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                <div id="finance-card-variance"
+                    class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200"
+                    data-finance-card="variance" data-finance-card-tone="variance" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-lg font-bold flex items-center gap-2 text-slate-800">
                             <i data-lucide="scale" class="w-5 h-5 text-amber-600"></i>
                             Budget Variance
                         </h2>
-                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Plan vs
-                            Actual</span>
+                        <span class="finance-card-shortcut">Option + V</span>
                     </div>
                     <div id="variance-panel">
                         <div class="text-xs text-slate-400">Loading variance data...</div>
@@ -3943,8 +3994,8 @@
     <script src="assets/js/features/ronin.js?v=20260425a"></script>
     <script src="assets/js/features/crypto.js?v=20260515b"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
-    <script src="assets/js/ui/renderers.js?v=20260515a"></script>
-    <script src="assets/js/features/crud.js?v=20260515a"></script>
+    <script src="assets/js/ui/renderers.js?v=20260522a"></script>
+    <script src="assets/js/features/crud.js?v=20260522a"></script>
     <script src="assets/js/features/backup.js?v=20260510a"></script>
     <script src="assets/js/features/quick-links.js?v=20260425a"></script>
     <script src="assets/js/features/item-tracking.js?v=20260425a"></script>
@@ -3954,10 +4005,10 @@
     <script src="assets/js/features/insights.js?v=20260425a"></script>
     <script src="assets/js/features/planning.js?v=20260425a"></script>
     <script src="assets/js/features/forecast.js?v=20260425a"></script>
-    <script src="assets/js/features/statements.js?v=20260509a"></script>
+    <script src="assets/js/features/statements.js?v=20260522a"></script>
     <script src="assets/js/features/operations.js?v=20260425a"></script>
     <script src="assets/js/features/close.js?v=20260425a"></script>
-    <script src="assets/js/features/kpi.js?v=20260509a"></script>
+    <script src="assets/js/features/kpi.js?v=20260522a"></script>
     <script src="assets/js/features/analytics.js?v=20260425a"></script>
     <script src="assets/js/features/revenue.js?v=20260425a"></script>
     <script src="assets/js/features/variance.js?v=20260425a"></script>
@@ -3965,7 +4016,7 @@
     <script src="assets/js/features/agm.js?v=20260425a"></script>
     <script src="assets/js/features/assets.js?v=20260425a"></script>
     <script src="assets/js/features/roi.js?v=20260425a"></script>
-    <script src="assets/js/ui/preferences.js?v=20260425a"></script>
+    <script src="assets/js/ui/preferences.js?v=20260517a"></script>
     <script src="assets/js/ui/descriptors.js?v=20260425a"></script>
 
     <!-- Startup -->

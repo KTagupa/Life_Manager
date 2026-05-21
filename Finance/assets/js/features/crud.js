@@ -31,6 +31,43 @@
             return getUniqueCategoryList((window.allDecryptedDebts || []).map(d => d?.name));
         }
 
+        function getDebtNameSuffixBase(name) {
+            return String(name || '').trim().replace(/\s+\(\d+\)$/, '').trim();
+        }
+
+        function getNumberedDebtName(baseName, number) {
+            return number > 1 ? `${baseName} (${number})` : baseName;
+        }
+
+        function getUniqueDebtName(proposedName, debts = [], ignoreDebtId = '') {
+            const trimmed = String(proposedName || '').trim();
+            if (!trimmed) return '';
+
+            const usedNames = new Set((debts || [])
+                .filter(debt => !ignoreDebtId || String(debt?.id || '') !== ignoreDebtId)
+                .map(debt => String(debt?.name || '').trim().toLowerCase())
+                .filter(Boolean));
+
+            if (!usedNames.has(trimmed.toLowerCase())) return trimmed;
+
+            const baseName = getDebtNameSuffixBase(trimmed) || trimmed;
+            let suffix = 2;
+            while (usedNames.has(getNumberedDebtName(baseName, suffix).toLowerCase())) {
+                suffix += 1;
+            }
+            return getNumberedDebtName(baseName, suffix);
+        }
+
+        async function getDecryptedActiveDebts(db) {
+            const rows = Array.isArray(db?.debts) ? db.debts : [];
+            return (await Promise.all(rows
+                .filter(row => row && !row.deletedAt)
+                .map(async row => {
+                    const data = await decryptData(row.data);
+                    return data ? { ...data, id: row.id } : null;
+                }))).filter(Boolean);
+        }
+
         function getBudgetManagerCategories() {
             const budgetCategories = Object.keys(budgets || {});
             return getUniqueCategoryList([
@@ -854,11 +891,19 @@
         function getDebtActivityTransactions(debtId, debtName) {
             const normalizedName = String(debtName || '').trim();
             const normalizedDebtId = String(debtId || '').trim();
+            const fallbackOwners = typeof buildDebtCategoryFallbackOwners === 'function'
+                ? buildDebtCategoryFallbackOwners(window.allDecryptedDebts || [])
+                : null;
+            const useCategoryFallback = typeof canUseDebtCategoryFallback === 'function'
+                ? canUseDebtCategoryFallback({ id: normalizedDebtId, name: normalizedName }, fallbackOwners)
+                : true;
+
             return (window.allDecryptedTransactions || []).filter(tx => {
                 if (!tx || !isDebtLedgerTransaction(tx)) return false;
                 const txDebtId = String(tx.debtId || '').trim();
                 const txCategory = String(tx.category || '').trim();
-                return (normalizedDebtId && txDebtId === normalizedDebtId) || (normalizedName && txCategory === normalizedName);
+                if (txDebtId) return normalizedDebtId && txDebtId === normalizedDebtId;
+                return useCategoryFallback && normalizedName && txCategory === normalizedName;
             });
         }
 
@@ -872,9 +917,18 @@
             const aggregates = typeof buildDebtAndLentAggregates === 'function'
                 ? buildDebtAndLentAggregates(activityTransactions)
                 : { debtPaidByCategory: {}, debtBorrowedByCategory: {} };
+            const fallbackOwners = typeof buildDebtCategoryFallbackOwners === 'function'
+                ? buildDebtCategoryFallbackOwners(window.allDecryptedDebts || [])
+                : null;
             const debtName = String(debt.name || '').trim();
-            const paid = Number(aggregates.debtPaidByCategory?.[debtName] || 0);
-            const borrowedMore = Number(aggregates.debtBorrowedByCategory?.[debtName] || 0);
+            const debtAmounts = typeof getDebtAggregateAmounts === 'function'
+                ? getDebtAggregateAmounts(debt, aggregates, fallbackOwners)
+                : {
+                    paid: Number(aggregates.debtPaidByCategory?.[debtName] || 0),
+                    borrowedMore: Number(aggregates.debtBorrowedByCategory?.[debtName] || 0)
+                };
+            const paid = debtAmounts.paid;
+            const borrowedMore = debtAmounts.borrowedMore;
             const totalDebt = Math.max(0, Number(debt.amount) || 0) + borrowedMore;
             const remaining = Math.max(0, totalDebt - paid);
             const paymentRows = activityTransactions
@@ -2887,9 +2941,11 @@
             const db = await getDB();
             db.debts = db.debts || [];
             const debtId = generateFinanceRecordId('debt_');
+            const existingDebts = await getDecryptedActiveDebts(db);
+            const uniqueName = getUniqueDebtName(name, existingDebts);
             const borrowDateISO = shouldTrackBorrowDate ? toISODateFromInputValue(borrowDateValue) : null;
             const encrypted = await encryptData({
-                name,
+                name: uniqueName,
                 amount,
                 borrowDate: borrowDateISO,
                 borrowAddedCash: shouldTrackBorrowDate,
@@ -2898,6 +2954,8 @@
             db.debts.push({
                 id: debtId,
                 data: encrypted,
+                createdAt: Date.now(),
+                lastModified: Date.now(),
                 deletedAt: null
             });
 
@@ -2905,10 +2963,10 @@
                 await createDebtBorrowTransaction({
                     db,
                     debtId,
-                    category: name,
+                    category: uniqueName,
                     amount,
                     dateISO: borrowDateISO,
-                    desc: `Borrowed for ${name}`,
+                    desc: `Borrowed for ${uniqueName}`,
                     notes: '',
                     countAsCashReceived: true,
                     isInitialPrincipal: true
@@ -2921,7 +2979,10 @@
             toggleModal('debt-modal');
             await loadAndRender();
             await renderDebts(rawDebts);
-            refreshTransactionCategorySelect(name);
+            refreshTransactionCategorySelect(uniqueName);
+            if (uniqueName !== name) {
+                showToast(`✅ Debt saved as "${uniqueName}"`);
+            }
         }
 
         // New Logic for Update Debt Modal
@@ -2966,12 +3027,13 @@
                 return;
             }
 
+            const normalizedOldName = oldName.toLowerCase();
             const normalizedNewName = newName.toLowerCase();
             const nameTaken = (window.allDecryptedDebts || []).some(debt => {
                 if (!debt || debt.id === debtId) return false;
                 return String(debt.name || '').trim().toLowerCase() === normalizedNewName;
             });
-            if (nameTaken) {
+            if (nameTaken && normalizedNewName !== normalizedOldName) {
                 alert('Another debt already uses that name.');
                 return;
             }
@@ -3008,6 +3070,12 @@
 
             db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
             let seedTransactionFound = false;
+            const fallbackOwners = typeof buildDebtCategoryFallbackOwners === 'function'
+                ? buildDebtCategoryFallbackOwners(window.allDecryptedDebts || [])
+                : null;
+            const canUpdateUnlinkedNameMatches = typeof canUseDebtCategoryFallback === 'function'
+                ? canUseDebtCategoryFallback({ id: debtId, name: oldName }, fallbackOwners)
+                : true;
 
             for (let i = 0; i < db.transactions.length; i++) {
                 const rawTx = db.transactions[i];
@@ -3016,8 +3084,9 @@
                 const decrypted = await decryptData(rawTx.data);
                 if (!decrypted || !isDebtLedgerTransaction(decrypted)) continue;
 
-                const matchesDebtId = String(decrypted.debtId || '').trim() === debtId;
-                const matchesName = String(decrypted.category || '').trim() === oldName;
+                const txDebtId = String(decrypted.debtId || '').trim();
+                const matchesDebtId = txDebtId === debtId;
+                const matchesName = canUpdateUnlinkedNameMatches && !txDebtId && String(decrypted.category || '').trim() === oldName;
                 if (!matchesDebtId && !matchesName) continue;
 
                 if (decrypted.debtPrincipalSeed === true) {
