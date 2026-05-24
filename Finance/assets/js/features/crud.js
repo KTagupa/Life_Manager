@@ -768,9 +768,18 @@
 
                 // Guard: Prevent editing specialized transaction types unsupported by this modal.
                 // Also guard if a transaction references a category no longer available.
-
-                // Check if category exists in dropdown
-                const categoryExists = Array.from(cat.options).some(o => o.value === item.category);
+                let transactionCategory = item.category;
+                let categoryExists = Array.from(cat.options).some(o => o.value === transactionCategory);
+                const linkedDebt = item.debtId
+                    ? (window.allDecryptedDebts || []).find(debt => String(debt?.id || '').trim() === String(item.debtId || '').trim())
+                    : null;
+                if (!categoryExists && linkedDebt && typeof getDebtToPayCategoryName === 'function') {
+                    const linkedDebtCategory = getDebtToPayCategoryName(linkedDebt);
+                    if (Array.from(cat.options).some(o => o.value === linkedDebtCategory)) {
+                        transactionCategory = linkedDebtCategory;
+                        categoryExists = true;
+                    }
+                }
 
                 if (item.type === 'debt_increase' || item.type === 'credit_card_payment' || item.type === 'installment_payment' || !categoryExists) {
                     alert("This transaction belongs to a specialized workflow. Please manage it from its dedicated section instead.");
@@ -790,7 +799,7 @@
                     document.getElementById('t-currency').value = 'PHP';
                 }
 
-                cat.value = item.category;
+                cat.value = transactionCategory;
                 setTType(item.type);
 
                 // NEW: Set quantity
@@ -962,6 +971,18 @@
             });
         }
 
+        function openDebtPaymentHistoryTransaction(txId) {
+            const normalizedTxId = String(txId || '').trim();
+            if (!normalizedTxId) return;
+
+            const updateDebtModal = document.getElementById('update-debt-modal');
+            if (updateDebtModal) {
+                updateDebtModal.classList.add('hidden');
+            }
+
+            openTransactionModal(normalizedTxId);
+        }
+
         function renderDebtPaymentHistory(debt) {
             const summaryEl = document.getElementById('ud-summary');
             const metaEl = document.getElementById('ud-payment-history-meta');
@@ -1001,18 +1022,24 @@
             }
 
             listEl.innerHTML = paymentRows.map(tx => {
+                const encodedTxId = encodeInlineArg(tx.id);
                 const safeDesc = escapeHTML(tx.desc || `Repayment for ${debtName}`);
                 const safeDate = escapeHTML(new Date(tx.date).toLocaleDateString());
                 return `
-                    <div class="flex items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-2xl">
+                    <div onclick="openDebtPaymentHistoryTransaction(decodeURIComponent('${encodedTxId}'))"
+                        class="flex items-center justify-between gap-3 p-3 bg-white border border-slate-200 rounded-2xl cursor-pointer hover:border-rose-200 hover:bg-rose-50/40 transition-colors">
                         <div>
                             <p class="text-sm font-bold text-slate-700">${safeDesc}</p>
                             <p class="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Paid ${safeDate}</p>
                         </div>
-                        <p class="text-sm font-black text-rose-600">-${fmt(tx.amt)}</p>
+                        <div class="flex items-center gap-2">
+                            <p class="text-sm font-black text-rose-600">-${fmt(tx.amt)}</p>
+                            <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-300"></i>
+                        </div>
                     </div>
                 `;
             }).join('');
+            lucide.createIcons();
         }
 
         async function getNormalizedBillPayloadById(billId) {

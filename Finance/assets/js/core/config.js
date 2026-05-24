@@ -526,3 +526,20 @@ function getDebtCategoryMatchNames(debtOrName, options = {}) {
 function getDebtCategoryMatchSet(debts = [], options = {}) {
     return new Set((debts || []).flatMap(debt => getDebtCategoryMatchNames(debt, options)));
 }
+
+function isOrphanedDebtTransaction(tx, activeDebts = []) {
+    if (!tx || typeof tx !== 'object') return false;
+
+    const debtId = String(tx.debtId || '').trim();
+    const activeDebtIds = new Set((activeDebts || [])
+        .map(debt => String(debt?.id || '').trim())
+        .filter(Boolean));
+
+    if (debtId) return !activeDebtIds.has(debtId);
+
+    const category = String(tx.category || '').trim();
+    if (!isDebtToPayCategoryName(category)) return false;
+
+    const activeDebtCategories = getDebtCategoryMatchSet(activeDebts, { includeLegacy: false });
+    return !activeDebtCategories.has(category);
+}

@@ -18,6 +18,9 @@
                 const isInstallmentPay = typeof isInstallmentPayment === 'function' ? isInstallmentPayment(i) : i.type === 'installment_payment';
                 const isCardCharge = typeof isCreditCardCharge === 'function' ? isCreditCardCharge(i) : false;
                 const txDebtId = String(i.debtId || '').trim();
+                const isOrphanedDebtTx = typeof isOrphanedDebtTransaction === 'function'
+                    ? isOrphanedDebtTransaction(i, window.allDecryptedDebts || [])
+                    : false;
                 const isDebtPayment = i.type === 'expense' && ((txDebtId && debtIds.has(txDebtId)) || debtNames.has(String(i.category || '').trim()));
                 const isToday = isTxAssignedToToday(i);
                 const encodedTxId = encodeInlineArg(i.id);
@@ -51,7 +54,10 @@
                 const installmentBadge = isInstallmentPay
                     ? '<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">BNPL PAYMENT</span>'
                     : '';
-                const badges = [currencyBadge, creditCardBadge, installmentBadge, debtPaymentBadge, debtIncreaseBadge].filter(Boolean).join(' ');
+                const orphanedDebtBadge = isOrphanedDebtTx
+                    ? '<span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">MISSING DEBT</span>'
+                    : '';
+                const badges = [currencyBadge, creditCardBadge, installmentBadge, debtPaymentBadge, debtIncreaseBadge, orphanedDebtBadge].filter(Boolean).join(' ');
 
                 // Icon & Color Logic
                 let iconBg, iconText, amountColor, sign, amountText;
