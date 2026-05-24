@@ -952,6 +952,19 @@
                             </button>
                         </div>
                     </div>
+                    <div class="grid grid-cols-2 gap-1 p-1 mb-4 bg-slate-100 rounded-xl" role="tablist"
+                        aria-label="Debt status">
+                        <button id="debt-tab-active" type="button" onclick="setDebtListScope('active')"
+                            class="py-2 rounded-lg text-xs font-black text-rose-600 bg-white shadow-sm transition-colors"
+                            role="tab" aria-selected="true">
+                            Active <span id="debt-active-count">0</span>
+                        </button>
+                        <button id="debt-tab-completed" type="button" onclick="setDebtListScope('completed')"
+                            class="py-2 rounded-lg text-xs font-black text-slate-400 transition-colors"
+                            role="tab" aria-selected="false">
+                            Completed <span id="debt-completed-count">0</span>
+                        </button>
+                    </div>
                     <div id="debt-list" class="space-y-4">
                         <div class="text-center text-xs text-slate-400 py-2">No debts tracked. Good job!</div>
                     </div>
@@ -3994,21 +4007,21 @@
     <script src="assets/js/features/ronin.js?v=20260425a"></script>
     <script src="assets/js/features/crypto.js?v=20260515b"></script>
     <script src="assets/js/ui/charts.js?v=20260425a"></script>
-    <script src="assets/js/ui/renderers.js?v=20260522a"></script>
-    <script src="assets/js/features/crud.js?v=20260522a"></script>
+    <script src="assets/js/ui/renderers.js?v=20260524a"></script>
+    <script src="assets/js/features/crud.js?v=20260524a"></script>
     <script src="assets/js/features/backup.js?v=20260510a"></script>
     <script src="assets/js/features/quick-links.js?v=20260425a"></script>
     <script src="assets/js/features/item-tracking.js?v=20260425a"></script>
     <script src="assets/js/features/reminders.js?v=20260425a"></script>
     <script src="assets/js/features/reports.js?v=20260425a"></script>
-    <script src="assets/js/features/imports.js?v=20260425a"></script>
+    <script src="assets/js/features/imports.js?v=20260522a"></script>
     <script src="assets/js/features/insights.js?v=20260425a"></script>
     <script src="assets/js/features/planning.js?v=20260425a"></script>
-    <script src="assets/js/features/forecast.js?v=20260425a"></script>
-    <script src="assets/js/features/statements.js?v=20260522a"></script>
+    <script src="assets/js/features/forecast.js?v=20260522a"></script>
+    <script src="assets/js/features/statements.js?v=20260522b"></script>
     <script src="assets/js/features/operations.js?v=20260425a"></script>
     <script src="assets/js/features/close.js?v=20260425a"></script>
-    <script src="assets/js/features/kpi.js?v=20260522a"></script>
+    <script src="assets/js/features/kpi.js?v=20260522b"></script>
     <script src="assets/js/features/analytics.js?v=20260425a"></script>
     <script src="assets/js/features/revenue.js?v=20260425a"></script>
     <script src="assets/js/features/variance.js?v=20260425a"></script>

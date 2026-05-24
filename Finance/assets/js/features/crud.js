@@ -31,6 +31,11 @@
             return getUniqueCategoryList((window.allDecryptedDebts || []).map(d => d?.name));
         }
 
+        function getTrackedLentCategoryNames() {
+            return getUniqueCategoryList((window.allDecryptedLent || [])
+                .map(entry => entry?.name ? `Lent: ${entry.name}` : ''));
+        }
+
         function getDebtNameSuffixBase(name) {
             return String(name || '').trim().replace(/\s+\(\d+\)$/, '').trim();
         }
@@ -68,6 +73,38 @@
                 }))).filter(Boolean);
         }
 
+        function getTrackedRecordsByCategory(categoryName, records = [], getCategory = item => item?.name) {
+            const target = String(categoryName || '').trim().toLowerCase();
+            if (!target) return [];
+            return (records || []).filter(item => String(getCategory(item) || '').trim().toLowerCase() === target);
+        }
+
+        function resolveTrackedDebtIdForCategory(categoryName) {
+            const matches = getTrackedRecordsByCategory(categoryName, window.allDecryptedDebts || [], item => item?.name);
+            return matches.length === 1 ? String(matches[0].id || '').trim() || null : null;
+        }
+
+        function resolveTrackedLentIdForCategory(categoryName) {
+            const matches = getTrackedRecordsByCategory(categoryName, window.allDecryptedLent || [], item => `Lent: ${item?.name || ''}`);
+            return matches.length === 1 ? String(matches[0].id || '').trim() || null : null;
+        }
+
+        function getUniqueLentName(proposedName, lentEntries = [], ignoreLentId = '') {
+            const trimmed = String(proposedName || '').trim();
+            if (!trimmed) return '';
+            return getUniqueDebtName(trimmed, lentEntries, ignoreLentId);
+        }
+
+        async function getDecryptedActiveLent(db) {
+            const rows = Array.isArray(db?.lent) ? db.lent : [];
+            return (await Promise.all(rows
+                .filter(row => row && !row.deletedAt)
+                .map(async row => {
+                    const data = await decryptData(row.data);
+                    return data ? { ...data, id: row.id } : null;
+                }))).filter(Boolean);
+        }
+
         function getBudgetManagerCategories() {
             const budgetCategories = Object.keys(budgets || {});
             return getUniqueCategoryList([
@@ -80,7 +117,7 @@
 
         function findCategoryByName(categoryName, includeLent = false) {
             const lentCategories = includeLent
-                ? (window.allDecryptedLent || []).map(l => `Lent: ${l.name}`)
+                ? getTrackedLentCategoryNames()
                 : [];
             const target = String(categoryName || '').trim().toLowerCase();
             if (!target) return null;
@@ -335,8 +372,7 @@
             if (window.allDecryptedLent && window.allDecryptedLent.length > 0) {
                 const group = document.createElement('optgroup');
                 group.label = "Money Lent (to others)";
-                window.allDecryptedLent.forEach(l => {
-                    const categoryName = `Lent: ${l.name}`;
+                getTrackedLentCategoryNames().forEach(categoryName => {
                     if (existingValues.has(categoryName.toLowerCase())) return;
                     const op = document.createElement('option');
                     op.value = categoryName;
@@ -2601,6 +2637,8 @@
                 : 'cash';
             const creditCardId = paymentSource === 'credit_card' ? document.getElementById('t-credit-card')?.value || '' : '';
             const linkedCreditCard = creditCardId ? findTrackedCreditCard(creditCardId) : null;
+            const linkedDebtId = resolveTrackedDebtIdForCategory(category);
+            const linkedLentId = resolveTrackedLentIdForCategory(category);
 
             if (!desc || isNaN(amt)) return;
             if (!category) {
@@ -2637,6 +2675,8 @@
                 paymentSource,
                 creditCardId: linkedCreditCard ? linkedCreditCard.id : null,
                 creditCardName: linkedCreditCard ? linkedCreditCard.name : null,
+                debtId: linkedDebtId,
+                lentId: linkedLentId,
                 date,
                 importId: null,
                 dedupeHash: null,
@@ -2944,18 +2984,20 @@
             const existingDebts = await getDecryptedActiveDebts(db);
             const uniqueName = getUniqueDebtName(name, existingDebts);
             const borrowDateISO = shouldTrackBorrowDate ? toISODateFromInputValue(borrowDateValue) : null;
+            const now = Date.now();
             const encrypted = await encryptData({
                 name: uniqueName,
                 amount,
                 borrowDate: borrowDateISO,
                 borrowAddedCash: shouldTrackBorrowDate,
-                borrowTrackedAsIncome: shouldTrackBorrowDate
+                borrowTrackedAsIncome: shouldTrackBorrowDate,
+                addedAt: new Date(now).toISOString()
             });
             db.debts.push({
                 id: debtId,
                 data: encrypted,
-                createdAt: Date.now(),
-                lastModified: Date.now(),
+                createdAt: now,
+                lastModified: now,
                 deletedAt: null
             });
 
@@ -3283,15 +3325,19 @@
         }
 
         async function saveLent() {
-            const name = document.getElementById('l-name').value;
+            const name = document.getElementById('l-name').value.trim();
             if (!name) return;
 
-            const encrypted = await encryptData({ name });
             const db = await getDB();
             db.lent = db.lent || [];
+            const existingLent = await getDecryptedActiveLent(db);
+            const uniqueName = getUniqueLentName(name, existingLent);
+            const encrypted = await encryptData({ name: uniqueName });
             db.lent.push({
-                id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                id: generateFinanceRecordId('lent_'),
                 data: encrypted,
+                createdAt: Date.now(),
+                lastModified: Date.now(),
                 deletedAt: null
             });
             await saveDB(db);
@@ -3299,11 +3345,14 @@
             rawLent = db.lent.filter(l => !l.deletedAt);
             toggleModal('lent-modal');
             await renderLent(rawLent);
-            refreshTransactionCategorySelect();
+            refreshTransactionCategorySelect(`Lent: ${uniqueName}`);
             await refreshLinkedPanels({
                 refreshKPI: true,
                 refreshStatements: true
             });
+            if (uniqueName !== name) {
+                showToast(`✅ Lent record saved as "${uniqueName}"`);
+            }
         }
 
         async function saveBudgets() {

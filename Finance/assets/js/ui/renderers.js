@@ -4,6 +4,7 @@
         function renderTransactions(items) {
             const list = document.getElementById('transaction-list');
             const debtNames = new Set((window.allDecryptedDebts || []).map(d => String(d?.name || '').trim()).filter(Boolean));
+            const debtIds = new Set((window.allDecryptedDebts || []).map(d => String(d?.id || '').trim()).filter(Boolean));
 
             list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No transactions found.</div>';
 
@@ -14,7 +15,8 @@
                 const isCardPayment = i.type === 'credit_card_payment';
                 const isInstallmentPay = typeof isInstallmentPayment === 'function' ? isInstallmentPayment(i) : i.type === 'installment_payment';
                 const isCardCharge = typeof isCreditCardCharge === 'function' ? isCreditCardCharge(i) : false;
-                const isDebtPayment = i.type === 'expense' && debtNames.has(String(i.category || '').trim());
+                const txDebtId = String(i.debtId || '').trim();
+                const isDebtPayment = i.type === 'expense' && ((txDebtId && debtIds.has(txDebtId)) || debtNames.has(String(i.category || '').trim()));
                 const isToday = isTxAssignedToToday(i);
                 const encodedTxId = encodeInlineArg(i.id);
                 const safeDesc = escapeHTML(i.desc || 'Untitled');
@@ -113,6 +115,10 @@
             const debtBorrowedById = Object.create(null);
             const lentExpensesByCategory = Object.create(null);
             const lentIncomeByCategory = Object.create(null);
+            const lentExpensesByUnlinkedCategory = Object.create(null);
+            const lentIncomeByUnlinkedCategory = Object.create(null);
+            const lentExpensesById = Object.create(null);
+            const lentIncomeById = Object.create(null);
 
             (transactions || []).forEach(t => {
                 const category = (t && typeof t.category === 'string') ? t.category : '';
@@ -131,6 +137,12 @@
                     }
                     if (category.startsWith('Lent: ')) {
                         lentExpensesByCategory[category] = (lentExpensesByCategory[category] || 0) + amt;
+                        const lentId = String(t.lentId || '').trim();
+                        if (lentId) {
+                            lentExpensesById[lentId] = (lentExpensesById[lentId] || 0) + amt;
+                        } else {
+                            lentExpensesByUnlinkedCategory[category] = (lentExpensesByUnlinkedCategory[category] || 0) + amt;
+                        }
                     }
                     return;
                 }
@@ -150,6 +162,12 @@
 
                 if (t.type === 'income' && category.startsWith('Lent: ')) {
                     lentIncomeByCategory[category] = (lentIncomeByCategory[category] || 0) + amt;
+                    const lentId = String(t.lentId || '').trim();
+                    if (lentId) {
+                        lentIncomeById[lentId] = (lentIncomeById[lentId] || 0) + amt;
+                    } else {
+                        lentIncomeByUnlinkedCategory[category] = (lentIncomeByUnlinkedCategory[category] || 0) + amt;
+                    }
                 }
             });
 
@@ -161,7 +179,11 @@
                 debtPaidById,
                 debtBorrowedById,
                 lentExpensesByCategory,
-                lentIncomeByCategory
+                lentIncomeByCategory,
+                lentExpensesByUnlinkedCategory,
+                lentIncomeByUnlinkedCategory,
+                lentExpensesById,
+                lentIncomeById
             };
         }
 
@@ -202,6 +224,114 @@
             };
         }
 
+        function getLentCategoryName(lentEntry) {
+            return `Lent: ${String(lentEntry?.name || '').trim()}`;
+        }
+
+        function buildLentCategoryFallbackOwners(lentEntries = []) {
+            const owners = Object.create(null);
+            (lentEntries || []).forEach(entry => {
+                const key = normalizeDebtNameKey(getLentCategoryName(entry));
+                if (!key || key === 'lent:' || owners[key]) return;
+                owners[key] = String(entry?.id || '').trim();
+            });
+            return owners;
+        }
+
+        function canUseLentCategoryFallback(lentEntry, fallbackOwners = null) {
+            const lentId = String(lentEntry?.id || '').trim();
+            const key = normalizeDebtNameKey(getLentCategoryName(lentEntry));
+            if (!key || key === 'lent:') return false;
+            if (!fallbackOwners) return true;
+            return !fallbackOwners[key] || fallbackOwners[key] === lentId;
+        }
+
+        function getLentAggregateAmounts(lentEntry, aggregates = {}, fallbackOwners = null) {
+            const lentId = String(lentEntry?.id || '').trim();
+            const category = getLentCategoryName(lentEntry);
+            const useCategoryFallback = canUseLentCategoryFallback(lentEntry, fallbackOwners);
+            const expensesById = lentId ? Number(aggregates.lentExpensesById?.[lentId] || 0) : 0;
+            const incomeById = lentId ? Number(aggregates.lentIncomeById?.[lentId] || 0) : 0;
+            const expensesByCategory = useCategoryFallback ? Number(aggregates.lentExpensesByUnlinkedCategory?.[category] || 0) : 0;
+            const incomeByCategory = useCategoryFallback ? Number(aggregates.lentIncomeByUnlinkedCategory?.[category] || 0) : 0;
+
+            return {
+                expenses: expensesById + expensesByCategory,
+                income: incomeById + incomeByCategory
+            };
+        }
+
+        let debtListScope = 'active';
+
+        function getDebtRowStatus(debt, aggregates, fallbackOwners) {
+            const { paid, borrowedMore } = getDebtAggregateAmounts(debt, aggregates, fallbackOwners);
+            const baseAmount = Math.max(0, Number(debt?.amount) || 0);
+            const totalDebt = baseAmount + borrowedMore;
+            const percentage = totalDebt > 0 ? Math.min(100, Math.round((paid / totalDebt) * 100)) : 100;
+            const remaining = Math.max(0, totalDebt - paid);
+            const completed = remaining <= 0.01 && percentage >= 100;
+            return { paid, borrowedMore, totalDebt, percentage, remaining, completed };
+        }
+
+        function updateDebtScopeControls(activeCount = 0, completedCount = 0) {
+            const activeTab = document.getElementById('debt-tab-active');
+            const completedTab = document.getElementById('debt-tab-completed');
+            const activeCountEl = document.getElementById('debt-active-count');
+            const completedCountEl = document.getElementById('debt-completed-count');
+
+            if (activeCountEl) activeCountEl.textContent = String(activeCount);
+            if (completedCountEl) completedCountEl.textContent = String(completedCount);
+
+            if (activeTab) {
+                const selected = debtListScope === 'active';
+                activeTab.setAttribute('aria-selected', selected ? 'true' : 'false');
+                activeTab.className = selected
+                    ? 'py-2 rounded-lg text-xs font-black text-rose-600 bg-white shadow-sm transition-colors'
+                    : 'py-2 rounded-lg text-xs font-black text-slate-400 transition-colors';
+            }
+
+            if (completedTab) {
+                const selected = debtListScope === 'completed';
+                completedTab.setAttribute('aria-selected', selected ? 'true' : 'false');
+                completedTab.className = selected
+                    ? 'py-2 rounded-lg text-xs font-black text-emerald-600 bg-white shadow-sm transition-colors'
+                    : 'py-2 rounded-lg text-xs font-black text-slate-400 transition-colors';
+            }
+        }
+
+        function setDebtListScope(scope) {
+            debtListScope = scope === 'completed' ? 'completed' : 'active';
+            renderDebts(rawDebts || []);
+        }
+
+        function parseDebtAddedTimestamp(value) {
+            if (value == null || value === '') return NaN;
+            if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+
+            const raw = String(value).trim();
+            if (!raw) return NaN;
+
+            if (/^\d+$/.test(raw)) {
+                const numeric = Number(raw);
+                if (!Number.isFinite(numeric)) return NaN;
+                return numeric > 0 && numeric < 100000000000 ? numeric * 1000 : numeric;
+            }
+
+            const parsed = Date.parse(raw);
+            return Number.isFinite(parsed) ? parsed : NaN;
+        }
+
+        function formatDebtAddedDate(value) {
+            const ts = parseDebtAddedTimestamp(value);
+            if (!Number.isFinite(ts) || ts <= 0) return 'Date added unavailable';
+
+            return `Added ${new Date(ts).toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            })}`;
+        }
+
         function formatElectricityRate(rateInPhp, unit, decimals = 2) {
             const converted = convertToDisplayCurrency(Math.max(0, Number(rateInPhp) || 0), 'PHP', activeCurrency);
             const symbols = { PHP: '₱', USD: '$', JPY: '¥' };
@@ -217,7 +347,11 @@
 
             const decryptedDebts = (await Promise.all(items.map(async i => {
                 const d = await decryptData(i.data);
-                return d ? { ...d, id: i.id } : null;
+                return d ? {
+                    ...d,
+                    id: i.id,
+                    dateAdded: i.createdAt || d.addedAt || d.createdAt || null
+                } : null;
             }))).filter(x => x);
 
             // Store for category usage
@@ -233,19 +367,24 @@
             const aggregates = buildDebtAndLentAggregates(allTrans);
             const fallbackOwners = buildDebtCategoryFallbackOwners(decryptedDebts);
 
-            let renderedCount = 0;
-            decryptedDebts.forEach(d => {
+            const debtRows = decryptedDebts.map(d => ({
+                debt: d,
+                status: getDebtRowStatus(d, aggregates, fallbackOwners)
+            }));
+            const activeRows = debtRows.filter(row => !row.status.completed);
+            const completedRows = debtRows.filter(row => row.status.completed);
+            updateDebtScopeControls(activeRows.length, completedRows.length);
+
+            const rowsToRender = debtListScope === 'completed' ? completedRows : activeRows;
+            rowsToRender.forEach(({ debt: d, status }) => {
                 const safeDebtName = escapeHTML(d.name || 'Debt');
+                const safeDateAdded = escapeHTML(formatDebtAddedDate(d.dateAdded));
                 const encodedDebtId = encodeInlineArg(d.id);
-                const { paid, borrowedMore } = getDebtAggregateAmounts(d, aggregates, fallbackOwners);
-
-                const totalDebt = d.amount + borrowedMore;
-                const percentage = totalDebt > 0 ? Math.min(100, Math.round((paid / totalDebt) * 100)) : 100;
-                const remaining = Math.max(0, totalDebt - paid);
-
-                if (remaining <= 0.01 && percentage >= 100) return; // Hide completed debts
-
-                renderedCount += 1;
+                const { paid, totalDebt, percentage, remaining, completed } = status;
+                const progressColor = completed ? 'bg-emerald-500' : 'bg-rose-500';
+                const percentColor = completed ? 'text-emerald-600' : 'text-rose-600';
+                const overpaid = Math.max(0, paid - totalDebt);
+                const remainingText = completed && overpaid > 0.01 ? `Paid off • ${fmt(overpaid)} over` : completed ? 'Paid off' : `${fmt(remaining)} left`;
                 const div = document.createElement('div');
                 div.className = "group relative cursor-pointer hover:bg-slate-50 p-2 -mx-2 rounded-xl transition-colors";
                 div.onclick = (e) => {
@@ -256,26 +395,29 @@
                         <div class="flex justify-between items-end mb-1">
                             <div>
                                 <p class="text-sm font-bold text-slate-700">${safeDebtName}</p>
+                                <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">${safeDateAdded}</p>
                                 <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                                     Paid: ${fmt(paid)} / ${fmt(totalDebt)}
                                 </p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-black text-rose-600">${percentage}%</span>
+                                <span class="text-xs font-black ${percentColor}">${percentage}%</span>
                                 <button onclick="deleteItem('debts', decodeURIComponent('${encodedDebtId}'))" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
                                     <i data-lucide="trash-2" class="w-3 h-3"></i>
                                 </button>
                             </div>
                         </div>
                         <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-rose-500 rounded-full" style="width: ${percentage}%"></div>
+                            <div class="h-full ${progressColor} rounded-full" style="width: ${percentage}%"></div>
                         </div>
-                        <p class="text-[10px] text-slate-400 mt-1 italic text-right">${fmt(remaining)} left</p>
+                        <p class="text-[10px] text-slate-400 mt-1 italic text-right">${remainingText}</p>
                     `;
                 list.appendChild(div);
             });
-            if (renderedCount === 0) {
-                list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No active debts. Completed debts stay in history.</div>';
+            if (rowsToRender.length === 0) {
+                list.innerHTML = debtListScope === 'completed'
+                    ? '<div class="text-center text-xs text-slate-400 py-2">No completed debts yet.</div>'
+                    : '<div class="text-center text-xs text-slate-400 py-2">No active debts. Completed debts stay in history.</div>';
             }
             lucide.createIcons();
         }
@@ -540,17 +682,13 @@
             }
 
             const allTrans = window.allDecryptedTransactions || [];
-            const {
-                lentExpensesByCategory,
-                lentIncomeByCategory
-            } = buildDebtAndLentAggregates(allTrans);
+            const aggregates = buildDebtAndLentAggregates(allTrans);
+            const fallbackOwners = buildLentCategoryFallbackOwners(decryptedLent);
 
             decryptedLent.forEach(l => {
                 const safeLentName = escapeHTML(l.name || 'Lent');
                 const encodedLentId = encodeInlineArg(l.id);
-                const lentCategory = `Lent: ${l.name}`;
-                const expenses = lentExpensesByCategory[lentCategory] || 0;
-                const income = lentIncomeByCategory[lentCategory] || 0;
+                const { expenses, income } = getLentAggregateAmounts(l, aggregates, fallbackOwners);
 
                 const balance = expenses - income;
 

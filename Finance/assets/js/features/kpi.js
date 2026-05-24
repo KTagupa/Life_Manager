@@ -128,11 +128,20 @@ function computeLentOutstandingAsOf(endTs, transactions) {
     const aggregates = typeof buildDebtAndLentAggregates === 'function'
         ? buildDebtAndLentAggregates(relevant)
         : { lentExpensesByCategory: {}, lentIncomeByCategory: {} };
+    const fallbackOwners = typeof buildLentCategoryFallbackOwners === 'function'
+        ? buildLentCategoryFallbackOwners(lentPeople)
+        : null;
 
     return lentPeople.reduce((sum, person) => {
         const category = `Lent: ${person.name}`;
-        const lentOut = Number(aggregates.lentExpensesByCategory?.[category] || 0);
-        const repaid = Number(aggregates.lentIncomeByCategory?.[category] || 0);
+        const lentAmounts = typeof getLentAggregateAmounts === 'function'
+            ? getLentAggregateAmounts(person, aggregates, fallbackOwners)
+            : {
+                expenses: Number(aggregates.lentExpensesByCategory?.[category] || 0),
+                income: Number(aggregates.lentIncomeByCategory?.[category] || 0)
+            };
+        const lentOut = lentAmounts.expenses;
+        const repaid = lentAmounts.income;
         const outstanding = Math.max(0, lentOut - repaid);
         return sum + outstanding;
     }, 0);
@@ -216,12 +225,16 @@ async function refreshBusinessKPIPanel() {
     const startTs = range.start.getTime();
     const endTs = range.end.getTime();
 
-    const debtNameSet = new Set((window.allDecryptedDebts || []).map(d => String(d.name || '').trim()).filter(Boolean));
+    const debtList = window.allDecryptedDebts || [];
+    const debtNameSet = new Set(debtList.map(d => String(d.name || '').trim()).filter(Boolean));
+    const debtIdSet = new Set(debtList.map(d => String(d.id || '').trim()).filter(Boolean));
     const debtService = scopedTransactions.reduce((sum, tx) => {
         const amount = Number(tx.amt) || 0;
         if (!Number.isFinite(amount) || amount <= 0) return sum;
         if (isCreditCardPayment(tx)) return sum + amount;
         if (tx.type !== 'expense') return sum;
+        const txDebtId = String(tx.debtId || '').trim();
+        if (txDebtId && debtIdSet.has(txDebtId)) return sum + amount;
         const category = String(tx.category || '').trim();
         if (!debtNameSet.has(category)) return sum;
         return sum + amount;

@@ -319,6 +319,14 @@
                             if ((!existing.category || existing.category === 'Others') && row.category) {
                                 existing.category = row.category;
                             }
+                            const mergedDebtId = typeof resolveTrackedDebtIdForCategory === 'function'
+                                ? resolveTrackedDebtIdForCategory(existing.category)
+                                : null;
+                            const mergedLentId = typeof resolveTrackedLentIdForCategory === 'function'
+                                ? resolveTrackedLentIdForCategory(existing.category)
+                                : null;
+                            existing.debtId = existing.debtId || mergedDebtId || null;
+                            existing.lentId = existing.lentId || mergedLentId || null;
                             existing.importId = existing.importId || importId;
                             existing.dedupeHash = existing.dedupeHash || row.dedupeHash;
                             db.transactions[idx] = {
@@ -343,6 +351,12 @@
                     notes: '',
                     type: row.type,
                     category: row.category,
+                    debtId: typeof resolveTrackedDebtIdForCategory === 'function'
+                        ? resolveTrackedDebtIdForCategory(row.category)
+                        : null,
+                    lentId: typeof resolveTrackedLentIdForCategory === 'function'
+                        ? resolveTrackedLentIdForCategory(row.category)
+                        : null,
                     date: row.date,
                     importId,
                     dedupeHash: row.dedupeHash,

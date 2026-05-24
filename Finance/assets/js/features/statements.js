@@ -192,11 +192,20 @@ function statementsComputeReceivablesAsOf(endTs, transactions) {
         return Number.isFinite(ts) && ts <= endTs;
     });
     const aggregates = statementsBuildDebtAndLentAggregates(relevant);
+    const fallbackOwners = typeof buildLentCategoryFallbackOwners === 'function'
+        ? buildLentCategoryFallbackOwners(lentEntries)
+        : null;
 
     return lentEntries.reduce((sum, entry) => {
         const category = `Lent: ${entry?.name || ''}`;
-        const lentOut = Number(aggregates.lentExpensesByCategory?.[category] || 0);
-        const repaid = Number(aggregates.lentIncomeByCategory?.[category] || 0);
+        const lentAmounts = typeof getLentAggregateAmounts === 'function'
+            ? getLentAggregateAmounts(entry, aggregates, fallbackOwners)
+            : {
+                expenses: Number(aggregates.lentExpensesByCategory?.[category] || 0),
+                income: Number(aggregates.lentIncomeByCategory?.[category] || 0)
+            };
+        const lentOut = lentAmounts.expenses;
+        const repaid = lentAmounts.income;
         return sum + Math.max(0, lentOut - repaid);
     }, 0);
 }
@@ -542,7 +551,9 @@ async function computeStatementForMonth(monthKey) {
 
     const allTransactions = window.allDecryptedTransactions || [];
     const monthTransactions = statementsGetTransactionsForMonth(normalizedMonth, allTransactions);
-    const debtNames = new Set((window.allDecryptedDebts || []).map(d => String(d?.name || '').trim()).filter(Boolean));
+    const debtList = window.allDecryptedDebts || [];
+    const debtNames = new Set(debtList.map(d => String(d?.name || '').trim()).filter(Boolean));
+    const debtIds = new Set(debtList.map(d => String(d?.id || '').trim()).filter(Boolean));
     const isAutoCryptoExpense = typeof isAutoCryptoBuyExpenseTx === 'function'
         ? isAutoCryptoBuyExpenseTx
         : () => false;
@@ -593,7 +604,8 @@ async function computeStatementForMonth(monthKey) {
             creditCardBorrowing += amount;
         }
 
-        if (debtNames.has(category)) {
+        const txDebtId = String(tx?.debtId || '').trim();
+        if ((txDebtId && debtIds.has(txDebtId)) || debtNames.has(category)) {
             debtService += amount;
             return;
         }

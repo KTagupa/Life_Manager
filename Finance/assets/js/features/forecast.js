@@ -64,6 +64,10 @@
             return new Set((window.allDecryptedDebts || []).map(item => String(item?.name || '').trim()).filter(Boolean));
         }
 
+        function forecastGetDebtIdSet() {
+            return new Set((window.allDecryptedDebts || []).map(item => String(item?.id || '').trim()).filter(Boolean));
+        }
+
         async function forecastGetCryptoMonthlyBuyMap() {
             const out = Object.create(null);
             if (typeof getDecryptedCrypto !== 'function') return out;
@@ -100,6 +104,7 @@
 
             const txs = window.allDecryptedTransactions || [];
             const debtCategories = forecastGetDebtCategorySet();
+            const debtIds = forecastGetDebtIdSet();
             const isAutoCryptoExpense = typeof isAutoCryptoBuyExpenseTx === 'function'
                 ? isAutoCryptoBuyExpenseTx
                 : () => false;
@@ -130,7 +135,9 @@
                 const debtService = monthTx
                     .filter(tx => {
                         if (isCreditCardPayment(tx)) return true;
-                        return tx.type === 'expense' && debtCategories.has(String(tx.category || '').trim());
+                        if (tx.type !== 'expense') return false;
+                        const txDebtId = String(tx.debtId || '').trim();
+                        return (txDebtId && debtIds.has(txDebtId)) || debtCategories.has(String(tx.category || '').trim());
                     })
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
                 const savings = monthTx
