@@ -318,6 +318,16 @@
                 };
             }
 
+            if (collection === 'debts') {
+                return {
+                    title: 'Delete debt?',
+                    message: customMessage || 'This debt will be removed from the Debts to Pay card.\nLinked debt activity, including its borrowed-cash transaction, will be removed from Recent Movements too.',
+                    confirmLabel: 'Delete Debt',
+                    cancelLabel: 'Keep Debt',
+                    tone: 'danger'
+                };
+            }
+
             return {
                 title: `Delete ${itemLabel}?`,
                 message: customMessage || `This ${itemLabel} will be moved to undo history.`,
@@ -3698,6 +3708,27 @@
                 });
             }
 
+            if (latest.entityType === 'debts' && latest.meta?.removedDebtTransactions?.length) {
+                db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
+                latest.meta.removedDebtTransactions.forEach(tx => {
+                    if (!tx || !tx.id) return;
+                    const existingTxIdx = db.transactions.findIndex(entry => entry && entry.id === tx.id);
+                    const restoredTx = {
+                        ...tx,
+                        deletedAt: null,
+                        lastModified: Date.now()
+                    };
+                    if (existingTxIdx >= 0) {
+                        db.transactions[existingTxIdx] = {
+                            ...db.transactions[existingTxIdx],
+                            ...restoredTx
+                        };
+                    } else {
+                        db.transactions.push(restoredTx);
+                    }
+                });
+            }
+
             db[key] = targetCollection;
             db.undo_log.pop();
             await saveDB(db);
@@ -3741,6 +3772,37 @@
                 undoEntry.meta = { removedReminders };
             }
 
+            if (col === 'debts') {
+                db.transactions = Array.isArray(db.transactions) ? db.transactions : [];
+                const removedDebtTransactions = [];
+                const deleteLinkedAt = deletedAt;
+                for (let i = 0; i < db.transactions.length; i++) {
+                    const rawTx = db.transactions[i];
+                    if (!rawTx || rawTx.deletedAt) continue;
+
+                    const decrypted = await decryptData(rawTx.data);
+                    if (!decrypted) continue;
+
+                    const txDebtId = String(decrypted.debtId || '').trim();
+                    if (txDebtId !== id) continue;
+
+                    const deletedTx = {
+                        ...rawTx,
+                        deletedAt: deleteLinkedAt,
+                        lastModified: Date.now()
+                    };
+                    db.transactions[i] = deletedTx;
+                    removedDebtTransactions.push(deletedTx);
+                }
+
+                if (removedDebtTransactions.length) {
+                    undoEntry.meta = {
+                        ...(undoEntry.meta || {}),
+                        removedDebtTransactions
+                    };
+                }
+            }
+
             db[key] = targetCollection;
             if (col === 'crypto' && typeof syncCryptoBuyExpensesInDB === 'function') {
                 await syncCryptoBuyExpensesInDB(db);
@@ -3764,6 +3826,8 @@
                 await refreshLinkedPanels({ refreshMonthlyClose: true });
             } else if (col === 'debts') {
                 rawDebts = (persistedDB.debts || []).filter(d => !d.deletedAt);
+                rawTransactions = (persistedDB.transactions || []).filter(t => !t.deletedAt);
+                await loadAndRender();
                 await renderDebts(rawDebts);
                 populateBudgetInputs();
                 refreshTransactionCategorySelect();
