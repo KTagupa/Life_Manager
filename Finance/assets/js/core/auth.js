@@ -545,6 +545,7 @@ async function loadFromStorage() {
         }
     };
 
+    customCategories = db.custom_categories || [];
     recurringTransactions = db.recurring_transactions || [];
     rawTransactions = (db.transactions || []).filter(t => !t.deletedAt);
     await loadAndRender();

@@ -3,7 +3,9 @@
         // =============================================
         function renderTransactions(items) {
             const list = document.getElementById('transaction-list');
-            const debtNames = new Set((window.allDecryptedDebts || []).map(d => String(d?.name || '').trim()).filter(Boolean));
+            const debtNames = typeof getDebtCategoryMatchSet === 'function'
+                ? getDebtCategoryMatchSet(window.allDecryptedDebts || [])
+                : new Set((window.allDecryptedDebts || []).map(d => String(d?.name || '').trim()).filter(Boolean));
             const debtIds = new Set((window.allDecryptedDebts || []).map(d => String(d?.id || '').trim()).filter(Boolean));
 
             list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No transactions found.</div>';
@@ -194,29 +196,50 @@
         function buildDebtCategoryFallbackOwners(debts = []) {
             const owners = Object.create(null);
             (debts || []).forEach(debt => {
-                const key = normalizeDebtNameKey(debt?.name);
-                if (!key || owners[key]) return;
-                owners[key] = String(debt?.id || '').trim();
+                const debtId = String(debt?.id || '').trim();
+                const names = typeof getDebtCategoryMatchNames === 'function'
+                    ? getDebtCategoryMatchNames(debt)
+                    : [String(debt?.name || '').trim()].filter(Boolean);
+
+                names.forEach(name => {
+                    const key = normalizeDebtNameKey(name);
+                    if (!key || owners[key]) return;
+                    owners[key] = debtId;
+                });
             });
             return owners;
         }
 
         function canUseDebtCategoryFallback(debt, fallbackOwners = null) {
             const debtId = String(debt?.id || '').trim();
-            const key = normalizeDebtNameKey(debt?.name);
-            if (!key) return false;
+            const names = typeof getDebtCategoryMatchNames === 'function'
+                ? getDebtCategoryMatchNames(debt)
+                : [String(debt?.name || '').trim()].filter(Boolean);
+            if (!names.length) return false;
             if (!fallbackOwners) return true;
-            return !fallbackOwners[key] || fallbackOwners[key] === debtId;
+            return names.some(name => {
+                const key = normalizeDebtNameKey(name);
+                return !fallbackOwners[key] || fallbackOwners[key] === debtId;
+            });
         }
 
         function getDebtAggregateAmounts(debt, aggregates = {}, fallbackOwners = null) {
             const debtId = String(debt?.id || '').trim();
             const debtName = String(debt?.name || '').trim();
+            const debtCategories = typeof getDebtCategoryMatchNames === 'function'
+                ? getDebtCategoryMatchNames(debt)
+                : [debtName].filter(Boolean);
             const useCategoryFallback = canUseDebtCategoryFallback(debt, fallbackOwners);
             const paidById = debtId ? Number(aggregates.debtPaidById?.[debtId] || 0) : 0;
             const borrowedById = debtId ? Number(aggregates.debtBorrowedById?.[debtId] || 0) : 0;
-            const paidByCategory = useCategoryFallback ? Number(aggregates.debtPaidByUnlinkedCategory?.[debtName] || 0) : 0;
-            const borrowedByCategory = useCategoryFallback ? Number(aggregates.debtBorrowedByUnlinkedCategory?.[debtName] || 0) : 0;
+            const paidCategorySource = aggregates.debtPaidByUnlinkedCategory || aggregates.debtPaidByCategory || {};
+            const borrowedCategorySource = aggregates.debtBorrowedByUnlinkedCategory || aggregates.debtBorrowedByCategory || {};
+            const paidByCategory = useCategoryFallback
+                ? debtCategories.reduce((sum, category) => sum + Number(paidCategorySource[category] || 0), 0)
+                : 0;
+            const borrowedByCategory = useCategoryFallback
+                ? debtCategories.reduce((sum, category) => sum + Number(borrowedCategorySource[category] || 0), 0)
+                : 0;
 
             return {
                 paid: paidById + paidByCategory,

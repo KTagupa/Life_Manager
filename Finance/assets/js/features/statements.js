@@ -152,7 +152,9 @@ function statementsComputeDebtOutstandingAsOf(endTs, transactions) {
     const debtList = window.allDecryptedDebts || [];
     if (!debtList.length) return 0;
 
-    const debtNameSet = new Set(debtList.map(d => String(d?.name || '').trim()).filter(Boolean));
+    const debtNameSet = typeof getDebtCategoryMatchSet === 'function'
+        ? getDebtCategoryMatchSet(debtList)
+        : new Set(debtList.map(d => String(d?.name || '').trim()).filter(Boolean));
     const debtIdSet = new Set(debtList.map(d => String(d?.id || '').trim()).filter(Boolean));
     const relevant = (transactions || []).filter(tx => {
         const ts = getTxTimestamp(tx);
@@ -552,7 +554,9 @@ async function computeStatementForMonth(monthKey) {
     const allTransactions = window.allDecryptedTransactions || [];
     const monthTransactions = statementsGetTransactionsForMonth(normalizedMonth, allTransactions);
     const debtList = window.allDecryptedDebts || [];
-    const debtNames = new Set(debtList.map(d => String(d?.name || '').trim()).filter(Boolean));
+    const debtNames = typeof getDebtCategoryMatchSet === 'function'
+        ? getDebtCategoryMatchSet(debtList)
+        : new Set(debtList.map(d => String(d?.name || '').trim()).filter(Boolean));
     const debtIds = new Set(debtList.map(d => String(d?.id || '').trim()).filter(Boolean));
     const isAutoCryptoExpense = typeof isAutoCryptoBuyExpenseTx === 'function'
         ? isAutoCryptoBuyExpenseTx

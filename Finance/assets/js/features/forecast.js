@@ -61,7 +61,9 @@
         }
 
         function forecastGetDebtCategorySet() {
-            return new Set((window.allDecryptedDebts || []).map(item => String(item?.name || '').trim()).filter(Boolean));
+            return typeof getDebtCategoryMatchSet === 'function'
+                ? getDebtCategoryMatchSet(window.allDecryptedDebts || [])
+                : new Set((window.allDecryptedDebts || []).map(item => String(item?.name || '').trim()).filter(Boolean));
         }
 
         function forecastGetDebtIdSet() {

@@ -460,6 +460,7 @@ let roninReconcileSettings = {};
 let filteredTransactions = [];
 
 const standardCategories = ["Food", "Transport", "Bills", "Savings", "Entertainment", "Salary", "Others"];
+const DEBT_TO_PAY_CATEGORY_PREFIX = 'Debt to pay: ';
 
 function escapeHTML(value) {
     return String(value ?? '')
@@ -476,4 +477,52 @@ function escapeAttr(value) {
 
 function encodeInlineArg(value) {
     return encodeURIComponent(String(value ?? ''));
+}
+
+function getDebtToPayCategoryName(debtOrName) {
+    const sourceName = debtOrName && typeof debtOrName === 'object'
+        ? debtOrName.name
+        : debtOrName;
+    const name = String(sourceName || '').trim();
+    return name ? `${DEBT_TO_PAY_CATEGORY_PREFIX}${name}` : '';
+}
+
+function getDebtCategoryBaseName(categoryName) {
+    const category = String(categoryName || '').trim();
+    const prefix = DEBT_TO_PAY_CATEGORY_PREFIX.toLowerCase();
+    if (category.toLowerCase().startsWith(prefix)) {
+        return category.slice(DEBT_TO_PAY_CATEGORY_PREFIX.length).trim();
+    }
+    return category;
+}
+
+function isDebtToPayCategoryName(categoryName) {
+    const category = String(categoryName || '').trim();
+    return category.toLowerCase().startsWith(DEBT_TO_PAY_CATEGORY_PREFIX.toLowerCase())
+        && getDebtCategoryBaseName(category).length > 0;
+}
+
+function canUseLegacyDebtCategoryName(debtOrName) {
+    const name = String((debtOrName && typeof debtOrName === 'object') ? debtOrName.name : debtOrName || '').trim();
+    if (!name) return false;
+
+    const key = name.toLowerCase();
+    const customNames = Array.isArray(customCategories) ? customCategories : [];
+    return !customNames.some(category => String(category || '').trim().toLowerCase() === key);
+}
+
+function getDebtCategoryMatchNames(debtOrName, options = {}) {
+    const name = String((debtOrName && typeof debtOrName === 'object') ? debtOrName.name : debtOrName || '').trim();
+    if (!name) return [];
+
+    const categories = [getDebtToPayCategoryName(name)];
+    if (options.includeLegacy !== false && canUseLegacyDebtCategoryName(name)) {
+        categories.push(name);
+    }
+
+    return Array.from(new Set(categories.filter(Boolean)));
+}
+
+function getDebtCategoryMatchSet(debts = [], options = {}) {
+    return new Set((debts || []).flatMap(debt => getDebtCategoryMatchNames(debt, options)));
 }

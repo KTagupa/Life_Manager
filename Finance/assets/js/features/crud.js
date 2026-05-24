@@ -28,7 +28,8 @@
         }
 
         function getDebtCategoryNames() {
-            return getUniqueCategoryList((window.allDecryptedDebts || []).map(d => d?.name));
+            return getUniqueCategoryList((window.allDecryptedDebts || [])
+                .map(d => typeof getDebtToPayCategoryName === 'function' ? getDebtToPayCategoryName(d) : d?.name));
         }
 
         function getTrackedLentCategoryNames() {
@@ -80,7 +81,11 @@
         }
 
         function resolveTrackedDebtIdForCategory(categoryName) {
-            const matches = getTrackedRecordsByCategory(categoryName, window.allDecryptedDebts || [], item => item?.name);
+            const matches = getTrackedRecordsByCategory(categoryName, window.allDecryptedDebts || [], item => {
+                return typeof getDebtToPayCategoryName === 'function'
+                    ? getDebtToPayCategoryName(item)
+                    : item?.name;
+            });
             return matches.length === 1 ? String(matches[0].id || '').trim() || null : null;
         }
 
@@ -927,6 +932,10 @@
         function getDebtActivityTransactions(debtId, debtName) {
             const normalizedName = String(debtName || '').trim();
             const normalizedDebtId = String(debtId || '').trim();
+            const debtCategoryNames = typeof getDebtCategoryMatchNames === 'function'
+                ? getDebtCategoryMatchNames(normalizedName)
+                : [normalizedName].filter(Boolean);
+            const debtCategorySet = new Set(debtCategoryNames);
             const fallbackOwners = typeof buildDebtCategoryFallbackOwners === 'function'
                 ? buildDebtCategoryFallbackOwners(window.allDecryptedDebts || [])
                 : null;
@@ -939,7 +948,7 @@
                 const txDebtId = String(tx.debtId || '').trim();
                 const txCategory = String(tx.category || '').trim();
                 if (txDebtId) return normalizedDebtId && txDebtId === normalizedDebtId;
-                return useCategoryFallback && normalizedName && txCategory === normalizedName;
+                return useCategoryFallback && debtCategorySet.has(txCategory);
             });
         }
 
@@ -2983,6 +2992,9 @@
             const debtId = generateFinanceRecordId('debt_');
             const existingDebts = await getDecryptedActiveDebts(db);
             const uniqueName = getUniqueDebtName(name, existingDebts);
+            const debtCategory = typeof getDebtToPayCategoryName === 'function'
+                ? getDebtToPayCategoryName(uniqueName)
+                : uniqueName;
             const borrowDateISO = shouldTrackBorrowDate ? toISODateFromInputValue(borrowDateValue) : null;
             const now = Date.now();
             const encrypted = await encryptData({
@@ -3005,7 +3017,7 @@
                 await createDebtBorrowTransaction({
                     db,
                     debtId,
-                    category: uniqueName,
+                    category: debtCategory,
                     amount,
                     dateISO: borrowDateISO,
                     desc: `Borrowed for ${uniqueName}`,
@@ -3021,7 +3033,7 @@
             toggleModal('debt-modal');
             await loadAndRender();
             await renderDebts(rawDebts);
-            refreshTransactionCategorySelect(uniqueName);
+            refreshTransactionCategorySelect(debtCategory);
             if (uniqueName !== name) {
                 showToast(`✅ Debt saved as "${uniqueName}"`);
             }
@@ -3034,7 +3046,9 @@
 
             document.getElementById('ud-title').innerText = debt.name;
             document.getElementById('ud-debt-id').value = id;
-            document.getElementById('ud-category').value = debt.name; // Category matches debt name
+            document.getElementById('ud-category').value = typeof getDebtToPayCategoryName === 'function'
+                ? getDebtToPayCategoryName(debt)
+                : debt.name;
             document.getElementById('ud-original-category').value = debt.name;
             document.getElementById('ud-name').value = debt.name || '';
             document.getElementById('ud-base-amount').value = Number(debt.amount) || '';
@@ -3071,6 +3085,13 @@
 
             const normalizedOldName = oldName.toLowerCase();
             const normalizedNewName = newName.toLowerCase();
+            const oldDebtCategories = typeof getDebtCategoryMatchNames === 'function'
+                ? getDebtCategoryMatchNames(oldName)
+                : [oldName].filter(Boolean);
+            const oldDebtCategorySet = new Set(oldDebtCategories);
+            const newDebtCategory = typeof getDebtToPayCategoryName === 'function'
+                ? getDebtToPayCategoryName(newName)
+                : newName;
             const nameTaken = (window.allDecryptedDebts || []).some(debt => {
                 if (!debt || debt.id === debtId) return false;
                 return String(debt.name || '').trim().toLowerCase() === normalizedNewName;
@@ -3128,7 +3149,7 @@
 
                 const txDebtId = String(decrypted.debtId || '').trim();
                 const matchesDebtId = txDebtId === debtId;
-                const matchesName = canUpdateUnlinkedNameMatches && !txDebtId && String(decrypted.category || '').trim() === oldName;
+                const matchesName = canUpdateUnlinkedNameMatches && !txDebtId && oldDebtCategorySet.has(String(decrypted.category || '').trim());
                 if (!matchesDebtId && !matchesName) continue;
 
                 if (decrypted.debtPrincipalSeed === true) {
@@ -3147,7 +3168,7 @@
                         desc: `Borrowed for ${newName}`,
                         amt: amount,
                         type: 'debt_increase',
-                        category: newName,
+                        category: newDebtCategory,
                         date: borrowDateISO,
                         debtId,
                         debtBorrowTracked: true
@@ -3164,7 +3185,7 @@
                 if (matchesName || matchesDebtId) {
                     const updatedTx = {
                         ...decrypted,
-                        category: newName,
+                        category: newDebtCategory,
                         debtId: debtId || null
                     };
                     db.transactions[i] = {
@@ -3180,7 +3201,7 @@
                 await createDebtBorrowTransaction({
                     db,
                     debtId,
-                    category: newName,
+                    category: newDebtCategory,
                     amount,
                     dateISO: borrowDateISO,
                     desc: `Borrowed for ${newName}`,
@@ -3195,35 +3216,36 @@
                 const rawWish = db.wishlist[i];
                 if (!rawWish || rawWish.deletedAt) continue;
                 const decrypted = await decryptData(rawWish.data);
-                if (!decrypted || decrypted.category !== oldName) continue;
+                if (!decrypted || !oldDebtCategorySet.has(String(decrypted.category || '').trim())) continue;
                 db.wishlist[i] = {
                     ...rawWish,
                     data: await encryptData({
                         ...decrypted,
-                        category: newName
+                        category: newDebtCategory
                     }),
                     lastModified: Date.now(),
                     deletedAt: rawWish.deletedAt || null
                 };
             }
 
-            if (budgets[oldName] != null && oldName !== newName) {
-                budgets[newName] = budgets[oldName];
-                delete budgets[oldName];
+            const oldBudgetCategory = oldDebtCategories.find(category => budgets[category] != null);
+            if (oldBudgetCategory && oldBudgetCategory !== newDebtCategory) {
+                budgets[newDebtCategory] = budgets[oldBudgetCategory];
+                delete budgets[oldBudgetCategory];
                 db.budgets = { data: await encryptData(budgets) };
             }
 
             recurringTransactions = (recurringTransactions || []).map(reminder => {
-                if (!reminder || reminder.category !== oldName) return reminder;
-                return { ...reminder, category: newName };
+                if (!reminder || !oldDebtCategorySet.has(String(reminder.category || '').trim())) return reminder;
+                return { ...reminder, category: newDebtCategory };
             });
             categorizationRules = (categorizationRules || []).map(rule => {
-                if (!rule || rule.category !== oldName) return rule;
-                return { ...rule, category: newName, lastModified: Date.now() };
+                if (!rule || !oldDebtCategorySet.has(String(rule.category || '').trim())) return rule;
+                return { ...rule, category: newDebtCategory, lastModified: Date.now() };
             });
             financialGoals = (financialGoals || []).map(goal => {
-                if (!goal || goal.linkedCategory !== oldName) return goal;
-                return { ...goal, linkedCategory: newName, lastModified: Date.now() };
+                if (!goal || !oldDebtCategorySet.has(String(goal.linkedCategory || '').trim())) return goal;
+                return { ...goal, linkedCategory: newDebtCategory, lastModified: Date.now() };
             });
             db.recurring_transactions = recurringTransactions;
             db.categorization_rules = categorizationRules;
@@ -3235,7 +3257,7 @@
 
             await loadAndRender();
             await renderDebts(rawDebts);
-            refreshTransactionCategorySelect(newName);
+            refreshTransactionCategorySelect(newDebtCategory);
             await openUpdateDebtModal(debtId);
             showToast('✅ Debt updated');
         }
@@ -3273,12 +3295,15 @@
             const type = typeKey === 'repayment'
                 ? 'expense'
                 : 'debt_increase';
+            const debtLabel = typeof getDebtCategoryBaseName === 'function'
+                ? getDebtCategoryBaseName(category)
+                : category;
 
             if (!desc) {
                 if (typeKey === 'repayment') {
-                    desc = `Repayment for ${category}`;
+                    desc = `Repayment for ${debtLabel}`;
                 } else {
-                    desc = countLoanAsCashReceived ? `Borrowed for ${category}` : `Recorded debt increase for ${category}`;
+                    desc = countLoanAsCashReceived ? `Borrowed for ${debtLabel}` : `Recorded debt increase for ${debtLabel}`;
                 }
             }
 

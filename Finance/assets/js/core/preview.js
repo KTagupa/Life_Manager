@@ -98,6 +98,12 @@
         const phoneBnplId = makeId('ip');
         const phoneBnplName = 'Phone BNPL';
         const phoneBnplCreatedAt = previewDateDaysAgo(58, rand);
+        const laptopDebtCategory = typeof getDebtToPayCategoryName === 'function'
+            ? getDebtToPayCategoryName('Laptop Installment')
+            : 'Debt to pay: Laptop Installment';
+        const familyDebtCategory = typeof getDebtToPayCategoryName === 'function'
+            ? getDebtToPayCategoryName('Family Loan')
+            : 'Debt to pay: Family Loan';
 
         const transactionTemplates = [
             ['Client Retainer', 'Salary', 'income', 2],
@@ -113,8 +119,8 @@
             ['Weekend Dinner', 'Entertainment', 'expense', 11],
             ['Emergency Fund Transfer', 'Savings', 'expense', 7],
             ['Flight to Cebu', 'Travel', 'expense', 28],
-            ['Laptop Installment Payment', 'Laptop Installment', 'expense', 14],
-            ['Family Loan Payment', 'Family Loan', 'expense', 20],
+            ['Laptop Installment Payment', laptopDebtCategory, 'expense', 14],
+            ['Family Loan Payment', familyDebtCategory, 'expense', 20],
             ['Lent to Alex', 'Lent: Alex', 'expense', 24],
             ['Alex Partial Repayment', 'Lent: Alex', 'income', 10],
             ['Project Float Advance', 'Lent: Project Float', 'expense', 34],
@@ -134,8 +140,8 @@
             Entertainment: [700, 2600],
             Savings: [5000, 14000],
             Travel: [6000, 18000],
-            'Laptop Installment': [2800, 4200],
-            'Family Loan': [1200, 2600],
+            [laptopDebtCategory]: [2800, 4200],
+            [familyDebtCategory]: [1200, 2600],
             'Lent: Alex': [2500, 6000],
             'Lent: Project Float': [3000, 7000],
             'Business Ops': [1400, 4800]
@@ -162,7 +168,7 @@
         db.transactions.push(createPreviewEncryptedEntry(makeId, 'tx', {
             desc: 'Laptop Financing Approved',
             amt: 42000,
-            category: 'Laptop Installment',
+            category: laptopDebtCategory,
             type: 'debt_increase',
             date: debtOriginDate,
             notes: 'Preview debt source'
@@ -172,7 +178,7 @@
         db.transactions.push(createPreviewEncryptedEntry(makeId, 'tx', {
             desc: 'Family Loan Received',
             amt: 18000,
-            category: 'Family Loan',
+            category: familyDebtCategory,
             type: 'debt_increase',
             date: familyDebtOriginDate,
             notes: 'Preview debt source'

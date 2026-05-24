@@ -78,7 +78,9 @@ function computeCashBalanceAsOf(endTs, transactions) {
 
 function computeDebtOutstandingAsOf(endTs, transactions) {
     const debtList = window.allDecryptedDebts || [];
-    const debtNames = new Set(debtList.map(d => String(d.name || '').trim()).filter(Boolean));
+    const debtNames = typeof getDebtCategoryMatchSet === 'function'
+        ? getDebtCategoryMatchSet(debtList)
+        : new Set(debtList.map(d => String(d.name || '').trim()).filter(Boolean));
     const debtIds = new Set(debtList.map(d => String(d.id || '').trim()).filter(Boolean));
     if (!debtNames.size && !debtIds.size) return 0;
 
@@ -226,7 +228,9 @@ async function refreshBusinessKPIPanel() {
     const endTs = range.end.getTime();
 
     const debtList = window.allDecryptedDebts || [];
-    const debtNameSet = new Set(debtList.map(d => String(d.name || '').trim()).filter(Boolean));
+    const debtNameSet = typeof getDebtCategoryMatchSet === 'function'
+        ? getDebtCategoryMatchSet(debtList)
+        : new Set(debtList.map(d => String(d.name || '').trim()).filter(Boolean));
     const debtIdSet = new Set(debtList.map(d => String(d.id || '').trim()).filter(Boolean));
     const debtService = scopedTransactions.reduce((sum, tx) => {
         const amount = Number(tx.amt) || 0;

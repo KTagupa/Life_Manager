@@ -174,7 +174,11 @@
         }
 
         function getAllCategoryChoices() {
-            const debtCats = (window.allDecryptedDebts || []).map(d => d.name);
+            const debtCats = (window.allDecryptedDebts || []).map(d => {
+                return typeof getDebtToPayCategoryName === 'function'
+                    ? getDebtToPayCategoryName(d)
+                    : d.name;
+            });
             const lentCats = (window.allDecryptedLent || []).map(l => `Lent: ${l.name}`);
             return Array.from(new Set([...standardCategories, ...customCategories, ...debtCats, ...lentCats]));
         }
