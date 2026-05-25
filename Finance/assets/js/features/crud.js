@@ -831,12 +831,97 @@
                 setTPaymentSource('cash');
             }
             refreshTransactionPaymentSourceUI();
+            resetNotesCalculatorPreview();
             modal.classList.remove('hidden');
         }
 
         function closeTransactionModal() {
             wishlistConvertId = null;
             toggleModal('transaction-modal');
+        }
+
+        function parseNotesExpenseTotal(notes) {
+            const lines = String(notes || '').split(/\r?\n/);
+            const amountPattern = /[₱$¥]?\s*[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/g;
+            let total = 0;
+            let count = 0;
+
+            lines.forEach((rawLine) => {
+                const line = String(rawLine || '').trim();
+                if (!line) return;
+
+                amountPattern.lastIndex = 0;
+                let match = amountPattern.exec(line);
+                while (match) {
+                    const before = line[match.index - 1] || '';
+                    const after = line[match.index + match[0].length] || '';
+                    const touchesWord = /[A-Za-z0-9]/.test(before) || /[A-Za-z]/.test(after);
+                    const touchesDateDash = before === '-' || after === '-';
+
+                    if (!touchesWord && !touchesDateDash) {
+                        const normalized = match[0].replace(/[₱$¥,\s]/g, '');
+                        const amount = Number(normalized);
+                        if (Number.isFinite(amount)) {
+                            total += amount;
+                            count += 1;
+                            return;
+                        }
+                    }
+
+                    match = amountPattern.exec(line);
+                }
+            });
+
+            return { total, count };
+        }
+
+        function updateNotesCalculatorPreview(force = false) {
+            const notesEl = document.getElementById('t-notes');
+            const preview = document.getElementById('notes-calculator-preview');
+            if (!notesEl || !preview) return;
+            if (!force && preview.dataset.visible !== 'true') return;
+
+            const { total, count } = parseNotesExpenseTotal(notesEl.value);
+            if (!notesEl.value.trim()) {
+                preview.innerText = '';
+                preview.dataset.visible = '';
+                return;
+            }
+
+            preview.dataset.visible = 'true';
+            if (!count) {
+                preview.innerText = 'No note amounts found.';
+                return;
+            }
+
+            const currency = document.getElementById('t-currency')?.value || 'PHP';
+            preview.innerText = `${count} amount${count === 1 ? '' : 's'} = ${formatCurrency(total, currency)}`;
+        }
+
+        function resetNotesCalculatorPreview() {
+            const preview = document.getElementById('notes-calculator-preview');
+            if (!preview) return;
+            preview.innerText = '';
+            preview.dataset.visible = '';
+        }
+
+        function applyNotesExpenseTotal() {
+            const notesEl = document.getElementById('t-notes');
+            const amountEl = document.getElementById('t-amount');
+            if (!notesEl || !amountEl) return;
+
+            const { total, count } = parseNotesExpenseTotal(notesEl.value);
+            updateNotesCalculatorPreview(true);
+
+            if (!count) {
+                if (typeof showToast === 'function') showToast('No amounts found in notes.');
+                return;
+            }
+
+            amountEl.value = total.toFixed(2);
+            amountEl.dispatchEvent(new Event('input', { bubbles: true }));
+            updateConversionPreview();
+            if (typeof showToast === 'function') showToast(`Added ${count} note amount${count === 1 ? '' : 's'} to Amount.`);
         }
 
         function generateFinanceRecordId(prefix = '') {
