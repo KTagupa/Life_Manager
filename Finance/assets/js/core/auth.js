@@ -526,14 +526,17 @@ async function unlockApp() {
 async function loadFromStorage() {
     let db = await getDB();
 
-    if (typeof syncCryptoBuyExpensesInDB === 'function') {
+    const syncCryptoMirrors = typeof syncCryptoMirrorTransactionsInDB === 'function'
+        ? syncCryptoMirrorTransactionsInDB
+        : (typeof syncCryptoBuyExpensesInDB === 'function' ? syncCryptoBuyExpensesInDB : null);
+    if (syncCryptoMirrors) {
         try {
-            const syncResult = await syncCryptoBuyExpensesInDB(db);
+            const syncResult = await syncCryptoMirrors(db);
             if (syncResult?.changed) {
                 db = await saveDB(syncResult.db || db);
             }
         } catch (error) {
-            console.error('Crypto buy expense sync failed during load.', error);
+            console.error('Crypto mirror transaction sync failed during load.', error);
         }
     }
 

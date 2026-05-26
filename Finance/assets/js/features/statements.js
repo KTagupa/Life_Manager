@@ -138,12 +138,16 @@ function statementsComputeCashBalanceAsOf(endTs, transactions) {
     const isAutoCryptoExpense = typeof isAutoCryptoBuyExpenseTx === 'function'
         ? isAutoCryptoBuyExpenseTx
         : () => false;
+    const isAutoCryptoSellProceeds = typeof isAutoCryptoSellProceedsTx === 'function'
+        ? isAutoCryptoSellProceedsTx
+        : () => false;
     return (transactions || []).reduce((sum, tx) => {
         const ts = getTxTimestamp(tx);
         if (!Number.isFinite(ts) || ts > endTs) return sum;
         const amount = Number(tx.amt || 0);
         if (!Number.isFinite(amount) || amount <= 0) return sum;
         if (tx.type === 'expense' && isAutoCryptoExpense(tx)) return sum;
+        if (isAutoCryptoSellProceeds(tx)) return sum;
         return sum + getTxCashBalanceDelta(tx);
     }, 0);
 }

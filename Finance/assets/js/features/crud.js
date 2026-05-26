@@ -781,6 +781,11 @@
                     }
                 }
 
+                if (item.type === 'crypto_sell_proceeds') {
+                    alert("This cash-in was auto-created from a crypto sell. Please edit the source crypto transaction from the crypto portfolio instead.");
+                    return;
+                }
+
                 if (item.type === 'debt_increase' || item.type === 'credit_card_payment' || item.type === 'installment_payment' || !categoryExists) {
                     alert("This transaction belongs to a specialized workflow. Please manage it from its dedicated section instead.");
                     return;
@@ -3916,7 +3921,9 @@
             }
 
             db[key] = targetCollection;
-            if (col === 'crypto' && typeof syncCryptoBuyExpensesInDB === 'function') {
+            if (col === 'crypto' && typeof syncCryptoMirrorTransactionsInDB === 'function') {
+                await syncCryptoMirrorTransactionsInDB(db);
+            } else if (col === 'crypto' && typeof syncCryptoBuyExpensesInDB === 'function') {
                 await syncCryptoBuyExpensesInDB(db);
             }
             db.undo_log = db.undo_log || [];

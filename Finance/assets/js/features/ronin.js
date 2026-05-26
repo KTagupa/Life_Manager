@@ -1458,8 +1458,13 @@ async function persistRoninImportPayloadGroups(groups = []) {
             created += 1;
         }
     }
-    if (typeof syncCryptoBuyExpensesInDB === 'function' && groups.some(group => (group.payloads || []).some(payload => payload.type === 'buy'))) {
-        await syncCryptoBuyExpensesInDB(db);
+    const hasMirrorableCryptoPayload = groups.some(group => (group.payloads || []).some(payload => payload.type === 'buy' || payload.type === 'sell'));
+    if (hasMirrorableCryptoPayload) {
+        if (typeof syncCryptoMirrorTransactionsInDB === 'function') {
+            await syncCryptoMirrorTransactionsInDB(db);
+        } else if (typeof syncCryptoBuyExpensesInDB === 'function') {
+            await syncCryptoBuyExpensesInDB(db);
+        }
     }
     const saved = await saveDB(db);
     rawCrypto = (saved.crypto || []).filter(c => !c.deletedAt);

@@ -252,7 +252,7 @@
                     .filter(tx => tx.type === 'income')
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
                 const expense = transactions
-                    .filter(tx => tx.type !== 'income')
+                    .filter(tx => typeof isExpenseLikeTx === 'function' ? isExpenseLikeTx(tx) : tx.type === 'expense')
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
                 metrics = {
                     balance: income - expense,
@@ -264,7 +264,7 @@
 
             const expenseByCategory = {};
             transactions
-                .filter(tx => tx.type !== 'income')
+                .filter(tx => typeof isExpenseLikeTx === 'function' ? isExpenseLikeTx(tx) : tx.type === 'expense')
                 .forEach(tx => {
                     const category = String(tx.category || 'Uncategorized');
                     expenseByCategory[category] = (expenseByCategory[category] || 0) + (Number(tx.amt) || 0);

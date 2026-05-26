@@ -126,6 +126,10 @@
                 return tx?.debtBorrowTracked === true ? amount : 0;
             }
 
+            if (tx?.type === 'crypto_sell_proceeds') {
+                return amount;
+            }
+
             if (tx?.type === 'expense') {
                 return isCreditCardCharge(tx) ? 0 : -amount;
             }
@@ -387,6 +391,11 @@
                 }
 
                 if (t.type === 'debt_increase') {
+                    balance += getTxCashBalanceDelta(t);
+                    return;
+                }
+
+                if (t.type === 'crypto_sell_proceeds') {
                     balance += getTxCashBalanceDelta(t);
                     return;
                 }
