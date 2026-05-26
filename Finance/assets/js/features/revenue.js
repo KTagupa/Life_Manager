@@ -7,15 +7,19 @@
         function computeRevenueDiversification(scope = metricScope) {
             const allTx = window.allDecryptedTransactions || [];
             const scopedTx = getTransactionsForScope(scope, allTx, window.filteredTransactions);
-            const incomeTx = scopedTx.filter(t => t.type === 'income');
+            const incomeTx = scopedTx.filter(t => {
+                const amount = typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.type === 'income' ? (Number(t.amt) || 0) : 0);
+                return amount > 0;
+            });
 
             const bySource = {};
             let totalIncome = 0;
 
             incomeTx.forEach(t => {
                 const cat = t.category || 'Others';
-                bySource[cat] = (bySource[cat] || 0) + (t.amt || 0);
-                totalIncome += (t.amt || 0);
+                const amount = typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.amt || 0);
+                bySource[cat] = (bySource[cat] || 0) + amount;
+                totalIncome += amount;
             });
 
             const sources = Object.entries(bySource)
@@ -59,13 +63,13 @@
 
             // Month-over-month income comparison
             const now = new Date();
-            const currentMonthTx = allTx.filter(t => t.type === 'income' && getTxMonth(t) === (now.getMonth() + 1) && getTxYear(t) === now.getFullYear());
+            const currentMonthTx = allTx.filter(t => (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.type === 'income' ? (Number(t.amt) || 0) : 0)) > 0 && getTxMonth(t) === (now.getMonth() + 1) && getTxYear(t) === now.getFullYear());
             const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth();
             const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-            const prevMonthTx = allTx.filter(t => t.type === 'income' && getTxMonth(t) === prevMonth && getTxYear(t) === prevYear);
+            const prevMonthTx = allTx.filter(t => (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.type === 'income' ? (Number(t.amt) || 0) : 0)) > 0 && getTxMonth(t) === prevMonth && getTxYear(t) === prevYear);
 
-            const currentMonthIncome = currentMonthTx.reduce((s, t) => s + (t.amt || 0), 0);
-            const prevMonthIncome = prevMonthTx.reduce((s, t) => s + (t.amt || 0), 0);
+            const currentMonthIncome = currentMonthTx.reduce((s, t) => s + (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.amt || 0)), 0);
+            const prevMonthIncome = prevMonthTx.reduce((s, t) => s + (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.amt || 0)), 0);
             const momChange = prevMonthIncome > 0 ? ((currentMonthIncome - prevMonthIncome) / prevMonthIncome) * 100 : 0;
 
             return {

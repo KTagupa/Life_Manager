@@ -459,7 +459,7 @@ let xrplReconcileSettings = {};
 let roninReconcileSettings = {};
 let filteredTransactions = [];
 
-const standardCategories = ["Food", "Transport", "Bills", "Savings", "Entertainment", "Salary", "Others"];
+const standardCategories = ["Food", "Transport", "Bills", "Savings", "Entertainment", "Salary", "Refund/Reimbursement", "Asset Sale", "Own Transfer", "Non-Income Cash In", "Others"];
 const DEBT_TO_PAY_CATEGORY_PREFIX = 'Debt to pay: ';
 
 function escapeHTML(value) {

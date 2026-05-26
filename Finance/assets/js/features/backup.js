@@ -250,13 +250,19 @@
             if (!metrics) {
                 const income = transactions
                     .filter(tx => tx.type === 'income')
-                    .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
+                    .reduce((sum, tx) => sum + (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(tx) : (Number(tx.amt) || 0)), 0);
+                const nonIncomeCashIn = transactions
+                    .reduce((sum, tx) => sum + (typeof getTxNonIncomeCashInDelta === 'function' ? getTxNonIncomeCashInDelta(tx) : 0), 0);
                 const expense = transactions
                     .filter(tx => typeof isExpenseLikeTx === 'function' ? isExpenseLikeTx(tx) : tx.type === 'expense')
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);
+                const balance = typeof getTxCashBalanceDelta === 'function'
+                    ? transactions.reduce((sum, tx) => sum + getTxCashBalanceDelta(tx), 0)
+                    : income + nonIncomeCashIn - expense;
                 metrics = {
-                    balance: income - expense,
+                    balance,
                     income,
+                    nonIncomeCashIn,
                     expense,
                     savingsRate: income > 0 ? Math.round(((income - expense) / income) * 100) : 0
                 };

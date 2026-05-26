@@ -1161,6 +1161,12 @@ function normalizeStatementSnapshotEntry(entry) {
         cashflow: {
             operatingCashFlow: toFiniteNumber(cashflow.operatingCashFlow, 0),
             investingCashFlow: toFiniteNumber(cashflow.investingCashFlow, 0),
+            cashRecoveryIn: Math.max(0, toFiniteNumber(cashflow.cashRecoveryIn, 0)),
+            assetSaleIn: Math.max(0, toFiniteNumber(cashflow.assetSaleIn, 0)),
+            ownTransferIn: Math.max(0, toFiniteNumber(cashflow.ownTransferIn, 0)),
+            otherNonIncomeCashIn: Math.max(0, toFiniteNumber(cashflow.otherNonIncomeCashIn, 0)),
+            nonIncomeCashIn: Math.max(0, toFiniteNumber(cashflow.nonIncomeCashIn, 0)),
+            debtCashIn: Math.max(0, toFiniteNumber(cashflow.debtCashIn, 0)),
             creditCardBorrowing: Math.max(0, toFiniteNumber(cashflow.creditCardBorrowing, 0)),
             creditCardPayments: Math.max(0, toFiniteNumber(cashflow.creditCardPayments, 0)),
             financingCashFlow: toFiniteNumber(cashflow.financingCashFlow, 0),
@@ -1844,10 +1850,12 @@ async function importPendingMainTransactionsIntoFinance(previewRows = null) {
             continue;
         }
 
-        const type = item?.type === 'income' ? 'income' : 'expense';
+        const type = item?.type === 'income'
+            ? 'income'
+            : (item?.type === 'non_income_cash_in' ? 'non_income_cash_in' : 'expense');
         const currencyRaw = String(item?.currency || 'PHP').toUpperCase();
         const currency = (currencyRaw === 'USD' || currencyRaw === 'JPY' || currencyRaw === 'PHP') ? currencyRaw : 'PHP';
-        const category = String(item?.category || '').trim() || (type === 'income' ? 'Salary' : 'Others');
+        const category = String(item?.category || '').trim() || (type === 'income' ? 'Salary' : (type === 'non_income_cash_in' ? 'Non-Income Cash In' : 'Others'));
         const quantityRaw = Number(item?.quantity);
         const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1;
         const notes = String(item?.notes || '');

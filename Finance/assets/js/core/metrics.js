@@ -1,6 +1,7 @@
         // =============================================
         // SECTION 10: METRICS & SCOPING
         // =============================================
+        let latestSummaryMetrics = null;
 
         function getMetricScopeLabel(scope) {
             if (scope === 'all_time') return 'All records';
@@ -102,6 +103,19 @@
             return tx?.debtBorrowTracked === true && (tx?.type === 'debt_increase' || tx?.type === 'income');
         }
 
+        function isNonIncomeCashInTx(tx) {
+            return tx?.type === 'non_income_cash_in' || tx?.type === 'crypto_sell_proceeds';
+        }
+
+        function getTxNonIncomeCashInDelta(tx) {
+            const amount = Math.max(0, Number(tx?.amt || 0));
+            if (!Number.isFinite(amount) || amount <= 0) return 0;
+            if (isNonIncomeCashInTx(tx)) return amount;
+            if (tx?.type === 'income' && String(tx?.category || '').trim().startsWith('Lent: ')) return amount;
+            if (tx?.type === 'debt_increase' && tx?.debtBorrowTracked === true) return amount;
+            return 0;
+        }
+
         function isDebtBorrowLiabilityTx(tx) {
             return tx?.type === 'debt_increase' || isDebtBorrowCashInTx(tx);
         }
@@ -126,7 +140,7 @@
                 return tx?.debtBorrowTracked === true ? amount : 0;
             }
 
-            if (tx?.type === 'crypto_sell_proceeds') {
+            if (isNonIncomeCashInTx(tx)) {
                 return amount;
             }
 
@@ -145,6 +159,7 @@
             const amount = Math.max(0, Number(tx?.amt || 0));
             if (!Number.isFinite(amount) || amount <= 0) return 0;
             if (tx?.type !== 'income') return 0;
+            if (String(tx?.category || '').trim().startsWith('Lent: ')) return 0;
             return isDebtBorrowCashInTx(tx) ? 0 : amount;
         }
 
@@ -380,22 +395,26 @@
 
             let income = 0;
             let expense = 0;
+            let nonIncomeCashIn = 0;
             let balance = 0;
             const categoryExpenses = {};
 
             scopedTransactions.forEach(t => {
                 if (t.type === 'income') {
                     income += getTxReportedIncomeDelta(t);
+                    nonIncomeCashIn += getTxNonIncomeCashInDelta(t);
                     balance += getTxCashBalanceDelta(t);
                     return;
                 }
 
                 if (t.type === 'debt_increase') {
+                    nonIncomeCashIn += getTxNonIncomeCashInDelta(t);
                     balance += getTxCashBalanceDelta(t);
                     return;
                 }
 
-                if (t.type === 'crypto_sell_proceeds') {
+                if (isNonIncomeCashInTx(t)) {
+                    nonIncomeCashIn += getTxNonIncomeCashInDelta(t);
                     balance += getTxCashBalanceDelta(t);
                     return;
                 }
@@ -425,6 +444,7 @@
                 scopeLabel: getMetricScopeLabel(scope),
                 income,
                 expense,
+                nonIncomeCashIn,
                 balance,
                 savingsRate,
                 avgDailySpend,
@@ -435,17 +455,114 @@
         }
 
         function renderSummaryCards(metrics) {
+            latestSummaryMetrics = metrics;
             document.getElementById('balance-display').innerText = fmt(metrics.balance);
             document.getElementById('income-display').innerText = fmt(metrics.income);
+            const nonIncomeCashInDisplay = document.getElementById('non-income-cash-in-display');
+            if (nonIncomeCashInDisplay) {
+                nonIncomeCashInDisplay.innerText = fmt(metrics.nonIncomeCashIn || 0);
+            }
             document.getElementById('expense-display').innerText = fmt(metrics.expense);
             document.getElementById('savings-rate-display').innerText = `${metrics.savingsRate}%`;
             document.getElementById('avg-daily-spend').innerText = `Avg ${fmt(metrics.avgDailySpend)}/day`;
+            const nonIncomeCashInEl = document.getElementById('non-income-cash-in-detail');
+            if (nonIncomeCashInEl) {
+                nonIncomeCashInEl.innerText = Number(metrics.nonIncomeCashIn || 0) > 0
+                    ? 'Cash added, not counted as income'
+                    : 'No non-income cash in this scope';
+            }
 
             const selectedLabel = getSelectedPeriodLabel();
             const scopeCaption = metrics.scope === 'selected_period'
                 ? `Selected: ${selectedLabel}`
                 : `${metrics.scopeLabel}`;
             document.getElementById('balance-trend').innerText = scopeCaption;
+        }
+
+        function formatSignedBalanceAmount(amount) {
+            const value = Number(amount) || 0;
+            if (Math.abs(value) < 0.005) return fmt(0);
+            return value > 0 ? `+${fmt(value)}` : `-${fmt(Math.abs(value))}`;
+        }
+
+        function getLatestBalanceCalculationMetrics() {
+            if (latestSummaryMetrics) return latestSummaryMetrics;
+            const allTx = window.allDecryptedTransactions || [];
+            return computeSummaryMetrics(allTx, metricScope, {
+                filteredTransactions: window.filteredTransactions || []
+            });
+        }
+
+        function openBalanceCalculationModal(event) {
+            if (event?.target?.closest?.('[data-scope-slider]')) return;
+
+            const modal = document.getElementById('balance-calculation-modal');
+            if (!modal) return;
+
+            const metrics = getLatestBalanceCalculationMetrics();
+            latestSummaryMetrics = metrics;
+
+            const income = Number(metrics.income || 0);
+            const nonIncomeCashIn = Number(metrics.nonIncomeCashIn || 0);
+            const expense = Number(metrics.expense || 0);
+            const balance = Number(metrics.balance || 0);
+            const formulaBalance = income + nonIncomeCashIn - expense;
+            const adjustment = balance - formulaBalance;
+            const showAdjustment = Math.abs(adjustment) >= 0.005;
+
+            const setText = (id, text) => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = text;
+            };
+
+            setText('balance-calc-scope', metrics.scopeLabel || getMetricScopeLabel(metricScope));
+            setText('balance-calc-income', fmt(income));
+            setText('balance-calc-non-income', fmt(nonIncomeCashIn));
+            setText('balance-calc-expenses', `-${fmt(expense)}`);
+            setText('balance-calc-adjustment', formatSignedBalanceAmount(adjustment));
+            setText('balance-calc-total', fmt(balance));
+            setText('balance-calc-note', showAdjustment
+                ? 'Income plus Non-Income Cash In minus Expenses is reconciled to cash balance with timing adjustments such as credit-card spending that has not reduced cash yet.'
+                : 'Income plus Non-Income Cash In minus Expenses equals the scoped balance.');
+
+            const adjustmentRow = document.getElementById('balance-calc-adjustment-row');
+            if (adjustmentRow) adjustmentRow.classList.toggle('hidden', !showAdjustment);
+
+            modal.classList.remove('hidden');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeBalanceCalculationModal() {
+            document.getElementById('balance-calculation-modal')?.classList.add('hidden');
+        }
+
+        function handleBalanceCalculationTriggerKey(event) {
+            if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
+            event.preventDefault();
+            openBalanceCalculationModal(event);
+        }
+
+        function initBalanceCalculationModalControls() {
+            const trigger = document.querySelector('.finance-balance-breakdown-trigger');
+            if (trigger && trigger.dataset.balanceCalcBound !== 'true') {
+                trigger.dataset.balanceCalcBound = 'true';
+                trigger.addEventListener('click', openBalanceCalculationModal);
+                trigger.addEventListener('keydown', handleBalanceCalculationTriggerKey);
+            }
+
+            document.querySelectorAll('[data-balance-calc-close]').forEach(button => {
+                if (button.dataset.balanceCalcCloseBound === 'true') return;
+                button.dataset.balanceCalcCloseBound = 'true';
+                button.addEventListener('click', closeBalanceCalculationModal);
+            });
+
+            const modal = document.getElementById('balance-calculation-modal');
+            if (modal && modal.dataset.balanceCalcBackdropBound !== 'true') {
+                modal.dataset.balanceCalcBackdropBound = 'true';
+                modal.addEventListener('click', event => {
+                    if (event.target === modal) closeBalanceCalculationModal();
+                });
+            }
         }
 
         function setMetricScope(scope) {
@@ -480,3 +597,9 @@
             const allTx = allTransactions || window.allDecryptedTransactions || [];
             return computeSummaryMetrics(allTx, 'all_time', { filteredTransactions: allTx }).balance;
         }
+
+        window.openBalanceCalculationModal = openBalanceCalculationModal;
+        window.closeBalanceCalculationModal = closeBalanceCalculationModal;
+        window.handleBalanceCalculationTriggerKey = handleBalanceCalculationTriggerKey;
+
+        initBalanceCalculationModalControls();

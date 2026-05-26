@@ -91,6 +91,11 @@
                 const isDebtCashIn = typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(i);
                 const isDebtInc = i.type === 'debt_increase' || isDebtCashIn;
                 const isInc = i.type === 'income' && !isDebtCashIn;
+                const isNonIncomeCashIn = (typeof isNonIncomeCashInTx === 'function'
+                    ? isNonIncomeCashInTx(i)
+                    : (i.type === 'non_income_cash_in' || i.type === 'crypto_sell_proceeds'))
+                    || isDebtCashIn
+                    || (i.type === 'income' && String(i.category || '').trim().startsWith('Lent: '));
                 const isCryptoSellProceeds = typeof isAutoCryptoSellProceedsTx === 'function'
                     ? isAutoCryptoSellProceedsTx(i)
                     : i.type === 'crypto_sell_proceeds';
@@ -135,6 +140,9 @@
                 const cryptoSaleBadge = isCryptoSellProceeds
                     ? '<span class="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">CRYPTO SALE</span>'
                     : '';
+                const nonIncomeCashInBadge = isNonIncomeCashIn
+                    ? '<span class="text-[9px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded font-bold">NOT INCOME</span>'
+                    : '';
                 const installmentBadge = isInstallmentPay
                     ? '<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">BNPL PAYMENT</span>'
                     : '';
@@ -144,11 +152,11 @@
                 const managedBadge = featureLockInfo
                     ? `<span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">MANAGED • ${escapeHTML(featureLockInfo.feature)}</span>`
                     : '';
-                const badges = [currencyBadge, creditCardBadge, cryptoSaleBadge, installmentBadge, debtPaymentBadge, debtIncreaseBadge, orphanedDebtBadge, managedBadge].filter(Boolean).join(' ');
+                const badges = [currencyBadge, creditCardBadge, cryptoSaleBadge, nonIncomeCashInBadge, installmentBadge, debtPaymentBadge, debtIncreaseBadge, orphanedDebtBadge, managedBadge].filter(Boolean).join(' ');
 
                 // Icon & Color Logic
                 let iconBg, iconText, amountColor, sign, amountText;
-                if (isInc || isCryptoSellProceeds) {
+                if (isInc || isNonIncomeCashIn) {
                     iconBg = 'bg-emerald-50'; iconText = 'text-emerald-600';
                     amountColor = 'text-emerald-600'; sign = '+';
                 } else if (isDebtInc) {
@@ -257,7 +265,9 @@
                     }
                 }
 
-                if (t.type === 'income' && category.startsWith('Lent: ')) {
+                const isLentRepaymentCashIn = category.startsWith('Lent: ')
+                    && (t.type === 'income' || (typeof isNonIncomeCashInTx === 'function' && isNonIncomeCashInTx(t)));
+                if (isLentRepaymentCashIn) {
                     lentIncomeByCategory[category] = (lentIncomeByCategory[category] || 0) + amt;
                     const lentId = String(t.lentId || '').trim();
                     if (lentId) {

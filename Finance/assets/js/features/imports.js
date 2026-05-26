@@ -152,6 +152,13 @@
 
         function parseTransactionType(rawType, rawAmount) {
             const t = String(rawType || '').trim().toLowerCase();
+            if (
+                t.includes('non-income') ||
+                t.includes('non income') ||
+                t.includes('not income') ||
+                t.includes('cash in not income') ||
+                t === 'non_income_cash_in'
+            ) return 'non_income_cash_in';
             if (t.includes('income') || t.includes('credit') || t === 'in') return 'income';
             if (t.includes('expense') || t.includes('debit') || t === 'out') return 'expense';
             const amount = parseFloat(rawAmount);
@@ -246,7 +253,7 @@
                 const tags = parseTags(rawTags);
 
                 const ruleCategory = applyCategorizationRules(desc, amtPHP, type);
-                const category = rawCategory || ruleCategory || (type === 'income' ? 'Salary' : 'Others');
+                const category = rawCategory || ruleCategory || (type === 'income' ? 'Salary' : (type === 'non_income_cash_in' ? 'Non-Income Cash In' : 'Others'));
                 const dedupeHash = `${new Date(date).toISOString().split('T')[0]}|${amtPHP.toFixed(2)}|${normalizeTextForMatching(desc)}|${currency}`;
 
                 return {

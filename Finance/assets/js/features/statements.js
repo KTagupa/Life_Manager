@@ -121,7 +121,7 @@ function statementsBuildDebtAndLentAggregates(transactions) {
             debtBorrowedByCategory[category] = (debtBorrowedByCategory[category] || 0) + debtBorrowDelta;
         }
 
-        if (tx.type === 'income' && category.startsWith('Lent: ')) {
+        if (category.startsWith('Lent: ') && (tx.type === 'income' || (typeof isNonIncomeCashInTx === 'function' && isNonIncomeCashInTx(tx)))) {
             lentIncomeByCategory[category] = (lentIncomeByCategory[category] || 0) + amount;
         }
     });
@@ -577,6 +577,10 @@ async function computeStatementForMonth(monthKey) {
     let savingsContribution = 0;
     let creditCardBorrowing = 0;
     let creditCardPayments = 0;
+    let cashRecoveryIn = 0;
+    let assetSaleIn = 0;
+    let ownTransferIn = 0;
+    let otherNonIncomeCashIn = 0;
 
     monthTransactions.forEach(tx => {
         const amount = Number(tx?.amt || 0);
@@ -585,9 +589,12 @@ async function computeStatementForMonth(monthKey) {
         const categoryLower = category.toLowerCase();
 
         if (tx.type === 'income') {
-            income += typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(tx) : amount;
+            const reportedIncome = typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(tx) : amount;
+            income += reportedIncome;
             if (typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(tx)) {
                 debtCashIn += amount;
+            } else if (reportedIncome <= 0 && category.startsWith('Lent: ')) {
+                cashRecoveryIn += amount;
             }
             return;
         }
@@ -595,6 +602,22 @@ async function computeStatementForMonth(monthKey) {
         if (tx.type === 'debt_increase') {
             if (typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(tx)) {
                 debtCashIn += amount;
+            }
+            return;
+        }
+
+        if (typeof isNonIncomeCashInTx === 'function' && isNonIncomeCashInTx(tx)) {
+            const isCryptoSellMirror = typeof isAutoCryptoSellProceedsTx === 'function' && isAutoCryptoSellProceedsTx(tx);
+            if (isCryptoSellMirror) return;
+
+            if (category.startsWith('Lent: ') || categoryLower.includes('refund') || categoryLower.includes('reimburse')) {
+                cashRecoveryIn += amount;
+            } else if (categoryLower.includes('asset sale') || categoryLower.includes('asset')) {
+                assetSaleIn += amount;
+            } else if (categoryLower.includes('own transfer') || categoryLower.includes('transfer')) {
+                ownTransferIn += amount;
+            } else {
+                otherNonIncomeCashIn += amount;
             }
             return;
         }
@@ -645,11 +668,12 @@ async function computeStatementForMonth(monthKey) {
     const ebitdaMargin = income > 0 ? (ebitda / income) * 100 : 0;
     const netMargin = income > 0 ? (netIncome / income) * 100 : 0;
 
-    const operatingCashFlow = income - costOfEarning - operatingExpenses;
-    const investingCashFlow = -(savingsContribution + cryptoPosition.buyOutflowInMonth) + cryptoPosition.sellInflowInMonth;
-    const financingCashFlow = debtCashIn + creditCardBorrowing - debtService - creditCardPayments;
+    const operatingCashFlow = income - costOfEarning - operatingExpenses + cashRecoveryIn;
+    const investingCashFlow = -(savingsContribution + cryptoPosition.buyOutflowInMonth) + cryptoPosition.sellInflowInMonth + assetSaleIn;
+    const financingCashFlow = debtCashIn + creditCardBorrowing + otherNonIncomeCashIn - debtService - creditCardPayments;
+    const nonIncomeCashIn = cashRecoveryIn + assetSaleIn + ownTransferIn + otherNonIncomeCashIn;
     const freeCashFlow = operatingCashFlow + investingCashFlow;
-    const netCashFlow = operatingCashFlow + investingCashFlow + financingCashFlow;
+    const netCashFlow = operatingCashFlow + investingCashFlow + financingCashFlow + ownTransferIn;
 
     const cashFromTransactions = statementsComputeCashBalanceAsOf(range.endTs, allTransactions);
     const cash = cashFromTransactions - cryptoPosition.buyOutflowToDate + cryptoPosition.sellInflowToDate;
@@ -680,6 +704,11 @@ async function computeStatementForMonth(monthKey) {
         cashflow: {
             operatingCashFlow,
             investingCashFlow,
+            cashRecoveryIn,
+            assetSaleIn,
+            ownTransferIn,
+            otherNonIncomeCashIn,
+            nonIncomeCashIn,
             debtCashIn,
             creditCardBorrowing,
             creditCardPayments,
@@ -718,6 +747,10 @@ function statementsDescriptorKeyForLabel(label) {
         'ebitda': 'ebitda',
         'debt service': 'debt service',
         'debt cash in': 'financing cash flow',
+        'cash recovery': 'operating cash flow',
+        'asset sale in': 'investing cash flow',
+        'own transfer in': 'cash flow statement',
+        'other cash in': 'financing cash flow',
         'card borrowing': 'financing cash flow',
         'card payments': 'financing cash flow',
         'growth/investment': 'growth investment',
@@ -806,6 +839,10 @@ function renderStatementPanels(statement, source = 'live') {
     cfEl.innerHTML = [
         statementsMetricRow('Operating CF', fmt(Number(cashflow.operatingCashFlow || 0))),
         statementsMetricRow('Investing CF', fmt(Number(cashflow.investingCashFlow || 0))),
+        statementsMetricRow('Cash Recovery', fmt(Number(cashflow.cashRecoveryIn || 0))),
+        statementsMetricRow('Asset Sale In', fmt(Number(cashflow.assetSaleIn || 0))),
+        statementsMetricRow('Own Transfer In', fmt(Number(cashflow.ownTransferIn || 0))),
+        statementsMetricRow('Other Cash In', fmt(Number(cashflow.otherNonIncomeCashIn || 0))),
         statementsMetricRow('Debt Cash In', fmt(Number(cashflow.debtCashIn || 0))),
         statementsMetricRow('Card Borrowing', fmt(Number(cashflow.creditCardBorrowing || 0))),
         statementsMetricRow('Card Payments', fmt(Number(cashflow.creditCardPayments || 0))),
@@ -960,6 +997,10 @@ async function exportStatementToPDF(statement, sourceLabel = 'Live') {
         const cashFlowRows = [
             ['Operating CF', fmt(Number(statement?.cashflow?.operatingCashFlow || 0))],
             ['Investing CF', fmt(Number(statement?.cashflow?.investingCashFlow || 0))],
+            ['Cash Recovery', fmt(Number(statement?.cashflow?.cashRecoveryIn || 0))],
+            ['Asset Sale In', fmt(Number(statement?.cashflow?.assetSaleIn || 0))],
+            ['Own Transfer In', fmt(Number(statement?.cashflow?.ownTransferIn || 0))],
+            ['Other Cash In', fmt(Number(statement?.cashflow?.otherNonIncomeCashIn || 0))],
             ['Debt Cash In', fmt(Number(statement?.cashflow?.debtCashIn || 0))],
             ['Card Borrowing', fmt(Number(statement?.cashflow?.creditCardBorrowing || 0))],
             ['Card Payments', fmt(Number(statement?.cashflow?.creditCardPayments || 0))],
@@ -1102,6 +1143,12 @@ async function generateMonthlyStatementSnapshot() {
             cashflow: {
                 operatingCashFlow: Number(statement?.cashflow?.operatingCashFlow || 0),
                 investingCashFlow: Number(statement?.cashflow?.investingCashFlow || 0),
+                cashRecoveryIn: Number(statement?.cashflow?.cashRecoveryIn || 0),
+                assetSaleIn: Number(statement?.cashflow?.assetSaleIn || 0),
+                ownTransferIn: Number(statement?.cashflow?.ownTransferIn || 0),
+                otherNonIncomeCashIn: Number(statement?.cashflow?.otherNonIncomeCashIn || 0),
+                nonIncomeCashIn: Number(statement?.cashflow?.nonIncomeCashIn || 0),
+                debtCashIn: Number(statement?.cashflow?.debtCashIn || 0),
                 creditCardBorrowing: Number(statement?.cashflow?.creditCardBorrowing || 0),
                 creditCardPayments: Number(statement?.cashflow?.creditCardPayments || 0),
                 financingCashFlow: Number(statement?.cashflow?.financingCashFlow || 0),

@@ -2289,7 +2289,7 @@
                 originalCurrency: supportedCurrency,
                 quantity: 1,
                 notes: buildCryptoSellProceedsNotes(cryptoTx),
-                type: 'crypto_sell_proceeds',
+                type: 'non_income_cash_in',
                 category: CRYPTO_SELL_PROCEEDS_CATEGORY,
                 paymentSource: 'cash',
                 creditCardId: null,

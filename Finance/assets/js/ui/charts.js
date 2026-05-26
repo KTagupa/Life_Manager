@@ -188,7 +188,7 @@
                 const date = new Date(getTxTimestamp(t));
                 const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                 if (monthlyData[key]) {
-                    if (t.type === 'income') monthlyData[key].income += t.amt;
+                    if (t.type === 'income') monthlyData[key].income += typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.amt || 0);
                     else monthlyData[key].expense += typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0);
                 }
             });

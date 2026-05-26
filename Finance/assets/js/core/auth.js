@@ -297,10 +297,12 @@ function formatBridgePreviewAmount(amount, currency) {
 }
 
 function summarizeBridgePreviewItem(item) {
-    const type = item?.type === 'income' ? 'Income' : 'Expense';
+    const type = item?.type === 'income'
+        ? 'Income'
+        : (item?.type === 'non_income_cash_in' || item?.type === 'crypto_sell_proceeds' ? 'Non-Income Cash In' : 'Expense');
     const desc = String(item?.desc || 'Untitled');
     const amount = formatBridgePreviewAmount(item?.amt, item?.currency);
-    const category = String(item?.category || (item?.type === 'income' ? 'Salary' : 'Others'));
+    const category = String(item?.category || (item?.type === 'income' ? 'Salary' : (type === 'Non-Income Cash In' ? 'Non-Income Cash In' : 'Others')));
     const date = new Date(item?.date || Date.now()).toLocaleDateString();
     return `${type} • ${amount} • ${desc} • ${category} • ${date}`;
 }

@@ -50,10 +50,13 @@ function computeQuarterMetrics(year, quarter) {
         txCount++;
         const amount = t.amt || 0;
 
-        if (t.type === 'income') {
-            income += amount;
+        const reportedIncome = typeof getTxReportedIncomeDelta === 'function'
+            ? getTxReportedIncomeDelta(t)
+            : (t.type === 'income' ? amount : 0);
+        if (reportedIncome > 0) {
+            income += reportedIncome;
             const cat = t.category || 'Others';
-            incomeSources[cat] = (incomeSources[cat] || 0) + amount;
+            incomeSources[cat] = (incomeSources[cat] || 0) + reportedIncome;
         } else if ((typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? amount : 0)) > 0) {
             const expenseAmount = typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : amount;
             expenses += expenseAmount;
@@ -80,7 +83,10 @@ function computeQuarterMetrics(year, quarter) {
             const d = new Date(t.date);
             const tmk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
             if (tmk !== mk) return;
-            if (t.type === 'income') mIncome += t.amt || 0;
+            const reportedIncome = typeof getTxReportedIncomeDelta === 'function'
+                ? getTxReportedIncomeDelta(t)
+                : (t.type === 'income' ? (t.amt || 0) : 0);
+            if (reportedIncome > 0) mIncome += reportedIncome;
             else mExpense += typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0);
         });
         return { month: mk, income: mIncome, expense: mExpense, net: mIncome - mExpense };

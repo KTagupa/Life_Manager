@@ -27,7 +27,7 @@
 
         function getMonthlyMetrics(transactions, date) {
             const txs = getCurrentMonthTransactions(transactions, date);
-            const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amt, 0);
+            const income = txs.reduce((s, t) => s + (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.type === 'income' ? (t.amt || 0) : 0)), 0);
             const expense = txs.reduce((sum, t) => {
                 return sum + (typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0));
             }, 0);
