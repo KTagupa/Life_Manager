@@ -525,8 +525,9 @@ async function unlockApp() {
     setInterval(checkAndPerformAutoBackup, 60 * 60 * 1000); // Every hour
 }  // ← Make sure this closing brace is here!
 
-async function loadFromStorage() {
-    let db = await getDB();
+async function loadFromStorage(options = {}) {
+    const { forceRemote = false, notify = false } = options || {};
+    let db = await getDB({ forceRemote });
 
     const syncCryptoMirrors = typeof syncCryptoMirrorTransactionsInDB === 'function'
         ? syncCryptoMirrorTransactionsInDB
@@ -575,6 +576,14 @@ async function loadFromStorage() {
     await runLoadStep('credit-cards', async () => renderCreditCards(rawCreditCards));
     await runLoadStep('installments-bnpl', async () => renderInstallmentPlans(rawInstallmentPlans));
     await runLoadStep('lent', async () => renderLent(rawLent));
+    await runLoadStep('ledger-linked-records-refresh', async () => {
+        if (typeof refreshTransactionCategorySelect === 'function') {
+            refreshTransactionCategorySelect();
+        }
+        if (typeof applyFilters === 'function') {
+            applyFilters();
+        }
+    });
     await runLoadStep('post-ledger-refresh', async () => {
         if (typeof refreshBusinessKPIPanel === 'function') {
             await refreshBusinessKPIPanel();
@@ -639,4 +648,43 @@ async function loadFromStorage() {
     if (typeof refreshStorageDiagnosticsPanel === 'function') {
         await runLoadStep('storage-diagnostics', async () => refreshStorageDiagnosticsPanel());
     }
+    if (notify && typeof showToast === 'function') {
+        showToast('Recent movements refreshed');
+    }
 }
+
+async function refreshRecentMovementsData() {
+    const button = document.getElementById('btn-refresh-recent-movements');
+    const icon = button?.querySelector('[data-lucide="refresh-cw"]');
+    if (button?.dataset.refreshing === 'true') return;
+
+    if (button) {
+        button.dataset.refreshing = 'true';
+        button.disabled = true;
+        button.classList.add('opacity-70', 'cursor-wait');
+    }
+    if (icon) icon.classList.add('animate-spin');
+
+    try {
+        await loadFromStorage({ forceRemote: true, notify: true });
+    } catch (error) {
+        console.error('Recent movements refresh failed.', error);
+        if (typeof showToast === 'function') {
+            showToast('Could not refresh recent movements');
+        } else {
+            alert('Could not refresh recent movements.');
+        }
+    } finally {
+        if (icon) icon.classList.remove('animate-spin');
+        if (button) {
+            button.disabled = false;
+            button.classList.remove('opacity-70', 'cursor-wait');
+            delete button.dataset.refreshing;
+        }
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }
+}
+
+window.refreshRecentMovementsData = refreshRecentMovementsData;

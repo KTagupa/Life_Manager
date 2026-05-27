@@ -2972,11 +2972,11 @@
             editingCryptoTransactionState = null;
             toggleModal('crypto-transaction-modal');
 
-            await syncCryptoMirrorTransactionsInDB(db);
-            await saveDB(db);
+            const syncResult = await syncCryptoMirrorTransactionsInDB(db);
+            const savedDB = await saveDB(syncResult?.db || db);
 
-            rawCrypto = (db.crypto || []).filter(c => !c.deletedAt);
-            rawTransactions = (db.transactions || []).filter(t => !t.deletedAt);
+            rawCrypto = (savedDB.crypto || []).filter(c => !c.deletedAt);
+            rawTransactions = (savedDB.transactions || []).filter(t => !t.deletedAt);
             invalidateCryptoComputationCache();
             await loadFromStorage();
         }
