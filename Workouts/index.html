@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Workouts | Life Manager</title>
+    <link rel="stylesheet" href="../assets/css/workout-app.css">
+</head>
+
+<body>
+    <div class="workout-app-shell">
+        <header class="workout-app-topbar">
+            <div class="workout-app-brand">
+                <a class="workout-app-back" href="../index.html" aria-label="Back to Life Manager">&lt;</a>
+                <div>
+                    <strong>Workouts</strong>
+                    <span id="workout-app-today-label">Today</span>
+                </div>
+            </div>
+            <nav class="workout-app-tabs" aria-label="Workout sections">
+                <button type="button" class="workout-app-tab active" data-tab="today">Today</button>
+                <button type="button" class="workout-app-tab" data-tab="session">Session</button>
+                <button type="button" class="workout-app-tab" data-tab="routines">Routines</button>
+                <button type="button" class="workout-app-tab" data-tab="library">Library</button>
+                <button type="button" class="workout-app-tab" data-tab="progress">Progress</button>
+            </nav>
+        </header>
+
+        <main id="workout-app-view" class="workout-app-view" tabindex="-1">
+            <div class="workout-app-loading">Loading workouts...</div>
+        </main>
+    </div>
+
+    <div id="workout-app-toast" class="workout-app-toast" role="status" aria-live="polite"></div>
+
+    <script src="../assets/js/workoutCore.js"></script>
+    <script src="../assets/js/workoutStore.js"></script>
+    <script src="../assets/js/workoutApp.js"></script>
+</body>
+
+</html>

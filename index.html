@@ -139,8 +139,8 @@
                     data-tooltip="Habits (Optn+H)" aria-label="Habits (Optn+H)">✅</button>
                 <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleWorkouts()"
                     data-tooltip="Workouts" aria-label="Workouts">🏋</button>
-                <button class="toolbar-icon-btn toolbar-menu-action" onclick="openWorkoutStudioModal()"
-                    data-tooltip="Workout Studio" aria-label="Workout Studio">📈</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="openWorkoutSubapp()"
+                    data-tooltip="Open Workouts" aria-label="Open Workouts">📈</button>
                 <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleAgenda()"
                     data-tooltip="Planner (Optn+A)" aria-label="Planner (Optn+A)">📅</button>
                 <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleNotesPanel()"
@@ -804,7 +804,8 @@
         <div class="panel-header-row">
             <span>🏋 Workouts</span>
             <div class="workout-panel-header-actions">
-                <button class="btn btn-primary" onclick="openWorkoutStudioModal()">Studio</button>
+                <button class="btn" onclick="openWorkoutStudioModal('calendar')">Calendar</button>
+                <button class="btn btn-primary" onclick="openWorkoutSubapp()">Open Workouts</button>
                 <button class="btn" onclick="toggleWorkouts()">✕</button>
             </div>
         </div>
@@ -833,7 +834,7 @@
                 </label>
                 <label>
                     <span>Minutes</span>
-                    <input type="number" id="workout-duration-input" min="5" max="240" step="5" value="30">
+                    <input type="number" id="workout-duration-input" min="5" max="240" step="5" placeholder="Optional">
                 </label>
             </div>
         </div>
@@ -844,23 +845,6 @@
                 <span id="workout-summary-meta">0 scheduled today</span>
             </div>
             <div id="workout-summary-next" class="workout-summary-next">Add a workout movement to begin.</div>
-        </div>
-
-        <div class="workout-calendar-panel">
-            <div class="workout-calendar-toolbar">
-                <button type="button" class="workout-icon-btn" onclick="changeWorkoutCalendarDate(-1)" aria-label="Previous workout calendar period">&lt;</button>
-                <div id="workout-calendar-title" class="workout-calendar-title">This Week</div>
-                <button type="button" class="workout-icon-btn" onclick="changeWorkoutCalendarDate(1)" aria-label="Next workout calendar period">&gt;</button>
-            </div>
-            <div class="workout-calendar-mode-row">
-                <div class="workout-calendar-mode-switch panel-slider" id="workout-calendar-mode-switch" aria-label="Workout calendar view">
-                    <button type="button" class="workout-calendar-mode-btn panel-slider-option active" data-workout-calendar-view="week" onclick="setWorkoutCalendarView('week')">Week</button>
-                    <button type="button" class="workout-calendar-mode-btn panel-slider-option" data-workout-calendar-view="month" onclick="setWorkoutCalendarView('month')">Month</button>
-                </div>
-                <button type="button" class="workout-calendar-today-btn" onclick="goToWorkoutCalendarToday()">Today</button>
-            </div>
-            <div id="workout-calendar-grid" class="workout-calendar-grid workout-calendar-week"></div>
-            <div id="workout-calendar-day-detail" class="workout-calendar-day-detail"></div>
         </div>
 
         <div class="panel-list workout-list" id="workouts-list-container"></div>
@@ -1941,6 +1925,8 @@
     <script defer src="assets/js/note-maximize.js"></script>
     <script defer src="assets/js/notes.js"></script>
     <script defer src="assets/js/goals-habits.js"></script>
+    <script defer src="assets/js/workoutCore.js"></script>
+    <script defer src="assets/js/workoutStore.js"></script>
     <script defer src="assets/js/workouts.js"></script>
     <script defer src="assets/js/graph.js"></script>
     <script defer src="assets/js/ai-urgency.js"></script>
