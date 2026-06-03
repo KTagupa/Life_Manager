@@ -7,6 +7,7 @@ let lifeGoals = {};
 let habits = [];
 let workouts = [];
 let workoutRoutines = [];
+let workoutSessions = [];
 let notes = [];
 let reminders = [];
 let projects = [];
@@ -372,6 +373,7 @@ function pushHistory() {
         habits,
         workouts,
         workoutRoutines,
+        workoutSessions,
         notes,
         agenda,
         reminders
@@ -421,6 +423,7 @@ function restoreHistory() {
     habits = state.habits || [];
     workouts = state.workouts || [];
     workoutRoutines = state.workoutRoutines || [];
+    workoutSessions = state.workoutSessions || [];
     notes = state.notes || [];
     agenda = state.agenda || [];
     reminders = state.reminders || [];
@@ -795,6 +798,7 @@ function initDemoData() {
     habits = [];
     workouts = [];
     workoutRoutines = [];
+    workoutSessions = [];
     notes = [];
     agenda = [];
     quickLinks = [];
@@ -874,7 +878,7 @@ function saveToStorageImmediate() {
         aiUrgencyConfig: normalizeAiUrgencyConfig(aiUrgencyConfig),
         projects,
         nodes, archivedNodes, inbox, lifeGoals, notes, githubToken,
-        gistId, habits, workouts, workoutRoutines, agenda, pinnedItems, quickLinks, reminders, noteSettings, remindersModalPosition,
+        gistId, habits, workouts, workoutRoutines, workoutSessions, agenda, pinnedItems, quickLinks, reminders, noteSettings, remindersModalPosition,
         hiddenNodeGroups: Array.from(hiddenNodeGroups),
         timestamp: Date.now()
     };
@@ -1094,6 +1098,7 @@ function restoreStateData(parsed) {
     habits = migrated.habits || [];
     workouts = migrated.workouts || [];
     workoutRoutines = migrated.workoutRoutines || [];
+    workoutSessions = migrated.workoutSessions || [];
     notes = migrated.notes || [];
     reminders = migrated.reminders || [];
     githubToken = migrated.githubToken || '';
@@ -1289,6 +1294,14 @@ function sanitizeLoadedData() {
     } else {
         workoutRoutines = workoutRoutines.filter(routine => routine && typeof routine === 'object');
     }
+    if (!Array.isArray(workoutSessions)) workoutSessions = [];
+    if (typeof normalizeWorkoutSessionCollection === 'function') {
+        workoutSessions = normalizeWorkoutSessionCollection(workoutSessions);
+    } else if (window.WorkoutCore && typeof window.WorkoutCore.normalizeSessionCollection === 'function') {
+        workoutSessions = window.WorkoutCore.normalizeSessionCollection(workoutSessions);
+    } else {
+        workoutSessions = workoutSessions.filter(session => session && typeof session === 'object');
+    }
     // --- REMINDERS CLEANUP ---
     if (!Array.isArray(reminders)) reminders = [];
     const isValidType = (type) => ['task', 'subtask', 'note', 'habit', 'inbox'].includes(type);
@@ -1378,6 +1391,7 @@ function updateDataMetrics() {
         'Habits': habits,
         'Workouts': workouts,
         'Workout Routines': workoutRoutines,
+        'Workout Sessions': workoutSessions,
         'Reminders': reminders,
         'Finance': financeData,
         'Goals': lifeGoals
@@ -1458,6 +1472,7 @@ function saveData(download = false) {
         habits,
         workouts,
         workoutRoutines,
+        workoutSessions,
         agenda,
         quickLinks,
         reminders
@@ -1507,6 +1522,7 @@ function loadFile(input) {
                 habits = [];
                 workouts = [];
                 workoutRoutines = [];
+                workoutSessions = [];
                 agenda = [];
                 reminders = [];
             } else {
@@ -1520,6 +1536,7 @@ function loadFile(input) {
                 habits = parsed.habits || [];
                 workouts = parsed.workouts || [];
                 workoutRoutines = parsed.workoutRoutines || [];
+                workoutSessions = parsed.workoutSessions || [];
                 notes = parsed.notes || [];
                 archivedNodes = parsed.archivedNodes || [];
                 agenda = parsed.agenda || [];
@@ -1584,6 +1601,7 @@ async function clearData() {
     habits = [];
     workouts = [];
     workoutRoutines = [];
+    workoutSessions = [];
     agenda = [];
     quickLinks = [];
     reminders = [];

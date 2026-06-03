@@ -1648,6 +1648,7 @@ async function pushToGist() {
             habits: typeof habits !== 'undefined' ? habits : [],
             workouts: typeof workouts !== 'undefined' ? workouts : [],
             workoutRoutines: typeof workoutRoutines !== 'undefined' ? workoutRoutines : [],
+            workoutSessions: typeof workoutSessions !== 'undefined' ? workoutSessions : [],
             agenda: agenda || [],
             reminders: reminders || [],
             noteSettings: noteSettings || { categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`) },
@@ -2105,6 +2106,30 @@ function mergeStates(local, remote) {
         return (typeof normalizeWorkoutRoutineCollection === 'function') ? normalizeWorkoutRoutineCollection(merged) : merged;
     };
 
+    const mergeWorkoutSessionCollections = (localSessions, remoteSessions) => {
+        const byId = new Map();
+        [
+            ...(Array.isArray(localSessions) ? localSessions : []),
+            ...(Array.isArray(remoteSessions) ? remoteSessions : [])
+        ].forEach(session => {
+            if (!session || typeof session !== 'object') return;
+            const id = String(session.id || '').trim();
+            if (!id) return;
+            const existing = byId.get(id);
+            if (!existing) {
+                byId.set(id, session);
+                return;
+            }
+            const sessionTs = Math.max(Number(session.updatedAt) || 0, Number(session.completedAt) || 0, Number(session.createdAt) || 0);
+            const existingTs = Math.max(Number(existing.updatedAt) || 0, Number(existing.completedAt) || 0, Number(existing.createdAt) || 0);
+            byId.set(id, sessionTs >= existingTs ? session : existing);
+        });
+        const merged = Array.from(byId.values());
+        if (typeof normalizeWorkoutSessionCollection === 'function') return normalizeWorkoutSessionCollection(merged);
+        if (window.WorkoutCore && typeof window.WorkoutCore.normalizeSessionCollection === 'function') return window.WorkoutCore.normalizeSessionCollection(merged);
+        return merged;
+    };
+
     const mergeNoteSettings = (localSettings, remoteSettings) => {
         const localObj = (localSettings && typeof localSettings === 'object') ? localSettings : {};
         const remoteObj = (remoteSettings && typeof remoteSettings === 'object') ? remoteSettings : {};
@@ -2355,6 +2380,7 @@ function mergeStates(local, remote) {
         habits: mergeHabitCollections(local && local.habits, remote && remote.habits),
         workouts: mergeWorkoutCollections(local && local.workouts, remote && remote.workouts),
         workoutRoutines: mergeWorkoutRoutineCollections(local && local.workoutRoutines, remote && remote.workoutRoutines),
+        workoutSessions: mergeWorkoutSessionCollections(local && local.workoutSessions, remote && remote.workoutSessions),
         notes: [],
         agenda: mergeAgendaCollections(local && local.agenda, remote && remote.agenda),
         reminders: [],
@@ -2535,6 +2561,7 @@ async function pullFromGist() {
             nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda, reminders, noteSettings,
             workouts: typeof workouts !== 'undefined' ? workouts : [],
             workoutRoutines: typeof workoutRoutines !== 'undefined' ? workoutRoutines : [],
+            workoutSessions: typeof workoutSessions !== 'undefined' ? workoutSessions : [],
             geminiUsageStats: normalizeGeminiUsageSnapshotForSync(geminiUsageStats)
         };
 
@@ -2581,6 +2608,7 @@ async function pullFromGist() {
         habits = mergedState.habits || [];
         workouts = mergedState.workouts || [];
         workoutRoutines = mergedState.workoutRoutines || [];
+        workoutSessions = mergedState.workoutSessions || [];
         agenda = mergedState.agenda || [];
         reminders = mergedState.reminders || [];
         if (mergedState.noteSettings && typeof mergedState.noteSettings === 'object') {

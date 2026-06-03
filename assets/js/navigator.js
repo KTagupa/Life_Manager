@@ -1168,6 +1168,10 @@ function openFlockTrackSubpage() {
     window.location.href = 'flocktrack/index.html';
 }
 
+function openWorkoutSubapp() {
+    window.location.href = 'Workouts/index.html';
+}
+
 function isProjectDetailsModalOpen() {
     const modal = document.getElementById('project-details-modal');
     return !!(modal && modal.classList.contains('visible'));

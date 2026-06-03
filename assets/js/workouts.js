@@ -45,6 +45,9 @@ function addWorkoutDays(date, days) {
 }
 
 function normalizeWorkoutWeekdays(days) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeWeekdays === 'function') {
+        return window.WorkoutCore.normalizeWeekdays(days);
+    }
     const source = Array.isArray(days) ? days : [new Date().getDay()];
     const unique = Array.from(new Set(source.map(day => Number(day)).filter(day => Number.isInteger(day) && day >= 0 && day <= 6)));
     return (unique.length > 0 ? unique : [new Date().getDay()]).sort((a, b) => a - b);
@@ -86,13 +89,33 @@ function normalizeWorkoutLevels(levels) {
 }
 
 function normalizeWorkoutSchedule(schedule) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeSchedule === 'function') {
+        return window.WorkoutCore.normalizeSchedule(schedule);
+    }
     const source = schedule && typeof schedule === 'object' ? schedule : {};
     const time = /^\d{2}:\d{2}$/.test(source.time || '') ? source.time : '';
-    const duration = Math.max(5, Math.min(240, Math.round(Number(source.durationMinutes) || 30)));
+    const rawDuration = source.durationMinutes;
+    const hasDuration = rawDuration !== undefined && rawDuration !== null && String(rawDuration).trim() !== '';
+    const parsedDuration = Number(rawDuration);
+    const duration = hasDuration
+        ? Math.max(5, Math.min(240, Math.round(Number.isFinite(parsedDuration) ? parsedDuration : 30)))
+        : null;
     return {
         weekdays: normalizeWorkoutWeekdays(source.weekdays),
         time,
         durationMinutes: duration
+    };
+}
+
+function normalizeWorkoutProgressionPolicy(policy) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeProgressionPolicy === 'function') {
+        return window.WorkoutCore.normalizeProgressionPolicy(policy);
+    }
+    const source = policy && typeof policy === 'object' ? policy : {};
+    return {
+        requiredSets: Math.max(1, Math.min(20, Math.round(Number(source.requiredSets) || WORKOUT_REQUIRED_SETS))),
+        normalSetReps: Math.max(1, Math.min(9999, Math.round(Number(source.normalSetReps) || WORKOUT_NORMAL_SET_REPS))),
+        advancedSetReps: Math.max(1, Math.min(9999, Math.round(Number(source.advancedSetReps) || WORKOUT_ADVANCED_SET_REPS)))
     };
 }
 
@@ -139,7 +162,8 @@ function normalizeWorkoutHistory(events, workoutId, validLevelIds) {
         .slice(-1000);
 }
 
-function normalizeWorkoutLogs(logs, workoutId, validLevelIds) {
+function normalizeWorkoutLogs(logs, workoutId, validLevelIds, policy = null) {
+    const safePolicy = normalizeWorkoutProgressionPolicy(policy);
     const seen = new Set();
     return (Array.isArray(logs) ? logs : [])
         .map((log) => {
@@ -159,10 +183,11 @@ function normalizeWorkoutLogs(logs, workoutId, validLevelIds) {
                 levelId,
                 scheduledDateKey,
                 reps,
-                targetRepsAtLog: Number(log.targetRepsAtLog) === WORKOUT_ADVANCED_SET_REPS ? WORKOUT_ADVANCED_SET_REPS : WORKOUT_NORMAL_SET_REPS,
-                source: log.source === 'routine' ? 'routine' : 'manual',
+                targetRepsAtLog: Math.max(1, Math.round(Number(log.targetRepsAtLog) || safePolicy.normalSetReps)),
+                source: log.source === 'routine' || log.source === 'session' ? log.source : 'manual',
                 routineId: String(log.routineId || '').trim(),
                 routineRunId: String(log.routineRunId || '').trim(),
+                sessionId: String(log.sessionId || '').trim(),
                 createdAt
             };
         })
@@ -172,13 +197,17 @@ function normalizeWorkoutLogs(logs, workoutId, validLevelIds) {
 }
 
 function normalizeWorkoutForRuntime(workout) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeWorkout === 'function') {
+        return window.WorkoutCore.normalizeWorkout(workout);
+    }
     const source = workout && typeof workout === 'object' ? workout : {};
     const now = Date.now();
     const levels = normalizeWorkoutLevels(source.levels);
     const validLevelIds = new Set(levels.map(level => level.id));
     const currentLevelId = validLevelIds.has(source.currentLevelId) ? source.currentLevelId : levels[0].id;
     const pendingLevelId = validLevelIds.has(source.pendingLevelId) ? source.pendingLevelId : null;
-    const targetReps = Number(source.targetReps) === WORKOUT_ADVANCED_SET_REPS ? WORKOUT_ADVANCED_SET_REPS : WORKOUT_NORMAL_SET_REPS;
+    const progressionPolicy = normalizeWorkoutProgressionPolicy(source.progressionPolicy);
+    const targetReps = Number(source.targetReps) === progressionPolicy.advancedSetReps ? progressionPolicy.advancedSetReps : progressionPolicy.normalSetReps;
     const currentLevelStartedAt = Number(source.currentLevelStartedAt) || Number(source.createdAt) || now;
 
     workout.id = String(source.id || '').trim() || createWorkoutId('workout');
@@ -186,11 +215,12 @@ function normalizeWorkoutForRuntime(workout) {
     workout.unit = 'reps';
     workout.levels = levels;
     workout.currentLevelId = currentLevelId;
+    workout.progressionPolicy = progressionPolicy;
     workout.targetReps = targetReps;
     workout.currentLevelStartedAt = currentLevelStartedAt;
     workout.schedule = normalizeWorkoutSchedule(source.schedule);
     workout.deloadPolicy = normalizeWorkoutDeloadPolicy(source.deloadPolicy);
-    workout.logs = normalizeWorkoutLogs(source.logs, workout.id, validLevelIds).map(log => ({
+    workout.logs = normalizeWorkoutLogs(source.logs, workout.id, validLevelIds, progressionPolicy).map(log => ({
         ...log,
         workoutId: workout.id
     }));
@@ -210,6 +240,9 @@ function normalizeWorkoutForRuntime(workout) {
 }
 
 function normalizeWorkoutCollection(rawWorkouts) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeWorkoutCollection === 'function') {
+        return window.WorkoutCore.normalizeWorkoutCollection(rawWorkouts);
+    }
     const seen = new Set();
     return (Array.isArray(rawWorkouts) ? rawWorkouts : [])
         .map(workout => normalizeWorkoutForRuntime(workout))
@@ -221,6 +254,9 @@ function normalizeWorkoutCollection(rawWorkouts) {
 }
 
 function normalizeWorkoutRoutineStep(step, index = 0) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeRoutineStep === 'function') {
+        return window.WorkoutCore.normalizeRoutineStep(step, index);
+    }
     const source = step && typeof step === 'object' ? step : {};
     const type = source.type === 'rest' ? 'rest' : 'workout';
     const durationSeconds = Math.max(5, Math.min(3600, Math.round(Number(source.durationSeconds) || (type === 'rest' ? WORKOUT_ROUTINE_DEFAULT_REST_SECONDS : WORKOUT_ROUTINE_DEFAULT_WORK_SECONDS))));
@@ -238,6 +274,9 @@ function normalizeWorkoutRoutineStep(step, index = 0) {
 }
 
 function normalizeWorkoutRoutine(routine) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeRoutine === 'function') {
+        return window.WorkoutCore.normalizeRoutine(routine);
+    }
     const source = routine && typeof routine === 'object' ? routine : {};
     const now = Date.now();
     const steps = (Array.isArray(source.steps) ? source.steps : [])
@@ -256,6 +295,9 @@ function normalizeWorkoutRoutine(routine) {
 }
 
 function normalizeWorkoutRoutineCollection(rawRoutines) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeRoutineCollection === 'function') {
+        return window.WorkoutCore.normalizeRoutineCollection(rawRoutines);
+    }
     const seen = new Set();
     return (Array.isArray(rawRoutines) ? rawRoutines : [])
         .map(routine => normalizeWorkoutRoutine(routine))
@@ -264,6 +306,13 @@ function normalizeWorkoutRoutineCollection(rawRoutines) {
             seen.add(routine.id);
             return true;
         });
+}
+
+function normalizeWorkoutSessionCollection(rawSessions) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeSessionCollection === 'function') {
+        return window.WorkoutCore.normalizeSessionCollection(rawSessions);
+    }
+    return (Array.isArray(rawSessions) ? rawSessions : []).filter(session => session && typeof session === 'object');
 }
 
 function getWorkoutById(workoutId) {
@@ -305,6 +354,9 @@ function getWorkoutLevel(workout, levelId) {
 
 function isWorkoutScheduledOnDate(workout, date = new Date()) {
     normalizeWorkoutForRuntime(workout);
+    const dateKey = getWorkoutDateKey(date);
+    const startKey = getWorkoutDateKey(new Date(Number(workout.createdAt) || Date.now()));
+    if (dateKey < startKey) return false;
     return workout.schedule.weekdays.includes(new Date(date).getDay());
 }
 
@@ -322,7 +374,8 @@ function getWorkoutScheduleLabel(workout) {
     normalizeWorkoutForRuntime(workout);
     const days = workout.schedule.weekdays.map(day => WORKOUT_WEEKDAYS[day]).join(', ');
     const time = workout.schedule.time ? ` at ${workout.schedule.time}` : '';
-    return `${days}${time} · ${workout.schedule.durationMinutes}m`;
+    const duration = Number(workout.schedule.durationMinutes) > 0 ? ` · ${workout.schedule.durationMinutes}m` : '';
+    return `${days}${time}${duration}`;
 }
 
 function getWorkoutDayLogs(workout, dateKey = getWorkoutDateKey(), levelId = null) {
@@ -335,9 +388,13 @@ function getWorkoutDayLogs(workout, dateKey = getWorkoutDateKey(), levelId = nul
 }
 
 function getWorkoutDayMetrics(workout, dateKey = getWorkoutDateKey()) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.getDayMetrics === 'function') {
+        return window.WorkoutCore.getDayMetrics(workout, dateKey);
+    }
     normalizeWorkoutForRuntime(workout);
     const date = parseWorkoutDateKey(dateKey) || new Date();
-    const targetReps = Number(workout.targetReps) === WORKOUT_ADVANCED_SET_REPS ? WORKOUT_ADVANCED_SET_REPS : WORKOUT_NORMAL_SET_REPS;
+    const policy = normalizeWorkoutProgressionPolicy(workout.progressionPolicy);
+    const targetReps = Number(workout.targetReps) === policy.advancedSetReps ? policy.advancedSetReps : policy.normalSetReps;
     const levelLogs = getWorkoutDayLogs(workout, dateKey, workout.currentLevelId);
     const qualifyingSets = levelLogs.filter(log => Number(log.reps) >= targetReps).length;
     const partialLogs = levelLogs.filter(log => Number(log.reps) < targetReps);
@@ -345,10 +402,11 @@ function getWorkoutDayMetrics(workout, dateKey = getWorkoutDateKey()) {
         dateKey,
         scheduled: isWorkoutScheduledOnDate(workout, date),
         targetReps,
+        requiredSets: policy.requiredSets,
         qualifyingSets,
         partialLogs,
         levelLogs,
-        completed: qualifyingSets >= WORKOUT_REQUIRED_SETS
+        completed: qualifyingSets >= policy.requiredSets
     };
 }
 
@@ -373,7 +431,7 @@ function applyPendingWorkoutProgression(workout, todayKey = getWorkoutDateKey())
     }
     const previousLevelId = workout.currentLevelId;
     workout.currentLevelId = workout.pendingLevelId;
-    workout.targetReps = WORKOUT_NORMAL_SET_REPS;
+    workout.targetReps = normalizeWorkoutProgressionPolicy(workout.progressionPolicy).normalSetReps;
     workout.currentLevelStartedAt = Date.now();
     workout.pendingLevelId = null;
     workout.pendingEffectiveDateKey = null;
@@ -396,7 +454,8 @@ function evaluateWorkoutProgression(workout, dateKey = getWorkoutDateKey()) {
     const currentIndex = levels.findIndex(level => level.id === workout.currentLevelId);
     if (currentIndex < 0) return false;
 
-    if (metrics.targetReps === WORKOUT_ADVANCED_SET_REPS) return false;
+    const policy = normalizeWorkoutProgressionPolicy(workout.progressionPolicy);
+    if (metrics.targetReps === policy.advancedSetReps) return false;
 
     if (currentIndex < levels.length - 1) {
         const nextLevelId = levels[currentIndex + 1].id;
@@ -413,7 +472,7 @@ function evaluateWorkoutProgression(workout, dateKey = getWorkoutDateKey()) {
         return true;
     }
 
-    workout.targetReps = WORKOUT_ADVANCED_SET_REPS;
+    workout.targetReps = policy.advancedSetReps;
     workout.highestMasteredLevelId = workout.currentLevelId;
     workout.highestMasteredAt = Date.now();
     workout.pendingLevelId = null;
@@ -422,7 +481,7 @@ function evaluateWorkoutProgression(workout, dateKey = getWorkoutDateKey()) {
     addWorkoutHistoryEvent(workout, 'highest_mastered', {
         dateKey,
         levelId: workout.currentLevelId,
-        payload: { targetReps: WORKOUT_ADVANCED_SET_REPS }
+        payload: { targetReps: policy.advancedSetReps }
     });
     return true;
 }
@@ -483,7 +542,7 @@ function resetWorkoutComposer() {
     const durationInput = document.getElementById('workout-duration-input');
     if (nameInput) nameInput.value = '';
     if (timeInput) timeInput.value = '';
-    if (durationInput) durationInput.value = '30';
+    if (durationInput) durationInput.value = '';
     workoutComposerWeekdays = new Set([new Date().getDay()]);
     syncWorkoutComposerMode();
 }
@@ -498,7 +557,7 @@ function saveWorkoutFromComposer() {
     const schedule = {
         weekdays: Array.from(workoutComposerWeekdays),
         time: timeInput && timeInput.value ? timeInput.value : '',
-        durationMinutes: Number(durationInput && durationInput.value) || 30
+        durationMinutes: durationInput && durationInput.value ? Number(durationInput.value) : null
     };
 
     if (editingWorkoutId) {
@@ -512,14 +571,16 @@ function saveWorkoutFromComposer() {
         workout.updatedAt = Date.now();
         showNotification('Workout updated');
     } else {
-        const level = createWorkoutLevel('Level 1', 1);
-        workouts.push(normalizeWorkoutForRuntime({
+    const level = createWorkoutLevel('Level 1', 1);
+    const policy = normalizeWorkoutProgressionPolicy();
+    workouts.push(normalizeWorkoutForRuntime({
             id: createWorkoutId('workout'),
             name,
             unit: 'reps',
             levels: [level],
             currentLevelId: level.id,
-            targetReps: WORKOUT_NORMAL_SET_REPS,
+            progressionPolicy: policy,
+            targetReps: policy.normalSetReps,
             schedule,
             logs: [],
             history: [],
@@ -549,7 +610,7 @@ function editWorkout(workoutId) {
         nameInput.focus();
     }
     if (timeInput) timeInput.value = workout.schedule.time || '';
-    if (durationInput) durationInput.value = String(workout.schedule.durationMinutes || 30);
+    if (durationInput) durationInput.value = workout.schedule.durationMinutes ? String(workout.schedule.durationMinutes) : '';
     workoutComposerWeekdays = new Set(workout.schedule.weekdays);
     syncWorkoutComposerMode();
 }
@@ -582,7 +643,7 @@ function addWorkoutLevel(workoutId, inputId = null) {
     workout.levels = normalizeWorkoutLevels(workout.levels);
 
     if (
-        workout.targetReps === WORKOUT_ADVANCED_SET_REPS &&
+        workout.targetReps === normalizeWorkoutProgressionPolicy(workout.progressionPolicy).advancedSetReps &&
         previousHighest &&
         workout.currentLevelId === previousHighest.id &&
         (workout.highestMasteredLevelId === previousHighest.id || workout.highestMasteredAt)
@@ -734,7 +795,7 @@ function acceptWorkoutDeload(workoutId) {
     if (!info.eligible || !info.previousLevel) return;
     const fromLevelId = workout.currentLevelId;
     workout.currentLevelId = info.previousLevel.id;
-    workout.targetReps = WORKOUT_NORMAL_SET_REPS;
+    workout.targetReps = normalizeWorkoutProgressionPolicy(workout.progressionPolicy).normalSetReps;
     workout.currentLevelStartedAt = Date.now();
     workout.pendingLevelId = null;
     workout.pendingEffectiveDateKey = null;
@@ -918,16 +979,31 @@ function selectWorkoutCalendarDate(dateKey) {
     renderWorkoutCalendar();
 }
 
-function jumpToWorkoutCard(workoutId) {
-    const card = document.querySelector(`.workout-card[data-workout-id="${workoutId}"]`);
-    if (!card) {
-        toggleWorkouts(true);
-        setTimeout(() => jumpToWorkoutCard(workoutId), 100);
-        return;
-    }
-    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    card.classList.add('workout-focus-target');
-    setTimeout(() => card.classList.remove('workout-focus-target'), 1600);
+function jumpToWorkoutCard(workoutId, attempt = 0) {
+    if (!workoutId) return;
+    const studioWasOpen = isWorkoutStudioOpen();
+    toggleWorkouts(true);
+    if (studioWasOpen) closeWorkoutStudioModal();
+
+    const focusWorkoutCard = () => {
+        const card = Array.from(document.querySelectorAll('.workout-card'))
+            .find(item => item.dataset.workoutId === workoutId);
+        if (!card) {
+            if (attempt < 8) {
+                setTimeout(() => jumpToWorkoutCard(workoutId, attempt + 1), 100);
+            } else if (typeof showNotification === 'function') {
+                showNotification('Workout card not found');
+            }
+            return;
+        }
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.remove('workout-focus-target');
+        void card.offsetWidth;
+        card.classList.add('workout-focus-target');
+        setTimeout(() => card.classList.remove('workout-focus-target'), 2400);
+    };
+
+    setTimeout(focusWorkoutCard, studioWasOpen ? 140 : 40);
 }
 
 function renderWorkoutCalendarDayCell(date, visibleMonth) {
@@ -948,7 +1024,7 @@ function renderWorkoutCalendarDayCell(date, visibleMonth) {
         return `
             <span class="workout-calendar-chip ${itemStatus}" title="${escapeHtml(item.workout.name)}">
                 ${escapeHtml(item.workout.name)}
-                <b>${metrics.qualifyingSets}/${WORKOUT_REQUIRED_SETS}</b>
+                <b>${metrics.qualifyingSets}/${metrics.requiredSets || WORKOUT_REQUIRED_SETS}</b>
             </span>
         `;
     }).join('');
@@ -989,13 +1065,13 @@ function renderWorkoutCalendarDetailsTarget(options = {}) {
         const levelName = item.currentLevel ? item.currentLevel.name : 'Level';
         const status = metrics.completed ? 'Completed' : (item.partial ? 'In progress' : (summary.isPast ? 'Missed' : 'Scheduled'));
         const jumpButton = summary.isToday
-            ? `<button type="button" class="workout-calendar-jump-btn" onclick="jumpToWorkoutCard('${item.workout.id}')">Jump</button>`
+            ? `<button type="button" class="workout-calendar-jump-btn" onclick="jumpToWorkoutCard('${item.workout.id}')">Show</button>`
             : '';
         return `
             <div class="workout-calendar-detail-row ${metrics.completed ? 'done' : item.partial ? 'partial' : summary.isPast ? 'missed' : 'upcoming'}">
                 <div>
                     <strong>${escapeHtml(item.workout.name)}</strong>
-                    <span>${escapeHtml(levelName)} · ${metrics.targetReps} reps · ${metrics.qualifyingSets}/${WORKOUT_REQUIRED_SETS} sets · ${metrics.partialLogs.length} partial</span>
+                    <span>${escapeHtml(levelName)} · ${metrics.targetReps} reps · ${metrics.qualifyingSets}/${metrics.requiredSets || WORKOUT_REQUIRED_SETS} sets · ${metrics.partialLogs.length} partial</span>
                 </div>
                 <div class="workout-calendar-detail-actions">
                     <span>${status}</span>
@@ -1181,7 +1257,7 @@ function getWorkoutStudioScheduleFromGroup(group) {
     return normalizeWorkoutSchedule({
         weekdays: checkedDays.length ? checkedDays : [new Date().getDay()],
         time: timeInput && timeInput.value ? timeInput.value : '',
-        durationMinutes: Number(durationInput && durationInput.value) || 30
+        durationMinutes: durationInput && durationInput.value ? Number(durationInput.value) : null
     });
 }
 
@@ -1216,7 +1292,7 @@ function renderWorkoutStudioSetupForm(workout = null) {
                     </label>
                     <label>
                         <span>Minutes</span>
-                        <input id="workout-studio-duration-${escapeHtml(group)}" type="number" min="5" max="240" step="5" value="${schedule.durationMinutes || 30}">
+                        <input id="workout-studio-duration-${escapeHtml(group)}" type="number" min="5" max="240" step="5" value="${schedule.durationMinutes || ''}" placeholder="Optional">
                     </label>
                 </div>
                 <button type="button" class="workout-rep-btn primary workout-studio-submit" onclick="saveWorkoutFromStudio('${isEdit ? workout.id : ''}')">${buttonText}</button>
@@ -1247,13 +1323,15 @@ function saveWorkoutFromStudio(workoutId = '') {
         showNotification('Workout updated');
     } else {
         const level = createWorkoutLevel('Level 1', 1);
+        const policy = normalizeWorkoutProgressionPolicy();
         const workout = normalizeWorkoutForRuntime({
             id: createWorkoutId('workout'),
             name,
             unit: 'reps',
             levels: [level],
             currentLevelId: level.id,
-            targetReps: WORKOUT_NORMAL_SET_REPS,
+            progressionPolicy: policy,
+            targetReps: policy.normalSetReps,
             schedule,
             logs: [],
             history: [],
@@ -1459,11 +1537,11 @@ function renderWorkoutStudioToday() {
             <div class="workout-studio-row ${metrics.completed ? 'done' : metrics.scheduled ? 'scheduled' : ''}">
                 <div>
                     <strong>${escapeHtml(workout.name)}</strong>
-                    <span>${escapeHtml(currentLevel ? currentLevel.name : 'Level')} · ${metrics.targetReps} reps · ${metrics.qualifyingSets}/${WORKOUT_REQUIRED_SETS} sets · ${metrics.partialLogs.length} partial</span>
+                    <span>${escapeHtml(currentLevel ? currentLevel.name : 'Level')} · ${metrics.targetReps} reps · ${metrics.qualifyingSets}/${metrics.requiredSets || WORKOUT_REQUIRED_SETS} sets · ${metrics.partialLogs.length} partial</span>
                 </div>
                 <div class="workout-studio-row-actions">
                     <span>${status}</span>
-                    <button type="button" class="workout-calendar-jump-btn" onclick="jumpToWorkoutCard('${workout.id}')">Jump</button>
+                    <button type="button" class="workout-calendar-jump-btn" onclick="jumpToWorkoutCard('${workout.id}')">Show</button>
                     <button type="button" class="workout-calendar-jump-btn" onclick="openWorkoutStudioModal('progress', '${workout.id}')">Graph</button>
                 </div>
             </div>
@@ -2022,7 +2100,7 @@ function getWorkoutEventLabel(workout, entry) {
     if (entry.type === 'manual_deload') return `Dropped from ${levelName(entry.fromLevelId)} to ${levelName(entry.toLevelId)}`;
     if (entry.type === 'level_changed') return `Advanced from ${levelName(entry.fromLevelId)} to ${levelName(entry.toLevelId)}`;
     if (entry.type === 'level_scheduled') return `Next level scheduled: ${levelName(entry.toLevelId)}`;
-    if (entry.type === 'highest_mastered') return `Highest level mastered · requirement changed to ${WORKOUT_ADVANCED_SET_REPS} reps`;
+    if (entry.type === 'highest_mastered') return `Highest level mastered · requirement changed to ${normalizeWorkoutProgressionPolicy(workout.progressionPolicy).advancedSetReps} reps`;
     return String(entry.type || 'Workout event').replace(/_/g, ' ');
 }
 
@@ -2063,6 +2141,7 @@ function renderWorkoutStudioHistory() {
 
 function getWorkoutProgressPoints(workout, range = workoutProgressRange) {
     normalizeWorkoutForRuntime(workout);
+    const policy = normalizeWorkoutProgressionPolicy(workout.progressionPolicy);
     const today = parseWorkoutDateKey(getWorkoutDateKey()) || new Date();
     const allDates = workout.logs.map(log => log.scheduledDateKey).filter(Boolean)
         .concat(workout.history.map(event => event.dateKey).filter(Boolean));
@@ -2079,15 +2158,15 @@ function getWorkoutProgressPoints(workout, range = workoutProgressRange) {
         const dateKey = getWorkoutDateKey(cursor);
         const logs = getWorkoutLogsForDate(workout, dateKey);
         const totalReps = logs.reduce((sum, log) => sum + Math.round(Number(log.reps) || 0), 0);
-        const sets = logs.filter(log => Number(log.reps) >= (Number(log.targetRepsAtLog) || WORKOUT_NORMAL_SET_REPS)).length;
-        const partials = logs.filter(log => Number(log.reps) < (Number(log.targetRepsAtLog) || WORKOUT_NORMAL_SET_REPS)).length;
+        const sets = logs.filter(log => Number(log.reps) >= (Number(log.targetRepsAtLog) || policy.normalSetReps)).length;
+        const partials = logs.filter(log => Number(log.reps) < (Number(log.targetRepsAtLog) || policy.normalSetReps)).length;
         points.push({
             dateKey,
             totalReps,
             sets,
             partials,
             scheduled: isWorkoutScheduledOnDate(workout, cursor),
-            completed: sets >= WORKOUT_REQUIRED_SETS
+            completed: sets >= policy.requiredSets
         });
     }
     return points;
@@ -2312,10 +2391,12 @@ function renderWorkouts() {
     container.innerHTML = '';
     prepared.forEach(({ workout, metrics }) => {
         const currentLevel = getWorkoutLevel(workout, workout.currentLevelId);
-        const percent = Math.min(100, Math.round((metrics.qualifyingSets / WORKOUT_REQUIRED_SETS) * 100));
+        const requiredSets = metrics.requiredSets || WORKOUT_REQUIRED_SETS;
+        const percent = Math.min(100, Math.round((metrics.qualifyingSets / requiredSets) * 100));
         const partialText = metrics.partialLogs.length > 0 ? `${metrics.partialLogs.length} partial entr${metrics.partialLogs.length === 1 ? 'y' : 'ies'}` : 'No partial entries';
         const scheduleWarning = metrics.scheduled ? '' : '<div class="workout-warning">Today is not scheduled. Logs stay in history but will not auto-level.</div>';
         const nextStatus = getWorkoutNextStatus(workout);
+        const policy = normalizeWorkoutProgressionPolicy(workout.progressionPolicy);
 
         const card = document.createElement('div');
         card.className = `workout-card ${metrics.completed ? 'complete' : ''}`;
@@ -2343,7 +2424,7 @@ function renderWorkouts() {
                 </div>
                 <div>
                     <span class="workout-status-label">Today</span>
-                    <strong>${metrics.qualifyingSets} / ${WORKOUT_REQUIRED_SETS} sets</strong>
+                    <strong>${metrics.qualifyingSets} / ${requiredSets} sets</strong>
                 </div>
             </div>
 
@@ -2355,8 +2436,8 @@ function renderWorkouts() {
 
             <div class="workout-log-controls">
                 <button class="workout-rep-btn" onclick="logWorkoutReps('${workout.id}', 10)">+10</button>
-                <button class="workout-rep-btn primary" onclick="logWorkoutReps('${workout.id}', 20)">+20</button>
-                <button class="workout-rep-btn" onclick="logWorkoutReps('${workout.id}', 50)">+50</button>
+                <button class="workout-rep-btn primary" onclick="logWorkoutReps('${workout.id}', ${policy.normalSetReps})">+${policy.normalSetReps}</button>
+                <button class="workout-rep-btn" onclick="logWorkoutReps('${workout.id}', ${policy.advancedSetReps})">+${policy.advancedSetReps}</button>
                 <input type="number" id="workout-reps-input-${workout.id}" min="1" placeholder="Reps" onkeypress="if(event.key==='Enter') logWorkoutCustomReps('${workout.id}')">
                 <button class="workout-rep-btn" onclick="logWorkoutCustomReps('${workout.id}')">Log</button>
             </div>
@@ -2364,11 +2445,9 @@ function renderWorkouts() {
             <div class="workout-section-title">Today&apos;s Entries</div>
             <div class="workout-log-list">${renderWorkoutLogList(workout, metrics)}</div>
 
-            <div class="workout-section-title">Levels</div>
-            <div class="workout-level-list">${renderWorkoutLevels(workout)}</div>
-            <div class="workout-level-add-row">
-                <input type="text" id="workout-level-input-${workout.id}" placeholder="New level name" onkeypress="if(event.key==='Enter') addWorkoutLevel('${workout.id}')">
-                <button class="workout-rep-btn" onclick="addWorkoutLevel('${workout.id}')">Add Level</button>
+            <div class="workout-main-subapp-row">
+                <button type="button" class="workout-rep-btn primary" onclick="openWorkoutSubapp()">Open Workouts</button>
+                <button type="button" class="workout-rep-btn" onclick="openWorkoutSubapp()">Manage Levels</button>
             </div>
         `;
         container.appendChild(card);
@@ -2380,3 +2459,4 @@ function renderWorkouts() {
 window.normalizeWorkoutCollection = normalizeWorkoutCollection;
 window.normalizeWorkoutForRuntime = normalizeWorkoutForRuntime;
 window.normalizeWorkoutRoutineCollection = normalizeWorkoutRoutineCollection;
+window.normalizeWorkoutSessionCollection = normalizeWorkoutSessionCollection;
