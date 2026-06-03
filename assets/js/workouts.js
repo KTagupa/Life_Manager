@@ -316,12 +316,66 @@ function normalizeWorkoutSessionCollection(rawSessions) {
     return (Array.isArray(rawSessions) ? rawSessions : []).filter(session => session && typeof session === 'object');
 }
 
+function normalizeWorkoutRotationCollection(rawRotations) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeRotationCollection === 'function') {
+        return window.WorkoutCore.normalizeRotationCollection(rawRotations, Array.isArray(workouts) ? workouts : []);
+    }
+    return (Array.isArray(rawRotations) ? rawRotations : []).filter(rotation => rotation && typeof rotation === 'object');
+}
+
 function getWorkoutById(workoutId) {
     return (Array.isArray(workouts) ? workouts : []).find(workout => workout && workout.id === workoutId) || null;
 }
 
 function getWorkoutRoutineById(routineId) {
     return (Array.isArray(workoutRoutines) ? workoutRoutines : []).find(routine => routine && routine.id === routineId) || null;
+}
+
+function getWorkoutRotationMemberIds() {
+    const rotations = Array.isArray(workoutRotations) ? normalizeWorkoutRotationCollection(workoutRotations) : [];
+    return new Set(rotations.flatMap(rotation => rotation.workoutIds || []));
+}
+
+function getWorkoutRotationScheduleLabel(rotation) {
+    if (!rotation) return '';
+    const normalized = window.WorkoutCore && typeof window.WorkoutCore.normalizeRotation === 'function'
+        ? window.WorkoutCore.normalizeRotation(rotation, (Array.isArray(workouts) ? workouts : []).map(workout => workout.id))
+        : rotation;
+    const schedule = normalizeWorkoutSchedule(normalized.schedule);
+    const days = schedule.weekdays.map(day => WORKOUT_WEEKDAYS[day]).join(', ');
+    const time = schedule.time ? ` at ${schedule.time}` : '';
+    const duration = Number(schedule.durationMinutes) > 0 ? ` · ${schedule.durationMinutes}m` : '';
+    return `${days}${time}${duration}`;
+}
+
+function resolveWorkoutRotationForDate(rotation, date) {
+    if (!window.WorkoutCore) return null;
+    const safeWorkouts = Array.isArray(workouts) ? workouts : [];
+    const dateKey = getWorkoutDateKey(date);
+    const todayKey = getWorkoutDateKey();
+    if (dateKey < todayKey && Array.isArray(rotation.history)) {
+        const historical = rotation.history
+            .filter(event => event && event.dateKey === dateKey)
+            .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))[0];
+        if (historical) {
+            const workout = getWorkoutById(historical.workoutId);
+            if (workout) {
+                return {
+                    rotation,
+                    workout,
+                    reason: 'history',
+                    balanced: true
+                };
+            }
+        }
+    }
+    if (typeof window.WorkoutCore.projectRotationWorkout === 'function' && dateKey >= todayKey) {
+        return window.WorkoutCore.projectRotationWorkout(rotation, safeWorkouts, date, new Date());
+    }
+    if (typeof window.WorkoutCore.resolveRotationWorkout === 'function') {
+        return window.WorkoutCore.resolveRotationWorkout(rotation, safeWorkouts);
+    }
+    return null;
 }
 
 function addWorkoutHistoryEvent(workout, type, details = {}) {
@@ -886,8 +940,39 @@ function getWorkoutCalendarDaySummary(dateKey) {
     const date = parseWorkoutDateKey(dateKey) || new Date();
     const todayKey = getWorkoutDateKey();
     const safeWorkouts = Array.isArray(workouts) ? workouts : [];
+    const safeRotations = Array.isArray(workoutRotations) ? normalizeWorkoutRotationCollection(workoutRotations) : [];
+    const rotationMemberIds = new Set(safeRotations.flatMap(rotation => rotation.workoutIds || []));
+    const scheduledRotationWorkoutIds = new Set();
     const scheduledItems = [];
     const unscheduledItems = [];
+
+    safeRotations.forEach(rotation => {
+        const scheduled = window.WorkoutCore && typeof window.WorkoutCore.isRotationScheduledOnDate === 'function'
+            ? window.WorkoutCore.isRotationScheduledOnDate(rotation, date)
+            : normalizeWorkoutSchedule(rotation.schedule).weekdays.includes(date.getDay());
+        if (!scheduled) return;
+        const resolution = resolveWorkoutRotationForDate(rotation, date);
+        const workout = resolution && resolution.workout;
+        if (!workout) return;
+        normalizeWorkoutForRuntime(workout);
+        const metrics = getWorkoutDayMetrics(workout, dateKey);
+        const allDateLogs = getWorkoutLogsForDate(workout, dateKey).filter(log => !log.rotationId || log.rotationId === rotation.id);
+        const hasLoggedWork = allDateLogs.length > 0;
+        const partial = !metrics.completed && (metrics.qualifyingSets > 0 || metrics.partialLogs.length > 0 || hasLoggedWork);
+        const currentLevel = getWorkoutLevel(workout, workout.currentLevelId);
+        scheduledRotationWorkoutIds.add(workout.id);
+        scheduledItems.push({
+            type: 'rotation',
+            rotation,
+            resolution,
+            workout,
+            metrics,
+            allDateLogs,
+            currentLevel,
+            scheduled: true,
+            partial
+        });
+    });
 
     safeWorkouts.forEach(workout => {
         normalizeWorkoutForRuntime(workout);
@@ -907,6 +992,10 @@ function getWorkoutCalendarDaySummary(dateKey) {
             partial
         };
 
+        if (rotationMemberIds.has(workout.id)) {
+            if (!scheduledRotationWorkoutIds.has(workout.id) && hasLoggedWork) unscheduledItems.push(item);
+            return;
+        }
         if (scheduled) scheduledItems.push(item);
         else if (hasLoggedWork) unscheduledItems.push(item);
     });
@@ -1022,8 +1111,9 @@ function renderWorkoutCalendarDayCell(date, visibleMonth) {
     const chips = summary.scheduledItems.slice(0, workoutCalendarView === 'month' ? 2 : 4).map(item => {
         const metrics = item.metrics;
         const itemStatus = metrics.completed ? 'done' : (item.partial ? 'partial' : (summary.isPast ? 'missed' : 'upcoming'));
+        const label = item.type === 'rotation' ? `${item.workout.name} · ${item.rotation.name}` : item.workout.name;
         return `
-            <span class="workout-calendar-chip ${itemStatus}" title="${escapeHtml(item.workout.name)}">
+            <span class="workout-calendar-chip ${itemStatus}" title="${escapeHtml(label)}">
                 ${escapeHtml(item.workout.name)}
                 <b>${metrics.qualifyingSets}/${metrics.requiredSets || WORKOUT_REQUIRED_SETS}</b>
             </span>
@@ -1064,6 +1154,9 @@ function renderWorkoutCalendarDetailsTarget(options = {}) {
     const scheduledRows = summary.scheduledItems.map(item => {
         const metrics = item.metrics;
         const levelName = item.currentLevel ? item.currentLevel.name : 'Level';
+        const subLabel = item.type === 'rotation'
+            ? `${item.rotation.name} · ${getWorkoutRotationScheduleLabel(item.rotation)}`
+            : `${levelName} · ${metrics.targetReps} reps`;
         const status = metrics.completed ? 'Completed' : (item.partial ? 'In progress' : (summary.isPast ? 'Missed' : 'Scheduled'));
         const jumpButton = summary.isToday
             ? `<button type="button" class="workout-calendar-jump-btn" onclick="jumpToWorkoutCard('${item.workout.id}')">Show</button>`
@@ -1072,7 +1165,7 @@ function renderWorkoutCalendarDetailsTarget(options = {}) {
             <div class="workout-calendar-detail-row ${metrics.completed ? 'done' : item.partial ? 'partial' : summary.isPast ? 'missed' : 'upcoming'}">
                 <div>
                     <strong>${escapeHtml(item.workout.name)}</strong>
-                    <span>${escapeHtml(levelName)} · ${metrics.targetReps} reps · ${metrics.qualifyingSets}/${metrics.requiredSets || WORKOUT_REQUIRED_SETS} sets · ${metrics.partialLogs.length} partial</span>
+                    <span>${escapeHtml(subLabel)} · ${metrics.qualifyingSets}/${metrics.requiredSets || WORKOUT_REQUIRED_SETS} sets · ${metrics.partialLogs.length} partial</span>
                 </div>
                 <div class="workout-calendar-detail-actions">
                     <span>${status}</span>
@@ -1155,8 +1248,15 @@ function renderWorkoutCalendarTarget(options = {}) {
 }
 
 function isWorkoutStudioOpen() {
-    const modal = document.getElementById('workout-studio-modal');
-    return !!(modal && modal.classList.contains('visible'));
+    return false;
+}
+
+function getWorkoutSubappTabForStudio(tab = '') {
+    const value = String(tab || '').trim().toLowerCase();
+    if (value === 'levels') return 'library';
+    if (value === 'history') return 'progress';
+    const allowed = ['today', 'calendar', 'routines', 'progress', 'session', 'library'];
+    return allowed.includes(value) ? value : 'today';
 }
 
 function getWorkoutStudioSelectedWorkout() {
@@ -1168,27 +1268,24 @@ function getWorkoutStudioSelectedWorkout() {
 }
 
 function openWorkoutStudioModal(tab = null, workoutId = null) {
-    const modal = document.getElementById('workout-studio-modal');
-    const backdrop = document.getElementById('workout-studio-backdrop');
-    if (!modal || !backdrop) return;
-    if (WORKOUT_STUDIO_TABS.includes(tab)) workoutStudioActiveTab = tab;
-    if (workoutId && getWorkoutById(workoutId)) workoutStudioSelectedWorkoutId = workoutId;
-    if (!workoutStudioSelectedWorkoutId && Array.isArray(workouts) && workouts[0]) workoutStudioSelectedWorkoutId = workouts[0].id;
-    backdrop.classList.add('visible');
-    modal.classList.add('visible');
-    renderWorkoutStudio();
+    const targetTab = getWorkoutSubappTabForStudio(tab);
+    const safeWorkoutId = workoutId && getWorkoutById(workoutId) ? workoutId : '';
+    if (typeof openWorkoutSubapp === 'function') {
+        openWorkoutSubapp(targetTab, safeWorkoutId);
+        return;
+    }
+    const query = new URLSearchParams();
+    if (targetTab) query.set('tab', targetTab);
+    if (safeWorkoutId) query.set('workoutId', safeWorkoutId);
+    window.location.href = 'Workouts/index.html' + (query.toString() ? ('?' + query.toString()) : '');
 }
 
 function closeWorkoutStudioModal() {
-    const modal = document.getElementById('workout-studio-modal');
-    const backdrop = document.getElementById('workout-studio-backdrop');
-    if (modal) modal.classList.remove('visible');
-    if (backdrop) backdrop.classList.remove('visible');
+    // Legacy main-app modal entry point; the focused workspace is Workouts/index.html.
 }
 
 function setWorkoutStudioTab(tab) {
-    workoutStudioActiveTab = WORKOUT_STUDIO_TABS.includes(tab) ? tab : 'today';
-    renderWorkoutStudio();
+    openWorkoutStudioModal(tab, workoutStudioSelectedWorkoutId);
 }
 
 function selectWorkoutStudioWorkout(workoutId) {
@@ -1573,7 +1670,7 @@ function renderWorkoutStudioCalendar() {
                 <button type="button" class="workout-icon-btn" onclick="changeWorkoutCalendarDate(1)" aria-label="Next workout calendar period">&gt;</button>
             </div>
             <div class="workout-calendar-mode-row">
-                <div class="workout-calendar-mode-switch panel-slider" id="workout-studio-calendar-mode-switch" aria-label="Workout Studio calendar view">
+                <div class="workout-calendar-mode-switch panel-slider" id="workout-studio-calendar-mode-switch" aria-label="Workout calendar view">
                     <button type="button" class="workout-calendar-mode-btn workout-studio-calendar-mode-btn panel-slider-option active" data-workout-calendar-view="week" onclick="setWorkoutCalendarView('week')">Week</button>
                     <button type="button" class="workout-calendar-mode-btn workout-studio-calendar-mode-btn panel-slider-option" data-workout-calendar-view="month" onclick="setWorkoutCalendarView('month')">Month</button>
                 </div>
@@ -2363,6 +2460,10 @@ function renderWorkoutLogList(workout, metrics) {
 function renderWorkouts() {
     if (!Array.isArray(workouts)) workouts = [];
     workouts = normalizeWorkoutCollection(workouts);
+    if (typeof workoutRotations !== 'undefined') {
+        if (!Array.isArray(workoutRotations)) workoutRotations = [];
+        workoutRotations = normalizeWorkoutRotationCollection(workoutRotations);
+    }
     if (!Array.isArray(workoutRoutines)) workoutRoutines = [];
     workoutRoutines = normalizeWorkoutRoutineCollection(workoutRoutines);
     const todayKey = getWorkoutDateKey();
@@ -2448,7 +2549,7 @@ function renderWorkouts() {
 
             <div class="workout-main-subapp-row">
                 <button type="button" class="workout-rep-btn primary" onclick="openWorkoutSubapp()">Open Workouts</button>
-                <button type="button" class="workout-rep-btn" onclick="openWorkoutSubapp()">Manage Levels</button>
+                <button type="button" class="workout-rep-btn" onclick="openWorkoutSubapp('library', '${workout.id}')">Manage Levels</button>
             </div>
         `;
         container.appendChild(card);
@@ -2459,5 +2560,6 @@ function renderWorkouts() {
 
 window.normalizeWorkoutCollection = normalizeWorkoutCollection;
 window.normalizeWorkoutForRuntime = normalizeWorkoutForRuntime;
+window.normalizeWorkoutRotationCollection = normalizeWorkoutRotationCollection;
 window.normalizeWorkoutRoutineCollection = normalizeWorkoutRoutineCollection;
 window.normalizeWorkoutSessionCollection = normalizeWorkoutSessionCollection;

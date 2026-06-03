@@ -562,7 +562,7 @@
         return index < 0 ? 0 : index;
     }
 
-    function resolveRotationWorkout(rotationInput, workoutsInput) {
+    function resolveRotationWorkout(rotationInput, workoutsInput, options = {}) {
         const workouts = normalizeWorkoutCollection(workoutsInput);
         const workoutMap = new Map(workouts.map(workout => [workout.id, workout]));
         const rotation = normalizeRotation(rotationInput, workouts.map(workout => workout.id));
@@ -580,13 +580,14 @@
         const ranks = members.map(workout => getWorkoutLevelRank(workout));
         const minRank = Math.min(...ranks);
         const maxRank = Math.max(...ranks);
+        const offset = Math.max(0, Math.round(Number(options.offset) || 0));
         const eligibleIds = members
             .filter(workout => getWorkoutLevelRank(workout) === minRank)
             .map(workout => workout.id);
         const orderedIds = maxRank === minRank ? rotation.workoutIds : rotation.workoutIds.filter(id => eligibleIds.includes(id));
         const safeOrder = orderedIds.length ? orderedIds : rotation.workoutIds;
         const lastIndex = safeOrder.indexOf(rotation.lastWorkoutId);
-        const nextId = safeOrder[(lastIndex + 1 + safeOrder.length) % safeOrder.length] || safeOrder[0];
+        const nextId = safeOrder[(lastIndex + 1 + offset + safeOrder.length) % safeOrder.length] || safeOrder[0];
         return {
             rotation,
             workout: workoutMap.get(nextId) || members[0],
@@ -595,6 +596,25 @@
             minRank,
             maxRank
         };
+    }
+
+    function getRotationProjectionOffset(rotationInput, targetDate = new Date(), fromDate = new Date()) {
+        const rotation = normalizeRotation(rotationInput);
+        const target = new Date(targetDate);
+        const from = new Date(fromDate);
+        target.setHours(12, 0, 0, 0);
+        from.setHours(12, 0, 0, 0);
+        if (dateKey(target) < dateKey(from)) return 0;
+        let count = 0;
+        for (let cursor = new Date(from); dateKey(cursor) <= dateKey(target); cursor = addDays(cursor, 1)) {
+            if (isRotationScheduledOnDate(rotation, cursor)) count += 1;
+        }
+        return Math.max(0, count - 1);
+    }
+
+    function projectRotationWorkout(rotationInput, workoutsInput, targetDate = new Date(), fromDate = new Date()) {
+        const offset = getRotationProjectionOffset(rotationInput, targetDate, fromDate);
+        return resolveRotationWorkout(rotationInput, workoutsInput, { offset });
     }
 
     function isRotationScheduledOnDate(rotation, date = new Date()) {
@@ -691,6 +711,8 @@
         applySessionToWorkouts,
         getWorkoutLevelRank,
         resolveRotationWorkout,
+        getRotationProjectionOffset,
+        projectRotationWorkout,
         isRotationScheduledOnDate,
         advanceRotationsForSession,
         getScheduleLabel

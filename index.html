@@ -804,7 +804,7 @@
         <div class="panel-header-row">
             <span>🏋 Workouts</span>
             <div class="workout-panel-header-actions">
-                <button class="btn" onclick="openWorkoutStudioModal('calendar')">Calendar</button>
+                <button class="btn" onclick="openWorkoutSubapp('calendar')">Calendar</button>
                 <button class="btn btn-primary" onclick="openWorkoutSubapp()">Open Workouts</button>
                 <button class="btn" onclick="toggleWorkouts()">✕</button>
             </div>
@@ -848,26 +848,6 @@
         </div>
 
         <div class="panel-list workout-list" id="workouts-list-container"></div>
-    </div>
-
-    <div id="workout-studio-backdrop" onclick="closeWorkoutStudioModal()"></div>
-    <div id="workout-studio-modal" role="dialog" aria-modal="true" aria-labelledby="workout-studio-title">
-        <div class="workout-studio-header">
-            <div>
-                <div id="workout-studio-title" class="workout-studio-title">Workout Studio</div>
-                <div class="workout-studio-subtitle">Calendar, levels, history, and progress</div>
-            </div>
-            <button class="modal-close-btn" onclick="closeWorkoutStudioModal()" aria-label="Close Workout Studio">✕</button>
-        </div>
-        <div class="workout-studio-tabs" id="workout-studio-tabs" aria-label="Workout Studio tabs">
-            <button type="button" class="workout-studio-tab active" data-workout-studio-tab="today" onclick="setWorkoutStudioTab('today')">Today</button>
-            <button type="button" class="workout-studio-tab" data-workout-studio-tab="calendar" onclick="setWorkoutStudioTab('calendar')">Calendar</button>
-            <button type="button" class="workout-studio-tab" data-workout-studio-tab="levels" onclick="setWorkoutStudioTab('levels')">Levels</button>
-            <button type="button" class="workout-studio-tab" data-workout-studio-tab="routines" onclick="setWorkoutStudioTab('routines')">Routines</button>
-            <button type="button" class="workout-studio-tab" data-workout-studio-tab="history" onclick="setWorkoutStudioTab('history')">History</button>
-            <button type="button" class="workout-studio-tab" data-workout-studio-tab="progress" onclick="setWorkoutStudioTab('progress')">Progress</button>
-        </div>
-        <div id="workout-studio-content" class="workout-studio-content"></div>
     </div>
 
     <div id="workout-routine-player-backdrop"></div>
@@ -1919,15 +1899,15 @@
     <script defer src="assets/js/reminders.js"></script>
     <script defer src="assets/js/task-layout.js"></script>
     <script defer src="assets/js/task-groups.js"></script>
-    <script defer src="assets/js/navigator.js"></script>
+    <script defer src="assets/js/navigator.js?v=20260604a"></script>
     <script defer src="assets/js/integrations.js"></script>
     <script defer src="assets/js/note-editor.js"></script>
     <script defer src="assets/js/note-maximize.js"></script>
     <script defer src="assets/js/notes.js"></script>
     <script defer src="assets/js/goals-habits.js"></script>
-    <script defer src="assets/js/workoutCore.js"></script>
-    <script defer src="assets/js/workoutStore.js"></script>
-    <script defer src="assets/js/workouts.js"></script>
+    <script defer src="assets/js/workoutCore.js?v=20260604a"></script>
+    <script defer src="assets/js/workoutStore.js?v=20260604a"></script>
+    <script defer src="assets/js/workouts.js?v=20260604a"></script>
     <script defer src="assets/js/graph.js"></script>
     <script defer src="assets/js/ai-urgency.js"></script>
     <script defer src="assets/js/tasks.js"></script>

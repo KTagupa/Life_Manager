@@ -1168,8 +1168,21 @@ function openFlockTrackSubpage() {
     window.location.href = 'flocktrack/index.html';
 }
 
-function openWorkoutSubapp() {
-    window.location.href = 'Workouts/index.html';
+function normalizeWorkoutSubappTab(tab = '') {
+    const value = String(tab || '').trim().toLowerCase();
+    if (value === 'levels') return 'library';
+    if (value === 'history') return 'progress';
+    const allowed = ['today', 'session', 'calendar', 'routines', 'library', 'progress'];
+    return allowed.includes(value) ? value : '';
+}
+
+function openWorkoutSubapp(tab = '', workoutId = '') {
+    const query = new URLSearchParams();
+    const normalizedTab = normalizeWorkoutSubappTab(tab);
+    const safeWorkoutId = String(workoutId || '').trim();
+    if (normalizedTab) query.set('tab', normalizedTab);
+    if (safeWorkoutId) query.set('workoutId', safeWorkoutId);
+    window.location.href = 'Workouts/index.html' + (query.toString() ? ('?' + query.toString()) : '');
 }
 
 function isProjectDetailsModalOpen() {

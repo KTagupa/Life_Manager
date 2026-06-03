@@ -213,6 +213,27 @@ function testRotationFavorsLowerLevelMembers() {
     assert.equal(resolved.workout.id, 'chin');
 }
 
+function testRotationProjectsFutureScheduledNames() {
+    const pullUps = makeWorkout({ id: 'pull', name: 'Pull-ups' });
+    const chinUps = makeWorkout({ id: 'chin', name: 'Chin-ups' });
+    const rows = Core.normalizeWorkoutCollection([pullUps, chinUps]);
+    const rotation = Core.normalizeRotation({
+        id: 'upper_pull',
+        name: 'Upper Pull',
+        workoutIds: ['pull', 'chin'],
+        schedule: { weekdays: [1, 3, 5] },
+        createdAt: atNoon(2026, 1, 1)
+    }, rows.map(workout => workout.id));
+
+    const monday = Core.projectRotationWorkout(rotation, rows, new Date(2026, 5, 1), new Date(2026, 5, 1));
+    const wednesday = Core.projectRotationWorkout(rotation, rows, new Date(2026, 5, 3), new Date(2026, 5, 1));
+    const friday = Core.projectRotationWorkout(rotation, rows, new Date(2026, 5, 5), new Date(2026, 5, 1));
+
+    assert.equal(monday.workout.id, 'pull');
+    assert.equal(wednesday.workout.id, 'chin');
+    assert.equal(friday.workout.id, 'pull');
+}
+
 testNormalizeLegacyWorkoutsAndRoutines();
 testScheduledDayDetection();
 testSetQualificationPolicies();
@@ -220,5 +241,6 @@ testLevelProgressionAndPendingApplication();
 testSessionSavePayloadToMovementLogs();
 testRotationResolutionAndAdvanceOnAttempt();
 testRotationFavorsLowerLevelMembers();
+testRotationProjectsFutureScheduledNames();
 
 console.log('WorkoutCore tests passed');

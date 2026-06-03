@@ -4,16 +4,22 @@
     const Core = global.WorkoutCore;
     const Store = global.WorkoutStore;
     const WEEKDAYS = Core ? Core.WEEKDAYS : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const WORKOUT_APP_TABS = ['today', 'session', 'calendar', 'routines', 'library', 'progress'];
 
     const state = {
         workouts: [],
         rotations: [],
         routines: [],
         sessions: [],
-        activeTab: 'today',
+        activeTab: getInitialTab(),
         activeSession: null,
         editingWorkoutId: null,
         editingRotationId: null,
+        calendarView: 'week',
+        calendarDate: new Date(),
+        selectedCalendarDateKey: null,
+        selectedProgressWorkoutId: getInitialWorkoutId(),
+        progressRange: '90',
         routineDraft: {
             id: null,
             name: '',
@@ -26,6 +32,25 @@
 
     function byId(id) {
         return document.getElementById(id);
+    }
+
+    function getQueryParam(name) {
+        try {
+            return new URLSearchParams(global.location && global.location.search || '').get(name) || '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function getInitialTab() {
+        const tab = String(getQueryParam('tab') || '').trim().toLowerCase();
+        if (tab === 'levels') return 'library';
+        if (tab === 'history') return 'progress';
+        return WORKOUT_APP_TABS.includes(tab) ? tab : 'today';
+    }
+
+    function getInitialWorkoutId() {
+        return String(getQueryParam('workoutId') || '').trim();
     }
 
     function escapeHtml(value) {
@@ -119,7 +144,9 @@
         return state.rotations
             .filter(rotation => Core.isRotationScheduledOnDate(rotation, date))
             .map(rotation => {
-                const resolution = getRotationResolution(rotation);
+                const resolution = Core.dateKey(date) === todayKey()
+                    ? getRotationResolution(rotation)
+                    : Core.projectRotationWorkout(rotation, state.workouts, date, new Date());
                 return resolution && resolution.workout ? {
                     type: 'rotation',
                     rotation: resolution.rotation,
@@ -132,6 +159,10 @@
 
     function getRotationIdsForWorkout(workoutId) {
         return state.rotations.filter(rotation => rotation.workoutIds.includes(workoutId));
+    }
+
+    function getAllRotationMemberIds() {
+        return new Set(state.rotations.flatMap(rotation => rotation.workoutIds));
     }
 
     function getRotationAttemptedToday(rotation, key = todayKey()) {
@@ -174,11 +205,13 @@
         state.rotations = Core.normalizeRotationCollection(loaded.workoutRotations, state.workouts);
         state.routines = Core.normalizeRoutineCollection(loaded.workoutRoutines);
         state.sessions = Core.normalizeSessionCollection(loaded.workoutSessions);
+        if (state.activeTab === 'library' && state.selectedProgressWorkoutId && getWorkout(state.selectedProgressWorkoutId)) {
+            state.editingWorkoutId = state.selectedProgressWorkoutId;
+        }
     }
 
     function setTab(tab) {
-        const allowed = ['today', 'session', 'routines', 'library', 'progress'];
-        state.activeTab = allowed.includes(tab) ? tab : 'today';
+        state.activeTab = WORKOUT_APP_TABS.includes(tab) ? tab : 'today';
         render();
         const view = byId('workout-app-view');
         if (view) view.focus({ preventScroll: true });
@@ -199,6 +232,7 @@
         }
 
         if (state.activeTab === 'session') view.innerHTML = renderSession();
+        else if (state.activeTab === 'calendar') view.innerHTML = renderCalendar();
         else if (state.activeTab === 'routines') view.innerHTML = renderRoutines();
         else if (state.activeTab === 'library') view.innerHTML = renderLibrary();
         else if (state.activeTab === 'progress') view.innerHTML = renderProgress();
@@ -221,7 +255,7 @@
     function getTodayMetrics() {
         const key = todayKey();
         const rotationItems = getScheduledRotationItems(new Date());
-        const rotationMemberIds = new Set(rotationItems.flatMap(item => item.rotation.workoutIds));
+        const rotationMemberIds = getAllRotationMemberIds();
         const directItems = state.workouts
             .filter(workout => Core.isScheduledOnDate(workout, new Date()) && !rotationMemberIds.has(workout.id))
             .map(workout => ({ type: 'movement', workout }));
@@ -332,6 +366,224 @@
                 </div>
             </article>
         `;
+    }
+
+    function getCalendarRange() {
+        const anchor = new Date(state.calendarDate);
+        anchor.setHours(12, 0, 0, 0);
+        const dates = [];
+        if (state.calendarView === 'month') {
+            const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12, 0, 0, 0);
+            const start = Core.addDays(first, -first.getDay());
+            for (let offset = 0; offset < 42; offset += 1) dates.push(Core.addDays(start, offset));
+            return dates;
+        }
+        const start = Core.addDays(anchor, -anchor.getDay());
+        for (let offset = 0; offset < 7; offset += 1) dates.push(Core.addDays(start, offset));
+        return dates;
+    }
+
+    function getCalendarTitle(dates) {
+        if (state.calendarView === 'month') {
+            return state.calendarDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        }
+        const first = dates[0] || new Date();
+        const last = dates[dates.length - 1] || first;
+        return `${first.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${last.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+    }
+
+    function getCalendarScheduledItems(date) {
+        const rotationItems = getScheduledRotationItems(date);
+        const rotationMemberIds = getAllRotationMemberIds();
+        const directItems = state.workouts
+            .filter(workout => Core.isScheduledOnDate(workout, date) && !rotationMemberIds.has(workout.id))
+            .map(workout => ({ type: 'movement', workout }));
+        return [...rotationItems, ...directItems];
+    }
+
+    function getCalendarDaySummary(date) {
+        const key = Core.dateKey(date);
+        const scheduledItems = getCalendarScheduledItems(date).map(item => {
+            const workout = item.workout;
+            const metrics = Core.getDayMetrics(workout, key);
+            const rotation = item.type === 'rotation' ? item.rotation : null;
+            const logs = Core.getDayLogs(workout, key).filter(log => !rotation || !log.rotationId || log.rotationId === rotation.id);
+            const attempted = logs.length > 0 || (rotation && rotation.history.some(event => event.dateKey === key && event.workoutId === workout.id));
+            const complete = rotation ? attempted : metrics.completed;
+            const partial = !complete && (metrics.qualifyingSets > 0 || metrics.partialLogs.length > 0 || attempted);
+            return {
+                ...item,
+                metrics,
+                logs,
+                attempted,
+                complete,
+                partial
+            };
+        });
+        const scheduledIds = new Set(scheduledItems.map(item => item.workout.id));
+        const unscheduledItems = state.workouts
+            .filter(workout => !scheduledIds.has(workout.id))
+            .map(workout => ({
+                type: 'movement',
+                workout,
+                metrics: Core.getDayMetrics(workout, key),
+                logs: Core.getDayLogs(workout, key)
+            }))
+            .filter(item => item.logs.length);
+        const isToday = key === todayKey();
+        const isPast = key < todayKey();
+        const completed = scheduledItems.filter(item => item.complete).length;
+        const partial = scheduledItems.filter(item => item.partial).length;
+        let status = 'rest';
+        if (scheduledItems.length && completed === scheduledItems.length) status = 'completed';
+        else if (partial) status = 'partial';
+        else if (scheduledItems.length && isPast) status = 'missed';
+        else if (scheduledItems.length) status = 'upcoming';
+        else if (unscheduledItems.length) status = 'logged';
+        return { key, date, scheduledItems, unscheduledItems, isToday, isPast, status };
+    }
+
+    function getCalendarStatusLabel(status) {
+        return {
+            completed: 'Done',
+            partial: 'Partial',
+            missed: 'Missed',
+            upcoming: 'Scheduled',
+            logged: 'Logged'
+        }[status] || 'Rest';
+    }
+
+    function renderCalendarDayCell(date, visibleMonth) {
+        const summary = getCalendarDaySummary(date);
+        const isSelected = summary.key === state.selectedCalendarDateKey;
+        const isDim = state.calendarView === 'month' && visibleMonth !== null && date.getMonth() !== visibleMonth;
+        const chips = summary.scheduledItems.slice(0, state.calendarView === 'month' ? 2 : 4).map(item => `
+            <span class="workout-calendar-chip ${item.complete ? 'done' : item.partial ? 'partial' : summary.isPast ? 'missed' : 'upcoming'}">
+                ${escapeHtml(item.workout.name)}
+            </span>
+        `).join('');
+        const extra = summary.scheduledItems.length - (state.calendarView === 'month' ? 2 : 4);
+        const loggedOnly = summary.unscheduledItems.length ? `<span class="workout-calendar-chip logged">+${summary.unscheduledItems.length} log</span>` : '';
+        return `
+            <button type="button" class="workout-calendar-day ${summary.status} ${summary.isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${isDim ? 'dim' : ''}" onclick="WorkoutApp.selectCalendarDate('${summary.key}')">
+                <span class="workout-calendar-day-head">
+                    <strong>${date.getDate()}</strong>
+                    <span>${escapeHtml(WEEKDAYS[date.getDay()])}</span>
+                </span>
+                <span class="workout-calendar-day-status">${getCalendarStatusLabel(summary.status)}</span>
+                <span class="workout-calendar-chip-list">
+                    ${chips}
+                    ${extra > 0 ? `<span class="workout-calendar-chip more">+${extra}</span>` : ''}
+                    ${loggedOnly}
+                </span>
+            </button>
+        `;
+    }
+
+    function renderCalendarDetail() {
+        const selectedDate = Core.parseDateKey(state.selectedCalendarDateKey) || new Date();
+        const summary = getCalendarDaySummary(selectedDate);
+        const scheduledRows = summary.scheduledItems.map(item => {
+            const rotation = item.type === 'rotation' ? item.rotation : null;
+            const subtitle = rotation ? `${rotation.name} / ${getRotationScheduleLabel(rotation)}` : getScheduleLabel(item.workout);
+            const status = item.complete ? 'Done' : item.partial ? 'Partial' : summary.isPast ? 'Missed' : 'Scheduled';
+            return `
+                <div class="workout-calendar-detail-row ${item.complete ? 'done' : item.partial ? 'partial' : summary.isPast ? 'missed' : 'upcoming'}">
+                    <div>
+                        <strong>${escapeHtml(item.workout.name)}</strong>
+                        <span>${escapeHtml(subtitle)} / ${status}</span>
+                    </div>
+                    <div class="workout-inline-actions">
+                        <button type="button" class="workout-btn primary" onclick="${rotation ? `WorkoutApp.startRotationSession('${escapeHtml(rotation.id)}')` : `WorkoutApp.startWorkoutSession('${escapeHtml(item.workout.id)}')`}">Start</button>
+                        <button type="button" class="workout-btn" onclick="WorkoutApp.editMovement('${escapeHtml(item.workout.id)}')">Edit</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        const unscheduledRows = summary.unscheduledItems.map(item => `
+            <div class="workout-calendar-detail-row logged">
+                <div>
+                    <strong>${escapeHtml(item.workout.name)}</strong>
+                    <span>${item.logs.length} unscheduled log${item.logs.length === 1 ? '' : 's'}</span>
+                </div>
+                <button type="button" class="workout-btn" onclick="WorkoutApp.setProgressWorkout('${escapeHtml(item.workout.id)}')">Progress</button>
+            </div>
+        `).join('');
+        return `
+            <section class="workout-panel">
+                <div class="workout-calendar-detail-head">
+                    <div>
+                        <h2 class="workout-section-title">${escapeHtml(formatDateLabel(summary.key))}</h2>
+                        <div class="workout-meta">${escapeHtml(getCalendarStatusLabel(summary.status))}</div>
+                    </div>
+                    <button type="button" class="workout-btn" onclick="WorkoutApp.goCalendarToday()">Today</button>
+                </div>
+                <div class="workout-recent-list">
+                    ${scheduledRows || '<div class="workout-empty">No scheduled movements.</div>'}
+                    ${unscheduledRows ? `<div class="workout-calendar-subhead">Unscheduled Logs</div>${unscheduledRows}` : ''}
+                </div>
+            </section>
+        `;
+    }
+
+    function renderCalendar() {
+        if (!state.selectedCalendarDateKey) state.selectedCalendarDateKey = todayKey();
+        const dates = getCalendarRange();
+        if (!dates.some(date => Core.dateKey(date) === state.selectedCalendarDateKey)) {
+            state.selectedCalendarDateKey = Core.dateKey(state.calendarDate);
+        }
+        const visibleMonth = state.calendarView === 'month' ? state.calendarDate.getMonth() : null;
+        const calendarActions = `
+            <button type="button" class="workout-btn" onclick="WorkoutApp.changeCalendarDate(-1)">&lt;</button>
+            <button type="button" class="workout-btn" onclick="WorkoutApp.goCalendarToday()">Today</button>
+            <button type="button" class="workout-btn" onclick="WorkoutApp.changeCalendarDate(1)">&gt;</button>
+        `;
+        return `
+            ${renderPageHead('Calendar', 'Week and month view for scheduled movements, rotations, missed days, and logs.', calendarActions)}
+            <section class="workout-panel">
+                <div class="workout-calendar-toolbar">
+                    <h2>${escapeHtml(getCalendarTitle(dates))}</h2>
+                    <div class="workout-calendar-mode-row">
+                        <button type="button" class="workout-btn ${state.calendarView === 'week' ? 'primary' : ''}" onclick="WorkoutApp.setCalendarView('week')">Week</button>
+                        <button type="button" class="workout-btn ${state.calendarView === 'month' ? 'primary' : ''}" onclick="WorkoutApp.setCalendarView('month')">Month</button>
+                    </div>
+                </div>
+                <div class="workout-calendar-grid workout-calendar-${state.calendarView}">
+                    ${dates.map(date => renderCalendarDayCell(date, visibleMonth)).join('')}
+                </div>
+            </section>
+            ${renderCalendarDetail()}
+        `;
+    }
+
+    function setCalendarView(view) {
+        state.calendarView = view === 'month' ? 'month' : 'week';
+        render();
+    }
+
+    function changeCalendarDate(delta) {
+        const step = Number(delta) || 0;
+        if (state.calendarView === 'month') {
+            state.calendarDate = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + step, 1, 12, 0, 0, 0);
+        } else {
+            state.calendarDate = Core.addDays(state.calendarDate, step * 7);
+        }
+        state.selectedCalendarDateKey = Core.dateKey(state.calendarDate);
+        render();
+    }
+
+    function goCalendarToday() {
+        state.calendarDate = new Date();
+        state.selectedCalendarDateKey = todayKey();
+        render();
+    }
+
+    function selectCalendarDate(dateKey) {
+        const date = Core.parseDateKey(dateKey);
+        if (!date) return;
+        state.selectedCalendarDateKey = Core.dateKey(date);
+        state.calendarDate = date;
+        render();
     }
 
     function renderSession() {
@@ -997,6 +1249,10 @@
 
     function renderRotationForm(rotation) {
         const schedule = Core.normalizeSchedule(rotation && rotation.schedule);
+        const firstId = rotation && rotation.workoutIds[0] ? rotation.workoutIds[0] : (state.workouts[0] && state.workouts[0].id) || '';
+        const firstOptions = state.workouts.map(workout => `
+            <option value="${escapeHtml(workout.id)}" ${workout.id === firstId ? 'selected' : ''}>${escapeHtml(workout.name)}</option>
+        `).join('');
         const memberTiles = state.workouts.length
             ? state.workouts.map(workout => `
                 <label class="workout-check-tile text">
@@ -1016,6 +1272,10 @@
                 <label class="workout-field">
                     <span>Name</span>
                     <input id="rotation-name-input" type="text" value="${escapeHtml(rotation ? rotation.name : '')}" placeholder="Upper pull">
+                </label>
+                <label class="workout-field">
+                    <span>First movement</span>
+                    <select id="rotation-first-workout-select">${firstOptions}</select>
                 </label>
                 <div class="workout-member-grid">${memberTiles}</div>
                 <div class="workout-weekday-grid">${weekdayTiles}</div>
@@ -1043,8 +1303,19 @@
         const members = rotation.workoutIds
             .map(id => getWorkout(id))
             .filter(Boolean)
-            .map(member => member.name)
-            .join(' / ');
+            .map((member, index) => `
+                <div class="workout-step-row workout">
+                    <div>
+                        <strong>${escapeHtml(member.name)}</strong>
+                        <div class="workout-meta">${index === 0 ? 'First' : `Order ${index + 1}`}</div>
+                    </div>
+                    <div class="workout-inline-actions">
+                        <button type="button" class="workout-icon-btn" onclick="WorkoutApp.moveRotationMember('${escapeHtml(rotation.id)}', ${index}, -1)">^</button>
+                        <button type="button" class="workout-icon-btn" onclick="WorkoutApp.moveRotationMember('${escapeHtml(rotation.id)}', ${index}, 1)">v</button>
+                    </div>
+                </div>
+            `)
+            .join('');
         const dueText = workout
             ? `${workout.name}${resolution && !resolution.balanced ? ' / catch-up' : ''}`
             : 'No due movement';
@@ -1066,7 +1337,7 @@
                     <div class="workout-pill"><span>Members</span><strong>${rotation.workoutIds.length}</strong></div>
                     <div class="workout-pill"><span>Attempts</span><strong>${rotation.history.length}</strong></div>
                 </div>
-                <div class="workout-meta">${escapeHtml(members)}</div>
+                <div class="workout-step-list">${members}</div>
             </article>
         `;
     }
@@ -1074,6 +1345,7 @@
     function renderMovementForm(workout) {
         const policy = getPolicy(workout);
         const schedule = Core.normalizeSchedule(workout && workout.schedule);
+        const rotationNames = workout ? getRotationIdsForWorkout(workout.id).map(rotation => rotation.name).join(' / ') : '';
         const levelsText = workout
             ? workout.levels.map(level => level.name).join('\n')
             : 'Level 1';
@@ -1090,6 +1362,7 @@
                     <input id="movement-name-input" type="text" value="${escapeHtml(workout ? workout.name : '')}" placeholder="Push-ups, squats, pull-ups">
                 </label>
                 <div class="workout-weekday-grid">${weekdayTiles}</div>
+                ${rotationNames ? `<div class="workout-meta">Scheduled through rotation: ${escapeHtml(rotationNames)}. This movement schedule is ignored while it belongs to a rotation.</div>` : ''}
                 <div class="workout-form-row">
                     <label class="workout-field">
                         <span>Time</span>
@@ -1135,12 +1408,14 @@
     function renderMovementCard(workout) {
         const metrics = Core.getDayMetrics(workout, todayKey());
         const level = getLevel(workout, workout.currentLevelId);
+        const rotationNames = getRotationIdsForWorkout(workout.id).map(rotation => rotation.name).join(' / ');
+        const scheduleText = rotationNames ? `Scheduled through ${rotationNames}` : getScheduleLabel(workout);
         return `
             <article class="workout-card">
                 <div class="workout-card-head">
                     <div>
                         <h3 class="workout-card-title">${escapeHtml(workout.name)}</h3>
-                        <div class="workout-meta">${escapeHtml(getScheduleLabel(workout))}</div>
+                        <div class="workout-meta">${escapeHtml(scheduleText)}</div>
                     </div>
                     <div class="workout-card-actions">
                         <button type="button" class="workout-btn primary" onclick="WorkoutApp.startWorkoutSession('${escapeHtml(workout.id)}')">Start</button>
@@ -1228,9 +1503,18 @@
             notify('Name the rotation before saving.');
             return null;
         }
-        const workoutIds = Array.from(document.querySelectorAll('input[name="rotation-workout"]:checked'))
+        const checkedIds = Array.from(document.querySelectorAll('input[name="rotation-workout"]:checked'))
             .map(input => String(input.value || '').trim())
             .filter(Boolean);
+        const previousOrder = existing && Array.isArray(existing.workoutIds) ? existing.workoutIds : [];
+        const firstId = byId('rotation-first-workout-select') && byId('rotation-first-workout-select').value;
+        let workoutIds = [
+            ...previousOrder.filter(id => checkedIds.includes(id)),
+            ...checkedIds.filter(id => !previousOrder.includes(id))
+        ];
+        if (firstId && workoutIds.includes(firstId)) {
+            workoutIds = [firstId, ...workoutIds.filter(id => id !== firstId)];
+        }
         if (workoutIds.length < 2) {
             notify('Pick at least two movements for a rotation.');
             return null;
@@ -1278,6 +1562,18 @@
         await persistWorkoutState('Rotation deleted.');
     }
 
+    async function moveRotationMember(rotationId, index, direction) {
+        const rotation = getRotation(rotationId);
+        if (!rotation) return;
+        const nextIndex = index + direction;
+        if (nextIndex < 0 || nextIndex >= rotation.workoutIds.length) return;
+        const [workoutId] = rotation.workoutIds.splice(index, 1);
+        rotation.workoutIds.splice(nextIndex, 0, workoutId);
+        rotation.updatedAt = Date.now();
+        state.editingRotationId = rotationId;
+        await persistWorkoutState('Rotation order updated.');
+    }
+
     function resetRotationForm() {
         state.editingRotationId = null;
         render();
@@ -1318,6 +1614,7 @@
         const qualifyingSets = logs.filter(log => Number(log.reps) >= Number(log.targetRepsAtLog || Core.NORMAL_SET_REPS)).length;
         const completedDays = countCompletedDays();
         const recentSessions = state.sessions.slice().reverse().slice(0, 8);
+        const selectedWorkout = getProgressWorkout();
         return `
             ${renderPageHead('Progress', 'Simple totals and recent activity from saved sessions and compatible movement logs.')}
             <div class="workout-stat-grid">
@@ -1340,7 +1637,173 @@
                     <div class="workout-recent-list">${renderRecentSessions(recentSessions)}</div>
                 </section>
             </div>
+            ${selectedWorkout ? renderFocusedProgress(selectedWorkout) : ''}
         `;
+    }
+
+    function getProgressWorkout() {
+        if (!state.workouts.length) return null;
+        let workout = state.selectedProgressWorkoutId ? getWorkout(state.selectedProgressWorkoutId) : null;
+        if (!workout) {
+            workout = state.workouts[0];
+            state.selectedProgressWorkoutId = workout.id;
+        }
+        return workout;
+    }
+
+    function setProgressWorkout(workoutId) {
+        if (!getWorkout(workoutId)) return;
+        state.selectedProgressWorkoutId = workoutId;
+        state.activeTab = 'progress';
+        render();
+    }
+
+    function setProgressRange(range) {
+        state.progressRange = ['30', '90', 'all'].includes(String(range)) ? String(range) : '90';
+        render();
+    }
+
+    function getProgressRangeStart(workout, range = state.progressRange) {
+        const today = new Date();
+        if (range !== 'all') return Core.addDays(today, -(Number(range) || 90) + 1);
+        const keys = (workout.logs || []).map(log => log.scheduledDateKey)
+            .concat((workout.history || []).map(event => event.dateKey))
+            .filter(Boolean)
+            .sort();
+        return keys.length ? (Core.parseDateKey(keys[0]) || Core.addDays(today, -89)) : Core.addDays(today, -89);
+    }
+
+    function getWorkoutProgressPoints(workout, range = state.progressRange) {
+        const policy = getPolicy(workout);
+        const start = getProgressRangeStart(workout, range);
+        const today = new Date();
+        const points = [];
+        for (let cursor = new Date(start); Core.dateKey(cursor) <= Core.dateKey(today); cursor = Core.addDays(cursor, 1)) {
+            const key = Core.dateKey(cursor);
+            const dayLogs = Core.getDayLogs(workout, key);
+            const totalReps = dayLogs.reduce((sum, log) => sum + Number(log.reps || 0), 0);
+            const sets = dayLogs.filter(log => Number(log.reps) >= Number(log.targetRepsAtLog || policy.normalSetReps)).length;
+            const partials = dayLogs.filter(log => Number(log.reps) < Number(log.targetRepsAtLog || policy.normalSetReps)).length;
+            points.push({
+                key,
+                label: cursor.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                totalReps,
+                sets,
+                partials,
+                completed: sets >= policy.requiredSets,
+                scheduled: Core.isScheduledOnDate(workout, cursor)
+            });
+        }
+        return points;
+    }
+
+    function renderFocusedProgress(workout) {
+        const points = getWorkoutProgressPoints(workout);
+        const totalReps = points.reduce((sum, point) => sum + point.totalReps, 0);
+        const totalSets = points.reduce((sum, point) => sum + point.sets, 0);
+        const completedDays = points.filter(point => point.completed).length;
+        const partialDays = points.filter(point => point.partials > 0 && !point.completed).length;
+        const level = getLevel(workout, workout.currentLevelId);
+        const options = state.workouts.map(item => `
+            <option value="${escapeHtml(item.id)}" ${item.id === workout.id ? 'selected' : ''}>${escapeHtml(item.name)}</option>
+        `).join('');
+        const rangeButton = range => `<button type="button" class="workout-btn ${state.progressRange === range ? 'primary' : ''}" onclick="WorkoutApp.setProgressRange('${range}')">${range === 'all' ? 'All' : range}</button>`;
+        return `
+            <section class="workout-panel workout-progress-focus">
+                <div class="workout-progress-head">
+                    <div>
+                        <h2 class="workout-section-title">Movement Progress</h2>
+                        <div class="workout-meta">${escapeHtml(level ? level.name : 'Level')} / ${escapeHtml(getScheduleLabel(workout))}</div>
+                    </div>
+                    <div class="workout-progress-controls">
+                        <label class="workout-field">
+                            <span>Movement</span>
+                            <select onchange="WorkoutApp.setProgressWorkout(this.value)">${options}</select>
+                        </label>
+                        <div class="workout-calendar-mode-row">${rangeButton('30')}${rangeButton('90')}${rangeButton('all')}</div>
+                    </div>
+                </div>
+                <div class="workout-stat-grid">
+                    <div class="workout-stat"><span>Total reps</span><strong>${totalReps}</strong></div>
+                    <div class="workout-stat"><span>Sets</span><strong>${totalSets}</strong></div>
+                    <div class="workout-stat"><span>Completed days</span><strong>${completedDays}</strong></div>
+                    <div class="workout-stat"><span>Partial days</span><strong>${partialDays}</strong></div>
+                </div>
+                <div class="workout-two-col">
+                    <section class="workout-subpanel">
+                        <h2 class="workout-section-title">Qualifying Sets</h2>
+                        ${renderBars(points.map(point => ({ label: point.label, value: point.sets })), 'sets')}
+                    </section>
+                    <section class="workout-subpanel">
+                        <h2 class="workout-section-title">Total Reps</h2>
+                        ${renderBars(points.map(point => ({ label: point.label, value: point.totalReps })), 'reps')}
+                    </section>
+                    <section class="workout-subpanel">
+                        <h2 class="workout-section-title">Level Timeline</h2>
+                        <div class="workout-recent-list">${renderWorkoutTimeline(workout)}</div>
+                    </section>
+                    <section class="workout-subpanel">
+                        <h2 class="workout-section-title">Recent History</h2>
+                        <div class="workout-recent-list">${renderWorkoutHistory(workout)}</div>
+                    </section>
+                </div>
+            </section>
+        `;
+    }
+
+    function getWorkoutEventLabel(workout, event) {
+        const levelName = levelId => {
+            const level = getLevel(workout, levelId);
+            return level ? level.name : 'Level';
+        };
+        if (event.kind === 'log') return `${Math.round(Number(event.reps) || 0)} reps${event.qualifies ? ' / qualifying set' : ''}`;
+        if (event.type === 'manual_deload') return `Dropped from ${levelName(event.fromLevelId)} to ${levelName(event.toLevelId)}`;
+        if (event.type === 'level_changed') return `Advanced from ${levelName(event.fromLevelId)} to ${levelName(event.toLevelId)}`;
+        if (event.type === 'level_scheduled') return `Next level scheduled: ${levelName(event.toLevelId)}`;
+        if (event.type === 'highest_mastered') return `Highest level mastered`;
+        return event.type ? event.type.replace(/_/g, ' ') : 'Workout event';
+    }
+
+    function renderWorkoutTimeline(workout) {
+        const events = (workout.history || [])
+            .filter(event => ['manual_deload', 'level_changed', 'level_scheduled', 'highest_mastered'].includes(event.type))
+            .slice()
+            .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+            .slice(0, 8);
+        if (!events.length) return '<div class="workout-empty">Level changes will appear here.</div>';
+        return events.map(event => `
+            <div class="workout-recent-row">
+                <div>
+                    <strong>${escapeHtml(getWorkoutEventLabel(workout, event))}</strong>
+                    <div class="workout-meta">${escapeHtml(formatDateLabel(event.dateKey || todayKey()))}</div>
+                </div>
+                <span class="workout-meta">Event</span>
+            </div>
+        `).join('');
+    }
+
+    function renderWorkoutHistory(workout) {
+        const policy = getPolicy(workout);
+        const logs = (workout.logs || []).map(log => ({
+            ...log,
+            kind: 'log',
+            dateKey: log.scheduledDateKey,
+            qualifies: Number(log.reps) >= Number(log.targetRepsAtLog || policy.normalSetReps)
+        }));
+        const events = (workout.history || []).map(event => ({ ...event, kind: 'event' }));
+        const rows = logs.concat(events)
+            .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+            .slice(0, 12);
+        if (!rows.length) return '<div class="workout-empty">No movement history yet.</div>';
+        return rows.map(entry => `
+            <div class="workout-recent-row">
+                <div>
+                    <strong>${escapeHtml(getWorkoutEventLabel(workout, entry))}</strong>
+                    <div class="workout-meta">${escapeHtml(formatDateLabel(entry.dateKey || todayKey()))}</div>
+                </div>
+                <span class="workout-meta">${entry.kind === 'log' ? 'Log' : 'Event'}</span>
+            </div>
+        `).join('');
     }
 
     function countCompletedDays() {
@@ -1454,10 +1917,17 @@
         editRoutine,
         deleteRoutine,
         resetRoutineDraft,
+        setCalendarView,
+        changeCalendarDate,
+        goCalendarToday,
+        selectCalendarDate,
+        setProgressWorkout,
+        setProgressRange,
         saveMovement,
         saveRotation,
         editRotation,
         deleteRotation,
+        moveRotationMember,
         resetRotationForm,
         editMovement,
         deleteMovement,
