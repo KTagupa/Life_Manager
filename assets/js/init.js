@@ -97,6 +97,7 @@
             render();
             renderInbox();
             renderGoals();
+            if (typeof renderWorkouts === 'function') renderWorkouts();
             if (typeof ensureToolbarSubpageButtons === 'function') ensureToolbarSubpageButtons();
             setupInteractions();
             setupPanelDrag();
@@ -152,6 +153,8 @@
                 inbox: inbox.length,
                 notes: notes.length,
                 habits: habits.length,
+                workouts: Array.isArray(workouts) ? workouts.length : 0,
+                workoutRoutines: Array.isArray(workoutRoutines) ? workoutRoutines.length : 0,
                 projects: Array.isArray(projects) ? projects.length : 0
             });
 

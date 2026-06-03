@@ -5,10 +5,12 @@ let archivedNodes = [];
 let inbox = [];
 let lifeGoals = {};
 let habits = [];
+let workouts = [];
+let workoutRoutines = [];
 let notes = [];
 let reminders = [];
 let projects = [];
-let dataModelVersion = 4;
+let dataModelVersion = 5;
 let aiUrgencyConfig = {
     mode: 'shadow',
     enabled: true,
@@ -18,7 +20,7 @@ let aiUrgencyConfig = {
     semanticProvider: 'heuristic'
 };
 
-const DATA_MODEL_VERSION = 4;
+const DATA_MODEL_VERSION = 5;
 const PROJECT_STATUS_VALUES = ['active', 'paused', 'completed', 'archived'];
 const PROJECT_ORIGIN_VALUES = ['manual', 'ai', 'migrated'];
 const TASK_REFLECTION_OUTCOME_VALUES = ['on_target', 'harder', 'easier'];
@@ -368,6 +370,8 @@ function pushHistory() {
         inbox,
         lifeGoals,
         habits,
+        workouts,
+        workoutRoutines,
         notes,
         agenda,
         reminders
@@ -415,6 +419,8 @@ function restoreHistory() {
     inbox = state.inbox || [];
     lifeGoals = state.lifeGoals || {};
     habits = state.habits || [];
+    workouts = state.workouts || [];
+    workoutRoutines = state.workoutRoutines || [];
     notes = state.notes || [];
     agenda = state.agenda || [];
     reminders = state.reminders || [];
@@ -426,6 +432,7 @@ function restoreHistory() {
     // Refresh all panels
     renderGoals();
     renderHabits();
+    if (typeof renderWorkouts === 'function') renderWorkouts();
     renderNotesList();
     if (typeof renderReminderStrip === 'function') renderReminderStrip();
     if (typeof renderRemindersModal === 'function') renderRemindersModal();
@@ -786,6 +793,8 @@ function initDemoData() {
     inbox = [];
     lifeGoals = {};
     habits = [];
+    workouts = [];
+    workoutRoutines = [];
     notes = [];
     agenda = [];
     quickLinks = [];
@@ -865,7 +874,7 @@ function saveToStorageImmediate() {
         aiUrgencyConfig: normalizeAiUrgencyConfig(aiUrgencyConfig),
         projects,
         nodes, archivedNodes, inbox, lifeGoals, notes, githubToken,
-        gistId, habits, agenda, pinnedItems, quickLinks, reminders, noteSettings, remindersModalPosition,
+        gistId, habits, workouts, workoutRoutines, agenda, pinnedItems, quickLinks, reminders, noteSettings, remindersModalPosition,
         hiddenNodeGroups: Array.from(hiddenNodeGroups),
         timestamp: Date.now()
     };
@@ -1083,6 +1092,8 @@ function restoreStateData(parsed) {
     inbox = migrated.inbox || [];
     lifeGoals = migrated.lifeGoals || {};
     habits = migrated.habits || [];
+    workouts = migrated.workouts || [];
+    workoutRoutines = migrated.workoutRoutines || [];
     notes = migrated.notes || [];
     reminders = migrated.reminders || [];
     githubToken = migrated.githubToken || '';
@@ -1265,6 +1276,19 @@ function sanitizeLoadedData() {
             h.target = 1;
         }
     });
+    // --- WORKOUTS CLEANUP ---
+    if (!Array.isArray(workouts)) workouts = [];
+    if (typeof normalizeWorkoutCollection === 'function') {
+        workouts = normalizeWorkoutCollection(workouts);
+    } else {
+        workouts = workouts.filter(workout => workout && typeof workout === 'object');
+    }
+    if (!Array.isArray(workoutRoutines)) workoutRoutines = [];
+    if (typeof normalizeWorkoutRoutineCollection === 'function') {
+        workoutRoutines = normalizeWorkoutRoutineCollection(workoutRoutines);
+    } else {
+        workoutRoutines = workoutRoutines.filter(routine => routine && typeof routine === 'object');
+    }
     // --- REMINDERS CLEANUP ---
     if (!Array.isArray(reminders)) reminders = [];
     const isValidType = (type) => ['task', 'subtask', 'note', 'habit', 'inbox'].includes(type);
@@ -1352,6 +1376,8 @@ function updateDataMetrics() {
         'Tasks': { nodes, archivedNodes, inbox, agenda },
         'Projects': projects,
         'Habits': habits,
+        'Workouts': workouts,
+        'Workout Routines': workoutRoutines,
         'Reminders': reminders,
         'Finance': financeData,
         'Goals': lifeGoals
@@ -1430,6 +1456,8 @@ function saveData(download = false) {
         lifeGoals,
         notes,
         habits,
+        workouts,
+        workoutRoutines,
         agenda,
         quickLinks,
         reminders
@@ -1477,6 +1505,8 @@ function loadFile(input) {
                 notes = [];
                 archivedNodes = [];
                 habits = [];
+                workouts = [];
+                workoutRoutines = [];
                 agenda = [];
                 reminders = [];
             } else {
@@ -1488,6 +1518,8 @@ function loadFile(input) {
                 inbox = parsed.inbox || [];
                 lifeGoals = parsed.lifeGoals || {};
                 habits = parsed.habits || [];
+                workouts = parsed.workouts || [];
+                workoutRoutines = parsed.workoutRoutines || [];
                 notes = parsed.notes || [];
                 archivedNodes = parsed.archivedNodes || [];
                 agenda = parsed.agenda || [];
@@ -1518,6 +1550,8 @@ function loadFile(input) {
             render();
             renderInbox();
             renderGoals();
+            renderHabits();
+            if (typeof renderWorkouts === 'function') renderWorkouts();
             renderAgenda();
             renderQuickLinks();
             if (typeof renderReminderStrip === 'function') renderReminderStrip();
@@ -1548,6 +1582,8 @@ async function clearData() {
     lifeGoals = {};
     notes = [];
     habits = [];
+    workouts = [];
+    workoutRoutines = [];
     agenda = [];
     quickLinks = [];
     reminders = [];

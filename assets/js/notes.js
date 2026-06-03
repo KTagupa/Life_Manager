@@ -1094,7 +1094,9 @@ function renderNotesList() {
         // Safety check if element exists (in case of partial load)
         if (!searchInput) return;
     
-        const searchVal = searchInput.value.toLowerCase();
+        const searchTerms = typeof tokenizeNoteSearchQuery === 'function'
+            ? tokenizeNoteSearchQuery(searchInput.value)
+            : Array.from(new Set(String(searchInput.value || '').toLowerCase().split(/\s+/).filter(Boolean)));
         container.innerHTML = '';
         ensureSideNotesFilterControls(notes);
     
@@ -1112,7 +1114,10 @@ function renderNotesList() {
             const title = (note && note.title) ? String(note.title).toLowerCase() : '';
             const bodyText = extractSideNoteBodyText(note);
             const bodyTextLower = bodyText.toLowerCase();
-            const searchMatch = title.includes(searchVal) || bodyTextLower.includes(searchVal);
+            const tagText = extractSideNoteTags(note).join(' ').toLowerCase();
+            const searchMatch = searchTerms.length === 0 || searchTerms.every(term =>
+                title.includes(term) || bodyTextLower.includes(term) || tagText.includes(term)
+            );
             if (!searchMatch) return false;
 
             if (normalizedFilterMode === 'context-linked' && !noteMatchesActiveContext(note)) return false;
@@ -1376,6 +1381,7 @@ function openNoteEditor(noteId) {
     // Reset state
     activeBlockId = currentNoteBlocks.length > 0 ? currentNoteBlocks[0].id : null;
     isNoteGlobalViewMode = false;
+    if (typeof resetNoteFindState === 'function') resetNoteFindState();
 
     // Show the editor
     const editor = document.getElementById('note-editor');
@@ -1429,6 +1435,7 @@ function closeNoteEditor() {
     currentEditingNoteId = null;
     currentNoteBlocks = [];
     activeBlockId = null;
+    if (typeof resetNoteFindState === 'function') resetNoteFindState();
 
     // Re-render list to show any title changes/previews
     renderNotesList();

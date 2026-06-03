@@ -230,7 +230,8 @@ const RIGHT_DOCK_PANEL_IDS = [
     'navigator-panel',
     'sync-panel',
     'goals-panel',
-    'habits-panel'
+    'habits-panel',
+    'workouts-panel'
 ];
 
 function resetViewportOrigin() {
@@ -436,6 +437,9 @@ function openRightRailTab(tabId) {
         case 'habits':
             if (typeof toggleHabits === 'function') toggleHabits(true);
             break;
+        case 'workouts':
+            if (typeof toggleWorkouts === 'function') toggleWorkouts(true);
+            break;
         case 'planner':
             if (typeof openPlannerTab === 'function') {
                 const desired = (typeof currentPlannerTab === 'string' && currentPlannerTab) ? currentPlannerTab : 'agenda';
@@ -461,7 +465,7 @@ function openRightRailTab(tabId) {
 }
 
 function closeWorkspaceSurfaces() {
-    const sidePanels = ['goals-panel', 'habits-panel', 'notes-panel', 'agenda-panel', 'projects-panel', 'archive-panel', 'calendar-panel'];
+    const sidePanels = ['goals-panel', 'habits-panel', 'workouts-panel', 'notes-panel', 'agenda-panel', 'projects-panel', 'archive-panel', 'calendar-panel'];
     sidePanels.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');

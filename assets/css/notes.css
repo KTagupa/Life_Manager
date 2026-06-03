@@ -287,6 +287,7 @@
             display: flex;
             gap: 12px;
             align-items: center;
+            flex-wrap: wrap;
             position: sticky;
             top: 0;
             z-index: 20;
@@ -331,6 +332,65 @@
             font-size: 0.9rem;
         }
 
+        .note-find-toolbar {
+            margin-left: auto;
+            padding-right: 0;
+            border-right: none;
+            align-items: center;
+            min-width: 260px;
+            max-width: 380px;
+            flex: 1 1 280px;
+        }
+
+        .note-find-icon {
+            color: #94a3b8;
+            font-size: 0.85rem;
+            line-height: 1;
+        }
+
+        .note-find-input {
+            min-width: 120px;
+            width: 100%;
+            height: 30px;
+            border: 1px solid rgba(148, 163, 184, 0.32);
+            background: rgba(2, 6, 23, 0.46);
+            color: #e2e8f0;
+            border-radius: 6px;
+            padding: 0 9px;
+            font-size: 0.82rem;
+            outline: none;
+        }
+
+        .note-find-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.16);
+        }
+
+        .note-find-count {
+            min-width: 42px;
+            color: #94a3b8;
+            font-size: 0.74rem;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .note-find-nav-btn,
+        .note-find-clear-btn {
+            width: 30px;
+            height: 30px;
+            justify-content: center;
+            padding: 0;
+            flex: 0 0 auto;
+        }
+
+        @media (max-width: 720px) {
+            .note-find-toolbar {
+                order: 20;
+                min-width: 100%;
+                max-width: none;
+            }
+        }
+
         /* Blocks Area */
         #blocks-container {
             flex: 1;
@@ -359,6 +419,15 @@
 
         .note-block.active-block {
             border-color: var(--accent);
+        }
+
+        .note-block.note-search-block-match {
+            box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.36), 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .note-block.note-search-active-match {
+            border-color: #facc15;
+            box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.46), 0 8px 24px rgba(0, 0, 0, 0.28);
         }
 
         .note-block.ai-selected-block {
@@ -484,6 +553,15 @@
         .block-preview-area h2,
         .block-preview-area h3 {
             margin-top: 0;
+        }
+
+        .note-search-hit {
+            background: #facc15;
+            color: #1e293b;
+            border-radius: 3px;
+            padding: 0 2px;
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
         }
 
         .block-preview-area ul,

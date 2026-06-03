@@ -1646,6 +1646,8 @@ async function pushToGist() {
             lifeGoals: lifeGoals || {},
             notes: notes || [],
             habits: typeof habits !== 'undefined' ? habits : [],
+            workouts: typeof workouts !== 'undefined' ? workouts : [],
+            workoutRoutines: typeof workoutRoutines !== 'undefined' ? workoutRoutines : [],
             agenda: agenda || [],
             reminders: reminders || [],
             noteSettings: noteSettings || { categoryNames: Array.from({ length: 10 }, (_, i) => `Category ${i + 1}`) },
@@ -2013,6 +2015,96 @@ function mergeStates(local, remote) {
         return [...Array.from(byId.values()), ...withoutId];
     };
 
+    const mergeWorkoutCollections = (localWorkouts, remoteWorkouts) => {
+        const byId = new Map();
+        const all = [
+            ...(Array.isArray(localWorkouts) ? localWorkouts : []),
+            ...(Array.isArray(remoteWorkouts) ? remoteWorkouts : [])
+        ];
+
+        const getUpdatedTs = (workout) => Math.max(
+            Number(workout && workout.updatedAt) || 0,
+            Number(workout && workout.createdAt) || 0,
+            Number(workout && workout.highestMasteredAt) || 0
+        );
+
+        const mergeLogs = (firstLogs, secondLogs) => {
+            const seen = new Set();
+            return [
+                ...(Array.isArray(firstLogs) ? firstLogs : []),
+                ...(Array.isArray(secondLogs) ? secondLogs : [])
+            ].filter(log => {
+                if (!log || typeof log !== 'object') return false;
+                const key = log.id || `${log.workoutId || ''}|${log.levelId || ''}|${log.scheduledDateKey || ''}|${log.reps || ''}|${log.createdAt || ''}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            }).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
+        };
+
+        const mergeLevels = (firstLevels, secondLevels) => {
+            const levelById = new Map();
+            [
+                ...(Array.isArray(firstLevels) ? firstLevels : []),
+                ...(Array.isArray(secondLevels) ? secondLevels : [])
+            ].forEach(level => {
+                if (!level || typeof level !== 'object') return;
+                const id = String(level.id || '').trim();
+                if (!id) return;
+                const existing = levelById.get(id);
+                if (!existing || Number(level.order) >= Number(existing.order)) {
+                    levelById.set(id, { ...existing, ...level });
+                }
+            });
+            return Array.from(levelById.values()).sort((a, b) => Number(a.order) - Number(b.order));
+        };
+
+        all.forEach(rawWorkout => {
+            if (!rawWorkout || typeof rawWorkout !== 'object') return;
+            const id = String(rawWorkout.id || '').trim();
+            if (!id) return;
+            const existing = byId.get(id);
+            if (!existing) {
+                byId.set(id, rawWorkout);
+                return;
+            }
+
+            const preferred = getUpdatedTs(rawWorkout) >= getUpdatedTs(existing) ? rawWorkout : existing;
+            const other = preferred === rawWorkout ? existing : rawWorkout;
+            byId.set(id, {
+                ...other,
+                ...preferred,
+                levels: mergeLevels(existing.levels, rawWorkout.levels),
+                logs: mergeLogs(existing.logs, rawWorkout.logs)
+            });
+        });
+
+        const merged = Array.from(byId.values());
+        return (typeof normalizeWorkoutCollection === 'function') ? normalizeWorkoutCollection(merged) : merged;
+    };
+
+    const mergeWorkoutRoutineCollections = (localRoutines, remoteRoutines) => {
+        const byId = new Map();
+        [
+            ...(Array.isArray(localRoutines) ? localRoutines : []),
+            ...(Array.isArray(remoteRoutines) ? remoteRoutines : [])
+        ].forEach(routine => {
+            if (!routine || typeof routine !== 'object') return;
+            const id = String(routine.id || '').trim();
+            if (!id) return;
+            const existing = byId.get(id);
+            if (!existing) {
+                byId.set(id, routine);
+                return;
+            }
+            const routineTs = Math.max(Number(routine.updatedAt) || 0, Number(routine.createdAt) || 0);
+            const existingTs = Math.max(Number(existing.updatedAt) || 0, Number(existing.createdAt) || 0);
+            byId.set(id, routineTs >= existingTs ? routine : existing);
+        });
+        const merged = Array.from(byId.values());
+        return (typeof normalizeWorkoutRoutineCollection === 'function') ? normalizeWorkoutRoutineCollection(merged) : merged;
+    };
+
     const mergeNoteSettings = (localSettings, remoteSettings) => {
         const localObj = (localSettings && typeof localSettings === 'object') ? localSettings : {};
         const remoteObj = (remoteSettings && typeof remoteSettings === 'object') ? remoteSettings : {};
@@ -2261,6 +2353,8 @@ function mergeStates(local, remote) {
         inbox: mergeInboxCollections(local && local.inbox, remote && remote.inbox),
         lifeGoals: mergeLifeGoalsCollections(local && local.lifeGoals, remote && remote.lifeGoals),
         habits: mergeHabitCollections(local && local.habits, remote && remote.habits),
+        workouts: mergeWorkoutCollections(local && local.workouts, remote && remote.workouts),
+        workoutRoutines: mergeWorkoutRoutineCollections(local && local.workoutRoutines, remote && remote.workoutRoutines),
         notes: [],
         agenda: mergeAgendaCollections(local && local.agenda, remote && remote.agenda),
         reminders: [],
@@ -2439,6 +2533,8 @@ async function pullFromGist() {
                 : (aiUrgencyConfig || {}),
             projects,
             nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda, reminders, noteSettings,
+            workouts: typeof workouts !== 'undefined' ? workouts : [],
+            workoutRoutines: typeof workoutRoutines !== 'undefined' ? workoutRoutines : [],
             geminiUsageStats: normalizeGeminiUsageSnapshotForSync(geminiUsageStats)
         };
 
@@ -2483,6 +2579,8 @@ async function pullFromGist() {
         lifeGoals = mergedState.lifeGoals || {};
         notes = mergedState.notes || [];
         habits = mergedState.habits || [];
+        workouts = mergedState.workouts || [];
+        workoutRoutines = mergedState.workoutRoutines || [];
         agenda = mergedState.agenda || [];
         reminders = mergedState.reminders || [];
         if (mergedState.noteSettings && typeof mergedState.noteSettings === 'object') {
@@ -2503,6 +2601,7 @@ async function pullFromGist() {
         render();             // Redraw the graph
         renderInbox();        // Update fab inbox list
         renderGoals();        // Update goals panel
+        if (typeof renderWorkouts === 'function') renderWorkouts();
         if (typeof renderReminderStrip === 'function') renderReminderStrip();
         if (typeof renderRemindersModal === 'function') renderRemindersModal();
 

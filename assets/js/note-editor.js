@@ -1,5 +1,230 @@
 // --- BLOCK-BASED NOTE SYSTEM FUNCTIONS ---
 
+let noteFindQuery = '';
+let noteFindMatches = [];
+let activeNoteFindIndex = -1;
+let noteFindHasNavigated = false;
+
+function tokenizeNoteSearchQuery(query) {
+    return Array.from(new Set(String(query || '')
+        .toLowerCase()
+        .split(/\s+/)
+        .map(term => term.trim())
+        .filter(Boolean)));
+}
+
+function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getNoteFindTerms() {
+    return tokenizeNoteSearchQuery(noteFindQuery);
+}
+
+function getNoteFindMatchesForBlock(blockId) {
+    const normalizedBlockId = String(blockId);
+    return noteFindMatches.filter(match => String(match.blockId) === normalizedBlockId);
+}
+
+function refreshNoteFindMatches(options = {}) {
+    const previousMatch = options.preserveActive !== false && noteFindMatches[activeNoteFindIndex]
+        ? { ...noteFindMatches[activeNoteFindIndex] }
+        : null;
+    const terms = getNoteFindTerms();
+    const matches = [];
+
+    if (terms.length) {
+        currentNoteBlocks.forEach((block, blockIndex) => {
+            const text = String(block && block.text ? block.text : '');
+            const lowerText = text.toLowerCase();
+            terms.forEach((term) => {
+                let startIndex = lowerText.indexOf(term);
+                while (startIndex !== -1) {
+                    matches.push({
+                        blockId: block.id,
+                        blockIndex,
+                        start: startIndex,
+                        end: startIndex + term.length,
+                        term
+                    });
+                    startIndex = lowerText.indexOf(term, startIndex + Math.max(term.length, 1));
+                }
+            });
+        });
+    }
+
+    matches.sort((a, b) => {
+        if (a.blockIndex !== b.blockIndex) return a.blockIndex - b.blockIndex;
+        if (a.start !== b.start) return a.start - b.start;
+        return a.end - b.end;
+    });
+
+    noteFindMatches = matches;
+
+    if (!noteFindMatches.length) {
+        activeNoteFindIndex = -1;
+    } else if (previousMatch) {
+        const preservedIndex = noteFindMatches.findIndex(match =>
+            String(match.blockId) === String(previousMatch.blockId) &&
+            match.start === previousMatch.start &&
+            match.end === previousMatch.end
+        );
+        activeNoteFindIndex = preservedIndex >= 0 ? preservedIndex : Math.min(activeNoteFindIndex, noteFindMatches.length - 1);
+    } else {
+        activeNoteFindIndex = 0;
+    }
+
+    updateNoteFindCount();
+}
+
+function updateNoteFindCount() {
+    const countEl = document.getElementById('note-find-count');
+    if (!countEl) return;
+    const current = activeNoteFindIndex >= 0 ? activeNoteFindIndex + 1 : 0;
+    countEl.textContent = `${current}/${noteFindMatches.length}`;
+}
+
+function applyNoteFindHighlights(container) {
+    const terms = getNoteFindTerms();
+    if (!container || !terms.length) return;
+
+    const pattern = new RegExp(`(${terms.map(escapeRegExp).sort((a, b) => b.length - a.length).join('|')})`, 'gi');
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            const parent = node.parentElement;
+            if (!parent) return NodeFilter.FILTER_REJECT;
+            if (parent.closest('mark, textarea, input, button, script, style')) return NodeFilter.FILTER_REJECT;
+            pattern.lastIndex = 0;
+            return pattern.test(node.nodeValue || '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+    });
+
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+
+    nodes.forEach((node) => {
+        const text = node.nodeValue || '';
+        const fragment = document.createDocumentFragment();
+        let lastIndex = 0;
+        pattern.lastIndex = 0;
+
+        text.replace(pattern, (match, _term, offset) => {
+            if (offset > lastIndex) {
+                fragment.appendChild(document.createTextNode(text.slice(lastIndex, offset)));
+            }
+            const mark = document.createElement('mark');
+            mark.className = 'note-search-hit';
+            mark.textContent = match;
+            fragment.appendChild(mark);
+            lastIndex = offset + match.length;
+            return match;
+        });
+
+        if (lastIndex < text.length) {
+            fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+        }
+        node.parentNode.replaceChild(fragment, node);
+    });
+}
+
+function handleNoteFindInput(value) {
+    noteFindQuery = String(value || '');
+    noteFindHasNavigated = false;
+    refreshNoteFindMatches({ preserveActive: false });
+    renderNoteBlocks();
+}
+
+function handleNoteFindKeydown(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        if (event.shiftKey) goToPreviousNoteFindMatch();
+        else goToNextNoteFindMatch();
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        clearNoteFindSearch();
+    }
+}
+
+function focusNoteFindSearch() {
+    const input = document.getElementById('note-find-input');
+    if (!input) return;
+    input.focus();
+    input.select();
+}
+
+function clearNoteFindSearch() {
+    noteFindQuery = '';
+    noteFindMatches = [];
+    activeNoteFindIndex = -1;
+    noteFindHasNavigated = false;
+    const input = document.getElementById('note-find-input');
+    if (input) input.value = '';
+    updateNoteFindCount();
+    renderNoteBlocks();
+    if (input) input.focus();
+}
+
+function resetNoteFindState() {
+    noteFindQuery = '';
+    noteFindMatches = [];
+    activeNoteFindIndex = -1;
+    noteFindHasNavigated = false;
+    const input = document.getElementById('note-find-input');
+    if (input) input.value = '';
+    updateNoteFindCount();
+}
+
+function goToNextNoteFindMatch() {
+    if (!noteFindMatches.length) return;
+    if (noteFindHasNavigated) {
+        activeNoteFindIndex = (activeNoteFindIndex + 1) % noteFindMatches.length;
+    } else {
+        noteFindHasNavigated = true;
+        if (activeNoteFindIndex < 0) activeNoteFindIndex = 0;
+    }
+    updateNoteFindCount();
+    renderNoteBlocks();
+    requestAnimationFrame(() => jumpToActiveNoteFindMatch());
+}
+
+function goToPreviousNoteFindMatch() {
+    if (!noteFindMatches.length) return;
+    if (noteFindHasNavigated) {
+        activeNoteFindIndex = (activeNoteFindIndex - 1 + noteFindMatches.length) % noteFindMatches.length;
+    } else {
+        noteFindHasNavigated = true;
+        if (activeNoteFindIndex < 0) activeNoteFindIndex = noteFindMatches.length - 1;
+    }
+    updateNoteFindCount();
+    renderNoteBlocks();
+    requestAnimationFrame(() => jumpToActiveNoteFindMatch());
+}
+
+function jumpToActiveNoteFindMatch() {
+    const match = noteFindMatches[activeNoteFindIndex];
+    if (!match) return;
+
+    const blockEl = document.getElementById(`block-${match.blockId}`);
+    if (blockEl) {
+        blockEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    const textarea = document.getElementById(`editor-${match.blockId}`);
+    if (textarea && textarea.offsetParent !== null && !isNoteGlobalViewMode) {
+        textarea.focus();
+        textarea.setSelectionRange(match.start, match.end);
+    }
+}
+
+document.addEventListener('keydown', (event) => {
+    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'f') return;
+    const editor = document.getElementById('note-editor');
+    if (!editor || editor.classList.contains('hidden')) return;
+    event.preventDefault();
+    focusNoteFindSearch();
+});
+
 // Parse note body with legacy migration
 function parseNoteBody(note) {
     if (window.NotesCore && typeof window.NotesCore.parseBlocks === 'function') {
@@ -54,8 +279,17 @@ function renderNoteBlocks() {
             const isCurrentBlockEditing = !isNoteGlobalViewMode && block.isEditing;
             const wholeNoteSelected = typeof aiNoteSelection !== 'undefined' && aiNoteSelection.notes.has(noteId);
             const blockSelected = wholeNoteSelected || (typeof aiNoteSelection !== 'undefined' && aiNoteSelection.blocks.has(makeBlockSelectionKey(noteId, block.id)));
+            const blockFindMatches = getNoteFindMatchesForBlock(block.id);
+            const hasFindMatch = blockFindMatches.length > 0;
+            const activeFindMatch = noteFindMatches[activeNoteFindIndex];
+            const hasActiveFindMatch = activeFindMatch && String(activeFindMatch.blockId) === String(block.id);
     
-            blockDiv.className = `note-block ${activeBlockId === block.id && !isNoteGlobalViewMode ? 'active-block' : ''}`;
+            blockDiv.className = [
+                'note-block',
+                activeBlockId === block.id && !isNoteGlobalViewMode ? 'active-block' : '',
+                hasFindMatch ? 'note-search-block-match' : '',
+                hasActiveFindMatch ? 'note-search-active-match' : ''
+            ].filter(Boolean).join(' ');
             if (blockSelected) blockDiv.classList.add('ai-selected-block');
             blockDiv.id = `block-${block.id}`;
             blockDiv.style.backgroundColor = noteCategoryColors[block.colorIndex] || noteCategoryColors[0];
@@ -126,6 +360,7 @@ function renderNoteBlocks() {
             if (typeof enhanceRenderedMarkdown === 'function') {
                 enhanceRenderedMarkdown(preview);
             }
+            applyNoteFindHighlights(preview);
     
             // Auto-resize if in editing mode
             if (isCurrentBlockEditing) {
@@ -202,6 +437,7 @@ function setActiveBlock(id) {
 function updateBlockText(id, text) {
     const block = currentNoteBlocks.find(b => b.id === id);
     if (block) block.text = text;
+    if (noteFindQuery) refreshNoteFindMatches({ preserveActive: true });
     triggerNoteSave();
 }
 

@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="assets/css/notes.css">
     <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/goals-habits.css">
+    <link rel="stylesheet" href="assets/css/workouts.css">
     <link rel="stylesheet" href="assets/css/graph.css">
     <link rel="stylesheet" href="assets/css/panels-modals.css">
     <link rel="stylesheet" href="assets/css/calendar.css">
@@ -136,6 +137,10 @@
                     data-tooltip="Life Goals (Optn+G)" aria-label="Life Goals (Optn+G)">🎯</button>
                 <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleHabits()"
                     data-tooltip="Habits (Optn+H)" aria-label="Habits (Optn+H)">✅</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleWorkouts()"
+                    data-tooltip="Workouts" aria-label="Workouts">🏋</button>
+                <button class="toolbar-icon-btn toolbar-menu-action" onclick="openWorkoutStudioModal()"
+                    data-tooltip="Workout Studio" aria-label="Workout Studio">📈</button>
                 <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleAgenda()"
                     data-tooltip="Planner (Optn+A)" aria-label="Planner (Optn+A)">📅</button>
                 <button class="toolbar-icon-btn toolbar-menu-action" onclick="toggleNotesPanel()"
@@ -177,6 +182,7 @@
         <button class="right-rail-tab" data-panel-id="notes-panel" onclick="openRightRailTab('notes')">Notes</button>
         <button class="right-rail-tab" data-panel-id="goals-panel" onclick="openRightRailTab('goals')">Goals</button>
         <button class="right-rail-tab" data-panel-id="habits-panel" onclick="openRightRailTab('habits')">Habits</button>
+        <button class="right-rail-tab" data-panel-id="workouts-panel" onclick="openRightRailTab('workouts')">Workouts</button>
         <button class="right-rail-tab" data-panel-id="agenda-panel"
             onclick="openRightRailTab('planner')">Planner</button>
         <button class="right-rail-tab" data-panel-id="projects-panel" onclick="openRightRailTab('projects')">Projects</button>
@@ -794,6 +800,97 @@
         </div>
     </div>
 
+    <div id="workouts-panel" class="hidden side-panel">
+        <div class="panel-header-row">
+            <span>🏋 Workouts</span>
+            <div class="workout-panel-header-actions">
+                <button class="btn btn-primary" onclick="openWorkoutStudioModal()">Studio</button>
+                <button class="btn" onclick="toggleWorkouts()">✕</button>
+            </div>
+        </div>
+
+        <div class="workout-composer">
+            <div class="workout-composer-row">
+                <input type="text" id="workout-name-input" placeholder="Workout movement..." onkeypress="if(event.key==='Enter') saveWorkoutFromComposer()">
+                <button id="workout-submit-btn" class="btn btn-primary" onclick="saveWorkoutFromComposer()">Add</button>
+                <button id="workout-cancel-edit-btn" class="btn" style="display:none;" onclick="cancelWorkoutEdit()">Cancel</button>
+            </div>
+
+            <div class="workout-weekday-row" id="workout-weekday-row" aria-label="Workout weekdays">
+                <button type="button" class="workout-weekday-btn" data-day="0" onclick="toggleWorkoutComposerWeekday(0)">Sun</button>
+                <button type="button" class="workout-weekday-btn" data-day="1" onclick="toggleWorkoutComposerWeekday(1)">Mon</button>
+                <button type="button" class="workout-weekday-btn" data-day="2" onclick="toggleWorkoutComposerWeekday(2)">Tue</button>
+                <button type="button" class="workout-weekday-btn" data-day="3" onclick="toggleWorkoutComposerWeekday(3)">Wed</button>
+                <button type="button" class="workout-weekday-btn" data-day="4" onclick="toggleWorkoutComposerWeekday(4)">Thu</button>
+                <button type="button" class="workout-weekday-btn" data-day="5" onclick="toggleWorkoutComposerWeekday(5)">Fri</button>
+                <button type="button" class="workout-weekday-btn" data-day="6" onclick="toggleWorkoutComposerWeekday(6)">Sat</button>
+            </div>
+
+            <div class="workout-schedule-row">
+                <label>
+                    <span>Time</span>
+                    <input type="time" id="workout-time-input">
+                </label>
+                <label>
+                    <span>Minutes</span>
+                    <input type="number" id="workout-duration-input" min="5" max="240" step="5" value="30">
+                </label>
+            </div>
+        </div>
+
+        <div class="workout-summary-strip">
+            <div class="workout-summary-top">
+                <span id="workout-summary-title">No workouts yet</span>
+                <span id="workout-summary-meta">0 scheduled today</span>
+            </div>
+            <div id="workout-summary-next" class="workout-summary-next">Add a workout movement to begin.</div>
+        </div>
+
+        <div class="workout-calendar-panel">
+            <div class="workout-calendar-toolbar">
+                <button type="button" class="workout-icon-btn" onclick="changeWorkoutCalendarDate(-1)" aria-label="Previous workout calendar period">&lt;</button>
+                <div id="workout-calendar-title" class="workout-calendar-title">This Week</div>
+                <button type="button" class="workout-icon-btn" onclick="changeWorkoutCalendarDate(1)" aria-label="Next workout calendar period">&gt;</button>
+            </div>
+            <div class="workout-calendar-mode-row">
+                <div class="workout-calendar-mode-switch panel-slider" id="workout-calendar-mode-switch" aria-label="Workout calendar view">
+                    <button type="button" class="workout-calendar-mode-btn panel-slider-option active" data-workout-calendar-view="week" onclick="setWorkoutCalendarView('week')">Week</button>
+                    <button type="button" class="workout-calendar-mode-btn panel-slider-option" data-workout-calendar-view="month" onclick="setWorkoutCalendarView('month')">Month</button>
+                </div>
+                <button type="button" class="workout-calendar-today-btn" onclick="goToWorkoutCalendarToday()">Today</button>
+            </div>
+            <div id="workout-calendar-grid" class="workout-calendar-grid workout-calendar-week"></div>
+            <div id="workout-calendar-day-detail" class="workout-calendar-day-detail"></div>
+        </div>
+
+        <div class="panel-list workout-list" id="workouts-list-container"></div>
+    </div>
+
+    <div id="workout-studio-backdrop" onclick="closeWorkoutStudioModal()"></div>
+    <div id="workout-studio-modal" role="dialog" aria-modal="true" aria-labelledby="workout-studio-title">
+        <div class="workout-studio-header">
+            <div>
+                <div id="workout-studio-title" class="workout-studio-title">Workout Studio</div>
+                <div class="workout-studio-subtitle">Calendar, levels, history, and progress</div>
+            </div>
+            <button class="modal-close-btn" onclick="closeWorkoutStudioModal()" aria-label="Close Workout Studio">✕</button>
+        </div>
+        <div class="workout-studio-tabs" id="workout-studio-tabs" aria-label="Workout Studio tabs">
+            <button type="button" class="workout-studio-tab active" data-workout-studio-tab="today" onclick="setWorkoutStudioTab('today')">Today</button>
+            <button type="button" class="workout-studio-tab" data-workout-studio-tab="calendar" onclick="setWorkoutStudioTab('calendar')">Calendar</button>
+            <button type="button" class="workout-studio-tab" data-workout-studio-tab="levels" onclick="setWorkoutStudioTab('levels')">Levels</button>
+            <button type="button" class="workout-studio-tab" data-workout-studio-tab="routines" onclick="setWorkoutStudioTab('routines')">Routines</button>
+            <button type="button" class="workout-studio-tab" data-workout-studio-tab="history" onclick="setWorkoutStudioTab('history')">History</button>
+            <button type="button" class="workout-studio-tab" data-workout-studio-tab="progress" onclick="setWorkoutStudioTab('progress')">Progress</button>
+        </div>
+        <div id="workout-studio-content" class="workout-studio-content"></div>
+    </div>
+
+    <div id="workout-routine-player-backdrop"></div>
+    <div id="workout-routine-player" role="dialog" aria-modal="true" aria-labelledby="workout-routine-player-title">
+        <div id="workout-routine-player-content"></div>
+    </div>
+
     <div id="notes-panel" class="hidden side-panel">
         <div class="panel-header-row" id="notes-header-drag-handle">
             <div  class="layout-group-53">
@@ -1009,6 +1106,20 @@
                 <button class="note-toolbar-btn" onclick="copyEntireNote()" title="Copy Entire Note">
                     <i class="fas fa-copy"></i> Copy All
                 </button>
+            </div>
+
+            <div class="note-toolbar-group note-find-toolbar" role="search" aria-label="Find in note">
+                <span class="note-find-icon" aria-hidden="true">🔍</span>
+                <input type="search" id="note-find-input" class="note-find-input" placeholder="Find in note..."
+                    oninput="handleNoteFindInput(this.value)"
+                    onkeydown="handleNoteFindKeydown(event)">
+                <span id="note-find-count" class="note-find-count">0/0</span>
+                <button type="button" class="note-toolbar-btn note-find-nav-btn" onclick="goToPreviousNoteFindMatch()"
+                    title="Previous match" aria-label="Previous match">↑</button>
+                <button type="button" class="note-toolbar-btn note-find-nav-btn" onclick="goToNextNoteFindMatch()"
+                    title="Next match" aria-label="Next match">↓</button>
+                <button type="button" class="note-toolbar-btn note-find-clear-btn" onclick="clearNoteFindSearch()"
+                    title="Clear search" aria-label="Clear search">✕</button>
             </div>
         </div>
 
@@ -1694,10 +1805,11 @@
             <span class="health-label">Task Load</span>
             <span class="health-val" id="hd-load">0 / 0</span>
         </div>
-        <div class="health-row" title="IndexedDB Storage (High Capacity)">
+        <div class="health-row" id="hd-storage-row" title="App payload and browser storage quota">
             <span class="health-label">DB Size</span>
-            <div  class="layout-group-93">
-                <span class="health-val" id="hd-storage-text">0%</span>
+            <div class="layout-group-93 health-storage-metric">
+                <span class="health-val" id="hd-storage-text">0 KB app</span>
+                <span class="health-storage-quota" id="hd-storage-quota">Quota pending</span>
                 <div class="health-bar-bg">
                     <div class="health-bar-fill" id="hd-storage-bar"></div>
                 </div>
@@ -1829,6 +1941,7 @@
     <script defer src="assets/js/note-maximize.js"></script>
     <script defer src="assets/js/notes.js"></script>
     <script defer src="assets/js/goals-habits.js"></script>
+    <script defer src="assets/js/workouts.js"></script>
     <script defer src="assets/js/graph.js"></script>
     <script defer src="assets/js/ai-urgency.js"></script>
     <script defer src="assets/js/tasks.js"></script>

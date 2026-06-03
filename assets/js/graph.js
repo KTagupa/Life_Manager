@@ -1289,6 +1289,8 @@ function closeAllSidePanels() {
     if (goalsPanel) goalsPanel.classList.add('hidden');
     const habitsPanel = document.getElementById('habits-panel');
     if (habitsPanel) habitsPanel.classList.add('hidden');
+    const workoutsPanel = document.getElementById('workouts-panel');
+    if (workoutsPanel) workoutsPanel.classList.add('hidden');
     const archivePanel = document.getElementById('archive-panel');
     if (archivePanel) archivePanel.classList.add('hidden');
     const plannerPanel = document.getElementById('agenda-panel');
@@ -1688,6 +1690,109 @@ function deleteAgendaSlot(index) {
 
 // Replace your existing updateHealthMonitor with this one
 let lastHealthUpdateTime = 0;
+let lastStoragePayloadBytes = 0;
+let lastBrowserStorageEstimateTime = 0;
+let browserStorageEstimatePending = false;
+let browserStorageEstimate = null;
+const BROWSER_STORAGE_ESTIMATE_REFRESH_MS = 30000;
+
+function formatHealthStorageBytes(bytes) {
+    const numericBytes = Number(bytes);
+    if (!Number.isFinite(numericBytes) || numericBytes < 0) return '--';
+
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let value = numericBytes;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+    }
+
+    if (unitIndex === 0) return Math.round(value) + ' ' + units[unitIndex];
+    const precision = value >= 100 ? 0 : 1;
+    return value.toFixed(precision) + ' ' + units[unitIndex];
+}
+
+function applyStorageHealthDisplay(appPayloadBytes) {
+    lastStoragePayloadBytes = Number.isFinite(Number(appPayloadBytes)) ? Math.max(0, Number(appPayloadBytes)) : 0;
+
+    const appSizeText = formatHealthStorageBytes(lastStoragePayloadBytes);
+    const appLabel = appSizeText + ' app';
+    const estimate = browserStorageEstimate || {};
+    const hasBrowserQuota = estimate.supported === true
+        && Number.isFinite(Number(estimate.usage))
+        && Number.isFinite(Number(estimate.quota))
+        && Number(estimate.quota) > 0;
+
+    const browserLabel = hasBrowserQuota
+        ? `${formatHealthStorageBytes(estimate.usage)} / ${formatHealthStorageBytes(estimate.quota)}`
+        : (estimate.supported === false ? 'Quota unavailable' : 'Quota pending');
+
+    const storageText = document.getElementById('hd-storage-text');
+    const storageQuota = document.getElementById('hd-storage-quota');
+    const storageRow = document.getElementById('hd-storage-row');
+    const storageBar = document.getElementById('hd-storage-bar');
+    const reviewStorageEl = document.getElementById('review-health-storage');
+
+    if (storageText) storageText.innerText = appLabel;
+    if (storageQuota) storageQuota.innerText = browserLabel;
+    if (reviewStorageEl) reviewStorageEl.innerText = hasBrowserQuota ? browserLabel : appSizeText;
+
+    if (storageRow) {
+        storageRow.title = hasBrowserQuota
+            ? `App payload: ${appSizeText}. Browser storage: ${browserLabel}.`
+            : `App payload: ${appSizeText}. Browser storage estimate is not available yet.`;
+    }
+
+    if (storageBar) {
+        const softLimit = 10 * 1024 * 1024;
+        const storagePct = hasBrowserQuota
+            ? (Number(estimate.usage) / Number(estimate.quota)) * 100
+            : (lastStoragePayloadBytes / softLimit) * 100;
+
+        storageBar.style.width = Math.min(100, Math.max(1, storagePct)) + '%';
+        if (storagePct > 80) storageBar.style.background = 'var(--blocked-color)';
+        else if (storagePct > 50) storageBar.style.background = '#fbbf24';
+        else storageBar.style.background = 'var(--ready-color)';
+    }
+}
+
+function refreshBrowserStorageEstimateIfNeeded(force = false) {
+    const now = Date.now();
+    const canEstimateStorage = typeof navigator !== 'undefined'
+        && navigator.storage
+        && typeof navigator.storage.estimate === 'function';
+
+    if (!canEstimateStorage) {
+        browserStorageEstimate = { supported: false };
+        applyStorageHealthDisplay(lastStoragePayloadBytes);
+        return;
+    }
+
+    if (browserStorageEstimatePending) return;
+    if (!force && now - lastBrowserStorageEstimateTime < BROWSER_STORAGE_ESTIMATE_REFRESH_MS) return;
+
+    browserStorageEstimatePending = true;
+    lastBrowserStorageEstimateTime = now;
+
+    navigator.storage.estimate()
+        .then((estimate) => {
+            browserStorageEstimate = {
+                supported: true,
+                usage: Math.max(0, Number(estimate && estimate.usage) || 0),
+                quota: Math.max(0, Number(estimate && estimate.quota) || 0),
+                updatedAt: Date.now()
+            };
+        })
+        .catch((error) => {
+            console.warn('Storage quota estimate failed:', error);
+            browserStorageEstimate = { supported: false, error: true };
+        })
+        .finally(() => {
+            browserStorageEstimatePending = false;
+            applyStorageHealthDisplay(lastStoragePayloadBytes);
+        });
+}
 
 function updateHealthMonitor() {
     // Throttle: Only update the UI every 500ms to save CPU
@@ -1753,39 +1858,15 @@ function updateHealthMonitor() {
             aiUrgencyConfig: (typeof aiUrgencyConfig !== 'undefined') ? aiUrgencyConfig : {},
             projects: (typeof projects !== 'undefined') ? projects : [],
             nodes, archivedNodes, inbox, lifeGoals, notes,
-            habits, agenda, pinnedItems, quickLinks, reminders,
+            habits, workouts, workoutRoutines, agenda, pinnedItems, quickLinks, reminders,
             hiddenNodeGroups: (typeof hiddenNodeGroups !== 'undefined') ? Array.from(hiddenNodeGroups) : [],
             timestamp: Date.now()
         };
         const jsonString = JSON.stringify(dataPayload);
         const totalBytes = new Blob([jsonString]).size;
 
-        // Soft limit for visualization 10MB (Performance warning threshold)
-        const softLimit = 10 * 1024 * 1024;
-        const storagePct = (totalBytes / softLimit) * 100;
-
-        const storageText = document.getElementById('hd-storage-text');
-        const storageBar = document.getElementById('hd-storage-bar');
-
-        let sizeStr = '';
-        if (totalBytes < 1024 * 1024) {
-            sizeStr = (totalBytes / 1024).toFixed(1) + ' KB';
-        } else {
-            sizeStr = (totalBytes / (1024 * 1024)).toFixed(2) + ' MB';
-        }
-
-        if (storageText) {
-            storageText.innerText = sizeStr;
-        }
-        const reviewStorageEl = document.getElementById('review-health-storage');
-        if (reviewStorageEl) reviewStorageEl.innerText = sizeStr;
-        if (storageBar) {
-            storageBar.style.width = Math.min(100, Math.max(1, storagePct)) + '%';
-            // Colorize based on usage
-            if (storagePct > 80) storageBar.style.background = 'var(--blocked-color)';
-            else if (storagePct > 50) storageBar.style.background = '#fbbf24';
-            else storageBar.style.background = 'var(--ready-color)';
-        }
+        applyStorageHealthDisplay(totalBytes);
+        refreshBrowserStorageEstimateIfNeeded();
     } catch (e) {
         console.warn("Storage health check failed:", e);
     }
