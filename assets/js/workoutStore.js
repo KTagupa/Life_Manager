@@ -47,6 +47,7 @@
         return {
             dataModelVersion: typeof global.DATA_MODEL_VERSION === 'number' ? global.DATA_MODEL_VERSION : 5,
             workouts: [],
+            workoutRotations: [],
             workoutRoutines: [],
             workoutSessions: [],
             timestamp: Date.now()
@@ -156,6 +157,7 @@
         const source = state && typeof state === 'object' ? state : getEmptyState();
         return {
             workouts: core ? core.normalizeWorkoutCollection(source.workouts) : (Array.isArray(source.workouts) ? source.workouts : []),
+            workoutRotations: core ? core.normalizeRotationCollection(source.workoutRotations, source.workouts) : (Array.isArray(source.workoutRotations) ? source.workoutRotations : []),
             workoutRoutines: core ? core.normalizeRoutineCollection(source.workoutRoutines) : (Array.isArray(source.workoutRoutines) ? source.workoutRoutines : []),
             workoutSessions: core ? core.normalizeSessionCollection(source.workoutSessions) : (Array.isArray(source.workoutSessions) ? source.workoutSessions : [])
         };
@@ -176,6 +178,7 @@
         const merged = {
             ...current,
             workouts: core ? core.normalizeWorkoutCollection(nextSlices && nextSlices.workouts) : (nextSlices.workouts || []),
+            workoutRotations: core ? core.normalizeRotationCollection(nextSlices && nextSlices.workoutRotations, nextSlices && nextSlices.workouts) : (nextSlices.workoutRotations || []),
             workoutRoutines: core ? core.normalizeRoutineCollection(nextSlices && nextSlices.workoutRoutines) : (nextSlices.workoutRoutines || []),
             workoutSessions: core ? core.normalizeSessionCollection(nextSlices && nextSlices.workoutSessions) : (nextSlices.workoutSessions || []),
             dataModelVersion: Math.max(Number(current.dataModelVersion) || 5, typeof global.DATA_MODEL_VERSION === 'number' ? global.DATA_MODEL_VERSION : 5)
@@ -188,14 +191,17 @@
         const core = getCore();
         if (!core) throw new Error('WorkoutCore is unavailable.');
         const applied = core.applySessionToWorkouts(sessionInput, state.workouts);
+        const rotationUpdate = core.advanceRotationsForSession(applied.session, state.workoutRotations, applied.workouts);
         const sessions = core.normalizeSessionCollection([...(state.workoutSessions || []), applied.session]);
         await saveWorkoutState({
             workouts: applied.workouts,
+            workoutRotations: rotationUpdate.rotations,
             workoutRoutines: state.workoutRoutines,
             workoutSessions: sessions
         });
         return {
             ...applied,
+            workoutRotations: rotationUpdate.rotations,
             workoutSessions: sessions
         };
     }

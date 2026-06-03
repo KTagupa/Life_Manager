@@ -7,11 +7,13 @@
 
     const state = {
         workouts: [],
+        rotations: [],
         routines: [],
         sessions: [],
         activeTab: 'today',
         activeSession: null,
         editingWorkoutId: null,
+        editingRotationId: null,
         routineDraft: {
             id: null,
             name: '',
@@ -84,6 +86,10 @@
         return state.routines.find(routine => routine && routine.id === routineId) || null;
     }
 
+    function getRotation(rotationId) {
+        return state.rotations.find(rotation => rotation && rotation.id === rotationId) || null;
+    }
+
     function getLevel(workout, levelId) {
         if (!workout) return null;
         return workout.levels.find(level => level.id === levelId) || workout.levels[0] || null;
@@ -97,12 +103,54 @@
         return Core.getScheduleLabel(workout);
     }
 
+    function getRotationScheduleLabel(rotation) {
+        const normalized = Core.normalizeRotation(rotation, state.workouts.map(workout => workout.id));
+        const days = normalized.schedule.weekdays.map(day => WEEKDAYS[day]).join(', ');
+        const time = normalized.schedule.time ? ` at ${normalized.schedule.time}` : '';
+        const duration = Number(normalized.schedule.durationMinutes) > 0 ? ` / ${normalized.schedule.durationMinutes}m` : '';
+        return `${days}${time}${duration}`;
+    }
+
+    function getRotationResolution(rotation) {
+        return Core.resolveRotationWorkout(rotation, state.workouts);
+    }
+
+    function getScheduledRotationItems(date = new Date()) {
+        return state.rotations
+            .filter(rotation => Core.isRotationScheduledOnDate(rotation, date))
+            .map(rotation => {
+                const resolution = getRotationResolution(rotation);
+                return resolution && resolution.workout ? {
+                    type: 'rotation',
+                    rotation: resolution.rotation,
+                    workout: resolution.workout,
+                    resolution
+                } : null;
+            })
+            .filter(Boolean);
+    }
+
+    function getRotationIdsForWorkout(workoutId) {
+        return state.rotations.filter(rotation => rotation.workoutIds.includes(workoutId));
+    }
+
+    function getRotationAttemptedToday(rotation, key = todayKey()) {
+        if (!rotation) return false;
+        return state.workouts.some(workout => (workout.logs || []).some(log => {
+            if (log.scheduledDateKey !== key) return false;
+            if (log.rotationId && log.rotationId === rotation.id) return true;
+            return !log.rotationId && rotation.history.some(event => event.dateKey === key && event.workoutId === workout.id);
+        }));
+    }
+
     function getStepWorkout(step) {
         return step && step.type === 'workout' ? getWorkout(step.workoutId) : null;
     }
 
     function normalizeLocalState() {
         state.workouts = Core.normalizeWorkoutCollection(state.workouts);
+        state.workouts.forEach(workout => Core.applyPendingProgression(workout, todayKey()));
+        state.rotations = Core.normalizeRotationCollection(state.rotations, state.workouts);
         state.routines = Core.normalizeRoutineCollection(state.routines);
         state.sessions = Core.normalizeSessionCollection(state.sessions);
     }
@@ -111,6 +159,7 @@
         normalizeLocalState();
         await Store.saveWorkoutState({
             workouts: state.workouts,
+            workoutRotations: state.rotations,
             workoutRoutines: state.routines,
             workoutSessions: state.sessions
         });
@@ -121,6 +170,8 @@
     async function loadState() {
         const loaded = await Store.loadWorkoutState();
         state.workouts = Core.normalizeWorkoutCollection(loaded.workouts);
+        state.workouts.forEach(workout => Core.applyPendingProgression(workout, todayKey()));
+        state.rotations = Core.normalizeRotationCollection(loaded.workoutRotations, state.workouts);
         state.routines = Core.normalizeRoutineCollection(loaded.workoutRoutines);
         state.sessions = Core.normalizeSessionCollection(loaded.workoutSessions);
     }
@@ -169,8 +220,16 @@
 
     function getTodayMetrics() {
         const key = todayKey();
-        const scheduled = state.workouts.filter(workout => Core.isScheduledOnDate(workout, new Date()));
-        const completed = scheduled.filter(workout => Core.getDayMetrics(workout, key).completed);
+        const rotationItems = getScheduledRotationItems(new Date());
+        const rotationMemberIds = new Set(rotationItems.flatMap(item => item.rotation.workoutIds));
+        const directItems = state.workouts
+            .filter(workout => Core.isScheduledOnDate(workout, new Date()) && !rotationMemberIds.has(workout.id))
+            .map(workout => ({ type: 'movement', workout }));
+        const scheduled = [...rotationItems, ...directItems];
+        const completed = scheduled.filter(item => {
+            if (item.type === 'rotation') return getRotationAttemptedToday(item.rotation, key);
+            return Core.getDayMetrics(item.workout, key).completed;
+        });
         const logged = state.workouts.filter(workout => Core.getDayMetrics(workout, key).levelLogs.length > 0);
         return { key, scheduled, completed, logged };
     }
@@ -213,20 +272,31 @@
         `;
     }
 
-    function renderTodayMovementCard(workout) {
+    function renderTodayMovementCard(item) {
+        const workout = item.workout || item;
+        const rotation = item.type === 'rotation' ? item.rotation : null;
+        const resolution = item.resolution || null;
         const metrics = Core.getDayMetrics(workout, todayKey());
         const policy = getPolicy(workout);
         const level = getLevel(workout, workout.currentLevelId);
         const percent = Math.min(100, Math.round((metrics.qualifyingSets / Math.max(1, metrics.requiredSets)) * 100));
+        const scheduleText = rotation
+            ? `${rotation.name} / ${getRotationScheduleLabel(rotation)}`
+            : getScheduleLabel(workout);
+        const balanceText = rotation && resolution && !resolution.balanced
+            ? 'Level catch-up rotation'
+            : rotation
+                ? 'Alternating rotation'
+                : '';
         return `
             <article class="workout-card">
                 <div class="workout-card-head">
                     <div>
                         <h3 class="workout-card-title">${escapeHtml(workout.name)}</h3>
-                        <div class="workout-meta">${escapeHtml(getScheduleLabel(workout))}</div>
+                        <div class="workout-meta">${escapeHtml(scheduleText)}${balanceText ? ` / ${escapeHtml(balanceText)}` : ''}</div>
                     </div>
                     <div class="workout-card-actions">
-                        <button type="button" class="workout-btn primary" onclick="WorkoutApp.startWorkoutSession('${escapeHtml(workout.id)}')">Start</button>
+                        <button type="button" class="workout-btn primary" onclick="${rotation ? `WorkoutApp.startRotationSession('${escapeHtml(rotation.id)}')` : `WorkoutApp.startWorkoutSession('${escapeHtml(workout.id)}')`}">Start</button>
                         <button type="button" class="workout-btn" onclick="WorkoutApp.editMovement('${escapeHtml(workout.id)}')">Edit</button>
                     </div>
                 </div>
@@ -237,9 +307,9 @@
                 </div>
                 <div class="workout-progress-track"><div class="workout-progress-fill" style="width:${percent}%"></div></div>
                 <div class="workout-action-row" style="margin-top:14px">
-                    <button type="button" class="workout-btn blue" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${policy.normalSetReps})">+${policy.normalSetReps}</button>
-                    <button type="button" class="workout-btn" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${metrics.targetReps})">Target Set</button>
-                    <button type="button" class="workout-btn warning" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${policy.advancedSetReps})">+${policy.advancedSetReps}</button>
+                    <button type="button" class="workout-btn blue" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${policy.normalSetReps}, '${escapeHtml(rotation ? rotation.id : '')}')">+${policy.normalSetReps}</button>
+                    <button type="button" class="workout-btn" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${metrics.targetReps}, '${escapeHtml(rotation ? rotation.id : '')}')">Target Set</button>
+                    <button type="button" class="workout-btn warning" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${policy.advancedSetReps}, '${escapeHtml(rotation ? rotation.id : '')}')">+${policy.advancedSetReps}</button>
                 </div>
             </article>
         `;
@@ -303,6 +373,21 @@
             <button type="button" class="workout-btn primary workout-large-btn" onclick="WorkoutApp.startScheduledSession()">Start Scheduled</button>
             <button type="button" class="workout-btn workout-large-btn" onclick="WorkoutApp.startAllSession()">Start All</button>
         `;
+        const scheduledRows = metrics.scheduled.length
+            ? metrics.scheduled.map(item => {
+                const workout = item.workout;
+                const rotation = item.type === 'rotation' ? item.rotation : null;
+                return `
+                <div class="workout-recent-row">
+                    <div>
+                        <strong>${escapeHtml(workout.name)}</strong>
+                        <div class="workout-meta">${escapeHtml(rotation ? `${rotation.name} / ${getRotationScheduleLabel(rotation)}` : getScheduleLabel(workout))}</div>
+                    </div>
+                    <button type="button" class="workout-btn primary" onclick="${rotation ? `WorkoutApp.startRotationSession('${escapeHtml(rotation.id)}')` : `WorkoutApp.startWorkoutSession('${escapeHtml(workout.id)}')`}">Start</button>
+                </div>
+            `;
+            }).join('')
+            : '<div class="workout-empty">Create a movement in Library to start logging.</div>';
         const movementRows = state.workouts.length
             ? state.workouts.map(workout => `
                 <div class="workout-recent-row">
@@ -330,7 +415,11 @@
             ${renderPageHead('Session', `${metrics.scheduled.length} scheduled movement${metrics.scheduled.length === 1 ? '' : 's'} today.`, startActions)}
             <div class="workout-two-col">
                 <section class="workout-panel">
-                    <h2 class="workout-section-title">Movements</h2>
+                    <h2 class="workout-section-title">Scheduled</h2>
+                    <div class="workout-recent-list">${scheduledRows}</div>
+                </section>
+                <section class="workout-panel">
+                    <h2 class="workout-section-title">Ad Hoc Movements</h2>
                     <div class="workout-recent-list">${movementRows}</div>
                 </section>
                 <section class="workout-panel">
@@ -362,12 +451,13 @@
         const targetReps = Math.max(1, Math.round(Number(step.targetReps) || (workout ? workout.targetReps : Core.NORMAL_SET_REPS)));
         const targetSets = Math.max(1, Math.round(Number(step.targetSets) || (workout ? getPolicy(workout).requiredSets : Core.REQUIRED_SETS)));
         const level = workout ? getLevel(workout, workout.currentLevelId) : null;
+        const rotationText = step.rotationName ? ` / ${step.rotationName}` : '';
         return `
             <section class="workout-step-card">
                 <div>
                     <span class="workout-kicker">Movement</span>
                     <h2>${escapeHtml(workout ? workout.name : 'Missing movement')}</h2>
-                    <div class="workout-meta">${escapeHtml(level ? level.name : 'Level')} / ${setCount}/${targetSets} sets / target ${targetReps} reps</div>
+                    <div class="workout-meta">${escapeHtml(level ? level.name : 'Level')}${escapeHtml(rotationText)} / ${setCount}/${targetSets} sets / target ${targetReps} reps</div>
                 </div>
                 <div class="workout-session-reps">
                     <input type="number" id="session-reps-input" min="1" value="${targetReps}" aria-label="Reps">
@@ -393,7 +483,7 @@
                 <div class="workout-session-entry-row">
                     <div>
                         <strong>${escapeHtml(entry.workoutName || 'Movement')}</strong>
-                        <div class="workout-meta">${escapeHtml(entry.levelName || 'Level')} / target ${entry.targetRepsAtLog}</div>
+                        <div class="workout-meta">${escapeHtml(entry.levelName || 'Level')}${entry.rotationName ? ` / ${escapeHtml(entry.rotationName)}` : ''} / target ${entry.targetRepsAtLog}</div>
                     </div>
                     <strong>${entry.reps} reps</strong>
                 </div>
@@ -410,6 +500,9 @@
             workoutName: workout.name,
             levelId: workout.currentLevelId,
             levelName: level ? level.name : '',
+            rotationId: String(overrides.rotationId || '').trim(),
+            rotationName: String(overrides.rotationName || '').trim(),
+            scheduledForProgression: overrides.scheduledForProgression === true,
             targetReps: Math.max(1, Math.round(Number(overrides.targetReps) || Number(workout.targetReps) || policy.normalSetReps)),
             targetSets: Math.max(1, Math.round(Number(overrides.targetSets) || policy.requiredSets)),
             durationSeconds: Math.max(5, Math.round(Number(overrides.durationSeconds) || Core.ROUTINE_DEFAULT_WORK_SECONDS)),
@@ -417,7 +510,7 @@
         };
     }
 
-    function beginSession(name, steps, routine = null) {
+    function beginSession(name, steps, routine = null, meta = {}) {
         if (!steps.length) {
             notify('Add at least one movement before starting.');
             return;
@@ -427,6 +520,8 @@
             name,
             routineId: routine ? routine.id : '',
             routineName: routine ? routine.name : '',
+            rotationId: String(meta.rotationId || '').trim(),
+            rotationName: String(meta.rotationName || '').trim(),
             startedAt: Date.now(),
             paused: false,
             pausedMs: 0,
@@ -440,8 +535,16 @@
     }
 
     function startScheduledSession() {
-        const scheduled = state.workouts.filter(workout => Core.isScheduledOnDate(workout, new Date()));
-        beginSession('Scheduled Workout', scheduled.map(workout => buildWorkoutStep(workout)));
+        const metrics = getTodayMetrics();
+        beginSession('Scheduled Workout', metrics.scheduled.map(item => {
+            const workout = item.workout;
+            const rotation = item.type === 'rotation' ? item.rotation : null;
+            return buildWorkoutStep(workout, {
+                rotationId: rotation ? rotation.id : '',
+                rotationName: rotation ? rotation.name : '',
+                scheduledForProgression: true
+            });
+        }));
     }
 
     function startAllSession() {
@@ -455,6 +558,24 @@
             return;
         }
         beginSession(workout.name, [buildWorkoutStep(workout)]);
+    }
+
+    function startRotationSession(rotationId) {
+        const rotation = getRotation(rotationId);
+        const resolution = rotation ? getRotationResolution(rotation) : null;
+        if (!rotation || !resolution || !resolution.workout) {
+            notify('Rotation is missing movements.');
+            return;
+        }
+        const step = buildWorkoutStep(resolution.workout, {
+            rotationId: rotation.id,
+            rotationName: rotation.name,
+            scheduledForProgression: true
+        });
+        beginSession(`${resolution.workout.name} / ${rotation.name}`, [step], null, {
+            rotationId: rotation.id,
+            rotationName: rotation.name
+        });
     }
 
     function startRoutineSession(routineId) {
@@ -497,6 +618,9 @@
             workoutName: workout.name,
             levelId: workout.currentLevelId,
             levelName: level ? level.name : '',
+            rotationId: step.rotationId || '',
+            rotationName: step.rotationName || '',
+            scheduledForProgression: step.scheduledForProgression === true,
             reps,
             targetRepsAtLog: Number(workout.targetReps) || getPolicy(workout).normalSetReps,
             createdAt: Date.now()
@@ -551,6 +675,8 @@
             id: session.id,
             routineId: session.routineId,
             routineName: session.routineName,
+            rotationId: session.rotationId,
+            rotationName: session.rotationName,
             name: session.name,
             dateKey: todayKey(),
             startedAt: session.startedAt,
@@ -560,6 +686,7 @@
         };
         const result = await Store.saveSession(saved);
         state.workouts = result.workouts;
+        state.rotations = result.workoutRotations;
         state.sessions = result.workoutSessions;
 
         if (session.routineId) {
@@ -578,6 +705,7 @@
                 routine.updatedAt = now;
                 await Store.saveWorkoutState({
                     workouts: state.workouts,
+                    workoutRotations: state.rotations,
                     workoutRoutines: state.routines,
                     workoutSessions: state.sessions
                 });
@@ -590,13 +718,16 @@
         render();
     }
 
-    async function quickLogMovement(workoutId, reps) {
+    async function quickLogMovement(workoutId, reps, rotationId = '') {
         const workout = getWorkout(workoutId);
         if (!workout) return;
         const now = Date.now();
         const level = getLevel(workout, workout.currentLevelId);
+        const rotation = rotationId ? getRotation(rotationId) : null;
         const result = await Store.saveSession({
             id: Core.createId('workout_session'),
+            rotationId: rotation ? rotation.id : '',
+            rotationName: rotation ? rotation.name : '',
             name: `Quick Log - ${workout.name}`,
             dateKey: todayKey(),
             startedAt: now,
@@ -608,12 +739,16 @@
                 workoutName: workout.name,
                 levelId: workout.currentLevelId,
                 levelName: level ? level.name : '',
+                rotationId: rotation ? rotation.id : '',
+                rotationName: rotation ? rotation.name : '',
+                scheduledForProgression: !!rotation,
                 reps,
                 targetRepsAtLog: Number(workout.targetReps) || getPolicy(workout).normalSetReps,
                 createdAt: now
             }]
         });
         state.workouts = result.workouts;
+        state.rotations = result.workoutRotations;
         state.sessions = result.workoutSessions;
         notify('Set logged.');
         render();
@@ -828,9 +963,13 @@
 
     function renderLibrary() {
         const editing = state.editingWorkoutId ? getWorkout(state.editingWorkoutId) : null;
+        const editingRotation = state.editingRotationId ? getRotation(state.editingRotationId) : null;
         const movementRows = state.workouts.length
             ? state.workouts.map(renderMovementCard).join('')
             : '<div class="workout-empty">No movements yet.</div>';
+        const rotationRows = state.rotations.length
+            ? state.rotations.map(renderRotationCard).join('')
+            : '<div class="workout-empty">No rotations yet.</div>';
         return `
             ${renderPageHead('Library', 'Create movements, schedules, levels, and progression defaults.')}
             <div class="workout-library-grid">
@@ -843,6 +982,92 @@
                     <div class="workout-grid">${movementRows}</div>
                 </section>
             </div>
+            <div class="workout-two-col" style="margin-top:14px">
+                <section class="workout-panel">
+                    <h2 class="workout-section-title">${editingRotation ? 'Edit Rotation' : 'Create Rotation'}</h2>
+                    ${renderRotationForm(editingRotation)}
+                </section>
+                <section class="workout-panel">
+                    <h2 class="workout-section-title">Rotations</h2>
+                    <div class="workout-grid">${rotationRows}</div>
+                </section>
+            </div>
+        `;
+    }
+
+    function renderRotationForm(rotation) {
+        const schedule = Core.normalizeSchedule(rotation && rotation.schedule);
+        const memberTiles = state.workouts.length
+            ? state.workouts.map(workout => `
+                <label class="workout-check-tile text">
+                    <input type="checkbox" name="rotation-workout" value="${escapeHtml(workout.id)}" ${rotation && rotation.workoutIds.includes(workout.id) ? 'checked' : ''}>
+                    ${escapeHtml(workout.name)}
+                </label>
+            `).join('')
+            : '<div class="workout-empty">Create at least two movements first.</div>';
+        const weekdayTiles = WEEKDAYS.map((label, day) => `
+            <label class="workout-check-tile">
+                <input type="checkbox" name="rotation-weekday" value="${day}" ${schedule.weekdays.includes(day) ? 'checked' : ''}>
+                ${escapeHtml(label)}
+            </label>
+        `).join('');
+        return `
+            <div class="workout-form">
+                <label class="workout-field">
+                    <span>Name</span>
+                    <input id="rotation-name-input" type="text" value="${escapeHtml(rotation ? rotation.name : '')}" placeholder="Upper pull">
+                </label>
+                <div class="workout-member-grid">${memberTiles}</div>
+                <div class="workout-weekday-grid">${weekdayTiles}</div>
+                <div class="workout-form-row">
+                    <label class="workout-field">
+                        <span>Time</span>
+                        <input id="rotation-time-input" type="time" value="${escapeHtml(schedule.time)}">
+                    </label>
+                    <label class="workout-field">
+                        <span>Duration minutes</span>
+                        <input id="rotation-duration-input" type="number" min="5" max="240" value="${schedule.durationMinutes || ''}" placeholder="30">
+                    </label>
+                </div>
+                <div class="workout-action-row">
+                    <button type="button" class="workout-btn primary" onclick="WorkoutApp.saveRotation()">Save Rotation</button>
+                    <button type="button" class="workout-btn" onclick="WorkoutApp.resetRotationForm()">Clear</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderRotationCard(rotation) {
+        const resolution = getRotationResolution(rotation);
+        const workout = resolution && resolution.workout;
+        const members = rotation.workoutIds
+            .map(id => getWorkout(id))
+            .filter(Boolean)
+            .map(member => member.name)
+            .join(' / ');
+        const dueText = workout
+            ? `${workout.name}${resolution && !resolution.balanced ? ' / catch-up' : ''}`
+            : 'No due movement';
+        return `
+            <article class="workout-card">
+                <div class="workout-card-head">
+                    <div>
+                        <h3 class="workout-card-title">${escapeHtml(rotation.name)}</h3>
+                        <div class="workout-meta">${escapeHtml(getRotationScheduleLabel(rotation))}</div>
+                    </div>
+                    <div class="workout-card-actions">
+                        <button type="button" class="workout-btn primary" onclick="WorkoutApp.startRotationSession('${escapeHtml(rotation.id)}')">Start</button>
+                        <button type="button" class="workout-btn" onclick="WorkoutApp.editRotation('${escapeHtml(rotation.id)}')">Edit</button>
+                        <button type="button" class="workout-btn danger" onclick="WorkoutApp.deleteRotation('${escapeHtml(rotation.id)}')">Delete</button>
+                    </div>
+                </div>
+                <div class="workout-pill-row">
+                    <div class="workout-pill"><span>Due</span><strong>${escapeHtml(dueText)}</strong></div>
+                    <div class="workout-pill"><span>Members</span><strong>${rotation.workoutIds.length}</strong></div>
+                    <div class="workout-pill"><span>Attempts</span><strong>${rotation.history.length}</strong></div>
+                </div>
+                <div class="workout-meta">${escapeHtml(members)}</div>
+            </article>
         `;
     }
 
@@ -997,6 +1222,67 @@
         await persistWorkoutState('Movement saved.');
     }
 
+    function readRotationForm(existing) {
+        const name = (byId('rotation-name-input') && byId('rotation-name-input').value.trim()) || '';
+        if (!name) {
+            notify('Name the rotation before saving.');
+            return null;
+        }
+        const workoutIds = Array.from(document.querySelectorAll('input[name="rotation-workout"]:checked'))
+            .map(input => String(input.value || '').trim())
+            .filter(Boolean);
+        if (workoutIds.length < 2) {
+            notify('Pick at least two movements for a rotation.');
+            return null;
+        }
+        const weekdays = Array.from(document.querySelectorAll('input[name="rotation-weekday"]:checked'))
+            .map(input => Number(input.value));
+        const now = Date.now();
+        return Core.normalizeRotation({
+            ...(existing || {}),
+            id: existing ? existing.id : Core.createId('workout_rotation'),
+            name,
+            workoutIds,
+            schedule: {
+                weekdays,
+                time: byId('rotation-time-input') && byId('rotation-time-input').value,
+                durationMinutes: byId('rotation-duration-input') && byId('rotation-duration-input').value
+            },
+            createdAt: existing ? existing.createdAt : now,
+            updatedAt: now
+        }, state.workouts.map(workout => workout.id));
+    }
+
+    async function saveRotation() {
+        const existing = state.editingRotationId ? getRotation(state.editingRotationId) : null;
+        const rotation = readRotationForm(existing);
+        if (!rotation) return;
+        state.rotations = existing
+            ? state.rotations.map(item => item.id === rotation.id ? rotation : item)
+            : [...state.rotations, rotation];
+        state.editingRotationId = null;
+        await persistWorkoutState('Rotation saved.');
+    }
+
+    function editRotation(rotationId) {
+        state.editingRotationId = rotationId;
+        state.activeTab = 'library';
+        render();
+    }
+
+    async function deleteRotation(rotationId) {
+        const rotation = getRotation(rotationId);
+        if (!rotation || !global.confirm(`Delete ${rotation.name}?`)) return;
+        state.rotations = state.rotations.filter(item => item.id !== rotationId);
+        if (state.editingRotationId === rotationId) state.editingRotationId = null;
+        await persistWorkoutState('Rotation deleted.');
+    }
+
+    function resetRotationForm() {
+        state.editingRotationId = null;
+        render();
+    }
+
     function editMovement(workoutId) {
         state.editingWorkoutId = workoutId;
         state.activeTab = 'library';
@@ -1010,6 +1296,12 @@
         state.routines = state.routines.map(routine => ({
             ...routine,
             steps: routine.steps.filter(step => step.type !== 'workout' || step.workoutId !== workoutId)
+        }));
+        state.rotations = state.rotations.map(rotation => ({
+            ...rotation,
+            workoutIds: rotation.workoutIds.filter(id => id !== workoutId),
+            lastWorkoutId: rotation.lastWorkoutId === workoutId ? '' : rotation.lastWorkoutId,
+            history: rotation.history.filter(event => event.workoutId !== workoutId)
         }));
         if (state.editingWorkoutId === workoutId) state.editingWorkoutId = null;
         await persistWorkoutState('Movement deleted.');
@@ -1145,6 +1437,7 @@
         startScheduledSession,
         startAllSession,
         startWorkoutSession,
+        startRotationSession,
         startRoutineSession,
         addSessionSet,
         nextStep,
@@ -1162,6 +1455,10 @@
         deleteRoutine,
         resetRoutineDraft,
         saveMovement,
+        saveRotation,
+        editRotation,
+        deleteRotation,
+        resetRotationForm,
         editMovement,
         deleteMovement,
         resetMovementForm

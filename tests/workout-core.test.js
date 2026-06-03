@@ -153,10 +153,72 @@ function testSessionSavePayloadToMovementLogs() {
     assert.equal(result.workouts[0].logs[1].reps, 15);
 }
 
+function testRotationResolutionAndAdvanceOnAttempt() {
+    const pullUps = makeWorkout({ id: 'pull', name: 'Pull-ups' });
+    const chinUps = makeWorkout({ id: 'chin', name: 'Chin-ups' });
+    const rows = Core.normalizeWorkoutCollection([pullUps, chinUps]);
+    const rotation = Core.normalizeRotation({
+        id: 'upper_pull',
+        name: 'Upper Pull',
+        workoutIds: ['pull', 'chin'],
+        schedule: { weekdays: [1, 3] },
+        createdAt: atNoon(2026, 1, 1)
+    }, rows.map(workout => workout.id));
+
+    let resolved = Core.resolveRotationWorkout(rotation, rows);
+    assert.equal(resolved.workout.id, 'pull');
+    assert.equal(resolved.reason, 'round_robin');
+
+    const session = Core.normalizeSession({
+        id: 'rotation_session_1',
+        rotationId: 'upper_pull',
+        rotationName: 'Upper Pull',
+        dateKey: '2026-06-01',
+        startedAt: atNoon(2026, 6, 1),
+        completedAt: atNoon(2026, 6, 1) + 300000,
+        entries: [{
+            workoutId: 'pull',
+            workoutName: 'Pull-ups',
+            levelId: 'level_1',
+            reps: 3,
+            rotationId: 'upper_pull',
+            scheduledForProgression: true,
+            targetRepsAtLog: 20
+        }]
+    });
+    const rotationUpdate = Core.advanceRotationsForSession(session, [rotation], rows);
+    assert.equal(rotationUpdate.advancedCount, 1);
+    assert.equal(rotationUpdate.rotations[0].lastWorkoutId, 'pull');
+
+    resolved = Core.resolveRotationWorkout(rotationUpdate.rotations[0], rows);
+    assert.equal(resolved.workout.id, 'chin');
+}
+
+function testRotationFavorsLowerLevelMembers() {
+    const pullUps = makeWorkout({ id: 'pull', name: 'Pull-ups', currentLevelId: 'level_2' });
+    const chinUps = makeWorkout({ id: 'chin', name: 'Chin-ups', currentLevelId: 'level_1' });
+    const rows = Core.normalizeWorkoutCollection([pullUps, chinUps]);
+    const rotation = Core.normalizeRotation({
+        id: 'upper_pull',
+        name: 'Upper Pull',
+        workoutIds: ['pull', 'chin'],
+        lastWorkoutId: 'chin',
+        schedule: { weekdays: [1, 3] },
+        createdAt: atNoon(2026, 1, 1)
+    }, rows.map(workout => workout.id));
+
+    const resolved = Core.resolveRotationWorkout(rotation, rows);
+    assert.equal(resolved.reason, 'level_balance');
+    assert.equal(resolved.balanced, false);
+    assert.equal(resolved.workout.id, 'chin');
+}
+
 testNormalizeLegacyWorkoutsAndRoutines();
 testScheduledDayDetection();
 testSetQualificationPolicies();
 testLevelProgressionAndPendingApplication();
 testSessionSavePayloadToMovementLogs();
+testRotationResolutionAndAdvanceOnAttempt();
+testRotationFavorsLowerLevelMembers();
 
 console.log('WorkoutCore tests passed');

@@ -435,6 +435,12 @@ button {
     gap: 6px;
 }
 
+.workout-member-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
 .workout-check-tile {
     display: grid;
     place-items: center;
@@ -446,6 +452,14 @@ button {
     font-size: 12px;
     font-weight: 850;
     cursor: pointer;
+}
+
+.workout-check-tile.text {
+    min-height: 40px;
+    justify-content: start;
+    padding: 8px 10px;
+    text-align: left;
+    overflow-wrap: anywhere;
 }
 
 .workout-check-tile input {
@@ -650,6 +664,7 @@ button {
     .workout-form-row,
     .workout-form-row.three,
     .workout-pill-row,
+    .workout-member-grid,
     .workout-three-col,
     .workout-stat-grid {
         grid-template-columns: 1fr;

@@ -6,6 +6,7 @@ let inbox = [];
 let lifeGoals = {};
 let habits = [];
 let workouts = [];
+let workoutRotations = [];
 let workoutRoutines = [];
 let workoutSessions = [];
 let notes = [];
@@ -372,6 +373,7 @@ function pushHistory() {
         lifeGoals,
         habits,
         workouts,
+        workoutRotations,
         workoutRoutines,
         workoutSessions,
         notes,
@@ -422,6 +424,7 @@ function restoreHistory() {
     lifeGoals = state.lifeGoals || {};
     habits = state.habits || [];
     workouts = state.workouts || [];
+    workoutRotations = state.workoutRotations || [];
     workoutRoutines = state.workoutRoutines || [];
     workoutSessions = state.workoutSessions || [];
     notes = state.notes || [];
@@ -797,6 +800,7 @@ function initDemoData() {
     lifeGoals = {};
     habits = [];
     workouts = [];
+    workoutRotations = [];
     workoutRoutines = [];
     workoutSessions = [];
     notes = [];
@@ -878,7 +882,7 @@ function saveToStorageImmediate() {
         aiUrgencyConfig: normalizeAiUrgencyConfig(aiUrgencyConfig),
         projects,
         nodes, archivedNodes, inbox, lifeGoals, notes, githubToken,
-        gistId, habits, workouts, workoutRoutines, workoutSessions, agenda, pinnedItems, quickLinks, reminders, noteSettings, remindersModalPosition,
+        gistId, habits, workouts, workoutRotations, workoutRoutines, workoutSessions, agenda, pinnedItems, quickLinks, reminders, noteSettings, remindersModalPosition,
         hiddenNodeGroups: Array.from(hiddenNodeGroups),
         timestamp: Date.now()
     };
@@ -1097,6 +1101,7 @@ function restoreStateData(parsed) {
     lifeGoals = migrated.lifeGoals || {};
     habits = migrated.habits || [];
     workouts = migrated.workouts || [];
+    workoutRotations = migrated.workoutRotations || [];
     workoutRoutines = migrated.workoutRoutines || [];
     workoutSessions = migrated.workoutSessions || [];
     notes = migrated.notes || [];
@@ -1288,6 +1293,12 @@ function sanitizeLoadedData() {
     } else {
         workouts = workouts.filter(workout => workout && typeof workout === 'object');
     }
+    if (!Array.isArray(workoutRotations)) workoutRotations = [];
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeRotationCollection === 'function') {
+        workoutRotations = window.WorkoutCore.normalizeRotationCollection(workoutRotations, workouts);
+    } else {
+        workoutRotations = workoutRotations.filter(rotation => rotation && typeof rotation === 'object');
+    }
     if (!Array.isArray(workoutRoutines)) workoutRoutines = [];
     if (typeof normalizeWorkoutRoutineCollection === 'function') {
         workoutRoutines = normalizeWorkoutRoutineCollection(workoutRoutines);
@@ -1390,6 +1401,7 @@ function updateDataMetrics() {
         'Projects': projects,
         'Habits': habits,
         'Workouts': workouts,
+        'Workout Rotations': workoutRotations,
         'Workout Routines': workoutRoutines,
         'Workout Sessions': workoutSessions,
         'Reminders': reminders,
@@ -1471,6 +1483,7 @@ function saveData(download = false) {
         notes,
         habits,
         workouts,
+        workoutRotations,
         workoutRoutines,
         workoutSessions,
         agenda,
@@ -1521,6 +1534,7 @@ function loadFile(input) {
                 archivedNodes = [];
                 habits = [];
                 workouts = [];
+                workoutRotations = [];
                 workoutRoutines = [];
                 workoutSessions = [];
                 agenda = [];
@@ -1535,6 +1549,7 @@ function loadFile(input) {
                 lifeGoals = parsed.lifeGoals || {};
                 habits = parsed.habits || [];
                 workouts = parsed.workouts || [];
+                workoutRotations = parsed.workoutRotations || [];
                 workoutRoutines = parsed.workoutRoutines || [];
                 workoutSessions = parsed.workoutSessions || [];
                 notes = parsed.notes || [];
@@ -1600,6 +1615,7 @@ async function clearData() {
     notes = [];
     habits = [];
     workouts = [];
+    workoutRotations = [];
     workoutRoutines = [];
     workoutSessions = [];
     agenda = [];

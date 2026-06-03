@@ -188,6 +188,7 @@ function normalizeWorkoutLogs(logs, workoutId, validLevelIds, policy = null) {
                 routineId: String(log.routineId || '').trim(),
                 routineRunId: String(log.routineRunId || '').trim(),
                 sessionId: String(log.sessionId || '').trim(),
+                rotationId: String(log.rotationId || '').trim(),
                 createdAt
             };
         })

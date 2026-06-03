@@ -162,6 +162,7 @@
                     routineId: String(log.routineId || '').trim(),
                     routineRunId: String(log.routineRunId || '').trim(),
                     sessionId: String(log.sessionId || '').trim(),
+                    rotationId: String(log.rotationId || '').trim(),
                     createdAt
                 };
             })
@@ -259,6 +260,64 @@
             });
     }
 
+    function normalizeRotationHistory(history, workoutIds) {
+        const validIds = new Set(workoutIds);
+        const seen = new Set();
+        return (Array.isArray(history) ? history : [])
+            .map(event => {
+                if (!event || typeof event !== 'object') return null;
+                const id = String(event.id || '').trim() || createId('rotation_event');
+                if (seen.has(id)) return null;
+                seen.add(id);
+                const workoutId = String(event.workoutId || '').trim();
+                if (!validIds.has(workoutId)) return null;
+                const createdAt = Number(event.createdAt) || Date.now();
+                return {
+                    id,
+                    workoutId,
+                    sessionId: String(event.sessionId || '').trim(),
+                    dateKey: /^\d{4}-\d{2}-\d{2}$/.test(event.dateKey || '') ? event.dateKey : dateKey(new Date(createdAt)),
+                    createdAt
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => Number(a.createdAt) - Number(b.createdAt))
+            .slice(-500);
+    }
+
+    function normalizeRotation(rotation, validWorkoutIds = null) {
+        const source = rotation && typeof rotation === 'object' ? rotation : {};
+        const now = Date.now();
+        const validSet = validWorkoutIds ? new Set(validWorkoutIds) : null;
+        const workoutIds = Array.from(new Set((Array.isArray(source.workoutIds) ? source.workoutIds : [])
+            .map(id => String(id || '').trim())
+            .filter(id => id && (!validSet || validSet.has(id)))));
+        const lastWorkoutId = workoutIds.includes(source.lastWorkoutId) ? source.lastWorkoutId : '';
+        return {
+            id: String(source.id || '').trim() || createId('workout_rotation'),
+            name: String(source.name || source.title || 'Workout Rotation').trim().slice(0, 120) || 'Workout Rotation',
+            workoutIds,
+            schedule: normalizeSchedule(source.schedule),
+            lastWorkoutId,
+            lastCompletedAt: Number(source.lastCompletedAt) || null,
+            history: normalizeRotationHistory(source.history, workoutIds),
+            createdAt: Number(source.createdAt) || now,
+            updatedAt: Number(source.updatedAt) || Number(source.createdAt) || now
+        };
+    }
+
+    function normalizeRotationCollection(rawRotations, workoutsInput = []) {
+        const validWorkoutIds = normalizeWorkoutCollection(workoutsInput).map(workout => workout.id);
+        const seen = new Set();
+        return (Array.isArray(rawRotations) ? rawRotations : [])
+            .map(rotation => normalizeRotation(rotation, validWorkoutIds.length ? validWorkoutIds : null))
+            .filter(rotation => {
+                if (!rotation || !rotation.id || seen.has(rotation.id) || rotation.workoutIds.length < 2) return false;
+                seen.add(rotation.id);
+                return true;
+            });
+    }
+
     function normalizeSessionEntry(entry, index = 0) {
         const source = entry && typeof entry === 'object' ? entry : {};
         const reps = Math.max(0, Math.round(Number(source.reps) || 0));
@@ -268,6 +327,9 @@
             workoutName: String(source.workoutName || '').trim(),
             levelId: String(source.levelId || '').trim(),
             levelName: String(source.levelName || '').trim(),
+            rotationId: String(source.rotationId || '').trim(),
+            rotationName: String(source.rotationName || '').trim(),
+            scheduledForProgression: source.scheduledForProgression === true,
             reps,
             targetRepsAtLog: Math.max(1, Math.round(Number(source.targetRepsAtLog) || NORMAL_SET_REPS)),
             createdAt: Number(source.createdAt) || Date.now() + index
@@ -285,6 +347,8 @@
             id: String(source.id || '').trim() || createId('workout_session'),
             routineId: String(source.routineId || '').trim(),
             routineName: String(source.routineName || '').trim(),
+            rotationId: String(source.rotationId || '').trim(),
+            rotationName: String(source.rotationName || '').trim(),
             name: String(source.name || source.routineName || 'Workout Session').trim().slice(0, 120) || 'Workout Session',
             dateKey: /^\d{4}-\d{2}-\d{2}$/.test(source.dateKey || '') ? source.dateKey : dateKey(new Date(completedAt || startedAt)),
             startedAt,
@@ -416,10 +480,10 @@
         return true;
     }
 
-    function evaluateProgression(workout, key = dateKey()) {
+    function evaluateProgression(workout, key = dateKey(), options = {}) {
         const normalized = normalizeWorkout(workout);
         const metrics = getDayMetrics(normalized, key);
-        if (!metrics.scheduled || !metrics.completed) return false;
+        if ((!metrics.scheduled && !options.assumeScheduled) || !metrics.completed) return false;
         const levels = normalized.levels.slice().sort((a, b) => a.order - b.order);
         const currentIndex = levels.findIndex(level => level.id === normalized.currentLevelId);
         if (currentIndex < 0) return false;
@@ -453,10 +517,11 @@
         return true;
     }
 
-    function applySessionToWorkouts(sessionInput, workoutsInput) {
+    function applySessionToWorkouts(sessionInput, workoutsInput, options = {}) {
         const session = normalizeSession(sessionInput);
         const workouts = normalizeWorkoutCollection(workoutsInput);
         const byId = new Map(workouts.map(workout => [workout.id, workout]));
+        const scheduledIds = new Set(Array.isArray(options.scheduledWorkoutIds) ? options.scheduledWorkoutIds : []);
         let loggedCount = 0;
         session.entries.forEach((entry, index) => {
             const workout = byId.get(entry.workoutId);
@@ -474,9 +539,12 @@
                 sessionId: session.id,
                 routineId: session.routineId || '',
                 routineRunId: '',
+                rotationId: entry.rotationId || session.rotationId || '',
                 createdAt
             });
-            evaluateProgression(workout, session.dateKey);
+            evaluateProgression(workout, session.dateKey, {
+                assumeScheduled: entry.scheduledForProgression || scheduledIds.has(workout.id)
+            });
             workout.updatedAt = Date.now();
             loggedCount += 1;
         });
@@ -484,6 +552,92 @@
             workouts,
             session,
             loggedCount
+        };
+    }
+
+    function getWorkoutLevelRank(workout) {
+        const normalized = normalizeWorkout(workout);
+        const levels = normalized.levels.slice().sort((a, b) => a.order - b.order);
+        const index = levels.findIndex(level => level.id === normalized.currentLevelId);
+        return index < 0 ? 0 : index;
+    }
+
+    function resolveRotationWorkout(rotationInput, workoutsInput) {
+        const workouts = normalizeWorkoutCollection(workoutsInput);
+        const workoutMap = new Map(workouts.map(workout => [workout.id, workout]));
+        const rotation = normalizeRotation(rotationInput, workouts.map(workout => workout.id));
+        const members = rotation.workoutIds.map(id => workoutMap.get(id)).filter(Boolean);
+        if (!members.length) return null;
+        if (members.length === 1) {
+            return {
+                rotation,
+                workout: members[0],
+                reason: 'single',
+                balanced: true
+            };
+        }
+
+        const ranks = members.map(workout => getWorkoutLevelRank(workout));
+        const minRank = Math.min(...ranks);
+        const maxRank = Math.max(...ranks);
+        const eligibleIds = members
+            .filter(workout => getWorkoutLevelRank(workout) === minRank)
+            .map(workout => workout.id);
+        const orderedIds = maxRank === minRank ? rotation.workoutIds : rotation.workoutIds.filter(id => eligibleIds.includes(id));
+        const safeOrder = orderedIds.length ? orderedIds : rotation.workoutIds;
+        const lastIndex = safeOrder.indexOf(rotation.lastWorkoutId);
+        const nextId = safeOrder[(lastIndex + 1 + safeOrder.length) % safeOrder.length] || safeOrder[0];
+        return {
+            rotation,
+            workout: workoutMap.get(nextId) || members[0],
+            reason: maxRank === minRank ? 'round_robin' : 'level_balance',
+            balanced: maxRank === minRank,
+            minRank,
+            maxRank
+        };
+    }
+
+    function isRotationScheduledOnDate(rotation, date = new Date()) {
+        const normalized = normalizeRotation(rotation);
+        const key = dateKey(date);
+        const startKey = dateKey(new Date(Number(normalized.createdAt) || Date.now()));
+        if (key < startKey) return false;
+        return normalized.schedule.weekdays.includes(new Date(date).getDay());
+    }
+
+    function advanceRotationsForSession(sessionInput, rotationsInput, workoutsInput) {
+        const session = normalizeSession(sessionInput);
+        const workouts = normalizeWorkoutCollection(workoutsInput);
+        const rotations = normalizeRotationCollection(rotationsInput, workouts);
+        const byId = new Map(rotations.map(rotation => [rotation.id, rotation]));
+        const attempted = new Map();
+        session.entries.forEach(entry => {
+            if (entry.reps <= 0 || !entry.rotationId || !byId.has(entry.rotationId)) return;
+            const rotation = byId.get(entry.rotationId);
+            if (!rotation.workoutIds.includes(entry.workoutId)) return;
+            attempted.set(rotation.id, entry.workoutId);
+        });
+        if (!attempted.size) return { rotations, advancedCount: 0 };
+        let advancedCount = 0;
+        attempted.forEach((workoutId, rotationId) => {
+            const rotation = byId.get(rotationId);
+            if (!rotation) return;
+            rotation.lastWorkoutId = workoutId;
+            rotation.lastCompletedAt = session.completedAt || Date.now();
+            rotation.history.push({
+                id: createId('rotation_event'),
+                workoutId,
+                sessionId: session.id,
+                dateKey: session.dateKey,
+                createdAt: session.completedAt || Date.now()
+            });
+            rotation.history = normalizeRotationHistory(rotation.history, rotation.workoutIds);
+            rotation.updatedAt = Date.now();
+            advancedCount += 1;
+        });
+        return {
+            rotations,
+            advancedCount
         };
     }
 
@@ -520,6 +674,8 @@
         normalizeRoutineStep,
         normalizeRoutine,
         normalizeRoutineCollection,
+        normalizeRotation,
+        normalizeRotationCollection,
         normalizeSessionEntry,
         normalizeSession,
         normalizeSessionCollection,
@@ -533,6 +689,10 @@
         applyPendingProgression,
         evaluateProgression,
         applySessionToWorkouts,
+        getWorkoutLevelRank,
+        resolveRotationWorkout,
+        isRotationScheduledOnDate,
+        advanceRotationsForSession,
         getScheduleLabel
     };
 });

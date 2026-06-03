@@ -1647,6 +1647,7 @@ async function pushToGist() {
             notes: notes || [],
             habits: typeof habits !== 'undefined' ? habits : [],
             workouts: typeof workouts !== 'undefined' ? workouts : [],
+            workoutRotations: typeof workoutRotations !== 'undefined' ? workoutRotations : [],
             workoutRoutines: typeof workoutRoutines !== 'undefined' ? workoutRoutines : [],
             workoutSessions: typeof workoutSessions !== 'undefined' ? workoutSessions : [],
             agenda: agenda || [],
@@ -2106,6 +2107,31 @@ function mergeStates(local, remote) {
         return (typeof normalizeWorkoutRoutineCollection === 'function') ? normalizeWorkoutRoutineCollection(merged) : merged;
     };
 
+    const mergeWorkoutRotationCollections = (localRotations, remoteRotations, mergedWorkouts) => {
+        const byId = new Map();
+        [
+            ...(Array.isArray(localRotations) ? localRotations : []),
+            ...(Array.isArray(remoteRotations) ? remoteRotations : [])
+        ].forEach(rotation => {
+            if (!rotation || typeof rotation !== 'object') return;
+            const id = String(rotation.id || '').trim();
+            if (!id) return;
+            const existing = byId.get(id);
+            if (!existing) {
+                byId.set(id, rotation);
+                return;
+            }
+            const rotationTs = Math.max(Number(rotation.updatedAt) || 0, Number(rotation.lastCompletedAt) || 0, Number(rotation.createdAt) || 0);
+            const existingTs = Math.max(Number(existing.updatedAt) || 0, Number(existing.lastCompletedAt) || 0, Number(existing.createdAt) || 0);
+            byId.set(id, rotationTs >= existingTs ? rotation : existing);
+        });
+        const merged = Array.from(byId.values());
+        if (window.WorkoutCore && typeof window.WorkoutCore.normalizeRotationCollection === 'function') {
+            return window.WorkoutCore.normalizeRotationCollection(merged, mergedWorkouts);
+        }
+        return merged;
+    };
+
     const mergeWorkoutSessionCollections = (localSessions, remoteSessions) => {
         const byId = new Map();
         [
@@ -2365,6 +2391,7 @@ function mergeStates(local, remote) {
         return mergedSlots;
     };
 
+    const mergedWorkouts = mergeWorkoutCollections(local && local.workouts, remote && remote.workouts);
     const merged = {
         dataModelVersion: Math.max(
             Number(local && local.dataModelVersion) || 1,
@@ -2378,7 +2405,8 @@ function mergeStates(local, remote) {
         inbox: mergeInboxCollections(local && local.inbox, remote && remote.inbox),
         lifeGoals: mergeLifeGoalsCollections(local && local.lifeGoals, remote && remote.lifeGoals),
         habits: mergeHabitCollections(local && local.habits, remote && remote.habits),
-        workouts: mergeWorkoutCollections(local && local.workouts, remote && remote.workouts),
+        workouts: mergedWorkouts,
+        workoutRotations: mergeWorkoutRotationCollections(local && local.workoutRotations, remote && remote.workoutRotations, mergedWorkouts),
         workoutRoutines: mergeWorkoutRoutineCollections(local && local.workoutRoutines, remote && remote.workoutRoutines),
         workoutSessions: mergeWorkoutSessionCollections(local && local.workoutSessions, remote && remote.workoutSessions),
         notes: [],
@@ -2560,6 +2588,7 @@ async function pullFromGist() {
             projects,
             nodes, archivedNodes, inbox, lifeGoals, habits, notes, agenda, reminders, noteSettings,
             workouts: typeof workouts !== 'undefined' ? workouts : [],
+            workoutRotations: typeof workoutRotations !== 'undefined' ? workoutRotations : [],
             workoutRoutines: typeof workoutRoutines !== 'undefined' ? workoutRoutines : [],
             workoutSessions: typeof workoutSessions !== 'undefined' ? workoutSessions : [],
             geminiUsageStats: normalizeGeminiUsageSnapshotForSync(geminiUsageStats)
@@ -2607,6 +2636,7 @@ async function pullFromGist() {
         notes = mergedState.notes || [];
         habits = mergedState.habits || [];
         workouts = mergedState.workouts || [];
+        workoutRotations = mergedState.workoutRotations || [];
         workoutRoutines = mergedState.workoutRoutines || [];
         workoutSessions = mergedState.workoutSessions || [];
         agenda = mergedState.agenda || [];

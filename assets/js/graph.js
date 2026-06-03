@@ -1858,7 +1858,7 @@ function updateHealthMonitor() {
             aiUrgencyConfig: (typeof aiUrgencyConfig !== 'undefined') ? aiUrgencyConfig : {},
             projects: (typeof projects !== 'undefined') ? projects : [],
             nodes, archivedNodes, inbox, lifeGoals, notes,
-            habits, workouts, workoutRoutines, workoutSessions, agenda, pinnedItems, quickLinks, reminders,
+            habits, workouts, workoutRotations, workoutRoutines, workoutSessions, agenda, pinnedItems, quickLinks, reminders,
             hiddenNodeGroups: (typeof hiddenNodeGroups !== 'undefined') ? Array.from(hiddenNodeGroups) : [],
             timestamp: Date.now()
         };
