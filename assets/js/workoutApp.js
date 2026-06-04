@@ -98,9 +98,60 @@
         return Math.max(0, elapsed);
     }
 
+    function getCurrentStep(session = state.activeSession) {
+        if (!session || !Array.isArray(session.steps) || !session.steps.length) return null;
+        return session.steps[session.currentStepIndex] || session.steps[0] || null;
+    }
+
+    function getStepElapsedMs(session = state.activeSession) {
+        if (!session) return 0;
+        const end = session.paused ? Number(session.pauseStartedAt) || Date.now() : Date.now();
+        const startedAt = Number(session.currentStepStartedAt) || Number(session.startedAt) || end;
+        const elapsed = end - startedAt - Number(session.currentStepPausedMs || 0);
+        return Math.max(0, elapsed);
+    }
+
+    function getStepDurationSeconds(step) {
+        return Math.max(0, Math.round(Number(step && step.durationSeconds) || 0));
+    }
+
+    function stepHasTimer(step) {
+        if (!step) return false;
+        const duration = getStepDurationSeconds(step);
+        if (duration <= 0) return false;
+        if (step.type === 'rest') return step.timerEnabled !== false;
+        return step.timerEnabled === true;
+    }
+
+    function getStepClockInfo(session = state.activeSession) {
+        const step = getCurrentStep(session);
+        const elapsedMs = getStepElapsedMs(session);
+        const durationMs = getStepDurationSeconds(step) * 1000;
+        const timed = stepHasTimer(step);
+        const remainingMs = timed ? Math.max(0, durationMs - elapsedMs) : 0;
+        const progress = timed && durationMs > 0 ? Math.min(100, Math.round((elapsedMs / durationMs) * 100)) : 0;
+        return {
+            timed,
+            elapsedMs,
+            remainingMs,
+            displayMs: timed ? remainingMs : elapsedMs,
+            progress,
+            done: timed && remainingMs <= 0
+        };
+    }
+
     function updateSessionClock() {
         const clock = byId('active-session-clock');
         if (clock) clock.textContent = formatTime(getElapsedMs());
+        const stepClock = byId('active-step-clock');
+        const stepStatus = byId('active-step-status');
+        const stepFill = byId('active-step-progress-fill');
+        if (stepClock || stepStatus || stepFill) {
+            const info = getStepClockInfo();
+            if (stepClock) stepClock.textContent = formatTime(info.displayMs);
+            if (stepStatus) stepStatus.textContent = info.timed ? (info.done ? 'Done' : 'Remaining') : 'Elapsed';
+            if (stepFill) stepFill.style.width = `${info.progress}%`;
+        }
     }
 
     function getWorkout(workoutId) {
@@ -589,32 +640,50 @@
     function renderSession() {
         if (!state.activeSession) return renderSessionStarter();
         const session = state.activeSession;
-        const step = session.steps[session.currentStepIndex] || session.steps[0] || null;
+        const step = getCurrentStep(session);
         const entryCount = session.entries.length;
         const setCount = step && step.type === 'workout'
             ? session.entries.filter(entry => entry.workoutId === step.workoutId).length
             : 0;
         const pauseLabel = session.paused ? 'Resume' : 'Pause';
+        const stepNumber = Math.min(session.currentStepIndex + 1, session.steps.length);
+        const nextStep = session.steps[session.currentStepIndex + 1] || null;
+        const previousDisabled = session.currentStepIndex <= 0 ? 'disabled' : '';
+        const nextDisabled = session.currentStepIndex >= session.steps.length - 1 ? 'disabled' : '';
 
         return `
-            <div class="workout-session-shell">
-                <div class="workout-session-banner">
-                    <div>
-                        <h1>${escapeHtml(session.name)}</h1>
-                        <span>${entryCount} logged set${entryCount === 1 ? '' : 's'} / step ${session.currentStepIndex + 1} of ${session.steps.length}</span>
+            <div class="workout-focus-shell">
+                <section class="workout-focus-stage ${step && step.type === 'rest' ? 'rest' : 'movement'}">
+                    <div class="workout-focus-topbar">
+                        <div>
+                            <span class="workout-kicker">${escapeHtml(session.routineName || session.rotationName || 'Workout Session')}</span>
+                            <h1>${escapeHtml(session.name)}</h1>
+                            <div class="workout-meta">${entryCount} logged set${entryCount === 1 ? '' : 's'} / step ${stepNumber} of ${session.steps.length}</div>
+                        </div>
+                        <div class="workout-focus-session-clock">
+                            <span>Session</span>
+                            <strong id="active-session-clock">${formatTime(getElapsedMs(session))}</strong>
+                        </div>
                     </div>
-                    <div id="active-session-clock" class="workout-session-clock">00:00</div>
-                    <div class="workout-inline-actions">
+                    ${step ? renderFocusStep(step, setCount) : '<div class="workout-empty">This session has no steps.</div>'}
+                    <div class="workout-focus-controls">
+                        <button type="button" class="workout-btn" onclick="WorkoutApp.previousStep()" ${previousDisabled}>Back</button>
                         <button type="button" class="workout-btn" onclick="WorkoutApp.togglePauseSession()">${pauseLabel}</button>
+                        <button type="button" class="workout-btn primary workout-large-btn" onclick="WorkoutApp.nextStep()" ${nextDisabled}>Next</button>
                         <button type="button" class="workout-btn primary" onclick="WorkoutApp.saveActiveSession()">Save</button>
                         <button type="button" class="workout-btn danger" onclick="WorkoutApp.discardSession()">Discard</button>
                     </div>
-                </div>
-                ${step ? renderActiveStep(step, setCount) : '<div class="workout-empty">This session has no steps.</div>'}
-                <section class="workout-panel">
-                    <h2 class="workout-section-title">Session Log</h2>
-                    <div class="workout-recent-list">${renderSessionEntries(session.entries)}</div>
                 </section>
+                <aside class="workout-focus-side">
+                    <section class="workout-subpanel">
+                        <h2 class="workout-section-title">Up Next</h2>
+                        ${renderNextStepPreview(nextStep)}
+                    </section>
+                    <section class="workout-subpanel">
+                        <h2 class="workout-section-title">Session Log</h2>
+                        <div class="workout-recent-list">${renderSessionEntries(session.entries)}</div>
+                    </section>
+                </aside>
             </div>
         `;
     }
@@ -682,20 +751,39 @@
         `;
     }
 
-    function renderActiveStep(step, setCount) {
+    function renderFocusTimerControls(step) {
+        const controls = [30, 60, 90].map(seconds => `
+            <button type="button" class="workout-btn" onclick="WorkoutApp.setCurrentStepTimer(${seconds})">${seconds}s</button>
+        `).join('');
+        const clear = stepHasTimer(step)
+            ? '<button type="button" class="workout-btn" onclick="WorkoutApp.clearCurrentStepTimer()">No Timer</button>'
+            : '';
+        return `<div class="workout-focus-timer-controls">${controls}${clear}</div>`;
+    }
+
+    function renderFocusClock(step) {
+        const info = getStepClockInfo();
+        return `
+            <div class="workout-focus-clock-card">
+                <span id="active-step-status">${info.timed ? (info.done ? 'Done' : 'Remaining') : 'Elapsed'}</span>
+                <strong id="active-step-clock">${formatTime(info.displayMs)}</strong>
+                <div class="workout-progress-track"><div id="active-step-progress-fill" class="workout-progress-fill" style="width:${info.progress}%"></div></div>
+                ${renderFocusTimerControls(step)}
+            </div>
+        `;
+    }
+
+    function renderFocusStep(step, setCount) {
         if (step.type === 'rest') {
             return `
-                <section class="workout-step-card">
-                    <div>
+                <div class="workout-focus-main">
+                    <div class="workout-focus-title">
                         <span class="workout-kicker">Rest</span>
-                        <h2>${Math.round(Number(step.durationSeconds) || Core.ROUTINE_DEFAULT_REST_SECONDS)} seconds</h2>
+                        <h2>Rest</h2>
                         <div class="workout-meta">${escapeHtml(step.notes || 'Breathe, reset, and move when ready.')}</div>
                     </div>
-                    <div class="workout-inline-actions">
-                        <button type="button" class="workout-btn" onclick="WorkoutApp.previousStep()">Back</button>
-                        <button type="button" class="workout-btn primary workout-large-btn" onclick="WorkoutApp.nextStep()">Next</button>
-                    </div>
-                </section>
+                    ${renderFocusClock(step)}
+                </div>
             `;
         }
 
@@ -705,12 +793,13 @@
         const level = workout ? getLevel(workout, workout.currentLevelId) : null;
         const rotationText = step.rotationName ? ` / ${step.rotationName}` : '';
         return `
-            <section class="workout-step-card">
-                <div>
+            <div class="workout-focus-main">
+                <div class="workout-focus-title">
                     <span class="workout-kicker">Movement</span>
                     <h2>${escapeHtml(workout ? workout.name : 'Missing movement')}</h2>
                     <div class="workout-meta">${escapeHtml(level ? level.name : 'Level')}${escapeHtml(rotationText)} / ${setCount}/${targetSets} sets / target ${targetReps} reps</div>
                 </div>
+                ${renderFocusClock(step)}
                 <div class="workout-session-reps">
                     <input type="number" id="session-reps-input" min="1" value="${targetReps}" aria-label="Reps">
                     <button type="button" class="workout-btn blue" onclick="WorkoutApp.addSessionSet(${Math.max(1, targetReps - 10)})">${Math.max(1, targetReps - 10)}</button>
@@ -718,11 +807,30 @@
                     <button type="button" class="workout-btn warning" onclick="WorkoutApp.addSessionSet(${workout ? getPolicy(workout).advancedSetReps : Core.ADVANCED_SET_REPS})">${workout ? getPolicy(workout).advancedSetReps : Core.ADVANCED_SET_REPS}</button>
                     <button type="button" class="workout-btn primary" onclick="WorkoutApp.addSessionSet()">Add Set</button>
                 </div>
-                <div class="workout-inline-actions">
-                    <button type="button" class="workout-btn" onclick="WorkoutApp.previousStep()">Back</button>
-                    <button type="button" class="workout-btn primary workout-large-btn" onclick="WorkoutApp.nextStep()">Next</button>
+            </div>
+        `;
+    }
+
+    function renderNextStepPreview(step) {
+        if (!step) return '<div class="workout-empty compact">Finish or save when ready.</div>';
+        if (step.type === 'rest') {
+            return `
+                <div class="workout-recent-row">
+                    <div>
+                        <strong>Rest</strong>
+                        <div class="workout-meta">${getStepDurationSeconds(step) || Core.ROUTINE_DEFAULT_REST_SECONDS} seconds</div>
+                    </div>
                 </div>
-            </section>
+            `;
+        }
+        const workout = getWorkout(step.workoutId);
+        return `
+            <div class="workout-recent-row">
+                <div>
+                    <strong>${escapeHtml(workout ? workout.name : step.workoutName || 'Movement')}</strong>
+                    <div class="workout-meta">${Math.round(Number(step.targetSets) || 1)} set${Number(step.targetSets) === 1 ? '' : 's'} / ${Math.round(Number(step.targetReps) || Core.NORMAL_SET_REPS)} reps</div>
+                </div>
+            </div>
         `;
     }
 
@@ -758,6 +866,7 @@
             targetReps: Math.max(1, Math.round(Number(overrides.targetReps) || Number(workout.targetReps) || policy.normalSetReps)),
             targetSets: Math.max(1, Math.round(Number(overrides.targetSets) || policy.requiredSets)),
             durationSeconds: Math.max(5, Math.round(Number(overrides.durationSeconds) || Core.ROUTINE_DEFAULT_WORK_SECONDS)),
+            timerEnabled: overrides.timerEnabled === true,
             notes: overrides.notes || ''
         };
     }
@@ -778,12 +887,20 @@
             paused: false,
             pausedMs: 0,
             pauseStartedAt: null,
+            currentStepStartedAt: Date.now(),
+            currentStepPausedMs: 0,
             currentStepIndex: 0,
             steps,
             entries: []
         };
         state.activeTab = 'session';
         render();
+    }
+
+    function resetCurrentStepClock(session = state.activeSession) {
+        if (!session) return;
+        session.currentStepStartedAt = Date.now();
+        session.currentStepPausedMs = 0;
     }
 
     function startScheduledSession() {
@@ -842,6 +959,7 @@
                     id: Core.createId('session_step'),
                     type: 'rest',
                     durationSeconds: Number(step.durationSeconds) || Core.ROUTINE_DEFAULT_REST_SECONDS,
+                    timerEnabled: step.timerEnabled !== false,
                     notes: step.notes || ''
                 };
             }
@@ -883,14 +1001,18 @@
     function nextStep() {
         const session = state.activeSession;
         if (!session) return;
+        if (session.currentStepIndex >= session.steps.length - 1) return;
         session.currentStepIndex = Math.min(session.steps.length - 1, session.currentStepIndex + 1);
+        resetCurrentStepClock(session);
         render();
     }
 
     function previousStep() {
         const session = state.activeSession;
         if (!session) return;
+        if (session.currentStepIndex <= 0) return;
         session.currentStepIndex = Math.max(0, session.currentStepIndex - 1);
+        resetCurrentStepClock(session);
         render();
     }
 
@@ -898,13 +1020,34 @@
         const session = state.activeSession;
         if (!session) return;
         if (session.paused) {
-            session.pausedMs += Date.now() - Number(session.pauseStartedAt || Date.now());
+            const pausedFor = Date.now() - Number(session.pauseStartedAt || Date.now());
+            session.pausedMs += pausedFor;
+            session.currentStepPausedMs = Number(session.currentStepPausedMs || 0) + pausedFor;
             session.pauseStartedAt = null;
             session.paused = false;
         } else {
             session.pauseStartedAt = Date.now();
             session.paused = true;
         }
+        render();
+    }
+
+    function setCurrentStepTimer(seconds) {
+        const session = state.activeSession;
+        const step = getCurrentStep(session);
+        if (!session || !step) return;
+        step.durationSeconds = Math.max(5, Math.min(3600, Math.round(Number(seconds) || 60)));
+        step.timerEnabled = true;
+        resetCurrentStepClock(session);
+        render();
+    }
+
+    function clearCurrentStepTimer() {
+        const session = state.activeSession;
+        const step = getCurrentStep(session);
+        if (!session || !step) return;
+        step.timerEnabled = false;
+        resetCurrentStepClock(session);
         render();
     }
 
@@ -1906,6 +2049,8 @@
         nextStep,
         previousStep,
         togglePauseSession,
+        setCurrentStepTimer,
+        clearCurrentStepTimer,
         discardSession,
         saveActiveSession,
         quickLogMovement,

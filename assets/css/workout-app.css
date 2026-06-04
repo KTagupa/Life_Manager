@@ -696,6 +696,167 @@ button {
     color: var(--workout-accent);
 }
 
+.workout-empty.compact {
+    min-height: 96px;
+}
+
+.workout-focus-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.32fr);
+    gap: 14px;
+    align-items: stretch;
+    min-height: calc(100vh - 138px);
+}
+
+.workout-focus-stage {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 18px;
+    min-width: 0;
+    border: 1px solid rgba(23, 32, 51, 0.18);
+    border-radius: 8px;
+    background: #172033;
+    color: #ffffff;
+    padding: clamp(16px, 3vw, 30px);
+    box-shadow: var(--workout-shadow);
+}
+
+.workout-focus-stage.rest {
+    background: #2b2115;
+}
+
+.workout-focus-topbar,
+.workout-focus-main,
+.workout-focus-controls,
+.workout-focus-timer-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
+.workout-focus-topbar {
+    justify-content: space-between;
+}
+
+.workout-focus-topbar h1,
+.workout-focus-title h2 {
+    margin: 0;
+    color: #ffffff;
+}
+
+.workout-focus-topbar h1 {
+    margin-top: 4px;
+    font-size: clamp(20px, 3vw, 34px);
+    line-height: 1.08;
+}
+
+.workout-focus-main {
+    align-content: center;
+    justify-content: space-between;
+}
+
+.workout-focus-title {
+    min-width: min(100%, 420px);
+    flex: 1 1 420px;
+}
+
+.workout-focus-title h2 {
+    margin-top: 8px;
+    overflow-wrap: anywhere;
+    font-size: clamp(42px, 9vw, 96px);
+    line-height: 0.96;
+    letter-spacing: 0;
+}
+
+.workout-focus-stage .workout-kicker,
+.workout-focus-stage .workout-meta {
+    color: #cbd5e1;
+}
+
+.workout-focus-session-clock,
+.workout-focus-clock-card {
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.workout-focus-session-clock {
+    min-width: 148px;
+    padding: 10px 12px;
+    text-align: right;
+}
+
+.workout-focus-session-clock span,
+.workout-focus-clock-card span {
+    display: block;
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.workout-focus-session-clock strong {
+    display: block;
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+    font-size: 28px;
+    line-height: 1;
+}
+
+.workout-focus-clock-card {
+    display: grid;
+    gap: 12px;
+    width: min(100%, 380px);
+    flex: 0 1 380px;
+    padding: 16px;
+}
+
+.workout-focus-clock-card strong {
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(42px, 8vw, 84px);
+    line-height: 0.95;
+}
+
+.workout-focus-clock-card .workout-progress-track {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.workout-focus-timer-controls .workout-btn {
+    min-height: 34px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.workout-focus-controls {
+    justify-content: flex-end;
+}
+
+.workout-focus-controls .workout-btn {
+    min-width: 104px;
+}
+
+.workout-focus-side {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    min-width: 0;
+}
+
+.workout-focus-stage .workout-session-reps {
+    flex: 1 1 100%;
+}
+
+.workout-focus-stage .workout-session-reps input {
+    height: 64px;
+    font-size: 22px;
+}
+
+.workout-focus-stage .workout-session-reps .workout-btn {
+    min-height: 64px;
+    font-size: 17px;
+}
+
 .workout-session-shell {
     display: grid;
     gap: 14px;
@@ -835,6 +996,7 @@ button {
     .workout-app-topbar,
     .workout-two-col,
     .workout-library-grid,
+    .workout-focus-shell,
     .workout-calendar-week {
         grid-template-columns: 1fr;
     }
@@ -900,9 +1062,28 @@ button {
 
     .workout-calendar-detail-row,
     .workout-progress-head,
-    .workout-progress-controls {
+    .workout-progress-controls,
+    .workout-focus-topbar,
+    .workout-focus-main,
+    .workout-focus-controls {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .workout-focus-shell {
+        min-height: 0;
+    }
+
+    .workout-focus-stage {
+        min-height: calc(100vh - 112px);
+    }
+
+    .workout-focus-session-clock,
+    .workout-focus-clock-card,
+    .workout-focus-title {
+        width: 100%;
+        min-width: 0;
+        text-align: left;
     }
 
     .workout-session-clock {
