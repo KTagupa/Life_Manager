@@ -22,6 +22,8 @@ const WORKOUT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const WORKOUT_STUDIO_TABS = ['today', 'calendar', 'levels', 'routines', 'history', 'progress'];
 const WORKOUT_ROUTINE_DEFAULT_WORK_SECONDS = 60;
 const WORKOUT_ROUTINE_DEFAULT_REST_SECONDS = 30;
+const WORKOUT_DEFAULT_TIME_BASE_SECONDS = 60;
+const WORKOUT_DEFAULT_TIME_INCREMENT_SECONDS = 5;
 
 function createWorkoutId(prefix = 'workout') {
     return `${prefix}_${Date.now()}${Math.random().toString(36).substr(2, 5)}`;
@@ -115,7 +117,9 @@ function normalizeWorkoutProgressionPolicy(policy) {
     return {
         requiredSets: Math.max(1, Math.min(20, Math.round(Number(source.requiredSets) || WORKOUT_REQUIRED_SETS))),
         normalSetReps: Math.max(1, Math.min(9999, Math.round(Number(source.normalSetReps) || WORKOUT_NORMAL_SET_REPS))),
-        advancedSetReps: Math.max(1, Math.min(9999, Math.round(Number(source.advancedSetReps) || WORKOUT_ADVANCED_SET_REPS)))
+        advancedSetReps: Math.max(1, Math.min(9999, Math.round(Number(source.advancedSetReps) || WORKOUT_ADVANCED_SET_REPS))),
+        baseSeconds: Math.max(1, Math.min(86400, Math.round(Number(source.baseSeconds) || WORKOUT_DEFAULT_TIME_BASE_SECONDS))),
+        incrementSeconds: Math.max(0, Math.min(86400, Math.round(Number(source.incrementSeconds) || WORKOUT_DEFAULT_TIME_INCREMENT_SECONDS)))
     };
 }
 
@@ -171,8 +175,10 @@ function normalizeWorkoutLogs(logs, workoutId, validLevelIds, policy = null) {
             const id = String(log.id || '').trim() || createWorkoutId('workout_log');
             if (seen.has(id)) return null;
             seen.add(id);
+            const unit = log.unit === 'seconds' || Number(log.durationSeconds || log.targetSecondsAtLog) > 0 ? 'seconds' : 'reps';
             const reps = Math.max(0, Math.round(Number(log.reps) || 0));
-            if (reps <= 0) return null;
+            const durationSeconds = Math.max(0, Math.round(Number(log.durationSeconds || (unit === 'seconds' ? log.reps : 0)) || 0));
+            if (unit === 'seconds' ? durationSeconds <= 0 : reps <= 0) return null;
             const createdAt = Number(log.createdAt) || Date.now();
             const fallbackDateKey = getWorkoutDateKey(new Date(createdAt));
             const scheduledDateKey = /^\d{4}-\d{2}-\d{2}$/.test(log.scheduledDateKey || '') ? log.scheduledDateKey : fallbackDateKey;
@@ -182,14 +188,20 @@ function normalizeWorkoutLogs(logs, workoutId, validLevelIds, policy = null) {
                 workoutId: String(log.workoutId || workoutId || ''),
                 levelId,
                 scheduledDateKey,
+                unit,
                 reps,
                 targetRepsAtLog: Math.max(1, Math.round(Number(log.targetRepsAtLog) || safePolicy.normalSetReps)),
+                durationSeconds,
+                targetSecondsAtLog: Math.max(1, Math.round(Number(log.targetSecondsAtLog) || safePolicy.baseSeconds)),
                 source: log.source === 'routine' || log.source === 'session' ? log.source : 'manual',
                 routineId: String(log.routineId || '').trim(),
                 routineRunId: String(log.routineRunId || '').trim(),
                 sessionId: String(log.sessionId || '').trim(),
+                sessionEntryId: String(log.sessionEntryId || log.entryId || '').trim(),
                 rotationId: String(log.rotationId || '').trim(),
-                createdAt
+                createdAt,
+                editedAt: Number(log.editedAt) || null,
+                updatedAt: Number(log.updatedAt) || Number(log.editedAt) || null
             };
         })
         .filter(Boolean)
@@ -213,11 +225,14 @@ function normalizeWorkoutForRuntime(workout) {
 
     workout.id = String(source.id || '').trim() || createWorkoutId('workout');
     workout.name = String(source.name || source.title || 'Workout').trim().slice(0, 120) || 'Workout';
-    workout.unit = 'reps';
+    workout.unit = source.unit === 'seconds' ? 'seconds' : 'reps';
     workout.levels = levels;
     workout.currentLevelId = currentLevelId;
     workout.progressionPolicy = progressionPolicy;
     workout.targetReps = targetReps;
+    workout.targetSeconds = workout.unit === 'seconds'
+        ? Math.max(1, progressionPolicy.baseSeconds + ((Math.max(1, Number((levels.find(level => level.id === currentLevelId) || levels[0]).order) || 1) - 1) * progressionPolicy.incrementSeconds))
+        : 0;
     workout.currentLevelStartedAt = currentLevelStartedAt;
     workout.schedule = normalizeWorkoutSchedule(source.schedule);
     workout.deloadPolicy = normalizeWorkoutDeloadPolicy(source.deloadPolicy);
@@ -325,6 +340,84 @@ function normalizeWorkoutRotationCollection(rawRotations) {
 
 function getWorkoutById(workoutId) {
     return (Array.isArray(workouts) ? workouts : []).find(workout => workout && workout.id === workoutId) || null;
+}
+
+function getWorkoutUnit(workout) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.normalizeUnit === 'function') {
+        return window.WorkoutCore.normalizeUnit(workout && workout.unit);
+    }
+    return workout && workout.unit === 'seconds' ? 'seconds' : 'reps';
+}
+
+function isTimedWorkout(workout) {
+    return getWorkoutUnit(workout) === 'seconds';
+}
+
+function getWorkoutTargetInfo(workout, levelId = null) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.getWorkoutTarget === 'function') {
+        return window.WorkoutCore.getWorkoutTarget(workout, levelId);
+    }
+    normalizeWorkoutForRuntime(workout);
+    const policy = normalizeWorkoutProgressionPolicy(workout.progressionPolicy);
+    const levels = getOrderedWorkoutLevels(workout);
+    const level = levels.find(item => item.id === (levelId || workout.currentLevelId)) || levels[0];
+    const order = Math.max(1, Number(level && level.order) || 1);
+    const seconds = Math.max(1, policy.baseSeconds + ((order - 1) * policy.incrementSeconds));
+    const reps = Number(workout.targetReps) === policy.advancedSetReps ? policy.advancedSetReps : policy.normalSetReps;
+    return {
+        unit: getWorkoutUnit(workout),
+        value: getWorkoutUnit(workout) === 'seconds' ? seconds : reps,
+        reps,
+        seconds
+    };
+}
+
+function formatWorkoutDuration(seconds) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.formatDuration === 'function') {
+        return window.WorkoutCore.formatDuration(seconds);
+    }
+    const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+    if (safeSeconds < 60) return `${safeSeconds} sec`;
+    const mins = Math.floor(safeSeconds / 60);
+    const secs = safeSeconds % 60;
+    return secs ? `${mins}m ${secs}s` : `${mins} min`;
+}
+
+function formatWorkoutTargetLabel(workout, value = null) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.formatTargetValue === 'function') {
+        return window.WorkoutCore.formatTargetValue(workout, value);
+    }
+    const target = getWorkoutTargetInfo(workout);
+    const safeValue = value === null || value === undefined ? target.value : Math.round(Number(value) || 0);
+    return isTimedWorkout(workout) ? formatWorkoutDuration(safeValue) : `${safeValue} reps`;
+}
+
+function formatWorkoutLogValue(log) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.formatLogValue === 'function') {
+        return window.WorkoutCore.formatLogValue(log);
+    }
+    return getWorkoutUnit(log) === 'seconds'
+        ? formatWorkoutDuration(log && log.durationSeconds)
+        : `${Math.round(Number(log && log.reps) || 0)} reps`;
+}
+
+function workoutLogQualifies(workout, log) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.logQualifies === 'function') {
+        return window.WorkoutCore.logQualifies(workout, log);
+    }
+    const target = getWorkoutTargetInfo(workout, log && log.levelId);
+    return isTimedWorkout(workout)
+        ? Math.round(Number(log && log.durationSeconds) || 0) >= Math.round(Number(log && log.targetSecondsAtLog) || target.seconds)
+        : Math.round(Number(log && log.reps) || 0) >= Math.round(Number(log && log.targetRepsAtLog) || target.reps);
+}
+
+function workoutLogIsAttempt(log) {
+    if (window.WorkoutCore && typeof window.WorkoutCore.isLogAttempt === 'function') {
+        return window.WorkoutCore.isLogAttempt(log);
+    }
+    return getWorkoutUnit(log) === 'seconds'
+        ? Math.round(Number(log && log.durationSeconds) || 0) > 0
+        : Math.round(Number(log && log.reps) || 0) > 0;
 }
 
 function getWorkoutRoutineById(routineId) {
@@ -590,24 +683,59 @@ function syncWorkoutComposerMode() {
     renderWorkoutComposerWeekdays();
 }
 
+function toggleWorkoutComposerUnitFields() {
+    const unitInput = document.getElementById('workout-unit-input');
+    const repsField = document.getElementById('workout-reps-target-field');
+    const secondsField = document.getElementById('workout-seconds-base-field');
+    const secondsRow = document.getElementById('workout-seconds-increment-row');
+    const timed = unitInput && unitInput.value === 'seconds';
+    if (repsField) repsField.style.display = timed ? 'none' : 'grid';
+    if (secondsField) secondsField.style.display = timed ? 'grid' : 'none';
+    if (secondsRow) secondsRow.style.display = timed ? 'grid' : 'none';
+}
+
 function resetWorkoutComposer() {
     editingWorkoutId = null;
     const nameInput = document.getElementById('workout-name-input');
     const timeInput = document.getElementById('workout-time-input');
     const durationInput = document.getElementById('workout-duration-input');
+    const unitInput = document.getElementById('workout-unit-input');
+    const normalRepsInput = document.getElementById('workout-normal-reps-input');
+    const baseSecondsInput = document.getElementById('workout-base-seconds-input');
+    const incrementSecondsInput = document.getElementById('workout-increment-seconds-input');
+    const requiredSetsInput = document.getElementById('workout-required-sets-input');
     if (nameInput) nameInput.value = '';
     if (timeInput) timeInput.value = '';
     if (durationInput) durationInput.value = '';
+    if (unitInput) unitInput.value = 'reps';
+    if (normalRepsInput) normalRepsInput.value = String(WORKOUT_NORMAL_SET_REPS);
+    if (baseSecondsInput) baseSecondsInput.value = String(WORKOUT_DEFAULT_TIME_BASE_SECONDS);
+    if (incrementSecondsInput) incrementSecondsInput.value = String(WORKOUT_DEFAULT_TIME_INCREMENT_SECONDS);
+    if (requiredSetsInput) requiredSetsInput.value = String(WORKOUT_REQUIRED_SETS);
     workoutComposerWeekdays = new Set([new Date().getDay()]);
     syncWorkoutComposerMode();
+    toggleWorkoutComposerUnitFields();
 }
 
 function saveWorkoutFromComposer() {
     const nameInput = document.getElementById('workout-name-input');
     const timeInput = document.getElementById('workout-time-input');
     const durationInput = document.getElementById('workout-duration-input');
+    const unitInput = document.getElementById('workout-unit-input');
+    const normalRepsInput = document.getElementById('workout-normal-reps-input');
+    const baseSecondsInput = document.getElementById('workout-base-seconds-input');
+    const incrementSecondsInput = document.getElementById('workout-increment-seconds-input');
+    const requiredSetsInput = document.getElementById('workout-required-sets-input');
     const name = String(nameInput && nameInput.value || '').trim();
     if (!name) return;
+    const unit = unitInput && unitInput.value === 'seconds' ? 'seconds' : 'reps';
+    const policy = normalizeWorkoutProgressionPolicy({
+        requiredSets: requiredSetsInput && requiredSetsInput.value,
+        normalSetReps: normalRepsInput && normalRepsInput.value,
+        advancedSetReps: WORKOUT_ADVANCED_SET_REPS,
+        baseSeconds: baseSecondsInput && baseSecondsInput.value,
+        incrementSeconds: incrementSecondsInput && incrementSecondsInput.value
+    });
 
     const schedule = {
         weekdays: Array.from(workoutComposerWeekdays),
@@ -622,16 +750,18 @@ function saveWorkoutFromComposer() {
             return;
         }
         workout.name = name.slice(0, 120);
+        workout.unit = unit;
+        workout.progressionPolicy = policy;
+        workout.targetReps = policy.normalSetReps;
         workout.schedule = normalizeWorkoutSchedule(schedule);
         workout.updatedAt = Date.now();
         showNotification('Workout updated');
     } else {
     const level = createWorkoutLevel('Level 1', 1);
-    const policy = normalizeWorkoutProgressionPolicy();
     workouts.push(normalizeWorkoutForRuntime({
             id: createWorkoutId('workout'),
             name,
-            unit: 'reps',
+            unit,
             levels: [level],
             currentLevelId: level.id,
             progressionPolicy: policy,
@@ -660,14 +790,26 @@ function editWorkout(workoutId) {
     const nameInput = document.getElementById('workout-name-input');
     const timeInput = document.getElementById('workout-time-input');
     const durationInput = document.getElementById('workout-duration-input');
+    const unitInput = document.getElementById('workout-unit-input');
+    const normalRepsInput = document.getElementById('workout-normal-reps-input');
+    const baseSecondsInput = document.getElementById('workout-base-seconds-input');
+    const incrementSecondsInput = document.getElementById('workout-increment-seconds-input');
+    const requiredSetsInput = document.getElementById('workout-required-sets-input');
+    const policy = normalizeWorkoutProgressionPolicy(workout.progressionPolicy);
     if (nameInput) {
         nameInput.value = workout.name;
         nameInput.focus();
     }
     if (timeInput) timeInput.value = workout.schedule.time || '';
     if (durationInput) durationInput.value = workout.schedule.durationMinutes ? String(workout.schedule.durationMinutes) : '';
+    if (unitInput) unitInput.value = getWorkoutUnit(workout);
+    if (normalRepsInput) normalRepsInput.value = String(policy.normalSetReps);
+    if (baseSecondsInput) baseSecondsInput.value = String(policy.baseSeconds);
+    if (incrementSecondsInput) incrementSecondsInput.value = String(policy.incrementSeconds);
+    if (requiredSetsInput) requiredSetsInput.value = String(policy.requiredSets);
     workoutComposerWeekdays = new Set(workout.schedule.weekdays);
     syncWorkoutComposerMode();
+    toggleWorkoutComposerUnitFields();
 }
 
 function cancelWorkoutEdit() {
@@ -792,16 +934,21 @@ function logWorkoutReps(workoutId, reps) {
     applyPendingWorkoutProgression(workout, todayKey);
     normalizeWorkoutForRuntime(workout);
 
-    const parsedReps = Math.max(0, Math.round(Number(reps) || 0));
-    if (parsedReps <= 0) return;
+    const timed = isTimedWorkout(workout);
+    const target = getWorkoutTargetInfo(workout);
+    const parsedValue = Math.max(0, Math.round(Number(reps) || 0));
+    if (parsedValue <= 0) return;
 
     workout.logs.push({
         id: createWorkoutId('workout_log'),
         workoutId: workout.id,
         levelId: workout.currentLevelId,
         scheduledDateKey: todayKey,
-        reps: parsedReps,
-        targetRepsAtLog: workout.targetReps,
+        unit: timed ? 'seconds' : 'reps',
+        reps: timed ? 0 : parsedValue,
+        targetRepsAtLog: target.reps,
+        durationSeconds: timed ? parsedValue : 0,
+        targetSecondsAtLog: target.seconds,
         createdAt: Date.now()
     });
 
@@ -881,6 +1028,41 @@ function deleteWorkoutLog(workoutId, logId) {
     const workout = getWorkoutById(workoutId);
     if (!workout) return;
     workout.logs = workout.logs.filter(log => log.id !== logId);
+    workout.updatedAt = Date.now();
+    renderWorkouts();
+    saveToStorage();
+}
+
+function editWorkoutLog(workoutId, logId) {
+    const workout = getWorkoutById(workoutId);
+    if (!workout) return;
+    normalizeWorkoutForRuntime(workout);
+    const log = (workout.logs || []).find(item => item.id === logId);
+    if (!log) return;
+    const timed = getWorkoutUnit(log) === 'seconds';
+    const currentValue = timed ? Math.round(Number(log.durationSeconds) || 0) : Math.round(Number(log.reps) || 0);
+    const raw = prompt(`Edit ${timed ? 'seconds' : 'reps'}:`, String(currentValue));
+    if (raw === null) return;
+    const nextValue = Math.max(1, Math.round(Number(raw) || 0));
+    if (!nextValue) return;
+    if (window.WorkoutCore && typeof window.WorkoutCore.updateWorkoutLog === 'function') {
+        window.WorkoutCore.updateWorkoutLog(
+            workout,
+            logId,
+            timed ? { durationSeconds: nextValue } : { reps: nextValue },
+            { assumeScheduled: isWorkoutScheduledOnDate(workout, parseWorkoutDateKey(log.scheduledDateKey) || new Date()) }
+        );
+    } else if (timed) {
+        log.unit = 'seconds';
+        log.durationSeconds = nextValue;
+        log.editedAt = Date.now();
+        log.updatedAt = log.editedAt;
+    } else {
+        log.unit = 'reps';
+        log.reps = nextValue;
+        log.editedAt = Date.now();
+        log.updatedAt = log.editedAt;
+    }
     workout.updatedAt = Date.now();
     renderWorkouts();
     saveToStorage();
@@ -1156,7 +1338,7 @@ function renderWorkoutCalendarDetailsTarget(options = {}) {
         const levelName = item.currentLevel ? item.currentLevel.name : 'Level';
         const subLabel = item.type === 'rotation'
             ? `${item.rotation.name} · ${getWorkoutRotationScheduleLabel(item.rotation)}`
-            : `${levelName} · ${metrics.targetReps} reps`;
+            : `${levelName} · ${metrics.targetLabel || formatWorkoutTargetLabel(item.workout)}`;
         const status = metrics.completed ? 'Completed' : (item.partial ? 'In progress' : (summary.isPast ? 'Missed' : 'Scheduled'));
         const jumpButton = summary.isToday
             ? `<button type="button" class="workout-calendar-jump-btn" onclick="jumpToWorkoutCard('${item.workout.id}')">Show</button>`
@@ -1176,12 +1358,18 @@ function renderWorkoutCalendarDetailsTarget(options = {}) {
     }).join('');
 
     const unscheduledRows = summary.unscheduledItems.map(item => {
-        const totalReps = item.allDateLogs.reduce((sum, log) => sum + (Number(log.reps) || 0), 0);
+        const totalReps = item.allDateLogs.filter(log => getWorkoutUnit(log) === 'reps').reduce((sum, log) => sum + (Number(log.reps) || 0), 0);
+        const totalSeconds = item.allDateLogs.filter(log => getWorkoutUnit(log) === 'seconds').reduce((sum, log) => sum + (Number(log.durationSeconds) || 0), 0);
+        const totalLabel = totalSeconds > 0 && totalReps > 0
+            ? `${Math.round(totalReps)} reps · ${formatWorkoutDuration(totalSeconds)}`
+            : totalSeconds > 0
+                ? formatWorkoutDuration(totalSeconds)
+                : `${Math.round(totalReps)} reps`;
         return `
             <div class="workout-calendar-detail-row logged">
                 <div>
                     <strong>${escapeHtml(item.workout.name)}</strong>
-                    <span>${item.allDateLogs.length} unscheduled entr${item.allDateLogs.length === 1 ? 'y' : 'ies'} · ${Math.round(totalReps)} reps</span>
+                    <span>${item.allDateLogs.length} unscheduled entr${item.allDateLogs.length === 1 ? 'y' : 'ies'} · ${escapeHtml(totalLabel)}</span>
                 </div>
                 <div class="workout-calendar-detail-actions">
                     <span>Logged</span>
@@ -1363,6 +1551,8 @@ function renderWorkoutStudioSetupForm(workout = null) {
     const isEdit = !!workout;
     const group = isEdit ? `edit-${workout.id}` : 'new';
     const schedule = isEdit ? normalizeWorkoutSchedule(workout.schedule) : normalizeWorkoutSchedule({ weekdays: [new Date().getDay()] });
+    const policy = normalizeWorkoutProgressionPolicy(workout && workout.progressionPolicy);
+    const unit = getWorkoutUnit(workout);
     const nameValue = isEdit ? escapeHtml(workout.name) : '';
     const buttonText = isEdit ? 'Save Workout' : 'Add Workout';
     const title = isEdit ? 'Workout Details' : 'Add Workout';
@@ -1393,10 +1583,46 @@ function renderWorkoutStudioSetupForm(workout = null) {
                         <input id="workout-studio-duration-${escapeHtml(group)}" type="number" min="5" max="240" step="5" value="${schedule.durationMinutes || ''}" placeholder="Optional">
                     </label>
                 </div>
+                <div class="workout-studio-form-grid">
+                    <label>
+                        <span>Unit</span>
+                        <select id="workout-studio-unit-${escapeHtml(group)}" onchange="toggleWorkoutStudioUnitFields('${escapeHtml(group)}')">
+                            <option value="reps" ${unit === 'reps' ? 'selected' : ''}>Reps</option>
+                            <option value="seconds" ${unit === 'seconds' ? 'selected' : ''}>Seconds</option>
+                        </select>
+                    </label>
+                    <label id="workout-studio-reps-field-${escapeHtml(group)}" style="display:${unit === 'seconds' ? 'none' : 'grid'}">
+                        <span>Normal reps</span>
+                        <input id="workout-studio-normal-reps-${escapeHtml(group)}" type="number" min="1" step="1" value="${policy.normalSetReps}">
+                    </label>
+                    <label id="workout-studio-base-field-${escapeHtml(group)}" style="display:${unit === 'seconds' ? 'grid' : 'none'}">
+                        <span>Start seconds</span>
+                        <input id="workout-studio-base-seconds-${escapeHtml(group)}" type="number" min="1" step="1" value="${policy.baseSeconds}">
+                    </label>
+                    <label id="workout-studio-increment-field-${escapeHtml(group)}" style="display:${unit === 'seconds' ? 'grid' : 'none'}">
+                        <span>Increment seconds</span>
+                        <input id="workout-studio-increment-seconds-${escapeHtml(group)}" type="number" min="0" step="1" value="${policy.incrementSeconds}">
+                    </label>
+                    <label>
+                        <span>Required sets</span>
+                        <input id="workout-studio-required-sets-${escapeHtml(group)}" type="number" min="1" max="20" step="1" value="${policy.requiredSets}">
+                    </label>
+                </div>
                 <button type="button" class="workout-rep-btn primary workout-studio-submit" onclick="saveWorkoutFromStudio('${isEdit ? workout.id : ''}')">${buttonText}</button>
             </div>
         </section>
     `;
+}
+
+function toggleWorkoutStudioUnitFields(group) {
+    const unitInput = document.getElementById(`workout-studio-unit-${group}`);
+    const repsField = document.getElementById(`workout-studio-reps-field-${group}`);
+    const baseField = document.getElementById(`workout-studio-base-field-${group}`);
+    const incrementField = document.getElementById(`workout-studio-increment-field-${group}`);
+    const timed = unitInput && unitInput.value === 'seconds';
+    if (repsField) repsField.style.display = timed ? 'none' : 'grid';
+    if (baseField) baseField.style.display = timed ? 'grid' : 'none';
+    if (incrementField) incrementField.style.display = timed ? 'grid' : 'none';
 }
 
 function saveWorkoutFromStudio(workoutId = '') {
@@ -1411,11 +1637,23 @@ function saveWorkoutFromStudio(workoutId = '') {
     }
 
     const schedule = getWorkoutStudioScheduleFromGroup(group);
+    const unitInput = document.getElementById(`workout-studio-unit-${group}`);
+    const unit = unitInput && unitInput.value === 'seconds' ? 'seconds' : 'reps';
+    const policy = normalizeWorkoutProgressionPolicy({
+        requiredSets: document.getElementById(`workout-studio-required-sets-${group}`)?.value,
+        normalSetReps: document.getElementById(`workout-studio-normal-reps-${group}`)?.value,
+        advancedSetReps: WORKOUT_ADVANCED_SET_REPS,
+        baseSeconds: document.getElementById(`workout-studio-base-seconds-${group}`)?.value,
+        incrementSeconds: document.getElementById(`workout-studio-increment-seconds-${group}`)?.value
+    });
     if (isEdit) {
         const workout = getWorkoutById(workoutId);
         if (!workout) return;
         normalizeWorkoutForRuntime(workout);
         workout.name = name.slice(0, 120);
+        workout.unit = unit;
+        workout.progressionPolicy = policy;
+        workout.targetReps = policy.normalSetReps;
         workout.schedule = schedule;
         workout.updatedAt = Date.now();
         showNotification('Workout updated');
@@ -1425,7 +1663,7 @@ function saveWorkoutFromStudio(workoutId = '') {
         const workout = normalizeWorkoutForRuntime({
             id: createWorkoutId('workout'),
             name,
-            unit: 'reps',
+            unit,
             levels: [level],
             currentLevelId: level.id,
             progressionPolicy: policy,
@@ -1635,7 +1873,7 @@ function renderWorkoutStudioToday() {
             <div class="workout-studio-row ${metrics.completed ? 'done' : metrics.scheduled ? 'scheduled' : ''}">
                 <div>
                     <strong>${escapeHtml(workout.name)}</strong>
-                    <span>${escapeHtml(currentLevel ? currentLevel.name : 'Level')} · ${metrics.targetReps} reps · ${metrics.qualifyingSets}/${metrics.requiredSets || WORKOUT_REQUIRED_SETS} sets · ${metrics.partialLogs.length} partial</span>
+                    <span>${escapeHtml(currentLevel ? currentLevel.name : 'Level')} · ${escapeHtml(metrics.targetLabel || formatWorkoutTargetLabel(workout))} · ${metrics.qualifyingSets}/${metrics.requiredSets || WORKOUT_REQUIRED_SETS} sets · ${metrics.partialLogs.length} partial</span>
                 </div>
                 <div class="workout-studio-row-actions">
                     <span>${status}</span>
@@ -1729,6 +1967,8 @@ function renderWorkoutRoutineStepEditor(step, index) {
         return `<option value="${escapeHtml(workout.id)}" ${step.workoutId === workout.id ? 'selected' : ''}>${escapeHtml(workout.name)} · ${escapeHtml(level ? level.name : 'Current level')}</option>`;
     }).join('');
     const isRest = step.type === 'rest';
+    const stepWorkout = !isRest ? getWorkoutById(step.workoutId) : null;
+    const stepTimed = stepWorkout && isTimedWorkout(stepWorkout);
     return `
         <div class="workout-routine-step-editor ${isRest ? 'rest' : 'workout'}">
             <div class="workout-routine-step-order">${index + 1}</div>
@@ -1752,8 +1992,8 @@ function renderWorkoutRoutineStepEditor(step, index) {
                     </label>
                     ${isRest ? '<span></span>' : `
                         <label>
-                            <span>Rep Target</span>
-                            <input id="routine-step-reps-${step.id}" type="number" min="0" max="9999" step="1" value="${step.targetReps || ''}" placeholder="Optional">
+                            <span>${stepTimed ? 'Progress target' : 'Rep Target'}</span>
+                            <input id="routine-step-reps-${step.id}" type="number" min="0" max="9999" step="1" value="${step.targetReps || ''}" placeholder="${stepTimed ? 'Uses movement seconds' : 'Optional'}">
                         </label>
                     `}
                     ${isRest ? '' : `
@@ -1862,7 +2102,9 @@ function saveVisibleRoutineReps() {
         const entry = activeWorkoutRoutineRun.entries.find(item => item.entryId === entryId);
         if (!entry) return;
         const raw = String(input.value || '').trim();
-        entry.reps = raw === '' ? null : Math.max(0, Math.round(Number(raw) || 0));
+        const value = raw === '' ? null : Math.max(0, Math.round(Number(raw) || 0));
+        if (entry.unit === 'seconds') entry.durationSeconds = value;
+        else entry.reps = value;
     });
 }
 
@@ -1871,7 +2113,9 @@ function updateActiveRoutineEntryReps(entryId, value) {
     const entry = activeWorkoutRoutineRun.entries.find(item => item.entryId === entryId);
     if (!entry) return;
     const raw = String(value || '').trim();
-    entry.reps = raw === '' ? null : Math.max(0, Math.round(Number(raw) || 0));
+    const normalized = raw === '' ? null : Math.max(0, Math.round(Number(raw) || 0));
+    if (entry.unit === 'seconds') entry.durationSeconds = normalized;
+    else entry.reps = normalized;
 }
 
 function getWorkoutRoutineAudioContext() {
@@ -1933,13 +2177,16 @@ function startWorkoutRoutine(routineId) {
     const steps = routine.steps.map((step, index) => {
         const workout = step.type === 'workout' ? getWorkoutById(step.workoutId) : null;
         const level = workout ? getWorkoutLevel(workout, workout.currentLevelId) : null;
+        const target = workout ? getWorkoutTargetInfo(workout) : null;
         return {
             ...step,
             order: index + 1,
             workoutName: workout ? workout.name : 'Missing workout',
             levelId: workout ? workout.currentLevelId : null,
             levelName: level ? level.name : 'Current level',
-            targetRepsAtStart: workout ? workout.targetReps : WORKOUT_NORMAL_SET_REPS
+            unit: workout ? getWorkoutUnit(workout) : 'reps',
+            targetRepsAtStart: workout ? target.reps : WORKOUT_NORMAL_SET_REPS,
+            targetSecondsAtStart: workout ? target.seconds : WORKOUT_DEFAULT_TIME_BASE_SECONDS
         };
     });
     activeWorkoutRoutineRun = {
@@ -1964,7 +2211,10 @@ function startWorkoutRoutine(routineId) {
                 levelId: step.levelId,
                 levelName: step.levelName,
                 targetRepsAtLog: step.targetRepsAtStart,
-                reps: null
+                targetSecondsAtLog: step.targetSecondsAtStart,
+                unit: step.unit,
+                reps: null,
+                durationSeconds: null
             }))
     };
     unlockWorkoutRoutineAudio();
@@ -2089,12 +2339,12 @@ function renderWorkoutRoutinePlayer() {
                 ${step.notes ? `<div class="workout-routine-player-note">${escapeHtml(step.notes)}</div>` : ''}
                 <div id="workout-routine-player-time" class="workout-routine-player-time">${formatWorkoutRoutineDuration(Math.ceil((activeWorkoutRoutineRun.stepEndsAt - Date.now()) / 1000))}</div>
                 <div class="workout-routine-player-track"><div id="workout-routine-player-fill" class="workout-routine-player-fill"></div></div>
-                ${!isRest && (step.targetReps || step.targetSets) ? `<div class="workout-routine-player-target">${step.targetSets ? `${step.targetSets} set${step.targetSets === 1 ? '' : 's'}` : ''}${step.targetSets && step.targetReps ? ' · ' : ''}${step.targetReps ? `${step.targetReps} rep target` : ''}</div>` : ''}
+                ${!isRest ? `<div class="workout-routine-player-target">${step.targetSets ? `${step.targetSets} set${step.targetSets === 1 ? '' : 's'} · ` : ''}${step.unit === 'seconds' ? `${formatWorkoutDuration(step.targetSecondsAtStart)} target` : `${step.targetReps || step.targetRepsAtStart || WORKOUT_NORMAL_SET_REPS} rep target`}</div>` : ''}
                 ${previousEntry ? `
                     <div class="workout-routine-player-reps">
                         <label>
-                            <span>${escapeHtml(previousEntry.workoutName)} reps</span>
-                            <input data-routine-entry-id="${previousEntry.entryId}" type="number" min="0" step="1" value="${previousEntry.reps ?? ''}" placeholder="Reps completed" oninput="updateActiveRoutineEntryReps('${previousEntry.entryId}', this.value)">
+                            <span>${escapeHtml(previousEntry.workoutName)} ${previousEntry.unit === 'seconds' ? 'seconds' : 'reps'}</span>
+                            <input data-routine-entry-id="${previousEntry.entryId}" type="number" min="0" step="1" value="${previousEntry.unit === 'seconds' ? (previousEntry.durationSeconds ?? '') : (previousEntry.reps ?? '')}" placeholder="${previousEntry.unit === 'seconds' ? 'Seconds completed' : 'Reps completed'}" oninput="updateActiveRoutineEntryReps('${previousEntry.entryId}', this.value)">
                         </label>
                     </div>
                 ` : ''}
@@ -2112,9 +2362,9 @@ function renderWorkoutRoutineReview() {
         <label class="workout-routine-review-row">
             <span>
                 <strong>${escapeHtml(entry.workoutName)}</strong>
-                <em>${escapeHtml(entry.levelName)}</em>
+                <em>${escapeHtml(entry.levelName)} · ${entry.unit === 'seconds' ? escapeHtml(formatWorkoutDuration(entry.targetSecondsAtLog)) : `${entry.targetRepsAtLog} reps`}</em>
             </span>
-            <input data-routine-entry-id="${entry.entryId}" type="number" min="0" step="1" value="${entry.reps ?? ''}" placeholder="Reps">
+            <input data-routine-entry-id="${entry.entryId}" type="number" min="0" step="1" value="${entry.unit === 'seconds' ? (entry.durationSeconds ?? '') : (entry.reps ?? '')}" placeholder="${entry.unit === 'seconds' ? 'Seconds' : 'Reps'}">
         </label>
     `).join('');
     return `
@@ -2127,7 +2377,7 @@ function renderWorkoutRoutineReview() {
                 <button type="button" class="workout-routine-player-close" onclick="closeWorkoutRoutinePlayer(true)">✕</button>
             </div>
             <div class="workout-routine-review-body">
-                <div class="workout-routine-review-title">Review reps</div>
+                <div class="workout-routine-review-title">Review results</div>
                 <div class="workout-routine-review-list">${rows || '<div class="workout-empty-state">No workout steps to log.</div>'}</div>
                 <div class="workout-routine-player-actions">
                     <button type="button" class="workout-rep-btn" onclick="closeWorkoutRoutinePlayer(true)">Discard</button>
@@ -2145,8 +2395,9 @@ function saveWorkoutRoutineRun() {
     const createdAt = Date.now();
     let loggedCount = 0;
     activeWorkoutRoutineRun.entries.forEach(entry => {
-        const reps = Math.max(0, Math.round(Number(entry.reps) || 0));
-        if (reps <= 0) return;
+        const timed = entry.unit === 'seconds';
+        const value = Math.max(0, Math.round(Number(timed ? entry.durationSeconds : entry.reps) || 0));
+        if (value <= 0) return;
         const workout = getWorkoutById(entry.workoutId);
         if (!workout) return;
         normalizeWorkoutForRuntime(workout);
@@ -2155,8 +2406,11 @@ function saveWorkoutRoutineRun() {
             workoutId: workout.id,
             levelId: entry.levelId || workout.currentLevelId,
             scheduledDateKey: todayKey,
-            reps,
-            targetRepsAtLog: entry.targetRepsAtLog || workout.targetReps || WORKOUT_NORMAL_SET_REPS,
+            unit: timed ? 'seconds' : 'reps',
+            reps: timed ? 0 : value,
+            targetRepsAtLog: entry.targetRepsAtLog || getWorkoutTargetInfo(workout).reps,
+            durationSeconds: timed ? value : 0,
+            targetSecondsAtLog: entry.targetSecondsAtLog || getWorkoutTargetInfo(workout).seconds,
             routineId: activeWorkoutRoutineRun.routineId,
             routineRunId: activeWorkoutRoutineRun.id,
             source: 'routine',
@@ -2175,7 +2429,9 @@ function saveWorkoutRoutineRun() {
             entries: activeWorkoutRoutineRun.entries.map(entry => ({
                 workoutId: entry.workoutId,
                 levelId: entry.levelId,
-                reps: Math.max(0, Math.round(Number(entry.reps) || 0))
+                unit: entry.unit,
+                reps: Math.max(0, Math.round(Number(entry.reps) || 0)),
+                durationSeconds: Math.max(0, Math.round(Number(entry.durationSeconds) || 0))
             }))
         });
         routine.runs = routine.runs.slice(-100);
@@ -2193,12 +2449,14 @@ function getWorkoutEventLabel(workout, entry) {
         return level ? level.name : 'Level';
     };
     if (entry.kind === 'log') {
-        return `${entry.reps} reps at ${levelName(entry.levelId)}${entry.qualifies ? ' · set' : ' · partial'}`;
+        return `${formatWorkoutLogValue(entry)} at ${levelName(entry.levelId)}${entry.qualifies ? ' · set' : ' · partial'}`;
     }
     if (entry.type === 'manual_deload') return `Dropped from ${levelName(entry.fromLevelId)} to ${levelName(entry.toLevelId)}`;
     if (entry.type === 'level_changed') return `Advanced from ${levelName(entry.fromLevelId)} to ${levelName(entry.toLevelId)}`;
     if (entry.type === 'level_scheduled') return `Next level scheduled: ${levelName(entry.toLevelId)}`;
-    if (entry.type === 'highest_mastered') return `Highest level mastered · requirement changed to ${normalizeWorkoutProgressionPolicy(workout.progressionPolicy).advancedSetReps} reps`;
+    if (entry.type === 'highest_mastered') return isTimedWorkout(workout)
+        ? `Highest level mastered · ${formatWorkoutTargetLabel(workout)}`
+        : `Highest level mastered · requirement changed to ${normalizeWorkoutProgressionPolicy(workout.progressionPolicy).advancedSetReps} reps`;
     return String(entry.type || 'Workout event').replace(/_/g, ' ');
 }
 
@@ -2211,7 +2469,7 @@ function renderWorkoutStudioHistory() {
         ...log,
         kind: 'log',
         dateKey: log.scheduledDateKey,
-        qualifies: Number(log.reps) >= (Number(log.targetRepsAtLog) || WORKOUT_NORMAL_SET_REPS)
+        qualifies: workoutLogQualifies(workout, log)
     }));
     const rows = events.concat(logs)
         .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
@@ -2255,12 +2513,16 @@ function getWorkoutProgressPoints(workout, range = workoutProgressRange) {
     for (let cursor = new Date(start); getWorkoutDateKey(cursor) <= getWorkoutDateKey(today); cursor = addWorkoutDays(cursor, 1)) {
         const dateKey = getWorkoutDateKey(cursor);
         const logs = getWorkoutLogsForDate(workout, dateKey);
-        const totalReps = logs.reduce((sum, log) => sum + Math.round(Number(log.reps) || 0), 0);
-        const sets = logs.filter(log => Number(log.reps) >= (Number(log.targetRepsAtLog) || policy.normalSetReps)).length;
-        const partials = logs.filter(log => Number(log.reps) < (Number(log.targetRepsAtLog) || policy.normalSetReps)).length;
+        const metricLogs = logs.filter(log => getWorkoutUnit(log) === getWorkoutUnit(workout));
+        const totalReps = metricLogs.reduce((sum, log) => sum + Math.round(Number(log.reps) || 0), 0);
+        const totalSeconds = metricLogs.reduce((sum, log) => sum + Math.round(Number(log.durationSeconds) || 0), 0);
+        const sets = metricLogs.filter(log => workoutLogQualifies(workout, log)).length;
+        const partials = metricLogs.filter(log => workoutLogIsAttempt(log) && !workoutLogQualifies(workout, log)).length;
         points.push({
             dateKey,
             totalReps,
+            totalSeconds,
+            totalValue: isTimedWorkout(workout) ? totalSeconds : totalReps,
             sets,
             partials,
             scheduled: isWorkoutScheduledOnDate(workout, cursor),
@@ -2281,7 +2543,7 @@ function renderWorkoutBarChart(points, valueKey, title, color = '#14b8a6') {
             <span
                 class="workout-chart-bar ${point.completed ? 'completed' : ''} ${value > 0 ? 'has-value' : ''}"
                 style="height:${height}%; --workout-chart-color:${color};"
-                title="${escapeHtml(point.dateKey)} · ${value}">
+                title="${escapeHtml(point.dateKey)} · ${escapeHtml(point.display || String(value))}">
             </span>
         `;
     }).join('');
@@ -2289,7 +2551,7 @@ function renderWorkoutBarChart(points, valueKey, title, color = '#14b8a6') {
         <div class="workout-chart">
             <div class="workout-chart-title">${escapeHtml(title)}</div>
             <div class="workout-chart-plot" role="img" aria-label="${escapeHtml(title)}">
-                ${hasData ? bars : '<div class="workout-chart-empty">No reps logged yet.</div>'}
+                ${hasData ? bars : '<div class="workout-chart-empty">No progress logged yet.</div>'}
             </div>
         </div>
     `;
@@ -2315,7 +2577,8 @@ function renderWorkoutStudioProgress() {
     if (!workout) return '<div class="workout-empty-state">Add a workout movement first.</div>';
     normalizeWorkoutForRuntime(workout);
     const points = getWorkoutProgressPoints(workout);
-    const totalReps = points.reduce((sum, point) => sum + point.totalReps, 0);
+    const timed = isTimedWorkout(workout);
+    const totalValue = points.reduce((sum, point) => sum + point.totalValue, 0);
     const totalSets = points.reduce((sum, point) => sum + point.sets, 0);
     const completedDays = points.filter(point => point.completed).length;
     const partialDays = points.filter(point => point.partials > 0 && !point.completed).length;
@@ -2328,7 +2591,7 @@ function renderWorkoutStudioProgress() {
         </div>
         ${renderWorkoutDeloadRecommendation(workout)}
         <div class="workout-status-grid workout-studio-stats">
-            <div><span class="workout-status-label">Total reps</span><strong>${Math.round(totalReps)}</strong></div>
+            <div><span class="workout-status-label">${timed ? 'Total time' : 'Total reps'}</span><strong>${escapeHtml(timed ? formatWorkoutDuration(totalValue) : String(Math.round(totalValue)))}</strong></div>
             <div><span class="workout-status-label">Sets</span><strong>${totalSets}</strong></div>
             <div><span class="workout-status-label">Completed days</span><strong>${completedDays}</strong></div>
             <div><span class="workout-status-label">Partial days</span><strong>${partialDays}</strong></div>
@@ -2338,7 +2601,10 @@ function renderWorkoutStudioProgress() {
                 ${renderWorkoutBarChart(points, 'sets', 'Qualifying sets', '#14b8a6')}
             </section>
             <section class="workout-studio-section">
-                ${renderWorkoutBarChart(points, 'totalReps', 'Total reps', '#60a5fa')}
+                ${renderWorkoutBarChart(points.map(point => ({
+                    ...point,
+                    display: timed ? formatWorkoutDuration(point.totalValue) : String(point.totalValue)
+                })), 'totalValue', timed ? 'Total time' : 'Total reps', '#60a5fa')}
             </section>
         </div>
         <section class="workout-studio-section">
@@ -2444,13 +2710,14 @@ function renderWorkoutLevels(workout, context = 'side') {
 
 function renderWorkoutLogList(workout, metrics) {
     const logs = metrics.levelLogs.slice().reverse();
-    if (logs.length === 0) return '<div class="workout-empty-log">No reps logged today.</div>';
+    if (logs.length === 0) return `<div class="workout-empty-log">No ${isTimedWorkout(workout) ? 'time' : 'reps'} logged today.</div>`;
     return logs.map(log => {
-        const qualifies = Number(log.reps) >= metrics.targetReps;
+        const qualifies = workoutLogQualifies(workout, log);
         return `
             <div class="workout-log-row ${qualifies ? 'set' : 'partial'}">
-                <span>${Math.round(log.reps)} reps</span>
+                <span>${escapeHtml(formatWorkoutLogValue(log))}</span>
                 <span>${qualifies ? 'set' : 'partial'}</span>
+                <button class="workout-icon-btn" onclick="editWorkoutLog('${workout.id}', '${log.id}')" title="Edit log">✎</button>
                 <button class="workout-icon-btn danger" onclick="deleteWorkoutLog('${workout.id}', '${log.id}')" title="Delete log">✕</button>
             </div>
         `;
@@ -2499,6 +2766,22 @@ function renderWorkouts() {
         const scheduleWarning = metrics.scheduled ? '' : '<div class="workout-warning">Today is not scheduled. Logs stay in history but will not auto-level.</div>';
         const nextStatus = getWorkoutNextStatus(workout);
         const policy = normalizeWorkoutProgressionPolicy(workout.progressionPolicy);
+        const timed = isTimedWorkout(workout);
+        const target = getWorkoutTargetInfo(workout);
+        const quickButtons = timed
+            ? `
+                <button class="workout-rep-btn primary" onclick="logWorkoutReps('${workout.id}', ${target.seconds})">+${escapeHtml(formatWorkoutDuration(target.seconds))}</button>
+                <button class="workout-rep-btn" onclick="logWorkoutReps('${workout.id}', ${target.seconds + policy.incrementSeconds})">+${escapeHtml(formatWorkoutDuration(target.seconds + policy.incrementSeconds))}</button>
+                <input type="number" id="workout-reps-input-${workout.id}" min="1" placeholder="Seconds" onkeypress="if(event.key==='Enter') logWorkoutCustomReps('${workout.id}')">
+                <button class="workout-rep-btn" onclick="logWorkoutCustomReps('${workout.id}')">Log</button>
+            `
+            : `
+                <button class="workout-rep-btn" onclick="logWorkoutReps('${workout.id}', 10)">+10</button>
+                <button class="workout-rep-btn primary" onclick="logWorkoutReps('${workout.id}', ${policy.normalSetReps})">+${policy.normalSetReps}</button>
+                <button class="workout-rep-btn" onclick="logWorkoutReps('${workout.id}', ${policy.advancedSetReps})">+${policy.advancedSetReps}</button>
+                <input type="number" id="workout-reps-input-${workout.id}" min="1" placeholder="Reps" onkeypress="if(event.key==='Enter') logWorkoutCustomReps('${workout.id}')">
+                <button class="workout-rep-btn" onclick="logWorkoutCustomReps('${workout.id}')">Log</button>
+            `;
 
         const card = document.createElement('div');
         card.className = `workout-card ${metrics.completed ? 'complete' : ''}`;
@@ -2522,7 +2805,7 @@ function renderWorkouts() {
                 </div>
                 <div>
                     <span class="workout-status-label">Requirement</span>
-                    <strong>${metrics.targetReps} reps</strong>
+                    <strong>${escapeHtml(metrics.targetLabel || formatWorkoutTargetLabel(workout))}</strong>
                 </div>
                 <div>
                     <span class="workout-status-label">Today</span>
@@ -2537,11 +2820,7 @@ function renderWorkouts() {
             ${scheduleWarning}
 
             <div class="workout-log-controls">
-                <button class="workout-rep-btn" onclick="logWorkoutReps('${workout.id}', 10)">+10</button>
-                <button class="workout-rep-btn primary" onclick="logWorkoutReps('${workout.id}', ${policy.normalSetReps})">+${policy.normalSetReps}</button>
-                <button class="workout-rep-btn" onclick="logWorkoutReps('${workout.id}', ${policy.advancedSetReps})">+${policy.advancedSetReps}</button>
-                <input type="number" id="workout-reps-input-${workout.id}" min="1" placeholder="Reps" onkeypress="if(event.key==='Enter') logWorkoutCustomReps('${workout.id}')">
-                <button class="workout-rep-btn" onclick="logWorkoutCustomReps('${workout.id}')">Log</button>
+                ${quickButtons}
             </div>
 
             <div class="workout-section-title">Today&apos;s Entries</div>

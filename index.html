@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="assets/css/notes.css">
     <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/goals-habits.css">
-    <link rel="stylesheet" href="assets/css/workouts.css">
+    <link rel="stylesheet" href="assets/css/workouts.css?v=20260605a">
     <link rel="stylesheet" href="assets/css/graph.css">
     <link rel="stylesheet" href="assets/css/panels-modals.css">
     <link rel="stylesheet" href="assets/css/calendar.css">
@@ -835,6 +835,33 @@
                 <label>
                     <span>Minutes</span>
                     <input type="number" id="workout-duration-input" min="5" max="240" step="5" placeholder="Optional">
+                </label>
+            </div>
+            <div class="workout-schedule-row">
+                <label>
+                    <span>Unit</span>
+                    <select id="workout-unit-input" onchange="toggleWorkoutComposerUnitFields()">
+                        <option value="reps">Reps</option>
+                        <option value="seconds">Seconds</option>
+                    </select>
+                </label>
+                <label id="workout-reps-target-field">
+                    <span>Normal reps</span>
+                    <input type="number" id="workout-normal-reps-input" min="1" step="1" value="20">
+                </label>
+                <label id="workout-seconds-base-field" style="display:none">
+                    <span>Start seconds</span>
+                    <input type="number" id="workout-base-seconds-input" min="1" step="1" value="60">
+                </label>
+            </div>
+            <div class="workout-schedule-row" id="workout-seconds-increment-row" style="display:none">
+                <label>
+                    <span>Increment seconds</span>
+                    <input type="number" id="workout-increment-seconds-input" min="0" step="1" value="5">
+                </label>
+                <label>
+                    <span>Required sets</span>
+                    <input type="number" id="workout-required-sets-input" min="1" max="20" step="1" value="3">
                 </label>
             </div>
         </div>
@@ -1905,9 +1932,9 @@
     <script defer src="assets/js/note-maximize.js"></script>
     <script defer src="assets/js/notes.js"></script>
     <script defer src="assets/js/goals-habits.js"></script>
-    <script defer src="assets/js/workoutCore.js?v=20260604a"></script>
-    <script defer src="assets/js/workoutStore.js?v=20260604a"></script>
-    <script defer src="assets/js/workouts.js?v=20260604a"></script>
+    <script defer src="assets/js/workoutCore.js?v=20260605a"></script>
+    <script defer src="assets/js/workoutStore.js?v=20260605a"></script>
+    <script defer src="assets/js/workouts.js?v=20260605a"></script>
     <script defer src="assets/js/graph.js"></script>
     <script defer src="assets/js/ai-urgency.js"></script>
     <script defer src="assets/js/tasks.js"></script>

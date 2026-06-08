@@ -14,6 +14,9 @@
     const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const ROUTINE_DEFAULT_WORK_SECONDS = 60;
     const ROUTINE_DEFAULT_REST_SECONDS = 30;
+    const DEFAULT_TIME_BASE_SECONDS = 60;
+    const DEFAULT_TIME_INCREMENT_SECONDS = 5;
+    const WORKOUT_UNITS = ['reps', 'seconds'];
 
     function createId(prefix = 'workout') {
         return `${prefix}_${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
@@ -56,12 +59,18 @@
         };
     }
 
+    function normalizeUnit(unit) {
+        return unit === 'seconds' ? 'seconds' : 'reps';
+    }
+
     function normalizeProgressionPolicy(policy) {
         const source = policy && typeof policy === 'object' ? policy : {};
         return {
             requiredSets: Math.max(1, Math.min(20, Math.round(Number(source.requiredSets) || REQUIRED_SETS))),
             normalSetReps: Math.max(1, Math.min(9999, Math.round(Number(source.normalSetReps) || NORMAL_SET_REPS))),
-            advancedSetReps: Math.max(1, Math.min(9999, Math.round(Number(source.advancedSetReps) || ADVANCED_SET_REPS)))
+            advancedSetReps: Math.max(1, Math.min(9999, Math.round(Number(source.advancedSetReps) || ADVANCED_SET_REPS))),
+            baseSeconds: Math.max(1, Math.min(86400, Math.round(Number(source.baseSeconds) || DEFAULT_TIME_BASE_SECONDS))),
+            incrementSeconds: Math.max(0, Math.min(86400, Math.round(Number(source.incrementSeconds) || DEFAULT_TIME_INCREMENT_SECONDS)))
         };
     }
 
@@ -109,6 +118,18 @@
         return normalized;
     }
 
+    function getLevelOrderFromLevels(levels, levelId) {
+        const ordered = normalizeLevels(levels);
+        const level = ordered.find(item => item.id === levelId) || ordered[0];
+        return Math.max(1, Number(level && level.order) || 1);
+    }
+
+    function getTargetSecondsForLevel(levels, policy, levelId) {
+        const safePolicy = normalizeProgressionPolicy(policy);
+        const order = getLevelOrderFromLevels(levels, levelId);
+        return Math.max(1, safePolicy.baseSeconds + ((order - 1) * safePolicy.incrementSeconds));
+    }
+
     function normalizeHistory(events, workoutId, validLevelIds) {
         const seen = new Set();
         return (Array.isArray(events) ? events : [])
@@ -146,24 +167,35 @@
                 const id = String(log.id || '').trim() || createId('workout_log');
                 if (seen.has(id)) return null;
                 seen.add(id);
+                const unit = normalizeUnit(log.unit || (Number(log.durationSeconds || log.targetSecondsAtLog) > 0 ? 'seconds' : 'reps'));
                 const reps = Math.max(0, Math.round(Number(log.reps) || 0));
-                if (reps <= 0) return null;
+                const durationSeconds = Math.max(0, Math.round(Number(log.durationSeconds || log.seconds || (unit === 'seconds' ? log.reps : 0)) || 0));
+                if (unit === 'seconds' ? durationSeconds <= 0 : reps <= 0) return null;
                 const createdAt = Number(log.createdAt) || Date.now();
                 const fallbackDateKey = dateKey(new Date(createdAt));
                 const targetReps = Math.max(1, Math.round(Number(log.targetRepsAtLog) || safePolicy.normalSetReps));
+                const targetSeconds = Math.max(1, Math.round(Number(log.targetSecondsAtLog) || safePolicy.baseSeconds));
+                const editedAt = Number(log.editedAt) || null;
+                const updatedAt = Number(log.updatedAt) || editedAt || null;
                 return {
                     id,
                     workoutId: String(log.workoutId || workoutId || ''),
                     levelId: validLevelIds.has(log.levelId) ? log.levelId : null,
                     scheduledDateKey: /^\d{4}-\d{2}-\d{2}$/.test(log.scheduledDateKey || '') ? log.scheduledDateKey : fallbackDateKey,
+                    unit,
                     reps,
                     targetRepsAtLog: targetReps,
+                    durationSeconds,
+                    targetSecondsAtLog: targetSeconds,
                     source: log.source === 'routine' || log.source === 'session' ? log.source : 'manual',
                     routineId: String(log.routineId || '').trim(),
                     routineRunId: String(log.routineRunId || '').trim(),
                     sessionId: String(log.sessionId || '').trim(),
+                    sessionEntryId: String(log.sessionEntryId || log.entryId || '').trim(),
                     rotationId: String(log.rotationId || '').trim(),
-                    createdAt
+                    createdAt,
+                    editedAt,
+                    updatedAt
                 };
             })
             .filter(Boolean)
@@ -178,17 +210,19 @@
         const levels = normalizeLevels(source.levels);
         const validLevelIds = new Set(levels.map(level => level.id));
         const policy = normalizeProgressionPolicy(source.progressionPolicy);
+        const unit = normalizeUnit(source.unit);
         const currentLevelId = validLevelIds.has(source.currentLevelId) ? source.currentLevelId : levels[0].id;
         const sourceTarget = Math.max(1, Math.round(Number(source.targetReps) || policy.normalSetReps));
         const isAdvanced = sourceTarget >= policy.advancedSetReps || Number(source.targetReps) === ADVANCED_SET_REPS;
 
         target.id = String(source.id || '').trim() || createId('workout');
         target.name = String(source.name || source.title || 'Workout').trim().slice(0, 120) || 'Workout';
-        target.unit = 'reps';
+        target.unit = unit;
         target.levels = levels;
         target.currentLevelId = currentLevelId;
         target.progressionPolicy = policy;
         target.targetReps = isAdvanced ? policy.advancedSetReps : policy.normalSetReps;
+        target.targetSeconds = unit === 'seconds' ? getTargetSecondsForLevel(levels, policy, currentLevelId) : 0;
         target.currentLevelStartedAt = Number(source.currentLevelStartedAt) || Number(source.createdAt) || now;
         target.schedule = normalizeSchedule(source.schedule);
         target.deloadPolicy = normalizeDeloadPolicy(source.deloadPolicy);
@@ -320,7 +354,9 @@
 
     function normalizeSessionEntry(entry, index = 0) {
         const source = entry && typeof entry === 'object' ? entry : {};
+        const unit = normalizeUnit(source.unit || (Number(source.durationSeconds || source.targetSecondsAtLog) > 0 ? 'seconds' : 'reps'));
         const reps = Math.max(0, Math.round(Number(source.reps) || 0));
+        const durationSeconds = Math.max(0, Math.round(Number(source.durationSeconds || source.seconds || (unit === 'seconds' ? source.reps : 0)) || 0));
         return {
             id: String(source.id || source.entryId || '').trim() || createId('session_entry'),
             workoutId: String(source.workoutId || '').trim(),
@@ -330,8 +366,12 @@
             rotationId: String(source.rotationId || '').trim(),
             rotationName: String(source.rotationName || '').trim(),
             scheduledForProgression: source.scheduledForProgression === true,
+            unit,
             reps,
             targetRepsAtLog: Math.max(1, Math.round(Number(source.targetRepsAtLog) || NORMAL_SET_REPS)),
+            durationSeconds,
+            targetSecondsAtLog: Math.max(1, Math.round(Number(source.targetSecondsAtLog) || DEFAULT_TIME_BASE_SECONDS)),
+            editedAt: Number(source.editedAt) || null,
             createdAt: Number(source.createdAt) || Date.now() + index
         };
     }
@@ -342,7 +382,7 @@
         const completedAt = Number(source.completedAt) || startedAt;
         const entries = (Array.isArray(source.entries) ? source.entries : [])
             .map(normalizeSessionEntry)
-            .filter(entry => entry.workoutId && entry.reps > 0);
+            .filter(entry => entry.workoutId && (entry.unit === 'seconds' ? entry.durationSeconds > 0 : entry.reps > 0));
         return {
             id: String(source.id || '').trim() || createId('workout_session'),
             routineId: String(source.routineId || '').trim(),
@@ -404,18 +444,80 @@
         });
     }
 
+    function getWorkoutTarget(workout, levelId = null) {
+        const normalized = normalizeWorkout(workout);
+        const policy = normalizeProgressionPolicy(normalized.progressionPolicy);
+        const safeLevelId = levelId && normalized.levels.some(level => level.id === levelId)
+            ? levelId
+            : normalized.currentLevelId;
+        const targetSeconds = getTargetSecondsForLevel(normalized.levels, policy, safeLevelId);
+        const targetReps = Number(normalized.targetReps) >= policy.advancedSetReps ? policy.advancedSetReps : policy.normalSetReps;
+        return {
+            unit: normalized.unit,
+            value: normalized.unit === 'seconds' ? targetSeconds : targetReps,
+            reps: targetReps,
+            seconds: targetSeconds
+        };
+    }
+
+    function isLogAttempt(log) {
+        if (!log || typeof log !== 'object') return false;
+        const unit = normalizeUnit(log.unit || (Number(log.durationSeconds || log.targetSecondsAtLog) > 0 ? 'seconds' : 'reps'));
+        return unit === 'seconds'
+            ? Math.round(Number(log.durationSeconds) || 0) > 0
+            : Math.round(Number(log.reps) || 0) > 0;
+    }
+
+    function logQualifies(workout, log) {
+        if (!log || typeof log !== 'object') return false;
+        const normalized = normalizeWorkout(workout);
+        const unit = normalizeUnit(log.unit || normalized.unit);
+        if (unit !== normalized.unit) return false;
+        if (unit === 'seconds') {
+            const targetSeconds = Math.max(1, Math.round(Number(log.targetSecondsAtLog) || getWorkoutTarget(normalized, log.levelId).seconds));
+            return Math.round(Number(log.durationSeconds) || 0) >= targetSeconds;
+        }
+        const targetReps = Math.max(1, Math.round(Number(log.targetRepsAtLog) || getWorkoutTarget(normalized, log.levelId).reps));
+        return Math.round(Number(log.reps) || 0) >= targetReps;
+    }
+
+    function formatDuration(seconds) {
+        const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0));
+        if (safeSeconds < 60) return `${safeSeconds} sec`;
+        const minutes = Math.floor(safeSeconds / 60);
+        const remainder = safeSeconds % 60;
+        return remainder ? `${minutes}m ${remainder}s` : `${minutes} min`;
+    }
+
+    function formatTargetValue(workout, value = null) {
+        const normalized = normalizeWorkout(workout);
+        const target = getWorkoutTarget(normalized);
+        const safeValue = value === null || value === undefined ? target.value : Math.round(Number(value) || 0);
+        return normalized.unit === 'seconds' ? formatDuration(safeValue) : `${safeValue} reps`;
+    }
+
+    function formatLogValue(log) {
+        const unit = normalizeUnit(log && log.unit);
+        if (unit === 'seconds') return formatDuration(log && log.durationSeconds);
+        return `${Math.round(Number(log && log.reps) || 0)} reps`;
+    }
+
     function getDayMetrics(workout, key = dateKey()) {
         const normalized = normalizeWorkout(workout);
         const date = parseDateKey(key) || new Date();
         const policy = normalizeProgressionPolicy(normalized.progressionPolicy);
-        const targetReps = Number(normalized.targetReps) >= policy.advancedSetReps ? policy.advancedSetReps : policy.normalSetReps;
-        const levelLogs = getDayLogs(normalized, key, normalized.currentLevelId);
-        const qualifyingSets = levelLogs.filter(log => Number(log.reps) >= targetReps).length;
-        const partialLogs = levelLogs.filter(log => Number(log.reps) < targetReps);
+        const target = getWorkoutTarget(normalized);
+        const levelLogs = getDayLogs(normalized, key, normalized.currentLevelId).filter(log => normalizeUnit(log.unit) === normalized.unit);
+        const qualifyingSets = levelLogs.filter(log => logQualifies(normalized, log)).length;
+        const partialLogs = levelLogs.filter(log => isLogAttempt(log) && !logQualifies(normalized, log));
         return {
             dateKey: key,
             scheduled: isScheduledOnDate(normalized, date),
-            targetReps,
+            unit: normalized.unit,
+            targetValue: target.value,
+            targetLabel: formatTargetValue(normalized, target.value),
+            targetReps: target.reps,
+            targetSeconds: target.seconds,
             requiredSets: policy.requiredSets,
             qualifyingSets,
             partialLogs,
@@ -466,7 +568,11 @@
         }
         const previousLevelId = normalized.currentLevelId;
         normalized.currentLevelId = normalized.pendingLevelId;
-        normalized.targetReps = normalized.progressionPolicy.normalSetReps;
+        if (normalized.unit === 'seconds') {
+            normalized.targetSeconds = getTargetSecondsForLevel(normalized.levels, normalized.progressionPolicy, normalized.currentLevelId);
+        } else {
+            normalized.targetReps = normalized.progressionPolicy.normalSetReps;
+        }
         normalized.currentLevelStartedAt = Date.now();
         normalized.pendingLevelId = null;
         normalized.pendingEffectiveDateKey = null;
@@ -488,7 +594,7 @@
         const currentIndex = levels.findIndex(level => level.id === normalized.currentLevelId);
         if (currentIndex < 0) return false;
         const policy = normalizeProgressionPolicy(normalized.progressionPolicy);
-        if (metrics.targetReps >= policy.advancedSetReps) return false;
+        if (normalized.unit === 'reps' && metrics.targetReps >= policy.advancedSetReps) return false;
         if (currentIndex < levels.length - 1) {
             const nextLevelId = levels[currentIndex + 1].id;
             const scheduled = schedulePendingLevel(normalized, nextLevelId, key);
@@ -503,7 +609,8 @@
             }
             return true;
         }
-        normalized.targetReps = policy.advancedSetReps;
+        if (normalized.unit === 'seconds' && normalized.highestMasteredLevelId === normalized.currentLevelId) return false;
+        if (normalized.unit === 'reps') normalized.targetReps = policy.advancedSetReps;
         normalized.highestMasteredLevelId = normalized.currentLevelId;
         normalized.highestMasteredAt = Date.now();
         normalized.pendingLevelId = null;
@@ -512,9 +619,67 @@
         addHistoryEvent(normalized, 'highest_mastered', {
             dateKey: key,
             levelId: normalized.currentLevelId,
-            payload: { targetReps: policy.advancedSetReps }
+            payload: normalized.unit === 'seconds'
+                ? { targetSeconds: metrics.targetSeconds }
+                : { targetReps: policy.advancedSetReps }
         });
         return true;
+    }
+
+    function clearPendingProgressionForDate(workout, key = dateKey()) {
+        const normalized = normalizeWorkout(workout);
+        if (!normalized.pendingLevelId || !normalized.pendingEffectiveDateKey) return false;
+        const pendingLevelId = normalized.pendingLevelId;
+        const beforeLength = normalized.history.length;
+        normalized.history = normalized.history.filter(event => !(
+            event.type === 'level_scheduled' &&
+            event.dateKey === key &&
+            event.toLevelId === pendingLevelId
+        ));
+        if (normalized.history.length === beforeLength) return false;
+        normalized.pendingLevelId = null;
+        normalized.pendingEffectiveDateKey = null;
+        normalized.updatedAt = Date.now();
+        return true;
+    }
+
+    function recalculateProgressionForDate(workout, key = dateKey(), options = {}) {
+        const normalized = normalizeWorkout(workout);
+        const metrics = getDayMetrics(normalized, key);
+        if (metrics.completed) return evaluateProgression(normalized, key, options);
+        return clearPendingProgressionForDate(normalized, key);
+    }
+
+    function updateWorkoutLog(workoutInput, logId, updates = {}, options = {}) {
+        const workout = normalizeWorkout(workoutInput);
+        const id = String(logId || '').trim();
+        const log = workout.logs.find(item => item.id === id);
+        if (!log) return { workout, log: null, changed: false };
+        const now = Number(updates.editedAt) || Date.now();
+        if (workout.unit === 'seconds' || normalizeUnit(log.unit) === 'seconds') {
+            const nextSeconds = Math.max(1, Math.round(Number(updates.durationSeconds ?? updates.seconds ?? log.durationSeconds) || 0));
+            log.unit = 'seconds';
+            log.durationSeconds = nextSeconds;
+            log.targetSecondsAtLog = Math.max(1, Math.round(Number(updates.targetSecondsAtLog ?? log.targetSecondsAtLog) || getWorkoutTarget(workout, log.levelId).seconds));
+            log.reps = Math.max(0, Math.round(Number(log.reps) || 0));
+        } else {
+            const nextReps = Math.max(1, Math.round(Number(updates.reps ?? log.reps) || 0));
+            log.unit = 'reps';
+            log.reps = nextReps;
+            log.targetRepsAtLog = Math.max(1, Math.round(Number(updates.targetRepsAtLog ?? log.targetRepsAtLog) || getWorkoutTarget(workout, log.levelId).reps));
+        }
+        log.editedAt = now;
+        log.updatedAt = now;
+        workout.logs = normalizeLogs(workout.logs, workout.id, new Set(workout.levels.map(level => level.id)), workout.progressionPolicy);
+        workout.updatedAt = now;
+        if (options.recalculate !== false) {
+            recalculateProgressionForDate(workout, log.scheduledDateKey || dateKey(), options);
+        }
+        return {
+            workout,
+            log: workout.logs.find(item => item.id === id) || null,
+            changed: true
+        };
     }
 
     function applySessionToWorkouts(sessionInput, workoutsInput, options = {}) {
@@ -525,21 +690,30 @@
         let loggedCount = 0;
         session.entries.forEach((entry, index) => {
             const workout = byId.get(entry.workoutId);
-            if (!workout || entry.reps <= 0) return;
+            if (!workout) return;
+            const entryUnit = workout.unit;
+            const hasAttempt = entryUnit === 'seconds' ? entry.durationSeconds > 0 : entry.reps > 0;
+            if (!hasAttempt) return;
             const levelId = workout.levels.some(level => level.id === entry.levelId) ? entry.levelId : workout.currentLevelId;
             const createdAt = (Number(entry.createdAt) || Date.now()) + index;
+            const target = getWorkoutTarget(workout, levelId);
             workout.logs.push({
                 id: createId('workout_log'),
                 workoutId: workout.id,
                 levelId,
                 scheduledDateKey: session.dateKey,
-                reps: entry.reps,
-                targetRepsAtLog: entry.targetRepsAtLog || workout.targetReps || workout.progressionPolicy.normalSetReps,
+                unit: entryUnit,
+                reps: entryUnit === 'seconds' ? 0 : entry.reps,
+                targetRepsAtLog: entry.targetRepsAtLog || target.reps,
+                durationSeconds: entryUnit === 'seconds' ? entry.durationSeconds : 0,
+                targetSecondsAtLog: entry.targetSecondsAtLog || target.seconds,
                 source: 'session',
                 sessionId: session.id,
+                sessionEntryId: entry.id,
                 routineId: session.routineId || '',
                 routineRunId: '',
                 rotationId: entry.rotationId || session.rotationId || '',
+                editedAt: entry.editedAt || null,
                 createdAt
             });
             evaluateProgression(workout, session.dateKey, {
@@ -632,7 +806,7 @@
         const byId = new Map(rotations.map(rotation => [rotation.id, rotation]));
         const attempted = new Map();
         session.entries.forEach(entry => {
-            if (entry.reps <= 0 || !entry.rotationId || !byId.has(entry.rotationId)) return;
+            if (!isLogAttempt(entry) || !entry.rotationId || !byId.has(entry.rotationId)) return;
             const rotation = byId.get(entry.rotationId);
             if (!rotation.workoutIds.includes(entry.workoutId)) return;
             attempted.set(rotation.id, entry.workoutId);
@@ -677,16 +851,21 @@
         WEEKDAYS,
         ROUTINE_DEFAULT_WORK_SECONDS,
         ROUTINE_DEFAULT_REST_SECONDS,
+        DEFAULT_TIME_BASE_SECONDS,
+        DEFAULT_TIME_INCREMENT_SECONDS,
+        WORKOUT_UNITS,
         createId,
         dateKey,
         parseDateKey,
         addDays,
         normalizeWeekdays,
         normalizeSchedule,
+        normalizeUnit,
         normalizeProgressionPolicy,
         normalizeDeloadPolicy,
         createLevel,
         normalizeLevels,
+        getTargetSecondsForLevel,
         normalizeHistory,
         normalizeLogs,
         normalizeWorkout,
@@ -703,11 +882,20 @@
         isScheduledOnDate,
         getNextDateKey,
         getDayLogs,
+        getWorkoutTarget,
+        isLogAttempt,
+        logQualifies,
+        formatDuration,
+        formatTargetValue,
+        formatLogValue,
         getDayMetrics,
         addHistoryEvent,
         schedulePendingLevel,
         applyPendingProgression,
         evaluateProgression,
+        clearPendingProgressionForDate,
+        recalculateProgressionForDate,
+        updateWorkoutLog,
         applySessionToWorkouts,
         getWorkoutLevelRank,
         resolveRotationWorkout,

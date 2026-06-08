@@ -9,6 +9,7 @@ function makeWorkout(overrides = {}) {
     return Core.normalizeWorkout({
         id: overrides.id || 'push',
         name: overrides.name || 'Push-ups',
+        unit: overrides.unit,
         createdAt: atNoon(2026, 1, 1),
         schedule: overrides.schedule || { weekdays: [1, 3], time: '08:00', durationMinutes: 30 },
         levels: overrides.levels || [
@@ -39,6 +40,7 @@ function testNormalizeLegacyWorkoutsAndRoutines() {
     assert.equal(workout.progressionPolicy.requiredSets, 3);
     assert.equal(workout.progressionPolicy.normalSetReps, 20);
     assert.equal(workout.progressionPolicy.advancedSetReps, 50);
+    assert.equal(workout.unit, 'reps');
     assert.deepEqual(workout.schedule.weekdays, [1, 5]);
     assert.equal(workout.schedule.time, '');
     assert.equal(workout.levels.length, 1);
@@ -55,6 +57,108 @@ function testNormalizeLegacyWorkoutsAndRoutines() {
     assert.equal(routine.steps.length, 2);
     assert.equal(routine.steps[0].order, 1);
     assert.equal(routine.steps[1].type, 'rest');
+}
+
+function testTimedWorkoutTargetsAndQualification() {
+    const workout = makeWorkout({
+        id: 'plank',
+        name: 'Plank',
+        unit: 'seconds',
+        progressionPolicy: { requiredSets: 3, baseSeconds: 60, incrementSeconds: 5 },
+        logs: [
+            { id: 'p1', levelId: 'level_1', unit: 'seconds', durationSeconds: 60, targetSecondsAtLog: 60, scheduledDateKey: '2026-06-01' },
+            { id: 'p2', levelId: 'level_1', unit: 'seconds', durationSeconds: 45, targetSecondsAtLog: 60, scheduledDateKey: '2026-06-01' },
+            { id: 'p3', levelId: 'level_1', unit: 'seconds', durationSeconds: 60, targetSecondsAtLog: 60, scheduledDateKey: '2026-06-01' },
+            { id: 'p4', levelId: 'level_1', unit: 'seconds', durationSeconds: 60, targetSecondsAtLog: 60, scheduledDateKey: '2026-06-01' }
+        ]
+    });
+    assert.equal(workout.unit, 'seconds');
+    assert.equal(workout.targetSeconds, 60);
+    assert.equal(Core.getWorkoutTarget(workout).seconds, 60);
+
+    const metrics = Core.getDayMetrics(workout, '2026-06-01');
+    assert.equal(metrics.targetSeconds, 60);
+    assert.equal(metrics.qualifyingSets, 3);
+    assert.equal(metrics.partialLogs.length, 1);
+    assert.equal(metrics.completed, true);
+
+    assert.equal(Core.evaluateProgression(workout, '2026-06-01'), true);
+    assert.equal(workout.pendingLevelId, 'level_2');
+    assert.equal(Core.applyPendingProgression(workout, '2026-06-03'), true);
+    assert.equal(workout.currentLevelId, 'level_2');
+    assert.equal(workout.targetSeconds, 65);
+}
+
+function testTimedSessionAndRotationAttempt() {
+    const plank = makeWorkout({
+        id: 'plank',
+        name: 'Plank',
+        unit: 'seconds',
+        progressionPolicy: { requiredSets: 3, baseSeconds: 60, incrementSeconds: 5 }
+    });
+    const sidePlank = makeWorkout({
+        id: 'side_plank',
+        name: 'Side Plank',
+        unit: 'seconds',
+        progressionPolicy: { requiredSets: 3, baseSeconds: 60, incrementSeconds: 5 }
+    });
+    const rows = Core.normalizeWorkoutCollection([plank, sidePlank]);
+    const rotation = Core.normalizeRotation({
+        id: 'core_hold',
+        name: 'Core Hold',
+        workoutIds: ['plank', 'side_plank'],
+        schedule: { weekdays: [1, 3] },
+        createdAt: atNoon(2026, 1, 1)
+    }, rows.map(workout => workout.id));
+    const session = Core.normalizeSession({
+        id: 'timed_session_1',
+        rotationId: 'core_hold',
+        rotationName: 'Core Hold',
+        dateKey: '2026-06-01',
+        startedAt: atNoon(2026, 6, 1),
+        completedAt: atNoon(2026, 6, 1) + 120000,
+        entries: [{
+            workoutId: 'plank',
+            workoutName: 'Plank',
+            levelId: 'level_1',
+            unit: 'seconds',
+            durationSeconds: 45,
+            targetSecondsAtLog: 60,
+            rotationId: 'core_hold',
+            scheduledForProgression: true
+        }]
+    });
+    const result = Core.applySessionToWorkouts(session, rows);
+    assert.equal(result.loggedCount, 1);
+    assert.equal(result.workouts[0].logs[0].unit, 'seconds');
+    assert.equal(result.workouts[0].logs[0].durationSeconds, 45);
+    assert.equal(Core.getDayMetrics(result.workouts[0], '2026-06-01').qualifyingSets, 0);
+
+    const rotationUpdate = Core.advanceRotationsForSession(result.session, [rotation], result.workouts);
+    assert.equal(rotationUpdate.advancedCount, 1);
+    assert.equal(rotationUpdate.rotations[0].lastWorkoutId, 'plank');
+}
+
+function testTimedLogEditRecalculatesPendingProgression() {
+    const workout = makeWorkout({
+        id: 'plank',
+        name: 'Plank',
+        unit: 'seconds',
+        progressionPolicy: { requiredSets: 3, baseSeconds: 60, incrementSeconds: 5 },
+        logs: [
+            { id: 'e1', levelId: 'level_1', unit: 'seconds', durationSeconds: 60, targetSecondsAtLog: 60, scheduledDateKey: '2026-06-01' },
+            { id: 'e2', levelId: 'level_1', unit: 'seconds', durationSeconds: 60, targetSecondsAtLog: 60, scheduledDateKey: '2026-06-01' },
+            { id: 'e3', levelId: 'level_1', unit: 'seconds', durationSeconds: 60, targetSecondsAtLog: 60, scheduledDateKey: '2026-06-01' }
+        ]
+    });
+    assert.equal(Core.evaluateProgression(workout, '2026-06-01'), true);
+    assert.equal(workout.pendingLevelId, 'level_2');
+
+    const edit = Core.updateWorkoutLog(workout, 'e3', { durationSeconds: 45 }, { assumeScheduled: true });
+    assert.equal(edit.changed, true);
+    assert.equal(Core.getDayMetrics(edit.workout, '2026-06-01').qualifyingSets, 2);
+    assert.equal(edit.workout.pendingLevelId, null);
+    assert.equal(edit.workout.logs.find(log => log.id === 'e3').durationSeconds, 45);
 }
 
 function testScheduledDayDetection() {
@@ -235,6 +339,9 @@ function testRotationProjectsFutureScheduledNames() {
 }
 
 testNormalizeLegacyWorkoutsAndRoutines();
+testTimedWorkoutTargetsAndQualification();
+testTimedSessionAndRotationAttempt();
+testTimedLogEditRecalculatesPendingProgression();
 testScheduledDayDetection();
 testSetQualificationPolicies();
 testLevelProgressionAndPendingApplication();

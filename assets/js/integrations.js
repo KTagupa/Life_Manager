@@ -2031,17 +2031,34 @@ function mergeStates(local, remote) {
         );
 
         const mergeLogs = (firstLogs, secondLogs) => {
-            const seen = new Set();
-            return [
+            const byKey = new Map();
+            [
                 ...(Array.isArray(firstLogs) ? firstLogs : []),
                 ...(Array.isArray(secondLogs) ? secondLogs : [])
-            ].filter(log => {
+            ].forEach(log => {
                 if (!log || typeof log !== 'object') return false;
-                const key = log.id || `${log.workoutId || ''}|${log.levelId || ''}|${log.scheduledDateKey || ''}|${log.reps || ''}|${log.createdAt || ''}`;
-                if (seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            }).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
+                const unit = log.unit || (Number(log.durationSeconds || log.targetSecondsAtLog) > 0 ? 'seconds' : 'reps');
+                const key = log.id || [
+                    log.workoutId || '',
+                    log.levelId || '',
+                    log.scheduledDateKey || '',
+                    unit,
+                    log.reps || '',
+                    log.durationSeconds || '',
+                    log.targetRepsAtLog || '',
+                    log.targetSecondsAtLog || '',
+                    log.createdAt || ''
+                ].join('|');
+                const existing = byKey.get(key);
+                if (!existing) {
+                    byKey.set(key, log);
+                    return;
+                }
+                const logTs = Math.max(Number(log.updatedAt) || 0, Number(log.editedAt) || 0, Number(log.createdAt) || 0);
+                const existingTs = Math.max(Number(existing.updatedAt) || 0, Number(existing.editedAt) || 0, Number(existing.createdAt) || 0);
+                byKey.set(key, logTs >= existingTs ? log : existing);
+            });
+            return Array.from(byKey.values()).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
         };
 
         const mergeLevels = (firstLevels, secondLevels) => {

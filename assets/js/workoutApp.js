@@ -105,6 +105,10 @@
 
     function getStepElapsedMs(session = state.activeSession) {
         if (!session) return 0;
+        const step = getCurrentStep(session);
+        if (step && step.type === 'workout' && step.unit === 'seconds' && !step.timedSetRunning) {
+            return Math.max(0, Math.round(Number(step.timedRecordedSeconds) || 0)) * 1000;
+        }
         const end = session.paused ? Number(session.pauseStartedAt) || Date.now() : Date.now();
         const startedAt = Number(session.currentStepStartedAt) || Number(session.startedAt) || end;
         const elapsed = end - startedAt - Number(session.currentStepPausedMs || 0);
@@ -173,6 +177,36 @@
 
     function getPolicy(workout) {
         return Core.normalizeProgressionPolicy(workout && workout.progressionPolicy);
+    }
+
+    function getUnit(workout) {
+        return Core.normalizeUnit(workout && workout.unit);
+    }
+
+    function isTimedWorkout(workout) {
+        return getUnit(workout) === 'seconds';
+    }
+
+    function getTarget(workout, levelId = null) {
+        return Core.getWorkoutTarget(workout, levelId);
+    }
+
+    function getTargetLabel(workout, value = null) {
+        return Core.formatTargetValue(workout, value);
+    }
+
+    function getLogValueLabel(log) {
+        return Core.formatLogValue(log);
+    }
+
+    function getLogQualifies(workout, log) {
+        return Core.logQualifies(workout, log);
+    }
+
+    function getSessionEntryValue(entry) {
+        return Core.normalizeUnit(entry && entry.unit) === 'seconds'
+            ? Math.round(Number(entry && entry.durationSeconds) || 0)
+            : Math.round(Number(entry && entry.reps) || 0);
     }
 
     function getScheduleLabel(workout) {
@@ -365,6 +399,16 @@
         const policy = getPolicy(workout);
         const level = getLevel(workout, workout.currentLevelId);
         const percent = Math.min(100, Math.round((metrics.qualifyingSets / Math.max(1, metrics.requiredSets)) * 100));
+        const timed = isTimedWorkout(workout);
+        const quickPrimary = timed
+            ? `<button type="button" class="workout-btn blue" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${metrics.targetSeconds}, '${escapeHtml(rotation ? rotation.id : '')}')">+${escapeHtml(Core.formatDuration(metrics.targetSeconds))}</button>`
+            : `<button type="button" class="workout-btn blue" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${policy.normalSetReps}, '${escapeHtml(rotation ? rotation.id : '')}')">+${policy.normalSetReps}</button>`;
+        const quickTarget = timed
+            ? `<button type="button" class="workout-btn" onclick="${rotation ? `WorkoutApp.startRotationSession('${escapeHtml(rotation.id)}')` : `WorkoutApp.startWorkoutSession('${escapeHtml(workout.id)}')`}">Open Timer</button>`
+            : `<button type="button" class="workout-btn" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${metrics.targetReps}, '${escapeHtml(rotation ? rotation.id : '')}')">Target Set</button>`;
+        const quickStretch = timed
+            ? `<button type="button" class="workout-btn warning" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${metrics.targetSeconds + policy.incrementSeconds}, '${escapeHtml(rotation ? rotation.id : '')}')">+${escapeHtml(Core.formatDuration(metrics.targetSeconds + policy.incrementSeconds))}</button>`
+            : `<button type="button" class="workout-btn warning" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${policy.advancedSetReps}, '${escapeHtml(rotation ? rotation.id : '')}')">+${policy.advancedSetReps}</button>`;
         const scheduleText = rotation
             ? `${rotation.name} / ${getRotationScheduleLabel(rotation)}`
             : getScheduleLabel(workout);
@@ -387,14 +431,14 @@
                 </div>
                 <div class="workout-pill-row">
                     <div class="workout-pill"><span>Level</span><strong>${escapeHtml(level ? level.name : 'Level')}</strong></div>
-                    <div class="workout-pill"><span>Target</span><strong>${metrics.targetReps} reps</strong></div>
+                    <div class="workout-pill"><span>Target</span><strong>${escapeHtml(metrics.targetLabel)}</strong></div>
                     <div class="workout-pill"><span>Today</span><strong>${metrics.qualifyingSets}/${metrics.requiredSets}</strong></div>
                 </div>
                 <div class="workout-progress-track"><div class="workout-progress-fill" style="width:${percent}%"></div></div>
                 <div class="workout-action-row" style="margin-top:14px">
-                    <button type="button" class="workout-btn blue" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${policy.normalSetReps}, '${escapeHtml(rotation ? rotation.id : '')}')">+${policy.normalSetReps}</button>
-                    <button type="button" class="workout-btn" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${metrics.targetReps}, '${escapeHtml(rotation ? rotation.id : '')}')">Target Set</button>
-                    <button type="button" class="workout-btn warning" onclick="WorkoutApp.quickLogMovement('${escapeHtml(workout.id)}', ${policy.advancedSetReps}, '${escapeHtml(rotation ? rotation.id : '')}')">+${policy.advancedSetReps}</button>
+                    ${quickPrimary}
+                    ${quickTarget}
+                    ${quickStretch}
                 </div>
             </article>
         `;
@@ -789,9 +833,34 @@
 
         const workout = getStepWorkout(step);
         const targetReps = Math.max(1, Math.round(Number(step.targetReps) || (workout ? workout.targetReps : Core.NORMAL_SET_REPS)));
+        const targetSeconds = Math.max(1, Math.round(Number(step.targetSeconds) || (workout ? getTarget(workout).seconds : Core.DEFAULT_TIME_BASE_SECONDS)));
         const targetSets = Math.max(1, Math.round(Number(step.targetSets) || (workout ? getPolicy(workout).requiredSets : Core.REQUIRED_SETS)));
         const level = workout ? getLevel(workout, workout.currentLevelId) : null;
         const rotationText = step.rotationName ? ` / ${step.rotationName}` : '';
+        const timed = workout && isTimedWorkout(workout);
+        const recordedSeconds = step.timedSetRunning
+            ? Math.max(0, Math.round(getStepElapsedMs() / 1000))
+            : Math.max(0, Math.round(Number(step.timedRecordedSeconds) || 0));
+        if (timed) {
+            return `
+                <div class="workout-focus-main">
+                    <div class="workout-focus-title">
+                        <span class="workout-kicker">Timed Movement</span>
+                        <h2>${escapeHtml(workout ? workout.name : 'Missing movement')}</h2>
+                        <div class="workout-meta">${escapeHtml(level ? level.name : 'Level')}${escapeHtml(rotationText)} / ${setCount}/${targetSets} sets / target ${escapeHtml(Core.formatDuration(targetSeconds))}</div>
+                    </div>
+                    ${renderFocusClock(step)}
+                    <div class="workout-session-reps timed">
+                        <button type="button" class="workout-btn blue" onclick="WorkoutApp.startTimedSet()" ${step.timedSetRunning ? 'disabled' : ''}>Start</button>
+                        <button type="button" class="workout-btn warning" onclick="WorkoutApp.stopTimedSet()" ${step.timedSetRunning ? '' : 'disabled'}>Stop</button>
+                        <input type="number" id="session-seconds-input" min="1" value="${recordedSeconds || targetSeconds}" aria-label="Seconds">
+                        <button type="button" class="workout-btn" onclick="WorkoutApp.addSessionSet(${Math.max(1, targetSeconds - getPolicy(workout).incrementSeconds)})">${escapeHtml(Core.formatDuration(Math.max(1, targetSeconds - getPolicy(workout).incrementSeconds)))}</button>
+                        <button type="button" class="workout-btn blue" onclick="WorkoutApp.addSessionSet(${targetSeconds})">${escapeHtml(Core.formatDuration(targetSeconds))}</button>
+                        <button type="button" class="workout-btn primary" onclick="WorkoutApp.addSessionSet()">Add Set</button>
+                    </div>
+                </div>
+            `;
+        }
         return `
             <div class="workout-focus-main">
                 <div class="workout-focus-title">
@@ -824,11 +893,13 @@
             `;
         }
         const workout = getWorkout(step.workoutId);
+        const timed = workout && isTimedWorkout(workout);
+        const target = workout ? getTarget(workout) : null;
         return `
             <div class="workout-recent-row">
                 <div>
                     <strong>${escapeHtml(workout ? workout.name : step.workoutName || 'Movement')}</strong>
-                    <div class="workout-meta">${Math.round(Number(step.targetSets) || 1)} set${Number(step.targetSets) === 1 ? '' : 's'} / ${Math.round(Number(step.targetReps) || Core.NORMAL_SET_REPS)} reps</div>
+                    <div class="workout-meta">${Math.round(Number(step.targetSets) || 1)} set${Number(step.targetSets) === 1 ? '' : 's'} / ${timed ? escapeHtml(Core.formatDuration(target ? target.seconds : step.targetSeconds)) : `${Math.round(Number(step.targetReps) || Core.NORMAL_SET_REPS)} reps`}</div>
                 </div>
             </div>
         `;
@@ -843,9 +914,9 @@
                 <div class="workout-session-entry-row">
                     <div>
                         <strong>${escapeHtml(entry.workoutName || 'Movement')}</strong>
-                        <div class="workout-meta">${escapeHtml(entry.levelName || 'Level')}${entry.rotationName ? ` / ${escapeHtml(entry.rotationName)}` : ''} / target ${entry.targetRepsAtLog}</div>
+                        <div class="workout-meta">${escapeHtml(entry.levelName || 'Level')}${entry.rotationName ? ` / ${escapeHtml(entry.rotationName)}` : ''} / target ${escapeHtml(Core.normalizeUnit(entry.unit) === 'seconds' ? Core.formatDuration(entry.targetSecondsAtLog) : `${entry.targetRepsAtLog} reps`)}</div>
                     </div>
-                    <strong>${entry.reps} reps</strong>
+                    <strong>${escapeHtml(Core.normalizeUnit(entry.unit) === 'seconds' ? Core.formatDuration(entry.durationSeconds) : `${entry.reps} reps`)}</strong>
                 </div>
             `).join('');
     }
@@ -853,6 +924,8 @@
     function buildWorkoutStep(workout, overrides = {}) {
         const policy = getPolicy(workout);
         const level = getLevel(workout, workout.currentLevelId);
+        const target = getTarget(workout);
+        const timed = isTimedWorkout(workout);
         return {
             id: Core.createId('session_step'),
             type: 'workout',
@@ -863,10 +936,14 @@
             rotationId: String(overrides.rotationId || '').trim(),
             rotationName: String(overrides.rotationName || '').trim(),
             scheduledForProgression: overrides.scheduledForProgression === true,
+            unit: getUnit(workout),
             targetReps: Math.max(1, Math.round(Number(overrides.targetReps) || Number(workout.targetReps) || policy.normalSetReps)),
+            targetSeconds: target.seconds,
             targetSets: Math.max(1, Math.round(Number(overrides.targetSets) || policy.requiredSets)),
-            durationSeconds: Math.max(5, Math.round(Number(overrides.durationSeconds) || Core.ROUTINE_DEFAULT_WORK_SECONDS)),
-            timerEnabled: overrides.timerEnabled === true,
+            durationSeconds: Math.max(5, Math.round(Number(overrides.durationSeconds) || (timed ? target.seconds : Core.ROUTINE_DEFAULT_WORK_SECONDS))),
+            timerEnabled: timed || overrides.timerEnabled === true,
+            timedSetRunning: false,
+            timedRecordedSeconds: 0,
             notes: overrides.notes || ''
         };
     }
@@ -969,6 +1046,31 @@
         beginSession(routine.name, steps, routine);
     }
 
+    function startTimedSet() {
+        const session = state.activeSession;
+        const step = getCurrentStep(session);
+        if (!session || !step || step.type !== 'workout') return;
+        const workout = getWorkout(step.workoutId);
+        if (!workout || !isTimedWorkout(workout)) return;
+        step.timedSetRunning = true;
+        step.timedRecordedSeconds = 0;
+        step.timerEnabled = true;
+        resetCurrentStepClock(session);
+        render();
+    }
+
+    function stopTimedSet() {
+        const session = state.activeSession;
+        const step = getCurrentStep(session);
+        if (!session || !step || step.type !== 'workout' || step.unit !== 'seconds') return;
+        const elapsedSeconds = Math.max(1, Math.round(getStepElapsedMs(session) / 1000));
+        step.timedRecordedSeconds = elapsedSeconds;
+        step.timedSetRunning = false;
+        const input = byId('session-seconds-input');
+        if (input) input.value = String(elapsedSeconds);
+        render();
+    }
+
     function addSessionSet(repsOverride = null) {
         const session = state.activeSession;
         if (!session) return;
@@ -979,9 +1081,38 @@
             notify('Movement not found.');
             return;
         }
+        const level = getLevel(workout, workout.currentLevelId);
+        if (isTimedWorkout(workout)) {
+            if (step.timedSetRunning) {
+                step.timedRecordedSeconds = Math.max(1, Math.round(getStepElapsedMs(session) / 1000));
+                step.timedSetRunning = false;
+            }
+            const input = byId('session-seconds-input');
+            const target = getTarget(workout);
+            const durationSeconds = Math.max(1, Math.round(Number(repsOverride || (input && input.value) || step.timedRecordedSeconds || target.seconds)));
+            session.entries.push({
+                id: Core.createId('session_entry'),
+                workoutId: workout.id,
+                workoutName: workout.name,
+                levelId: workout.currentLevelId,
+                levelName: level ? level.name : '',
+                rotationId: step.rotationId || '',
+                rotationName: step.rotationName || '',
+                scheduledForProgression: step.scheduledForProgression === true,
+                unit: 'seconds',
+                reps: 0,
+                durationSeconds,
+                targetSecondsAtLog: target.seconds,
+                targetRepsAtLog: getPolicy(workout).normalSetReps,
+                createdAt: Date.now()
+            });
+            step.timedRecordedSeconds = 0;
+            resetCurrentStepClock(session);
+            render();
+            return;
+        }
         const input = byId('session-reps-input');
         const reps = Math.max(1, Math.round(Number(repsOverride || (input && input.value) || step.targetReps || workout.targetReps)));
-        const level = getLevel(workout, workout.currentLevelId);
         session.entries.push({
             id: Core.createId('session_entry'),
             workoutId: workout.id,
@@ -991,8 +1122,11 @@
             rotationId: step.rotationId || '',
             rotationName: step.rotationName || '',
             scheduledForProgression: step.scheduledForProgression === true,
+            unit: 'reps',
             reps,
             targetRepsAtLog: Number(workout.targetReps) || getPolicy(workout).normalSetReps,
+            durationSeconds: 0,
+            targetSecondsAtLog: getTarget(workout).seconds,
             createdAt: Date.now()
         });
         render();
@@ -1119,6 +1253,9 @@
         const now = Date.now();
         const level = getLevel(workout, workout.currentLevelId);
         const rotation = rotationId ? getRotation(rotationId) : null;
+        const timed = isTimedWorkout(workout);
+        const target = getTarget(workout);
+        const value = Math.max(1, Math.round(Number(reps) || target.value));
         const result = await Store.saveSession({
             id: Core.createId('workout_session'),
             rotationId: rotation ? rotation.id : '',
@@ -1137,15 +1274,18 @@
                 rotationId: rotation ? rotation.id : '',
                 rotationName: rotation ? rotation.name : '',
                 scheduledForProgression: !!rotation,
-                reps,
+                unit: timed ? 'seconds' : 'reps',
+                reps: timed ? 0 : value,
                 targetRepsAtLog: Number(workout.targetReps) || getPolicy(workout).normalSetReps,
+                durationSeconds: timed ? value : 0,
+                targetSecondsAtLog: target.seconds,
                 createdAt: now
             }]
         });
         state.workouts = result.workouts;
         state.rotations = result.workoutRotations;
         state.sessions = result.workoutSessions;
-        notify('Set logged.');
+        notify(timed ? 'Timed set logged.' : 'Set logged.');
         render();
     }
 
@@ -1178,7 +1318,7 @@
                                 <input id="routine-target-sets" type="number" min="1" value="3">
                             </label>
                             <label class="workout-field">
-                                <span>Reps</span>
+                                <span>Reps target</span>
                                 <input id="routine-target-reps" type="number" min="1" value="${Core.NORMAL_SET_REPS}">
                             </label>
                         </div>
@@ -1222,11 +1362,12 @@
             `;
         }
         const workout = getWorkout(step.workoutId);
+        const timed = workout && isTimedWorkout(workout);
         return `
             <div class="workout-step-row workout">
                 <div>
                     <strong>${escapeHtml(workout ? workout.name : 'Missing movement')}</strong>
-                    <div class="workout-meta">${step.targetSets || 0} set${Number(step.targetSets) === 1 ? '' : 's'} / ${step.targetReps || 0} reps</div>
+                    <div class="workout-meta">${step.targetSets || 0} set${Number(step.targetSets) === 1 ? '' : 's'} / ${timed ? escapeHtml(Core.formatDuration(getTarget(workout).seconds)) : `${step.targetReps || 0} reps`}</div>
                 </div>
                 <div class="workout-inline-actions">
                     <button type="button" class="workout-icon-btn" onclick="WorkoutApp.moveRoutineStep(${index}, -1)">^</button>
@@ -1487,11 +1628,18 @@
 
     function renderMovementForm(workout) {
         const policy = getPolicy(workout);
+        const unit = getUnit(workout);
         const schedule = Core.normalizeSchedule(workout && workout.schedule);
         const rotationNames = workout ? getRotationIdsForWorkout(workout.id).map(rotation => rotation.name).join(' / ') : '';
         const levelsText = workout
             ? workout.levels.map(level => level.name).join('\n')
             : 'Level 1';
+        const previewLevels = workout
+            ? workout.levels
+            : Core.normalizeLevels([{ id: 'preview_1', name: 'Level 1', order: 1 }]);
+        const levelPreview = unit === 'seconds'
+            ? `<div class="workout-meta">Timed targets: ${previewLevels.map(level => `${escapeHtml(level.name)} ${escapeHtml(Core.formatDuration(Core.getTargetSecondsForLevel(previewLevels, policy, level.id)))}`).join(' / ')}</div>`
+            : '';
         const weekdayTiles = WEEKDAYS.map((label, day) => `
             <label class="workout-check-tile">
                 <input type="checkbox" name="movement-weekday" value="${day}" ${schedule.weekdays.includes(day) ? 'checked' : ''}>
@@ -1503,6 +1651,13 @@
                 <label class="workout-field">
                     <span>Name</span>
                     <input id="movement-name-input" type="text" value="${escapeHtml(workout ? workout.name : '')}" placeholder="Push-ups, squats, pull-ups">
+                </label>
+                <label class="workout-field">
+                    <span>Unit</span>
+                    <select id="movement-unit-select" onchange="WorkoutApp.toggleMovementUnitFields()">
+                        <option value="reps" ${unit === 'reps' ? 'selected' : ''}>Reps</option>
+                        <option value="seconds" ${unit === 'seconds' ? 'selected' : ''}>Seconds</option>
+                    </select>
                 </label>
                 <div class="workout-weekday-grid">${weekdayTiles}</div>
                 ${rotationNames ? `<div class="workout-meta">Scheduled through rotation: ${escapeHtml(rotationNames)}. This movement schedule is ignored while it belongs to a rotation.</div>` : ''}
@@ -1516,10 +1671,10 @@
                         <input id="movement-duration-input" type="number" min="5" max="240" value="${schedule.durationMinutes || ''}" placeholder="30">
                     </label>
                 </div>
-                <div class="workout-form-row three">
+                <div id="movement-reps-policy" class="workout-form-row three" style="display:${unit === 'seconds' ? 'none' : 'grid'}">
                     <label class="workout-field">
                         <span>Required sets</span>
-                        <input id="movement-required-sets" type="number" min="1" max="20" value="${policy.requiredSets}">
+                        <input id="movement-required-sets-reps" type="number" min="1" max="20" value="${policy.requiredSets}">
                     </label>
                     <label class="workout-field">
                         <span>Normal reps</span>
@@ -1530,10 +1685,25 @@
                         <input id="movement-advanced-reps" type="number" min="1" value="${policy.advancedSetReps}">
                     </label>
                 </div>
+                <div id="movement-time-policy" class="workout-form-row three" style="display:${unit === 'seconds' ? 'grid' : 'none'}">
+                    <label class="workout-field">
+                        <span>Required sets</span>
+                        <input id="movement-required-sets-time" type="number" min="1" max="20" value="${policy.requiredSets}">
+                    </label>
+                    <label class="workout-field">
+                        <span>Starting seconds</span>
+                        <input id="movement-base-seconds" type="number" min="1" value="${policy.baseSeconds}">
+                    </label>
+                    <label class="workout-field">
+                        <span>Increment seconds</span>
+                        <input id="movement-increment-seconds" type="number" min="0" value="${policy.incrementSeconds}">
+                    </label>
+                </div>
                 <label class="workout-field">
                     <span>Levels</span>
                     <textarea id="movement-levels-input" placeholder="One level per line">${escapeHtml(levelsText)}</textarea>
                 </label>
+                ${levelPreview}
                 <div class="workout-form-row">
                     <label class="workout-field">
                         <span>Deload after days</span>
@@ -1568,7 +1738,7 @@
                 </div>
                 <div class="workout-pill-row">
                     <div class="workout-pill"><span>Level</span><strong>${escapeHtml(level ? level.name : 'Level')}</strong></div>
-                    <div class="workout-pill"><span>Target</span><strong>${metrics.targetReps}</strong></div>
+                    <div class="workout-pill"><span>Target</span><strong>${escapeHtml(metrics.targetLabel)}</strong></div>
                     <div class="workout-pill"><span>Logs</span><strong>${workout.logs.length}</strong></div>
                 </div>
             </article>
@@ -1583,10 +1753,15 @@
         }
         const weekdays = Array.from(document.querySelectorAll('input[name="movement-weekday"]:checked'))
             .map(input => Number(input.value));
+        const unit = Core.normalizeUnit(byId('movement-unit-select') && byId('movement-unit-select').value);
         const policy = Core.normalizeProgressionPolicy({
-            requiredSets: byId('movement-required-sets') && byId('movement-required-sets').value,
+            requiredSets: unit === 'seconds'
+                ? byId('movement-required-sets-time') && byId('movement-required-sets-time').value
+                : byId('movement-required-sets-reps') && byId('movement-required-sets-reps').value,
             normalSetReps: byId('movement-normal-reps') && byId('movement-normal-reps').value,
-            advancedSetReps: byId('movement-advanced-reps') && byId('movement-advanced-reps').value
+            advancedSetReps: byId('movement-advanced-reps') && byId('movement-advanced-reps').value,
+            baseSeconds: byId('movement-base-seconds') && byId('movement-base-seconds').value,
+            incrementSeconds: byId('movement-increment-seconds') && byId('movement-increment-seconds').value
         });
         const existingLevels = existing && Array.isArray(existing.levels) ? existing.levels : [];
         const levelLines = ((byId('movement-levels-input') && byId('movement-levels-input').value) || 'Level 1')
@@ -1609,6 +1784,7 @@
             ...(existing || {}),
             id: existing ? existing.id : Core.createId('workout'),
             name,
+            unit,
             levels,
             currentLevelId,
             targetReps: wasAdvanced ? policy.advancedSetReps : policy.normalSetReps,
@@ -1722,6 +1898,14 @@
         render();
     }
 
+    function toggleMovementUnitFields() {
+        const unit = Core.normalizeUnit(byId('movement-unit-select') && byId('movement-unit-select').value);
+        const repsPolicy = byId('movement-reps-policy');
+        const timePolicy = byId('movement-time-policy');
+        if (repsPolicy) repsPolicy.style.display = unit === 'seconds' ? 'none' : 'grid';
+        if (timePolicy) timePolicy.style.display = unit === 'seconds' ? 'grid' : 'none';
+    }
+
     function editMovement(workoutId) {
         state.editingWorkoutId = workoutId;
         state.activeTab = 'library';
@@ -1752,9 +1936,10 @@
     }
 
     function renderProgress() {
-        const logs = state.workouts.flatMap(workout => (workout.logs || []).map(log => ({ ...log, workoutName: workout.name })));
-        const totalReps = logs.reduce((sum, log) => sum + Number(log.reps || 0), 0);
-        const qualifyingSets = logs.filter(log => Number(log.reps) >= Number(log.targetRepsAtLog || Core.NORMAL_SET_REPS)).length;
+        const logs = state.workouts.flatMap(workout => (workout.logs || []).map(log => ({ ...log, workoutName: workout.name, workout })));
+        const totalReps = logs.filter(log => Core.normalizeUnit(log.unit) === 'reps').reduce((sum, log) => sum + Number(log.reps || 0), 0);
+        const totalSeconds = logs.filter(log => Core.normalizeUnit(log.unit) === 'seconds').reduce((sum, log) => sum + Number(log.durationSeconds || 0), 0);
+        const qualifyingSets = logs.filter(log => getLogQualifies(log.workout, log)).length;
         const completedDays = countCompletedDays();
         const recentSessions = state.sessions.slice().reverse().slice(0, 8);
         const selectedWorkout = getProgressWorkout();
@@ -1762,6 +1947,7 @@
             ${renderPageHead('Progress', 'Simple totals and recent activity from saved sessions and compatible movement logs.')}
             <div class="workout-stat-grid">
                 <div class="workout-stat"><span>Total reps</span><strong>${totalReps}</strong></div>
+                <div class="workout-stat"><span>Total time</span><strong>${escapeHtml(Core.formatDuration(totalSeconds))}</strong></div>
                 <div class="workout-stat"><span>Qualifying sets</span><strong>${qualifyingSets}</strong></div>
                 <div class="workout-stat"><span>Completed days</span><strong>${completedDays}</strong></div>
                 <div class="workout-stat"><span>Sessions</span><strong>${state.sessions.length}</strong></div>
@@ -1806,6 +1992,46 @@
         render();
     }
 
+    function updateSessionEntryFromLog(log) {
+        if (!log || !log.sessionId) return;
+        const session = state.sessions.find(item => item.id === log.sessionId);
+        if (!session || !Array.isArray(session.entries)) return;
+        const entry = session.entries.find(item => item.id === log.sessionEntryId)
+            || session.entries.find(item => item.workoutId === log.workoutId && Number(item.createdAt) === Number(log.createdAt));
+        if (!entry) return;
+        entry.unit = log.unit;
+        entry.reps = log.reps;
+        entry.targetRepsAtLog = log.targetRepsAtLog;
+        entry.durationSeconds = log.durationSeconds;
+        entry.targetSecondsAtLog = log.targetSecondsAtLog;
+        entry.editedAt = log.editedAt || Date.now();
+        session.updatedAt = Date.now();
+    }
+
+    async function editSavedLog(workoutId, logId) {
+        const workout = getWorkout(workoutId);
+        if (!workout) return;
+        const log = (workout.logs || []).find(item => item.id === logId);
+        if (!log) return;
+        const timed = Core.normalizeUnit(log.unit) === 'seconds';
+        const currentValue = timed ? Math.round(Number(log.durationSeconds) || 0) : Math.round(Number(log.reps) || 0);
+        const label = timed ? 'seconds' : 'reps';
+        const raw = global.prompt(`Edit ${label}:`, String(currentValue));
+        if (raw === null) return;
+        const nextValue = Math.max(1, Math.round(Number(raw) || 0));
+        if (!nextValue) return;
+        const result = Core.updateWorkoutLog(
+            workout,
+            logId,
+            timed ? { durationSeconds: nextValue } : { reps: nextValue },
+            { assumeScheduled: Core.isScheduledOnDate(workout, Core.parseDateKey(log.scheduledDateKey) || new Date()) }
+        );
+        if (!result.changed) return;
+        state.workouts = state.workouts.map(item => item.id === workout.id ? result.workout : item);
+        updateSessionEntryFromLog(result.log);
+        await persistWorkoutState('Log updated.');
+    }
+
     function getProgressRangeStart(workout, range = state.progressRange) {
         const today = new Date();
         if (range !== 'all') return Core.addDays(today, -(Number(range) || 90) + 1);
@@ -1824,13 +2050,17 @@
         for (let cursor = new Date(start); Core.dateKey(cursor) <= Core.dateKey(today); cursor = Core.addDays(cursor, 1)) {
             const key = Core.dateKey(cursor);
             const dayLogs = Core.getDayLogs(workout, key);
-            const totalReps = dayLogs.reduce((sum, log) => sum + Number(log.reps || 0), 0);
-            const sets = dayLogs.filter(log => Number(log.reps) >= Number(log.targetRepsAtLog || policy.normalSetReps)).length;
-            const partials = dayLogs.filter(log => Number(log.reps) < Number(log.targetRepsAtLog || policy.normalSetReps)).length;
+            const metricLogs = dayLogs.filter(log => Core.normalizeUnit(log.unit) === getUnit(workout));
+            const totalReps = metricLogs.reduce((sum, log) => sum + Number(log.reps || 0), 0);
+            const totalSeconds = metricLogs.reduce((sum, log) => sum + Number(log.durationSeconds || 0), 0);
+            const sets = metricLogs.filter(log => getLogQualifies(workout, log)).length;
+            const partials = metricLogs.filter(log => Core.isLogAttempt(log) && !getLogQualifies(workout, log)).length;
             points.push({
                 key,
                 label: cursor.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
                 totalReps,
+                totalSeconds,
+                totalValue: isTimedWorkout(workout) ? totalSeconds : totalReps,
                 sets,
                 partials,
                 completed: sets >= policy.requiredSets,
@@ -1842,7 +2072,8 @@
 
     function renderFocusedProgress(workout) {
         const points = getWorkoutProgressPoints(workout);
-        const totalReps = points.reduce((sum, point) => sum + point.totalReps, 0);
+        const timed = isTimedWorkout(workout);
+        const totalValue = points.reduce((sum, point) => sum + point.totalValue, 0);
         const totalSets = points.reduce((sum, point) => sum + point.sets, 0);
         const completedDays = points.filter(point => point.completed).length;
         const partialDays = points.filter(point => point.partials > 0 && !point.completed).length;
@@ -1867,7 +2098,7 @@
                     </div>
                 </div>
                 <div class="workout-stat-grid">
-                    <div class="workout-stat"><span>Total reps</span><strong>${totalReps}</strong></div>
+                    <div class="workout-stat"><span>${timed ? 'Total time' : 'Total reps'}</span><strong>${escapeHtml(timed ? Core.formatDuration(totalValue) : String(totalValue))}</strong></div>
                     <div class="workout-stat"><span>Sets</span><strong>${totalSets}</strong></div>
                     <div class="workout-stat"><span>Completed days</span><strong>${completedDays}</strong></div>
                     <div class="workout-stat"><span>Partial days</span><strong>${partialDays}</strong></div>
@@ -1878,8 +2109,8 @@
                         ${renderBars(points.map(point => ({ label: point.label, value: point.sets })), 'sets')}
                     </section>
                     <section class="workout-subpanel">
-                        <h2 class="workout-section-title">Total Reps</h2>
-                        ${renderBars(points.map(point => ({ label: point.label, value: point.totalReps })), 'reps')}
+                        <h2 class="workout-section-title">${timed ? 'Total Time' : 'Total Reps'}</h2>
+                        ${renderBars(points.map(point => ({ label: point.label, value: point.totalValue, display: timed ? Core.formatDuration(point.totalValue) : `${point.totalValue} reps` })), timed ? 'time' : 'reps')}
                     </section>
                     <section class="workout-subpanel">
                         <h2 class="workout-section-title">Level Timeline</h2>
@@ -1899,7 +2130,7 @@
             const level = getLevel(workout, levelId);
             return level ? level.name : 'Level';
         };
-        if (event.kind === 'log') return `${Math.round(Number(event.reps) || 0)} reps${event.qualifies ? ' / qualifying set' : ''}`;
+        if (event.kind === 'log') return `${getLogValueLabel(event)}${event.qualifies ? ' / qualifying set' : ''}`;
         if (event.type === 'manual_deload') return `Dropped from ${levelName(event.fromLevelId)} to ${levelName(event.toLevelId)}`;
         if (event.type === 'level_changed') return `Advanced from ${levelName(event.fromLevelId)} to ${levelName(event.toLevelId)}`;
         if (event.type === 'level_scheduled') return `Next level scheduled: ${levelName(event.toLevelId)}`;
@@ -1931,7 +2162,7 @@
             ...log,
             kind: 'log',
             dateKey: log.scheduledDateKey,
-            qualifies: Number(log.reps) >= Number(log.targetRepsAtLog || policy.normalSetReps)
+            qualifies: getLogQualifies(workout, log)
         }));
         const events = (workout.history || []).map(event => ({ ...event, kind: 'event' }));
         const rows = logs.concat(events)
@@ -1944,7 +2175,10 @@
                     <strong>${escapeHtml(getWorkoutEventLabel(workout, entry))}</strong>
                     <div class="workout-meta">${escapeHtml(formatDateLabel(entry.dateKey || todayKey()))}</div>
                 </div>
-                <span class="workout-meta">${entry.kind === 'log' ? 'Log' : 'Event'}</span>
+                <div class="workout-inline-actions">
+                    <span class="workout-meta">${entry.kind === 'log' ? 'Log' : 'Event'}</span>
+                    ${entry.kind === 'log' ? `<button type="button" class="workout-btn" onclick="WorkoutApp.editSavedLog('${escapeHtml(workout.id)}', '${escapeHtml(entry.id)}')">Edit</button>` : ''}
+                </div>
             </div>
         `).join('');
     }
@@ -1969,7 +2203,7 @@
             const key = Core.dateKey(date);
             rows.push({
                 label: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-                value: logs.filter(log => log.scheduledDateKey === key).reduce((sum, log) => sum + Number(log.reps || 0), 0)
+                value: logs.filter(log => log.scheduledDateKey === key && Core.normalizeUnit(log.unit) === 'reps').reduce((sum, log) => sum + Number(log.reps || 0), 0)
             });
         }
         return renderBars(rows, 'reps');
@@ -1977,7 +2211,7 @@
 
     function renderMovementRepChart(logs) {
         const totals = new Map();
-        logs.forEach(log => {
+        logs.filter(log => Core.normalizeUnit(log.unit) === 'reps').forEach(log => {
             totals.set(log.workoutName, (totals.get(log.workoutName) || 0) + Number(log.reps || 0));
         });
         const rows = Array.from(totals.entries())
@@ -1996,7 +2230,7 @@
                     <div class="workout-bar-row">
                         <span>${escapeHtml(row.label)}</span>
                         <div class="workout-bar-track"><div class="workout-bar-fill" style="width:${Math.round((row.value / max) * 100)}%"></div></div>
-                        <strong>${row.value} ${unit}</strong>
+                        <strong>${escapeHtml(row.display || `${row.value} ${unit}`)}</strong>
                     </div>
                 `).join('')}
             </div>
@@ -2006,14 +2240,20 @@
     function renderRecentSessions(sessions) {
         if (!sessions.length) return '<div class="workout-empty">Saved sessions will appear here.</div>';
         return sessions.map(session => {
-            const reps = session.entries.reduce((sum, entry) => sum + Number(entry.reps || 0), 0);
+            const reps = session.entries.filter(entry => Core.normalizeUnit(entry.unit) === 'reps').reduce((sum, entry) => sum + Number(entry.reps || 0), 0);
+            const seconds = session.entries.filter(entry => Core.normalizeUnit(entry.unit) === 'seconds').reduce((sum, entry) => sum + Number(entry.durationSeconds || 0), 0);
+            const valueLabel = seconds > 0 && reps > 0
+                ? `${reps} reps / ${Core.formatDuration(seconds)}`
+                : seconds > 0
+                    ? Core.formatDuration(seconds)
+                    : `${reps} reps`;
             return `
                 <div class="workout-recent-row">
                     <div>
                         <strong>${escapeHtml(session.name)}</strong>
                         <div class="workout-meta">${escapeHtml(formatDateLabel(session.dateKey))} / ${session.entries.length} set${session.entries.length === 1 ? '' : 's'} / ${Math.round(Number(session.durationSeconds || 0) / 60)}m</div>
                     </div>
-                    <strong>${reps} reps</strong>
+                    <strong>${escapeHtml(valueLabel)}</strong>
                 </div>
             `;
         }).join('');
@@ -2045,6 +2285,8 @@
         startWorkoutSession,
         startRotationSession,
         startRoutineSession,
+        startTimedSet,
+        stopTimedSet,
         addSessionSet,
         nextStep,
         previousStep,
@@ -2068,12 +2310,14 @@
         selectCalendarDate,
         setProgressWorkout,
         setProgressRange,
+        editSavedLog,
         saveMovement,
         saveRotation,
         editRotation,
         deleteRotation,
         moveRotationMember,
         resetRotationForm,
+        toggleMovementUnitFields,
         editMovement,
         deleteMovement,
         resetMovementForm

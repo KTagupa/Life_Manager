@@ -41,7 +41,8 @@
 .workout-composer-row input,
 .workout-level-add-row input,
 .workout-log-controls input,
-.workout-schedule-row input {
+.workout-schedule-row input,
+.workout-schedule-row select {
     width: 100%;
     min-width: 0;
     border: 1px solid rgba(148, 163, 184, 0.28);
@@ -522,7 +523,8 @@
 
 .workout-studio-select-label select,
 .workout-deload-settings input[type="number"],
-.workout-studio-form input {
+.workout-studio-form input,
+.workout-studio-form select {
     width: 100%;
     min-width: 0;
     border: 1px solid rgba(148, 163, 184, 0.28);

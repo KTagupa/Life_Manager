@@ -45,7 +45,7 @@
 
     function getEmptyState() {
         return {
-            dataModelVersion: typeof global.DATA_MODEL_VERSION === 'number' ? global.DATA_MODEL_VERSION : 5,
+            dataModelVersion: typeof global.DATA_MODEL_VERSION === 'number' ? global.DATA_MODEL_VERSION : 6,
             workouts: [],
             workoutRotations: [],
             workoutRoutines: [],
@@ -181,7 +181,7 @@
             workoutRotations: core ? core.normalizeRotationCollection(nextSlices && nextSlices.workoutRotations, nextSlices && nextSlices.workouts) : (nextSlices.workoutRotations || []),
             workoutRoutines: core ? core.normalizeRoutineCollection(nextSlices && nextSlices.workoutRoutines) : (nextSlices.workoutRoutines || []),
             workoutSessions: core ? core.normalizeSessionCollection(nextSlices && nextSlices.workoutSessions) : (nextSlices.workoutSessions || []),
-            dataModelVersion: Math.max(Number(current.dataModelVersion) || 5, typeof global.DATA_MODEL_VERSION === 'number' ? global.DATA_MODEL_VERSION : 5)
+            dataModelVersion: Math.max(Number(current.dataModelVersion) || 6, typeof global.DATA_MODEL_VERSION === 'number' ? global.DATA_MODEL_VERSION : 6)
         };
         return writeAppState(merged);
     }

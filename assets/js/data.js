@@ -12,7 +12,7 @@ let workoutSessions = [];
 let notes = [];
 let reminders = [];
 let projects = [];
-let dataModelVersion = 5;
+let dataModelVersion = 6;
 let aiUrgencyConfig = {
     mode: 'shadow',
     enabled: true,
@@ -22,7 +22,7 @@ let aiUrgencyConfig = {
     semanticProvider: 'heuristic'
 };
 
-const DATA_MODEL_VERSION = 5;
+const DATA_MODEL_VERSION = 6;
 const PROJECT_STATUS_VALUES = ['active', 'paused', 'completed', 'archived'];
 const PROJECT_ORIGIN_VALUES = ['manual', 'ai', 'migrated'];
 const TASK_REFLECTION_OUTCOME_VALUES = ['on_target', 'harder', 'easier'];
