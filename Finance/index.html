@@ -906,6 +906,9 @@
                             </button>
                         </div>
                     </div>
+                    <div id="installment-runway-preview"
+                        class="hidden mx-4 mt-4 rounded-2xl border border-violet-100 bg-violet-50/60 px-4 py-3">
+                    </div>
                     <div id="installment-plan-list" class="p-4 space-y-3">
                         <div class="text-center text-xs text-slate-400 py-2">No installment plans tracked yet.</div>
                     </div>
@@ -1767,7 +1770,7 @@
     <!-- Modal: Add/Edit Installment Plan -->
     <div id="installment-plan-modal"
         class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+        <div class="bg-white rounded-3xl p-8 max-w-md w-full max-h-[95vh] overflow-y-auto custom-scrollbar shadow-2xl">
             <div class="flex items-center gap-3 mb-6">
                 <div class="bg-violet-100 p-2 rounded-xl text-violet-600">
                     <i data-lucide="calendar-clock" class="w-6 h-6"></i>
@@ -1807,6 +1810,38 @@
                 </div>
                 <input type="text" id="ip-notes" placeholder="Notes (optional)"
                     class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:border-violet-500">
+                <div class="rounded-2xl border border-violet-100 bg-violet-50/50 p-3">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <div>
+                            <p class="text-xs font-black uppercase tracking-wider text-violet-700">Item Image</p>
+                            <p class="text-[10px] text-slate-400 mt-0.5">Compressed to 800px and approximately 140 KB.</p>
+                        </div>
+                        <button type="button" onclick="document.getElementById('ip-image-input').click()"
+                            class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-white border border-violet-100 text-violet-700 hover:bg-violet-100">
+                            Choose Image
+                        </button>
+                    </div>
+                    <input type="file" id="ip-image-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                        class="hidden" onchange="handleInstallmentImageSelection(this)">
+                    <div class="relative overflow-hidden rounded-xl border border-violet-100 bg-white aspect-[16/9]">
+                        <img id="ip-image-preview" class="hidden w-full h-full object-contain bg-slate-50"
+                            alt="Compressed installment image preview">
+                        <div id="ip-image-placeholder"
+                            class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-300">
+                            <i data-lucide="image-plus" class="w-7 h-7"></i>
+                            <span class="text-[10px] font-bold">No image selected</span>
+                        </div>
+                    </div>
+                    <div class="flex items-start justify-between gap-3">
+                        <p id="ip-image-status" class="text-[10px] text-slate-400 mt-2">
+                            One compressed image, stored separately from your finance vault.
+                        </p>
+                        <button type="button" id="ip-image-remove-btn" onclick="removeInstallmentImageDraft()"
+                            class="hidden shrink-0 mt-2 text-[10px] font-bold text-rose-600 hover:text-rose-700">
+                            Remove
+                        </button>
+                    </div>
+                </div>
                 <p class="text-xs text-slate-400 ml-2">Fees are tracked for reporting only and do not increase the total amount or remaining balance.</p>
 
                 <div class="flex gap-3 pt-4">
@@ -1947,6 +1982,28 @@
             </div>
             <div id="installment-analytics-dashboard" class="space-y-5">
                 <div class="text-center text-xs text-slate-400 py-8">Loading installment analytics...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Installment Image Preview -->
+    <div id="installment-image-preview-modal"
+        class="fixed inset-0 z-[118] bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4"
+        onclick="if (event.target === this) toggleModal('installment-image-preview-modal')">
+        <div class="w-full max-w-3xl">
+            <div class="mb-3 flex items-center justify-between gap-3 text-white">
+                <div>
+                    <h3 id="installment-image-preview-title" class="text-lg font-black">Installment image</h3>
+                    <p id="installment-image-preview-meta" class="text-xs text-slate-300 mt-0.5">Compressed image</p>
+                </div>
+                <button type="button" onclick="toggleModal('installment-image-preview-modal')"
+                    class="rounded-xl bg-white/10 p-2 text-white hover:bg-white/20" aria-label="Close image preview">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="rounded-3xl bg-white/95 p-3 shadow-2xl">
+                <img id="installment-image-preview-large"
+                    class="max-h-[78vh] w-full rounded-2xl object-contain bg-slate-100" alt="Installment image">
             </div>
         </div>
     </div>
@@ -4069,7 +4126,7 @@
     <script src="assets/js/core/config.js?v=20260526b"></script>
     <script src="assets/js/core/metrics.js?v=20260526f"></script>
     <script src="../assets/js/financeBridgeQueue.js?v=20260425a"></script>
-    <script src="assets/js/core/storage.js?v=20260526b"></script>
+    <script src="assets/js/core/storage.js?v=20260730b"></script>
     <script src="assets/js/core/auth.js?v=20260527a"></script>
     <script src="assets/js/core/preview.js?v=20260524b"></script>
 
@@ -4078,9 +4135,9 @@
     <script src="assets/js/features/ronin.js?v=20260526a"></script>
     <script src="assets/js/features/crypto.js?v=20260527a"></script>
     <script src="assets/js/ui/charts.js?v=20260526b"></script>
-    <script src="assets/js/ui/renderers.js?v=20260526b"></script>
-    <script src="assets/js/features/crud.js?v=20260526b"></script>
-    <script src="assets/js/features/backup.js?v=20260526b"></script>
+    <script src="assets/js/ui/renderers.js?v=20260730b"></script>
+    <script src="assets/js/features/crud.js?v=20260730c"></script>
+    <script src="assets/js/features/backup.js?v=20260730b"></script>
     <script src="assets/js/features/quick-links.js?v=20260425a"></script>
     <script src="assets/js/features/item-tracking.js?v=20260425a"></script>
     <script src="assets/js/features/reminders.js?v=20260425a"></script>

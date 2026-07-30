@@ -660,12 +660,23 @@
 
             if (decrypted.length === 0) {
                 list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No installment plans tracked yet.</div>';
+                if (typeof renderInstallmentRunwayPreview === 'function') {
+                    renderInstallmentRunwayPreview();
+                }
                 return;
             }
 
             const outstandingMap = typeof computeInstallmentOutstandingMapAsOf === 'function'
                 ? computeInstallmentOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
                 : new Map();
+            const installmentImageEntries = await Promise.all(decrypted.map(async plan => {
+                const imageRef = String(plan.imageRef || '').trim();
+                if (!imageRef || typeof getInstallmentImageDataUrl !== 'function') {
+                    return [String(plan.id || ''), null];
+                }
+                return [String(plan.id || ''), await getInstallmentImageDataUrl(imageRef)];
+            }));
+            const installmentImageByPlanId = new Map(installmentImageEntries);
 
             const rows = decrypted.map(plan => {
                 const safeName = escapeHTML(plan.name || 'Installment Plan');
@@ -686,6 +697,7 @@
                 const paymentCount = paymentRows.length + historicalPayments.length;
                 const installmentCount = Math.max(0, Math.round(Number(plan.installmentCount || 0)));
                 const encodedPlanId = encodeInlineArg(plan.id);
+                const imageDataUrl = installmentImageByPlanId.get(String(plan.id || '')) || null;
                 const isComplete = outstanding <= 0.01;
                 const statusLabel = isComplete
                     ? 'Complete'
@@ -705,6 +717,7 @@
                     feesPaid,
                     installmentCount,
                     encodedPlanId,
+                    imageDataUrl,
                     statusLabel,
                     isComplete
                 };
@@ -718,11 +731,25 @@
                 div.className = 'p-4 bg-slate-50 rounded-2xl border border-slate-200';
                 div.innerHTML = `
                     <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                            <p class="text-sm font-bold text-slate-800 break-words">${row.safeName}</p>
-                            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${row.safeProvider}</p>
-                            <p class="text-[10px] text-slate-500 mt-1">Remaining ${fmt(row.outstanding)} of ${fmt(row.total)}</p>
-                            ${row.feeTotal > 0 ? `<p class="text-[10px] text-violet-500 mt-1">Fees paid ${fmt(row.feesPaid)} of ${fmt(row.feeTotal)}</p>` : ''}
+                        <div class="flex items-start gap-3 min-w-0">
+                            ${row.imageDataUrl ? `
+                                <button type="button" onclick="openInstallmentImagePreview(decodeURIComponent('${row.encodedPlanId}'))"
+                                    class="group relative w-14 h-14 shrink-0 overflow-hidden rounded-xl border border-violet-100 bg-white shadow-sm"
+                                    aria-label="View image for ${escapeAttr(row.plan.name || 'installment plan')}">
+                                    <img src="${escapeAttr(row.imageDataUrl)}" alt=""
+                                        class="w-full h-full object-cover transition-transform group-hover:scale-105">
+                                </button>
+                            ` : `
+                                <div class="w-14 h-14 shrink-0 rounded-xl border border-violet-100 bg-violet-50 flex items-center justify-center text-violet-300">
+                                    <i data-lucide="image" class="w-5 h-5"></i>
+                                </div>
+                            `}
+                            <div class="min-w-0">
+                                <p class="text-sm font-bold text-slate-800 break-words">${row.safeName}</p>
+                                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${row.safeProvider}</p>
+                                <p class="text-[10px] text-slate-500 mt-1">Remaining ${fmt(row.outstanding)} of ${fmt(row.total)}</p>
+                                ${row.feeTotal > 0 ? `<p class="text-[10px] text-violet-500 mt-1">Fees paid ${fmt(row.feesPaid)} of ${fmt(row.feeTotal)}</p>` : ''}
+                            </div>
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
                             <button onclick="openInstallmentPaymentModal(decodeURIComponent('${row.encodedPlanId}'))"
@@ -767,12 +794,22 @@
                     item.className = 'rounded-xl border border-slate-200 bg-white/70 px-3 py-3';
                     item.innerHTML = `
                         <div class="flex items-start justify-between gap-3">
-                            <div class="min-w-0">
-                                <p class="text-sm font-bold text-slate-600 break-words">${row.safeName}</p>
-                                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${row.safeProvider}</p>
-                                <p class="text-[10px] font-black uppercase tracking-wider text-emerald-700 mt-1">Paid in full</p>
-                                <p class="text-[10px] text-slate-500 mt-1">Total paid ${fmt(row.paid)}</p>
-                                ${row.feeTotal > 0 ? `<p class="text-[10px] text-violet-500 mt-1">Fees paid ${fmt(row.feesPaid)} of ${fmt(row.feeTotal)}</p>` : ''}
+                            <div class="flex items-start gap-3 min-w-0">
+                                ${row.imageDataUrl ? `
+                                    <button type="button" onclick="openInstallmentImagePreview(decodeURIComponent('${row.encodedPlanId}'))"
+                                        class="group relative w-12 h-12 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white"
+                                        aria-label="View image for ${escapeAttr(row.plan.name || 'installment plan')}">
+                                        <img src="${escapeAttr(row.imageDataUrl)}" alt=""
+                                            class="w-full h-full object-cover opacity-80 transition-transform group-hover:scale-105">
+                                    </button>
+                                ` : ''}
+                                <div class="min-w-0">
+                                    <p class="text-sm font-bold text-slate-600 break-words">${row.safeName}</p>
+                                    <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">${row.safeProvider}</p>
+                                    <p class="text-[10px] font-black uppercase tracking-wider text-emerald-700 mt-1">Paid in full</p>
+                                    <p class="text-[10px] text-slate-500 mt-1">Total paid ${fmt(row.paid)}</p>
+                                    ${row.feeTotal > 0 ? `<p class="text-[10px] text-violet-500 mt-1">Fees paid ${fmt(row.feesPaid)} of ${fmt(row.feeTotal)}</p>` : ''}
+                                </div>
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
                                 <button onclick="openInstallmentPlanModal(decodeURIComponent('${row.encodedPlanId}'))"
@@ -790,6 +827,9 @@
                 list.appendChild(completedWrap);
             }
 
+            if (typeof renderInstallmentRunwayPreview === 'function') {
+                renderInstallmentRunwayPreview();
+            }
             lucide.createIcons();
         }
 

@@ -7,8 +7,9 @@ const KDF_META_PREFIX = 'finance_flow_kdf_meta_v1_';
 const CURRENT_SCHEMA_VERSION = 6;
 const UNDO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const LOCAL_DB_NAME = 'finance_flow_local_v1';
-const LOCAL_DB_VERSION = 1;
+const LOCAL_DB_VERSION = 2;
 const LOCAL_DB_STORE = 'app_kv';
+const INSTALLMENT_IMAGE_STORE = 'installment_images';
 const LOCAL_STORAGE_MIRROR_DELAY_MS = 300;
 const REMOTE_REFRESH_TTL_MS = 30 * 1000;
 
@@ -20,6 +21,8 @@ let lastRemoteReadAt = 0;
 let remoteRefreshPromise = null;
 let remoteSyncPromise = null;
 let remoteSyncDirty = false;
+const previewInstallmentImageRecords = new Map();
+const installmentImageDataUrlCache = new Map();
 
 function canUseIndexedDB() {
     return typeof window !== 'undefined' && 'indexedDB' in window;
@@ -36,6 +39,9 @@ function openLocalIndexedDB() {
                 const db = req.result;
                 if (!db.objectStoreNames.contains(LOCAL_DB_STORE)) {
                     db.createObjectStore(LOCAL_DB_STORE, { keyPath: 'key' });
+                }
+                if (!db.objectStoreNames.contains(INSTALLMENT_IMAGE_STORE)) {
+                    db.createObjectStore(INSTALLMENT_IMAGE_STORE, { keyPath: 'key' });
                 }
             };
             req.onsuccess = () => resolve(req.result);
@@ -111,6 +117,280 @@ async function writeDBToIndexedDB(dbData) {
         console.error('IndexedDB write failed; localStorage cache still updated.', error);
         return false;
     }
+}
+
+function normalizeInstallmentImageRef(value) {
+    return String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 180);
+}
+
+function createInstallmentImageRef(planId) {
+    const normalizedPlanId = normalizeInstallmentImageRef(planId);
+    return normalizedPlanId ? `ipimg_${normalizedPlanId}` : '';
+}
+
+async function readInstallmentImageRecordFromIndexedDB(imageRef) {
+    const key = normalizeInstallmentImageRef(imageRef);
+    if (!key) return null;
+    try {
+        const db = await openLocalIndexedDB();
+        if (!db || !db.objectStoreNames.contains(INSTALLMENT_IMAGE_STORE)) return null;
+        return await new Promise((resolve) => {
+            const tx = db.transaction(INSTALLMENT_IMAGE_STORE, 'readonly');
+            const req = tx.objectStore(INSTALLMENT_IMAGE_STORE).get(key);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => resolve(null);
+        });
+    } catch (error) {
+        console.warn('Installment image read failed:', error);
+        return null;
+    }
+}
+
+async function writeInstallmentImageRecordToIndexedDB(record) {
+    const key = normalizeInstallmentImageRef(record?.key);
+    if (!key) return false;
+    try {
+        const db = await openLocalIndexedDB();
+        if (!db || !db.objectStoreNames.contains(INSTALLMENT_IMAGE_STORE)) return false;
+        return await new Promise((resolve) => {
+            const tx = db.transaction(INSTALLMENT_IMAGE_STORE, 'readwrite');
+            tx.objectStore(INSTALLMENT_IMAGE_STORE).put({ ...record, key });
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+        });
+    } catch (error) {
+        console.warn('Installment image write failed:', error);
+        return false;
+    }
+}
+
+async function listInstallmentImageRecordsFromIndexedDB() {
+    try {
+        const db = await openLocalIndexedDB();
+        if (!db || !db.objectStoreNames.contains(INSTALLMENT_IMAGE_STORE)) return [];
+        return await new Promise((resolve) => {
+            const tx = db.transaction(INSTALLMENT_IMAGE_STORE, 'readonly');
+            const req = tx.objectStore(INSTALLMENT_IMAGE_STORE).getAll();
+            req.onsuccess = () => resolve(Array.isArray(req.result) ? req.result : []);
+            req.onerror = () => resolve([]);
+        });
+    } catch (error) {
+        console.warn('Installment image list failed:', error);
+        return [];
+    }
+}
+
+async function getInstallmentImageCloudRef(imageRef) {
+    if (!hasRemoteSyncSession()) return null;
+    const key = normalizeInstallmentImageRef(imageRef);
+    if (!key) return null;
+    const vaultId = await getVaultId(masterKey);
+    return firestoreDB.collection('vaults').doc(vaultId).collection('installment_images').doc(key);
+}
+
+async function syncInstallmentImageRecordToCloud(record) {
+    try {
+        const ref = await getInstallmentImageCloudRef(record?.key);
+        if (!ref) return { attempted: false, synced: false };
+        await ref.set({ ...record, cloudSyncPending: false });
+        return { attempted: true, synced: true };
+    } catch (error) {
+        console.warn('Installment image cloud sync failed; saved locally:', error);
+        return { attempted: true, synced: false };
+    }
+}
+
+async function fetchInstallmentImageRecordFromCloud(imageRef) {
+    try {
+        const ref = await getInstallmentImageCloudRef(imageRef);
+        if (!ref) return null;
+        const snapshot = await ref.get();
+        if (!snapshot.exists) return null;
+        const record = { ...snapshot.data(), key: normalizeInstallmentImageRef(imageRef) };
+        await writeInstallmentImageRecordToIndexedDB(record);
+        return record;
+    } catch (error) {
+        console.warn('Installment image cloud load failed:', error);
+        return null;
+    }
+}
+
+async function encryptInstallmentImageDataUrl(imageRef, dataUrl, metadata = {}) {
+    const key = normalizeInstallmentImageRef(imageRef);
+    if (!key || !String(dataUrl || '').startsWith('data:image/')) {
+        throw new Error('Invalid installment image.');
+    }
+
+    const now = new Date().toISOString();
+    const baseRecord = {
+        key,
+        version: 1,
+        mimeType: String(metadata.mimeType || 'image/webp'),
+        width: Math.max(0, Math.round(Number(metadata.width || 0))),
+        height: Math.max(0, Math.round(Number(metadata.height || 0))),
+        sizeBytes: Math.max(0, Math.round(Number(metadata.sizeBytes || 0))),
+        originalName: String(metadata.originalName || '').slice(0, 180),
+        updatedAt: now,
+        deletedAt: null
+    };
+
+    if (previewMode) {
+        return { ...baseRecord, previewDataUrl: dataUrl };
+    }
+    if (!cryptoKey) throw new Error('Unlock FinanceFlow before saving an image.');
+
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(dataUrl);
+    const encrypted = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, encoded);
+    return {
+        ...baseRecord,
+        ivB64: bytesToBase64(iv),
+        contentB64: bytesToBase64(new Uint8Array(encrypted))
+    };
+}
+
+async function decryptInstallmentImageRecord(record) {
+    if (!record || record.deletedAt) return null;
+    if (record.previewDataUrl) return String(record.previewDataUrl);
+    if (!cryptoKey || !record.ivB64 || !record.contentB64) return null;
+    try {
+        const decrypted = await window.crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: base64ToBytes(record.ivB64) },
+            cryptoKey,
+            base64ToBytes(record.contentB64)
+        );
+        return new TextDecoder().decode(decrypted);
+    } catch (error) {
+        console.warn('Installment image decryption failed:', error);
+        return null;
+    }
+}
+
+async function saveInstallmentImageData(imageRef, dataUrl, metadata = {}) {
+    let record = await encryptInstallmentImageDataUrl(imageRef, dataUrl, metadata);
+    installmentImageDataUrlCache.set(record.key, dataUrl);
+
+    if (previewMode) {
+        previewInstallmentImageRecords.set(record.key, record);
+        return { record, attemptedCloudSync: false, cloudSynced: false };
+    }
+
+    const savedLocally = await writeInstallmentImageRecordToIndexedDB(record);
+    if (!savedLocally) throw new Error('Could not save the compressed image locally.');
+    const cloud = await syncInstallmentImageRecordToCloud(record);
+    if (cloud.attempted) {
+        record = { ...record, cloudSyncPending: !cloud.synced };
+        await writeInstallmentImageRecordToIndexedDB(record);
+    }
+    return {
+        record,
+        attemptedCloudSync: cloud.attempted,
+        cloudSynced: cloud.synced
+    };
+}
+
+async function getInstallmentImageRecord(imageRef, options = {}) {
+    const key = normalizeInstallmentImageRef(imageRef);
+    if (!key) return null;
+    if (previewMode) return previewInstallmentImageRecords.get(key) || null;
+
+    const localRecord = await readInstallmentImageRecordFromIndexedDB(key);
+    if (localRecord || options.allowRemote === false) return localRecord;
+    return fetchInstallmentImageRecordFromCloud(key);
+}
+
+async function getInstallmentImageDataUrl(imageRef, options = {}) {
+    const key = normalizeInstallmentImageRef(imageRef);
+    if (!key) return null;
+    if (installmentImageDataUrlCache.has(key)) return installmentImageDataUrlCache.get(key);
+    const record = await getInstallmentImageRecord(key, options);
+    const dataUrl = await decryptInstallmentImageRecord(record);
+    if (dataUrl) installmentImageDataUrlCache.set(key, dataUrl);
+    return dataUrl;
+}
+
+async function setInstallmentImageDeleted(imageRef, deleted = true) {
+    const key = normalizeInstallmentImageRef(imageRef);
+    if (!key) return false;
+    const record = await getInstallmentImageRecord(key);
+    if (!record) return false;
+    const next = {
+        ...record,
+        key,
+        deletedAt: deleted ? new Date().toISOString() : null,
+        updatedAt: new Date().toISOString()
+    };
+    installmentImageDataUrlCache.delete(key);
+    if (previewMode) {
+        previewInstallmentImageRecords.set(key, next);
+        return true;
+    }
+    let nextRecord = next;
+    const savedLocally = await writeInstallmentImageRecordToIndexedDB(nextRecord);
+    const cloud = await syncInstallmentImageRecordToCloud(nextRecord);
+    if (cloud.attempted) {
+        nextRecord = { ...nextRecord, cloudSyncPending: !cloud.synced };
+        await writeInstallmentImageRecordToIndexedDB(nextRecord);
+    }
+    return savedLocally;
+}
+
+async function syncPendingInstallmentImagesToCloud() {
+    if (!hasRemoteSyncSession()) return 0;
+    const records = await listInstallmentImageRecordsFromIndexedDB();
+    let syncedCount = 0;
+    for (const record of records) {
+        if (!record?.key || !record.cloudSyncPending) continue;
+        const cloud = await syncInstallmentImageRecordToCloud(record);
+        if (!cloud.synced) continue;
+        await writeInstallmentImageRecordToIndexedDB({
+            ...record,
+            cloudSyncPending: false
+        });
+        syncedCount += 1;
+    }
+    return syncedCount;
+}
+
+async function exportInstallmentImageRecords() {
+    const records = previewMode
+        ? Array.from(previewInstallmentImageRecords.values())
+        : await listInstallmentImageRecordsFromIndexedDB();
+    return records.filter(record => record && !record.deletedAt);
+}
+
+async function importInstallmentImageRecords(records = [], options = {}) {
+    const normalizedRecords = (Array.isArray(records) ? records : [])
+        .filter(record => record && normalizeInstallmentImageRef(record.key))
+        .map(record => ({ ...record, key: normalizeInstallmentImageRef(record.key) }));
+
+    if (previewMode) {
+        if (options.replace === true) previewInstallmentImageRecords.clear();
+        normalizedRecords.forEach(record => previewInstallmentImageRecords.set(record.key, record));
+        installmentImageDataUrlCache.clear();
+        return normalizedRecords.length;
+    }
+
+    installmentImageDataUrlCache.clear();
+    if (options.replace === true) {
+        const incomingKeys = new Set(normalizedRecords.map(record => record.key));
+        const existingRecords = await listInstallmentImageRecordsFromIndexedDB();
+        for (const existing of existingRecords) {
+            if (!existing?.key || incomingKeys.has(existing.key) || existing.deletedAt) continue;
+            const tombstone = {
+                ...existing,
+                deletedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            await writeInstallmentImageRecordToIndexedDB(tombstone);
+            if (options.syncCloud !== false) await syncInstallmentImageRecordToCloud(tombstone);
+        }
+    }
+    for (const record of normalizedRecords) {
+        await writeInstallmentImageRecordToIndexedDB(record);
+        if (options.syncCloud !== false) await syncInstallmentImageRecordToCloud(record);
+    }
+    return normalizedRecords.length;
 }
 
 function setCachedLocalDBSnapshot(dbData) {
@@ -1561,6 +1841,7 @@ function queueRemoteDBSync() {
                     kdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     lastModified: firebase.firestore.FieldValue.serverTimestamp()
                 });
+                await syncPendingInstallmentImagesToCloud();
 
                 const latestLocal = getCachedLocalDBSnapshotClone();
                 if (latestLocal && (latestLocal.sync?.revision || null) === processingRevision) {

@@ -7,6 +7,7 @@
             resolve: null
         };
         let electricityHistoryChart = null;
+        let installmentAnalyticsChart = null;
         const electricityHistoryModalState = {
             billId: '',
             bill: null,
@@ -1650,8 +1651,256 @@
             return Array.isArray(window.allDecryptedInstallmentPlans) ? window.allDecryptedInstallmentPlans : [];
         }
 
+        let installmentImageDraft = {
+            mode: 'unchanged',
+            dataUrl: null,
+            metadata: null,
+            existingRef: ''
+        };
+
         function findTrackedInstallmentPlan(planId) {
             return getTrackedInstallmentPlans().find(plan => plan && plan.id === planId) || null;
+        }
+
+        function formatInstallmentImageSize(bytes) {
+            const size = Math.max(0, Number(bytes || 0));
+            if (size < 1024) return `${Math.round(size)} B`;
+            return `${(size / 1024).toFixed(size >= 102400 ? 0 : 1)} KB`;
+        }
+
+        function setInstallmentImagePickerState(dataUrl = null, metadata = null, status = '') {
+            const preview = document.getElementById('ip-image-preview');
+            const placeholder = document.getElementById('ip-image-placeholder');
+            const removeButton = document.getElementById('ip-image-remove-btn');
+            const statusEl = document.getElementById('ip-image-status');
+            const hasImage = !!dataUrl;
+
+            if (preview) {
+                preview.src = hasImage ? dataUrl : '';
+                preview.classList.toggle('hidden', !hasImage);
+            }
+            placeholder?.classList.toggle('hidden', hasImage);
+            const showRemove = installmentImageDraft.mode !== 'remove'
+                && (hasImage || !!installmentImageDraft.existingRef);
+            removeButton?.classList.toggle('hidden', !showRemove);
+
+            if (statusEl) {
+                const detail = metadata?.sizeBytes
+                    ? `${formatInstallmentImageSize(metadata.sizeBytes)} • ${metadata.width || '?'}×${metadata.height || '?'}`
+                    : '';
+                statusEl.textContent = status || detail || 'One compressed image, stored separately from your finance vault.';
+                statusEl.className = `text-[10px] mt-2 ${
+                    installmentImageDraft.mode === 'remove' ? 'text-amber-600' : 'text-slate-400'
+                }`;
+            }
+        }
+
+        async function resetInstallmentImageDraft(plan = null) {
+            const imageRef = String(plan?.imageRef || '').trim();
+            installmentImageDraft = {
+                mode: 'unchanged',
+                dataUrl: null,
+                metadata: plan?.imageMeta || null,
+                existingRef: imageRef
+            };
+            const input = document.getElementById('ip-image-input');
+            if (input) input.value = '';
+
+            if (!imageRef) {
+                setInstallmentImagePickerState(null, null);
+                return;
+            }
+
+            setInstallmentImagePickerState(null, plan?.imageMeta || null, 'Loading compressed image...');
+            const dataUrl = typeof getInstallmentImageDataUrl === 'function'
+                ? await getInstallmentImageDataUrl(imageRef)
+                : null;
+            installmentImageDraft.dataUrl = dataUrl;
+            setInstallmentImagePickerState(
+                dataUrl,
+                plan?.imageMeta || null,
+                dataUrl ? '' : 'Image is unavailable on this device.'
+            );
+        }
+
+        function loadInstallmentImageElement(file) {
+            return new Promise((resolve, reject) => {
+                const objectUrl = URL.createObjectURL(file);
+                const image = new Image();
+                image.onload = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    resolve(image);
+                };
+                image.onerror = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    reject(new Error('This image format could not be opened.'));
+                };
+                image.src = objectUrl;
+            });
+        }
+
+        function installmentCanvasToBlob(canvas, mimeType, quality) {
+            return new Promise((resolve, reject) => {
+                canvas.toBlob(blob => {
+                    if (blob) resolve(blob);
+                    else reject(new Error('Image compression failed.'));
+                }, mimeType, quality);
+            });
+        }
+
+        function installmentBlobToDataUrl(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.onerror = () => reject(new Error('Compressed image could not be read.'));
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        async function compressInstallmentImage(file) {
+            if (!file || !String(file.type || '').startsWith('image/')) {
+                throw new Error('Choose a valid image file.');
+            }
+            if (file.size > 12 * 1024 * 1024) {
+                throw new Error('Choose an image smaller than 12 MB.');
+            }
+
+            const image = await loadInstallmentImageElement(file);
+            if (!image.naturalWidth || !image.naturalHeight) {
+                throw new Error('This image has no readable dimensions.');
+            }
+
+            const maxEdge = 800;
+            const targetBytes = 140 * 1024;
+            const minEdge = 480;
+            const initialScale = Math.min(1, maxEdge / Math.max(image.naturalWidth, image.naturalHeight));
+            let width = Math.max(1, Math.round(image.naturalWidth * initialScale));
+            let height = Math.max(1, Math.round(image.naturalHeight * initialScale));
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d', { alpha: true });
+            if (!context) throw new Error('Image compression is unavailable in this browser.');
+
+            const webpProbe = document.createElement('canvas').toDataURL('image/webp');
+            const mimeType = webpProbe.startsWith('data:image/webp') ? 'image/webp' : 'image/jpeg';
+            const qualities = [0.78, 0.70, 0.62, 0.55];
+            let bestBlob = null;
+            let bestWidth = width;
+            let bestHeight = height;
+
+            for (let resizeRound = 0; resizeRound < 4; resizeRound += 1) {
+                canvas.width = width;
+                canvas.height = height;
+                context.clearRect(0, 0, width, height);
+                if (mimeType === 'image/jpeg') {
+                    context.fillStyle = '#ffffff';
+                    context.fillRect(0, 0, width, height);
+                }
+                context.imageSmoothingEnabled = true;
+                context.imageSmoothingQuality = 'high';
+                context.drawImage(image, 0, 0, width, height);
+
+                for (const quality of qualities) {
+                    const blob = await installmentCanvasToBlob(canvas, mimeType, quality);
+                    if (!bestBlob || blob.size < bestBlob.size) {
+                        bestBlob = blob;
+                        bestWidth = width;
+                        bestHeight = height;
+                    }
+                    if (blob.size <= targetBytes) {
+                        bestBlob = blob;
+                        bestWidth = width;
+                        bestHeight = height;
+                        resizeRound = 4;
+                        break;
+                    }
+                }
+
+                if (resizeRound >= 4 || Math.max(width, height) <= minEdge) break;
+                const resizeScale = Math.max(0.75, minEdge / Math.max(width, height));
+                width = Math.max(1, Math.round(width * resizeScale));
+                height = Math.max(1, Math.round(height * resizeScale));
+            }
+
+            if (!bestBlob) throw new Error('Image compression failed.');
+            return {
+                dataUrl: await installmentBlobToDataUrl(bestBlob),
+                metadata: {
+                    mimeType: bestBlob.type || mimeType,
+                    sizeBytes: bestBlob.size,
+                    width: bestWidth,
+                    height: bestHeight,
+                    originalName: String(file.name || '').slice(0, 180)
+                }
+            };
+        }
+
+        async function handleInstallmentImageSelection(input) {
+            const file = input?.files?.[0];
+            if (!file) return;
+            const statusEl = document.getElementById('ip-image-status');
+            if (statusEl) {
+                statusEl.textContent = 'Compressing image...';
+                statusEl.className = 'text-[10px] text-violet-600 mt-2';
+            }
+
+            try {
+                const compressed = await compressInstallmentImage(file);
+                installmentImageDraft = {
+                    ...installmentImageDraft,
+                    mode: 'replace',
+                    dataUrl: compressed.dataUrl,
+                    metadata: compressed.metadata
+                };
+                setInstallmentImagePickerState(compressed.dataUrl, compressed.metadata);
+            } catch (error) {
+                console.error('Installment image compression failed:', error);
+                setInstallmentImagePickerState(
+                    installmentImageDraft.dataUrl,
+                    installmentImageDraft.metadata,
+                    error?.message || 'Image compression failed.'
+                );
+                alert(error?.message || 'Image compression failed.');
+            } finally {
+                if (input) input.value = '';
+            }
+        }
+
+        function removeInstallmentImageDraft() {
+            installmentImageDraft = {
+                ...installmentImageDraft,
+                mode: installmentImageDraft.existingRef ? 'remove' : 'unchanged',
+                dataUrl: null,
+                metadata: null
+            };
+            setInstallmentImagePickerState(null, null, installmentImageDraft.mode === 'remove'
+                ? 'Image will be removed when you save the plan.'
+                : 'No image selected.');
+        }
+
+        async function openInstallmentImagePreview(planId) {
+            const plan = findTrackedInstallmentPlan(planId);
+            const imageRef = String(plan?.imageRef || '').trim();
+            if (!plan || !imageRef) return;
+            const dataUrl = await getInstallmentImageDataUrl(imageRef);
+            if (!dataUrl) {
+                showToast('Image is unavailable on this device');
+                return;
+            }
+            const image = document.getElementById('installment-image-preview-large');
+            const title = document.getElementById('installment-image-preview-title');
+            const meta = document.getElementById('installment-image-preview-meta');
+            if (image) {
+                image.src = dataUrl;
+                image.alt = plan.name || 'Installment image';
+            }
+            if (title) title.textContent = plan.name || 'Installment image';
+            if (meta) {
+                const imageMeta = plan.imageMeta || {};
+                meta.textContent = imageMeta.sizeBytes
+                    ? `${formatInstallmentImageSize(imageMeta.sizeBytes)} • ${imageMeta.width || '?'}×${imageMeta.height || '?'}`
+                    : 'Compressed installment image';
+            }
+            document.getElementById('installment-image-preview-modal')?.classList.remove('hidden');
         }
 
         function normalizeInstallmentHistoricalPayments(payments = []) {
@@ -1695,17 +1944,184 @@
             return new Date(year, monthIndex, day, 12, 0, 0, 0);
         }
 
-        function buildInstallmentPaymentSchedule(plan) {
+        function getInstallmentLocalDateKey(date = new Date()) {
+            const value = date instanceof Date ? date : new Date(date);
+            if (!Number.isFinite(value.getTime())) return '';
+            const year = value.getFullYear();
+            const month = String(value.getMonth() + 1).padStart(2, '0');
+            const day = String(value.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function getInstallmentFirstDueDate(plan) {
             const normalized = normalizeInstallmentPlanInput(plan);
-            const count = Math.max(0, Math.round(Number(normalized.installmentCount || 0)));
             const dueDay = Number(normalized.dueDay || 0);
-            if (!count || !dueDay) return [];
+            if (!dueDay) return null;
 
             const startDate = getInstallmentLocalDate(normalized.startDate);
             let firstDue = makeInstallmentDueDate(startDate.getFullYear(), startDate.getMonth(), dueDay);
             if (firstDue < startDate) {
                 firstDue = makeInstallmentDueDate(startDate.getFullYear(), startDate.getMonth() + 1, dueDay);
             }
+            return firstDue;
+        }
+
+        function getInstallmentNextProjectedDueDate(plan, todayKey) {
+            const normalized = normalizeInstallmentPlanInput(plan);
+            const dueDay = Number(normalized.dueDay || 0);
+            const firstDue = getInstallmentFirstDueDate(normalized);
+            if (!dueDay || !firstDue) return null;
+
+            const today = getInstallmentLocalDate(todayKey);
+            if (firstDue >= today) return firstDue;
+
+            const elapsedMonths = Math.max(
+                0,
+                ((today.getFullYear() - firstDue.getFullYear()) * 12) + today.getMonth() - firstDue.getMonth()
+            );
+            let nextDue = makeInstallmentDueDate(
+                firstDue.getFullYear(),
+                firstDue.getMonth() + elapsedMonths,
+                dueDay
+            );
+            if (nextDue < today) {
+                nextDue = makeInstallmentDueDate(nextDue.getFullYear(), nextDue.getMonth() + 1, dueDay);
+            }
+            return nextDue;
+        }
+
+        function buildInstallmentProjectedPayments(plan, outstandingAmount, todayKey = getInstallmentLocalDateKey()) {
+            const normalized = normalizeInstallmentPlanInput(plan);
+            const outstanding = Math.max(0, Number(outstandingAmount || 0));
+            const count = Math.max(0, Math.round(Number(normalized.installmentCount || 0)));
+            const monthlyAmount = Math.max(0, Number(normalized.monthlyAmount || 0))
+                || (normalized.totalAmount > 0 && count > 0 ? normalized.totalAmount / count : 0);
+            const nextDue = getInstallmentNextProjectedDueDate(normalized, todayKey);
+            const planName = normalized.name || 'Installment Plan';
+            const base = {
+                planId: String(plan?.id || ''),
+                planName,
+                provider: normalized.provider || '',
+                outstanding,
+                monthlyAmount,
+                rows: [],
+                issue: '',
+                truncated: false
+            };
+
+            if (outstanding <= 0.01) return base;
+            if (!normalized.dueDay || !nextDue) {
+                return { ...base, issue: `${planName}: set a due day to include it in the projection.` };
+            }
+            if (!Number.isFinite(monthlyAmount) || monthlyAmount <= 0.01) {
+                return { ...base, issue: `${planName}: set a monthly payment or number of payments.` };
+            }
+
+            const feePerPayment = count > 0
+                ? Math.min(monthlyAmount, Math.max(0, Number(normalized.feeTotal || 0)) / count)
+                : 0;
+            const rows = [];
+            let remaining = outstanding;
+            let dueDate = nextDue;
+            const safetyLimit = 600;
+
+            while (remaining > 0.01 && rows.length < safetyLimit) {
+                const amount = Math.min(monthlyAmount, remaining);
+                rows.push({
+                    planId: base.planId,
+                    planName,
+                    provider: base.provider,
+                    dueDateKey: getInstallmentLocalDateKey(dueDate),
+                    amount,
+                    feeAmount: Math.min(amount, feePerPayment),
+                    balanceAfter: Math.max(0, remaining - amount)
+                });
+                remaining = Math.max(0, remaining - amount);
+                dueDate = makeInstallmentDueDate(
+                    dueDate.getFullYear(),
+                    dueDate.getMonth() + 1,
+                    normalized.dueDay
+                );
+            }
+
+            return {
+                ...base,
+                rows,
+                truncated: remaining > 0.01,
+                issue: remaining > 0.01
+                    ? `${planName}: projection exceeds 600 months; check the monthly payment.`
+                    : ''
+            };
+        }
+
+        function buildInstallmentPaymentRunway(
+            plans = getTrackedInstallmentPlans(),
+            outstandingMap = null,
+            todayKey = getInstallmentLocalDateKey()
+        ) {
+            const transactions = window.allDecryptedTransactions || [];
+            const resolvedOutstandingMap = outstandingMap || (
+                typeof computeInstallmentOutstandingMapAsOf === 'function'
+                    ? computeInstallmentOutstandingMapAsOf(Date.now(), transactions)
+                    : new Map()
+            );
+            const projections = (Array.isArray(plans) ? plans : []).map(plan => {
+                const outstanding = resolvedOutstandingMap.has(plan.id)
+                    ? Math.max(0, Number(resolvedOutstandingMap.get(plan.id) || 0))
+                    : Math.max(0, Number(plan.totalAmount || 0));
+                return buildInstallmentProjectedPayments(plan, outstanding, todayKey);
+            });
+            const payments = projections
+                .flatMap(projection => projection.rows)
+                .sort((a, b) => String(a.dueDateKey).localeCompare(String(b.dueDateKey))
+                    || String(a.planName).localeCompare(String(b.planName)));
+            const monthMap = new Map();
+
+            payments.forEach(payment => {
+                const monthKey = String(payment.dueDateKey || '').slice(0, 7);
+                if (!monthKey) return;
+                if (!monthMap.has(monthKey)) {
+                    monthMap.set(monthKey, {
+                        monthKey,
+                        total: 0,
+                        items: []
+                    });
+                }
+                const month = monthMap.get(monthKey);
+                month.total += Math.max(0, Number(payment.amount || 0));
+                month.items.push(payment);
+            });
+
+            const months = Array.from(monthMap.values())
+                .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+            const issues = projections.map(projection => projection.issue).filter(Boolean);
+
+            return {
+                todayKey,
+                payments,
+                months,
+                issues,
+                projections,
+                finalMonthKey: months.length ? months[months.length - 1].monthKey : ''
+            };
+        }
+
+        function formatInstallmentMonthLabel(monthKey, format = 'long') {
+            const normalized = String(monthKey || '').trim();
+            if (!/^\d{4}-\d{2}$/.test(normalized)) return '';
+            return new Date(`${normalized}-01T12:00:00`).toLocaleDateString(undefined, {
+                month: format === 'short' ? 'short' : 'long',
+                year: 'numeric'
+            });
+        }
+
+        function buildInstallmentPaymentSchedule(plan) {
+            const normalized = normalizeInstallmentPlanInput(plan);
+            const count = Math.max(0, Math.round(Number(normalized.installmentCount || 0)));
+            const dueDay = Number(normalized.dueDay || 0);
+            if (!count || !dueDay) return [];
+
+            const firstDue = getInstallmentFirstDueDate(normalized);
 
             const monthlyAmount = normalized.monthlyAmount > 0
                 ? normalized.monthlyAmount
@@ -1713,7 +2129,7 @@
             const feePerPayment = count > 0
                 ? Math.min(monthlyAmount, Math.max(0, Number(normalized.feeTotal || 0)) / count)
                 : 0;
-            const todayKey = new Date().toISOString().slice(0, 10);
+            const todayKey = getInstallmentLocalDateKey();
             const historicalPayments = normalizeInstallmentHistoricalPayments(normalized.historicalPayments);
             const historicalKeys = new Set(historicalPayments.map(payment => payment.dueDate || getInstallmentDateKey(payment.date)));
             const normalPaymentKeys = new Set((window.allDecryptedTransactions || [])
@@ -1722,7 +2138,7 @@
 
             return Array.from({ length: count }, (_, index) => {
                 const dueDate = makeInstallmentDueDate(firstDue.getFullYear(), firstDue.getMonth() + index, dueDay);
-                const dueDateKey = dueDate.toISOString().slice(0, 10);
+                const dueDateKey = getInstallmentLocalDateKey(dueDate);
                 const isFuture = dueDateKey > todayKey;
                 const isRecorded = historicalKeys.has(dueDateKey) || normalPaymentKeys.has(dueDateKey);
                 return {
@@ -1794,6 +2210,10 @@
             const dueDay = Number.isFinite(rawDueDay) && rawDueDay > 0
                 ? Math.max(1, Math.min(31, Math.round(rawDueDay)))
                 : null;
+            const sourceImageMeta = source.imageMeta && typeof source.imageMeta === 'object'
+                ? source.imageMeta
+                : null;
+            const imageRef = String(source.imageRef || '').trim();
 
             return {
                 name: String(source.name || '').trim(),
@@ -1805,6 +2225,14 @@
                 dueDay,
                 startDate: String(source.startDate || '').trim() || new Date().toISOString().slice(0, 10),
                 notes: String(source.notes || '').trim(),
+                imageRef: imageRef || null,
+                imageMeta: imageRef && sourceImageMeta ? {
+                    mimeType: String(sourceImageMeta.mimeType || ''),
+                    sizeBytes: Math.max(0, Math.round(Number(sourceImageMeta.sizeBytes || 0))),
+                    width: Math.max(0, Math.round(Number(sourceImageMeta.width || 0))),
+                    height: Math.max(0, Math.round(Number(sourceImageMeta.height || 0))),
+                    originalName: String(sourceImageMeta.originalName || '').slice(0, 180)
+                } : null,
                 historicalPayments: normalizeInstallmentHistoricalPayments(source.historicalPayments),
                 createdAt: source.createdAt || new Date().toISOString()
             };
@@ -2091,6 +2519,7 @@
                         dueDay.value = plan.dueDay || '';
                         startDate.value = getDateInputValue(plan.startDate);
                         notes.value = plan.notes;
+                        await resetInstallmentImageDraft(plan);
                         modal.classList.remove('hidden');
                         return;
                     }
@@ -2108,6 +2537,7 @@
             dueDay.value = '';
             startDate.value = new Date().toISOString().slice(0, 10);
             notes.value = '';
+            await resetInstallmentImageDraft();
             modal.classList.remove('hidden');
         }
 
@@ -2136,26 +2566,60 @@
             await ensureInstallmentCategory(db);
 
             let previousPlanName = '';
-            let planId = id;
+            const planId = id || generateFinanceRecordId('ip_');
+            let existing = null;
+            let existingData = null;
+            let existingImageRef = '';
+            let nextImageRef = '';
+            let imageSaveResult = null;
 
             if (id) {
                 const idx = db.installment_plans.findIndex(plan => plan.id === id);
-                if (idx !== -1) {
-                    const existing = db.installment_plans[idx] || {};
-                    const existingData = existing?.data ? await decryptData(existing.data) : null;
-                    previousPlanName = String(existingData?.name || '').trim();
-                    nextPlan.createdAt = existingData?.createdAt || nextPlan.createdAt;
-                    nextPlan.historicalPayments = normalizeInstallmentHistoricalPayments(existingData?.historicalPayments);
-                    db.installment_plans[idx] = {
-                        ...existing,
-                        id,
-                        data: await encryptData(nextPlan),
-                        lastModified: Date.now(),
-                        deletedAt: existing.deletedAt || null
-                    };
+                if (idx === -1) {
+                    alert('Could not find this installment plan.');
+                    return;
                 }
+                existing = db.installment_plans[idx] || {};
+                existingData = existing?.data ? await decryptData(existing.data) : null;
+                previousPlanName = String(existingData?.name || '').trim();
+                nextPlan.createdAt = existingData?.createdAt || nextPlan.createdAt;
+                nextPlan.historicalPayments = normalizeInstallmentHistoricalPayments(existingData?.historicalPayments);
+                existingImageRef = String(existingData?.imageRef || '').trim();
+            }
+
+            if (installmentImageDraft.mode === 'replace' && installmentImageDraft.dataUrl) {
+                nextImageRef = createInstallmentImageRef(`${planId}_${Date.now().toString(36)}`);
+                try {
+                    imageSaveResult = await saveInstallmentImageData(
+                        nextImageRef,
+                        installmentImageDraft.dataUrl,
+                        installmentImageDraft.metadata || {}
+                    );
+                } catch (error) {
+                    console.error('Installment image save failed:', error);
+                    alert(error?.message || 'Could not save the compressed image.');
+                    return;
+                }
+                nextPlan.imageRef = nextImageRef;
+                nextPlan.imageMeta = installmentImageDraft.metadata || null;
+            } else if (installmentImageDraft.mode === 'remove') {
+                nextPlan.imageRef = null;
+                nextPlan.imageMeta = null;
             } else {
-                planId = generateFinanceRecordId('ip_');
+                nextPlan.imageRef = existingImageRef || null;
+                nextPlan.imageMeta = existingData?.imageMeta || null;
+            }
+
+            if (id) {
+                const idx = db.installment_plans.findIndex(plan => plan.id === id);
+                db.installment_plans[idx] = {
+                    ...existing,
+                    id,
+                    data: await encryptData(nextPlan),
+                    lastModified: Date.now(),
+                    deletedAt: existing.deletedAt || null
+                };
+            } else {
                 db.installment_plans.push({
                     id: planId,
                     data: await encryptData(nextPlan),
@@ -2189,10 +2653,28 @@
                 }
             }
 
-            const persistedDB = await saveDB(db);
+            let persistedDB;
+            try {
+                persistedDB = await saveDB(db);
+            } catch (error) {
+                if (nextImageRef) await setInstallmentImageDeleted(nextImageRef, true);
+                throw error;
+            }
+            if (existingImageRef && (
+                installmentImageDraft.mode === 'remove'
+                || (nextImageRef && nextImageRef !== existingImageRef)
+            )) {
+                await setInstallmentImageDeleted(existingImageRef, true);
+            }
             rawInstallmentPlans = (persistedDB.installment_plans || db.installment_plans || []).filter(plan => !plan.deletedAt);
             rawTransactions = (persistedDB.transactions || db.transactions || []).filter(tx => !tx.deletedAt);
             toggleModal('installment-plan-modal');
+            installmentImageDraft = {
+                mode: 'unchanged',
+                dataUrl: null,
+                metadata: null,
+                existingRef: ''
+            };
             await loadAndRender();
             await renderInstallmentPlans(rawInstallmentPlans);
             refreshTransactionCategorySelect();
@@ -2201,7 +2683,10 @@
                 refreshForecast: true,
                 refreshStatements: true
             });
-            showToast(id ? '✅ Installment plan updated' : '✅ Installment plan added');
+            const imageSyncNote = imageSaveResult?.attemptedCloudSync && !imageSaveResult?.cloudSynced
+                ? ' • image saved locally'
+                : '';
+            showToast(`${id ? '✅ Installment plan updated' : '✅ Installment plan added'}${imageSyncNote}`);
         }
 
         function openInstallmentPaymentModal(id, options = {}) {
@@ -2352,9 +2837,15 @@
             const outstandingMap = typeof computeInstallmentOutstandingMapAsOf === 'function'
                 ? computeInstallmentOutstandingMapAsOf(Date.now(), transactions)
                 : new Map();
-            const todayKey = new Date().toISOString().slice(0, 10);
-            const weekEndKey = new Date(Date.now() + (7 * 24 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+            const todayKey = getInstallmentLocalDateKey();
+            const weekEndDate = getInstallmentLocalDate(todayKey);
+            weekEndDate.setDate(weekEndDate.getDate() + 7);
+            const weekEndKey = getInstallmentLocalDateKey(weekEndDate);
             const monthKey = todayKey.slice(0, 7);
+            const runway = buildInstallmentPaymentRunway(plans, outstandingMap, todayKey);
+            const projectionByPlanId = new Map(
+                runway.projections.map(projection => [projection.planId, projection])
+            );
 
             const summary = {
                 totalOriginal: 0,
@@ -2401,23 +2892,10 @@
                     summary.completedCount += 1;
                 }
 
-                const schedule = buildInstallmentPaymentSchedule(plan);
-                schedule
-                    .filter(row => !row.isRecorded && isActive)
-                    .forEach(row => {
-                        if (row.dueDateKey === todayKey) summary.dueToday += 1;
-                        if (row.dueDateKey >= todayKey && row.dueDateKey <= weekEndKey) summary.dueWeek += 1;
-                        if (row.dueDateKey.slice(0, 7) === monthKey) summary.dueMonth += 1;
-                        if (row.dueDateKey >= todayKey) {
-                            upcoming.push({
-                                planName: plan.name || 'Installment Plan',
-                                provider: plan.provider || '',
-                                dueDateKey: row.dueDateKey,
-                                amount: Math.min(Math.max(0, Number(row.amount || monthlyAmount)), outstanding),
-                                feeAmount: Math.max(0, Number(row.feeAmount || 0))
-                            });
-                        }
-                    });
+                const projection = projectionByPlanId.get(String(plan.id || ''));
+                const finalPayment = projection?.rows?.length
+                    ? projection.rows[projection.rows.length - 1]
+                    : null;
 
                 planRows.push({
                     name: plan.name || 'Installment Plan',
@@ -2429,7 +2907,22 @@
                     feeTotal,
                     feesPaid,
                     progressPct: total > 0 ? Math.min(100, Math.max(0, (paid / total) * 100)) : 0,
-                    active: isActive
+                    active: isActive,
+                    projectedPayoffMonthKey: finalPayment?.dueDateKey?.slice(0, 7) || '',
+                    projectionIssue: projection?.issue || ''
+                });
+            });
+
+            runway.payments.forEach(row => {
+                if (row.dueDateKey === todayKey) summary.dueToday += 1;
+                if (row.dueDateKey >= todayKey && row.dueDateKey <= weekEndKey) summary.dueWeek += 1;
+                if (row.dueDateKey.slice(0, 7) === monthKey) summary.dueMonth += 1;
+                upcoming.push({
+                    planName: row.planName,
+                    provider: row.provider,
+                    dueDateKey: row.dueDateKey,
+                    amount: Math.max(0, Number(row.amount || 0)),
+                    feeAmount: Math.max(0, Number(row.feeAmount || 0))
                 });
             });
 
@@ -2439,8 +2932,312 @@
             return {
                 summary,
                 upcoming: upcoming.slice(0, 6),
-                planRows
+                planRows,
+                runway
             };
+        }
+
+        function getInstallmentPaymentMonthKey(value) {
+            const raw = String(value || '').trim();
+            const matched = raw.match(/^(\d{4}-\d{2})/);
+            if (matched) return matched[1];
+            const date = new Date(value);
+            return Number.isFinite(date.getTime()) ? getInstallmentLocalDateKey(date).slice(0, 7) : '';
+        }
+
+        function getInstallmentMonthKeysBetween(firstMonthKey, lastMonthKey) {
+            if (!/^\d{4}-\d{2}$/.test(String(firstMonthKey || ''))
+                || !/^\d{4}-\d{2}$/.test(String(lastMonthKey || ''))
+                || firstMonthKey > lastMonthKey) {
+                return [];
+            }
+
+            const cursor = new Date(`${firstMonthKey}-01T12:00:00`);
+            const last = new Date(`${lastMonthKey}-01T12:00:00`);
+            const monthKeys = [];
+            while (cursor <= last && monthKeys.length < 720) {
+                monthKeys.push(getInstallmentLocalDateKey(cursor).slice(0, 7));
+                cursor.setMonth(cursor.getMonth() + 1);
+            }
+            return monthKeys;
+        }
+
+        function buildInstallmentAnalyticsChartData(
+            analyticsData = getInstallmentAnalyticsData(),
+            plans = getTrackedInstallmentPlans(),
+            transactions = window.allDecryptedTransactions || []
+        ) {
+            const actualByMonth = new Map();
+            const trackedPlanIds = new Set(
+                (Array.isArray(plans) ? plans : [])
+                    .map(plan => String(plan?.id || '').trim())
+                    .filter(Boolean)
+            );
+            const addActualPayment = (dateValue, amountValue) => {
+                const monthKey = getInstallmentPaymentMonthKey(dateValue);
+                const amount = Math.max(0, Number(amountValue || 0));
+                if (!monthKey || !Number.isFinite(amount) || amount <= 0) return;
+                actualByMonth.set(monthKey, (actualByMonth.get(monthKey) || 0) + amount);
+            };
+
+            (Array.isArray(plans) ? plans : []).forEach(plan => {
+                normalizeInstallmentHistoricalPayments(plan?.historicalPayments).forEach(payment => {
+                    addActualPayment(payment.date || payment.createdAt, payment.amount);
+                });
+            });
+            (Array.isArray(transactions) ? transactions : []).forEach(tx => {
+                if (!tx || tx.type !== 'installment_payment') return;
+                if (!trackedPlanIds.has(String(tx.installmentPlanId || '').trim())) return;
+                addActualPayment(tx.date || tx.createdAt, tx.amt);
+            });
+
+            const projectedByMonth = new Map(
+                (analyticsData?.runway?.months || []).map(month => [
+                    String(month.monthKey || ''),
+                    Math.max(0, Number(month.total || 0))
+                ])
+            );
+            const actualMonthKeys = Array.from(actualByMonth.keys()).sort();
+            const projectedMonthKeys = Array.from(projectedByMonth.keys()).filter(Boolean).sort();
+            const currentMonthKey = String(analyticsData?.runway?.todayKey || getInstallmentLocalDateKey()).slice(0, 7);
+            const firstMonthKey = actualMonthKeys[0] || projectedMonthKeys[0] || currentMonthKey;
+            const lastMonthKey = [
+                actualMonthKeys[actualMonthKeys.length - 1],
+                projectedMonthKeys[projectedMonthKeys.length - 1],
+                currentMonthKey
+            ].filter(Boolean).sort().pop() || firstMonthKey;
+            const lastActualMonthKey = actualMonthKeys[actualMonthKeys.length - 1] || '';
+            const firstProjectedMonthKey = projectedMonthKeys[0] || '';
+            const lastProjectedMonthKey = projectedMonthKeys[projectedMonthKeys.length - 1] || '';
+            const monthKeys = getInstallmentMonthKeysBetween(firstMonthKey, lastMonthKey);
+            let cumulativePaid = 0;
+            let projectedRemaining = Math.max(0, Number(analyticsData?.summary?.outstanding || 0));
+
+            return {
+                monthKeys,
+                labels: monthKeys.map(monthKey => formatInstallmentMonthLabel(monthKey, 'short')),
+                fullLabels: monthKeys.map(monthKey => formatInstallmentMonthLabel(monthKey)),
+                lastActualMonthKey,
+                series: {
+                    projectedDue: monthKeys.map(monthKey => (
+                        projectedByMonth.has(monthKey) ? projectedByMonth.get(monthKey) : null
+                    )),
+                    paidThisMonth: monthKeys.map(monthKey => (
+                        lastActualMonthKey && monthKey <= lastActualMonthKey
+                            ? Number(actualByMonth.get(monthKey) || 0)
+                            : null
+                    )),
+                    cumulativePaid: monthKeys.map(monthKey => {
+                        cumulativePaid += Number(actualByMonth.get(monthKey) || 0);
+                        return lastActualMonthKey && monthKey <= lastActualMonthKey ? cumulativePaid : null;
+                    }),
+                    projectedRemaining: monthKeys.map(monthKey => {
+                        if (!firstProjectedMonthKey || monthKey < firstProjectedMonthKey || monthKey > lastProjectedMonthKey) return null;
+                        projectedRemaining = Math.max(0, projectedRemaining - Number(projectedByMonth.get(monthKey) || 0));
+                        return projectedRemaining;
+                    })
+                }
+            };
+        }
+
+        function destroyInstallmentAnalyticsChart() {
+            if (!installmentAnalyticsChart) return;
+            installmentAnalyticsChart.destroy();
+            installmentAnalyticsChart = null;
+        }
+
+        function renderInstallmentAnalyticsChart(chartData) {
+            const canvas = document.getElementById('installment-analytics-chart');
+            if (!canvas || typeof Chart === 'undefined') return;
+            destroyInstallmentAnalyticsChart();
+
+            const datasets = [
+                {
+                    label: 'Projected due',
+                    data: chartData.series.projectedDue,
+                    borderColor: '#7c3aed',
+                    backgroundColor: 'rgba(124, 58, 237, 0.12)',
+                    pointBackgroundColor: '#7c3aed'
+                },
+                {
+                    label: 'Paid this month',
+                    data: chartData.series.paidThisMonth,
+                    borderColor: '#059669',
+                    backgroundColor: 'rgba(5, 150, 105, 0.12)',
+                    pointBackgroundColor: '#059669'
+                },
+                {
+                    label: 'Cumulative paid',
+                    data: chartData.series.cumulativePaid,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.12)',
+                    pointBackgroundColor: '#2563eb'
+                },
+                {
+                    label: 'Projected balance',
+                    data: chartData.series.projectedRemaining,
+                    borderColor: '#e11d48',
+                    backgroundColor: 'rgba(225, 29, 72, 0.10)',
+                    pointBackgroundColor: '#e11d48',
+                    borderDash: [6, 4],
+                    hidden: true
+                }
+            ].map(dataset => ({
+                ...dataset,
+                borderWidth: 2.5,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+                pointHitRadius: 12,
+                tension: 0.3,
+                fill: false,
+                spanGaps: false
+            }));
+
+            installmentAnalyticsChart = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false,
+                            filter: context => context.raw !== null,
+                            callbacks: {
+                                title: items => chartData.fullLabels[items[0]?.dataIndex] || '',
+                                label: context => `${context.dataset.label}: ${fmt(Number(context.parsed.y || 0))}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Month / Year',
+                                color: '#64748b',
+                                font: { size: 11, weight: 'bold' }
+                            },
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 12,
+                                color: '#64748b'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: `Amount (${activeCurrency || 'PHP'})`,
+                                color: '#64748b',
+                                font: { size: 11, weight: 'bold' }
+                            },
+                            ticks: {
+                                color: '#64748b',
+                                callback: value => fmt(Number(value || 0))
+                            },
+                            grid: {
+                                color: 'rgba(148, 163, 184, 0.16)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function toggleInstallmentAnalyticsSeries(datasetIndex, button) {
+            if (!installmentAnalyticsChart) return;
+            const nextVisible = !installmentAnalyticsChart.isDatasetVisible(datasetIndex);
+            installmentAnalyticsChart.setDatasetVisibility(datasetIndex, nextVisible);
+            installmentAnalyticsChart.update();
+            if (button) {
+                button.setAttribute('aria-pressed', String(nextVisible));
+                button.classList.toggle('opacity-40', !nextVisible);
+                button.classList.toggle('ring-2', nextVisible);
+                button.classList.toggle('ring-offset-1', nextVisible);
+            }
+        }
+
+        function renderInstallmentRunwayPreview() {
+            const target = document.getElementById('installment-runway-preview');
+            if (!target) return;
+
+            const plans = getTrackedInstallmentPlans();
+            if (!plans.length) {
+                target.classList.add('hidden');
+                target.innerHTML = '';
+                return;
+            }
+
+            const outstandingMap = typeof computeInstallmentOutstandingMapAsOf === 'function'
+                ? computeInstallmentOutstandingMapAsOf(Date.now(), window.allDecryptedTransactions || [])
+                : new Map();
+            const runway = buildInstallmentPaymentRunway(plans, outstandingMap);
+
+            if (!runway.months.length && !runway.issues.length) {
+                target.classList.remove('hidden');
+                target.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="rounded-xl bg-emerald-100 p-2 text-emerald-700">
+                            <i data-lucide="badge-check" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-black uppercase tracking-wider text-emerald-700">Payment Runway</p>
+                            <p class="text-sm font-bold text-slate-700 mt-0.5">All BNPL balances are paid off.</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            const nextMonth = runway.months[0] || null;
+            const finalMonthLabel = formatInstallmentMonthLabel(runway.finalMonthKey, 'short');
+            target.classList.remove('hidden');
+            target.innerHTML = `
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="rounded-xl bg-violet-100 p-2 text-violet-700">
+                            <i data-lucide="calendar-range" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-black uppercase tracking-wider text-violet-700">Payment Runway</p>
+                            <p class="text-[10px] text-slate-500 mt-0.5">Projected from current remaining balances</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 text-right">
+                        ${nextMonth ? `
+                            <div class="rounded-xl border border-violet-100 bg-white px-3 py-2">
+                                <p class="text-[9px] font-black uppercase tracking-wider text-slate-400">Next payment month</p>
+                                <p class="text-xs font-black text-slate-800">${escapeHTML(formatInstallmentMonthLabel(nextMonth.monthKey, 'short'))} • ${fmt(nextMonth.total)}</p>
+                            </div>
+                        ` : ''}
+                        ${finalMonthLabel ? `
+                            <div class="rounded-xl border border-emerald-100 bg-white px-3 py-2">
+                                <p class="text-[9px] font-black uppercase tracking-wider text-slate-400">Projected final month</p>
+                                <p class="text-xs font-black text-emerald-700">${escapeHTML(finalMonthLabel)}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                ${runway.issues.length ? `
+                    <p class="mt-2 text-[10px] font-bold text-amber-700">${runway.issues.length} active plan${runway.issues.length === 1 ? '' : 's'} need schedule details before the runway is complete.</p>
+                ` : ''}
+            `;
         }
 
         function renderInstallmentAnalyticsDashboard() {
@@ -2448,13 +3245,15 @@
             if (!target) return;
 
             const data = getInstallmentAnalyticsData();
-            const { summary, upcoming, planRows } = data;
+            const { summary, upcoming, planRows, runway } = data;
+            const chartData = buildInstallmentAnalyticsChartData(data);
             const feeRemaining = Math.max(0, summary.feeTotal - summary.feesPaid);
             const feeBurdenPct = summary.totalOriginal > 0
                 ? Math.min(999, (summary.feeTotal / summary.totalOriginal) * 100)
                 : 0;
 
             if (!planRows.length) {
+                destroyInstallmentAnalyticsChart();
                 target.innerHTML = '<div class="text-center text-sm text-slate-400 py-10">No installment or BNPL plans tracked yet.</div>';
                 lucide.createIcons();
                 return;
@@ -2475,6 +3274,98 @@
                             <p class="text-xl font-black mt-1">${escapeHTML(card.value)}</p>
                         </div>
                     `).join('')}
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-wider text-slate-500">Monthly Payment Analytics</p>
+                            <p class="text-xs text-slate-500 mt-1">Actual payment lines stop at the last recorded payment. Select a series to show or hide it.</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Chart series visibility">
+                            <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[10px] font-black text-violet-700 ring-2 ring-violet-200 ring-offset-1"
+                                aria-pressed="true"
+                                onclick="toggleInstallmentAnalyticsSeries(0, this)">
+                                <span class="h-2 w-2 rounded-full bg-violet-600"></span>
+                                Projected due
+                            </button>
+                            <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-black text-emerald-700 ring-2 ring-emerald-200 ring-offset-1"
+                                aria-pressed="true"
+                                onclick="toggleInstallmentAnalyticsSeries(1, this)">
+                                <span class="h-2 w-2 rounded-full bg-emerald-600"></span>
+                                Paid this month
+                            </button>
+                            <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[10px] font-black text-blue-700 ring-2 ring-blue-200 ring-offset-1"
+                                aria-pressed="true"
+                                onclick="toggleInstallmentAnalyticsSeries(2, this)">
+                                <span class="h-2 w-2 rounded-full bg-blue-600"></span>
+                                Cumulative paid
+                            </button>
+                            <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-black text-rose-700 ring-rose-200 opacity-40"
+                                aria-pressed="false"
+                                onclick="toggleInstallmentAnalyticsSeries(3, this)">
+                                <span class="h-2 w-2 rounded-full bg-rose-600"></span>
+                                Projected balance
+                            </button>
+                        </div>
+                    </div>
+                    <div class="relative mt-4 h-72 sm:h-80">
+                        <canvas id="installment-analytics-chart" aria-label="Installment monthly payment line chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-violet-100 bg-violet-50/40 p-4">
+                    <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-wider text-violet-700">Payment Runway</p>
+                            <p class="text-xs text-slate-500 mt-1">Projected monthly payments continue until every active balance reaches zero.</p>
+                        </div>
+                        ${runway.finalMonthKey ? `
+                            <div class="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-right">
+                                <p class="text-[9px] font-black uppercase tracking-wider text-slate-400">Projected BNPL-free</p>
+                                <p class="text-sm font-black text-emerald-700">${escapeHTML(formatInstallmentMonthLabel(runway.finalMonthKey))}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${runway.months.length ? `
+                        <div class="space-y-2 max-h-[30rem] overflow-y-auto custom-scrollbar pr-1">
+                            ${runway.months.map((month, monthIndex) => `
+                                <details class="group rounded-xl border border-violet-100 bg-white" ${monthIndex < 2 ? 'open' : ''}>
+                                    <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            <i data-lucide="chevron-down" class="w-4 h-4 shrink-0 text-violet-400 transition-transform group-open:rotate-180"></i>
+                                            <span class="text-sm font-black text-slate-800">${escapeHTML(formatInstallmentMonthLabel(month.monthKey))}</span>
+                                            <span class="text-[10px] font-bold text-slate-400">${month.items.length} payment${month.items.length === 1 ? '' : 's'}</span>
+                                        </div>
+                                        <span class="text-sm font-black text-violet-700 shrink-0">${fmt(month.total)}</span>
+                                    </summary>
+                                    <div class="border-t border-violet-50 px-3 py-2 space-y-2">
+                                        ${month.items.map(item => `
+                                            <div class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2">
+                                                <div class="min-w-0">
+                                                    <p class="text-xs font-bold text-slate-700 break-words">${escapeHTML(item.planName)}</p>
+                                                    <p class="text-[10px] text-slate-400">${escapeHTML(new Date(`${item.dueDateKey}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}${item.provider ? ` • ${escapeHTML(item.provider)}` : ''}</p>
+                                                </div>
+                                                <span class="text-xs font-black text-slate-800 shrink-0">${fmt(item.amount)}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </details>
+                            `).join('')}
+                        </div>
+                    ` : '<div class="rounded-xl border border-emerald-100 bg-white px-4 py-4 text-center text-xs font-bold text-emerald-700">No projected payments remain.</div>'}
+                    ${runway.issues.length ? `
+                        <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-amber-700">Projection needs information</p>
+                            <div class="mt-1 space-y-1">
+                                ${runway.issues.map(issue => `<p class="text-xs text-amber-800">${escapeHTML(issue)}</p>`).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -2562,6 +3453,8 @@
                                     <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
                                         <span>${row.progressPct.toFixed(0)}% paid</span>
                                         ${row.monthlyAmount > 0 ? `<span>${fmt(row.monthlyAmount)} next</span>` : ''}
+                                        ${row.projectedPayoffMonthKey ? `<span>Projected payoff ${escapeHTML(formatInstallmentMonthLabel(row.projectedPayoffMonthKey, 'short'))}</span>` : ''}
+                                        ${row.projectionIssue ? '<span class="font-bold text-amber-600">Projection needs details</span>' : ''}
                                         ${row.feeTotal > 0 ? `<span>${fmt(row.feesPaid)} / ${fmt(row.feeTotal)} fees</span>` : ''}
                                     </div>
                                 </div>
@@ -2571,6 +3464,7 @@
                 </div>
             `;
 
+            renderInstallmentAnalyticsChart(chartData);
             lucide.createIcons();
         }
 
@@ -3868,6 +4762,9 @@
             db[key] = targetCollection;
             db.undo_log.pop();
             await saveDB(db);
+            if (latest.entityType === 'installment_plans' && latest.meta?.installmentImageRef) {
+                await setInstallmentImageDeleted(latest.meta.installmentImageRef, false);
+            }
             undoLog = db.undo_log;
 
             showToast('↩️ Restored last deleted item');
@@ -3939,6 +4836,17 @@
                 }
             }
 
+            if (col === 'installment_plans') {
+                const deletedPlan = await decryptData(deletedEntry.data);
+                const installmentImageRef = String(deletedPlan?.imageRef || '').trim();
+                if (installmentImageRef) {
+                    undoEntry.meta = {
+                        ...(undoEntry.meta || {}),
+                        installmentImageRef
+                    };
+                }
+            }
+
             db[key] = targetCollection;
             if (col === 'crypto' && typeof syncCryptoMirrorTransactionsInDB === 'function') {
                 await syncCryptoMirrorTransactionsInDB(db);
@@ -3948,6 +4856,9 @@
             db.undo_log = db.undo_log || [];
             db.undo_log.push(undoEntry);
             const persistedDB = await saveDB(db);
+            if (col === 'installment_plans' && undoEntry.meta?.installmentImageRef) {
+                await setInstallmentImageDeleted(undoEntry.meta.installmentImageRef, true);
+            }
             undoLog = persistedDB.undo_log || [];
 
             if (col === 'transactions') {

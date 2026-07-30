@@ -391,6 +391,21 @@
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
+        function sanitizeReadableImageFilename(value) {
+            const normalized = String(value || 'installment')
+                .trim()
+                .replace(/[^a-zA-Z0-9_-]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 80);
+            return normalized || 'installment';
+        }
+
+        function getReadableImageExtension(mimeType) {
+            if (mimeType === 'image/png') return 'png';
+            if (mimeType === 'image/jpeg') return 'jpg';
+            return 'webp';
+        }
+
         function buildReadableExportReadme(exportedAt) {
             return [
                 'FinanceFlow Readable Export',
@@ -429,6 +444,7 @@
                 bills: (data.bills || []).length,
                 debts: (data.debts || []).length,
                 installmentPlans: (data.installment_plans || []).length,
+                installmentImages: (backup.attachments?.installmentImages || []).length,
                 crypto: (data.crypto || []).length,
                 budgets: backup.metadata?.budgetCategoryCount || 0
             };
@@ -447,6 +463,13 @@
                 const actual = await computeBackupHash(data);
                 if (expected !== actual) {
                     issues.push('Integrity hash mismatch.');
+                }
+            }
+            if (backup.integrity?.attachmentsHash) {
+                const expected = backup.integrity.attachmentsHash;
+                const actual = await computeBackupHash(backup.attachments || {});
+                if (expected !== actual) {
+                    issues.push('Attachment integrity hash mismatch.');
                 }
             }
 
@@ -509,22 +532,30 @@
 
             try {
                 const db = await getDB();
+                const installmentImages = typeof exportInstallmentImageRecords === 'function'
+                    ? await exportInstallmentImageRecords()
+                    : [];
+                const attachments = { installmentImages };
                 const dataHash = await computeBackupHash(db);
+                const attachmentsHash = await computeBackupHash(attachments);
                 const backupData = {
-                    appVersion: "4.0",
+                    appVersion: "4.1",
                     backupDate: new Date().toISOString(),
                     schemaVersion: db.schema_version || CURRENT_SCHEMA_VERSION,
                     encryptionVersion: "AES-GCM-v3",
                     metadata: {
                         budgetCategoryCount: Object.keys(budgets || {}).length,
                         transactionCount: (db.transactions || []).length,
+                        installmentImageCount: installmentImages.length,
                         conflictStrategy: db.sync?.conflictStrategy || 'local_wins'
                     },
                     integrity: {
                         algorithm: "SHA-256",
-                        hash: dataHash
+                        hash: dataHash,
+                        attachmentsHash
                     },
-                    data: db
+                    data: db,
+                    attachments
                 };
 
                 const jsonStr = JSON.stringify(backupData, null, 2);
@@ -584,6 +615,18 @@
                 const db = await getDB({ allowRemote: false });
                 const readable = await buildReadableFinanceExport(db, exportedAt);
                 const zip = new JSZip();
+                const readableInstallmentImageFiles = [];
+
+                for (const plan of readable.encryptedCollections.installment_plans || []) {
+                    if (!plan || plan.deletedAt || !plan.imageRef || typeof getInstallmentImageDataUrl !== 'function') continue;
+                    const dataUrl = await getInstallmentImageDataUrl(plan.imageRef, { allowRemote: false });
+                    const matched = String(dataUrl || '').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+                    if (!matched) continue;
+                    const extension = getReadableImageExtension(matched[1]);
+                    const filename = `images/installments/${sanitizeReadableImageFilename(plan.name)}-${sanitizeReadableImageFilename(plan.id || plan.imageRef)}.${extension}`;
+                    zip.file(filename, matched[2], { base64: true });
+                    readableInstallmentImageFiles.push(filename);
+                }
 
                 zip.file('README.txt', buildReadableExportReadme(exportedAt));
                 zip.file('manifest.json', JSON.stringify({
@@ -596,7 +639,8 @@
                             ...READABLE_EXPORT_OBJECT_SECTIONS
                         ].map(name => `csv/${name}.csv`),
                         json: ['json/full-readable-export.json'],
-                        pdf: ['snapshot-summary.pdf']
+                        pdf: ['snapshot-summary.pdf'],
+                        installmentImages: readableInstallmentImageFiles
                     }
                 }, null, 2));
                 zip.file('json/full-readable-export.json', JSON.stringify(readable, null, 2));
@@ -690,6 +734,7 @@
                     <div class="flex justify-between"><span class="text-slate-500">Bills:</span><span class="font-bold text-slate-700">${data.bills?.length || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Debts:</span><span class="font-bold text-slate-700">${data.debts?.length || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Installment/BNPL:</span><span class="font-bold text-slate-700">${data.installment_plans?.length || 0}</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">BNPL Images:</span><span class="font-bold text-slate-700">${backup.attachments?.installmentImages?.length || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Crypto Transactions:</span><span class="font-bold text-slate-700">${data.crypto?.length || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Budget Categories:</span><span class="font-bold text-slate-700">${backup.metadata?.budgetCategoryCount || 0}</span></div>
                     <div class="flex justify-between"><span class="text-slate-500">Schema Version:</span><span class="font-bold text-slate-700">${validation.stats.schemaVersion}</span></div>
@@ -723,6 +768,12 @@
 
                 // Persist locally + sync to Firebase
                 await saveDB(backup.data);
+                if (typeof importInstallmentImageRecords === 'function') {
+                    await importInstallmentImageRecords(
+                        backup.attachments?.installmentImages || [],
+                        { replace: true }
+                    );
+                }
 
                 // Reload all data safely through the normal pipeline
                 await loadFromStorage();
