@@ -18,14 +18,16 @@
     <script src="https://cdn.jsdelivr.net/npm/xrpl@4.6.0/build/xrpl-latest-min.js"></script>
 
 
-    <link rel="stylesheet" href="assets/css/app.css?v=20260526d">
+    <link rel="stylesheet" href="assets/css/app.css?v=20260801f">
 </head>
 
 <body class="finance-page bg-slate-50 min-h-screen pb-10" data-finance-theme="selected_period">
+    <a class="finance-skip-link" href="#main-content">Skip to Finance content</a>
     <div class="finance-theme-backdrop" aria-hidden="true"></div>
 
     <!-- Desktop Navigation -->
-    <nav class="finance-topbar hidden md:block bg-white/80 backdrop-blur-md border-b sticky top-0 z-50">
+    <nav class="finance-topbar hidden md:block bg-white/80 backdrop-blur-md border-b sticky top-0 z-50"
+        aria-label="Finance application controls">
         <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
             <div class="flex items-center gap-2 font-black text-indigo-600 text-2xl tracking-tight">
                 <div class="bg-indigo-600 text-white p-1 rounded-lg">
@@ -43,53 +45,6 @@
                     <i data-lucide="refresh-cw" class="w-3 h-3"></i>
                     <span id="active-currency">PHP (₱)</span>
                 </button>
-                <button onclick="openBudgetModal()"
-                    class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 rounded-full text-xs font-bold text-emerald-600 transition-all border border-emerald-200">
-                    <i data-lucide="target" class="w-3 h-3"></i>
-                    <span class="hidden sm:inline">Budgets</span>
-                </button>
-                <button onclick="openRecurringModal()"
-                    class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 rounded-full text-xs font-bold text-amber-600 transition-all border border-amber-200">
-                    <i data-lucide="repeat" class="w-3 h-3"></i>
-                    <span class="hidden sm:inline">Reminders</span>
-                </button>
-                <button onclick="openItemTracker()"
-                    class="flex items-center gap-2 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 rounded-full text-xs font-bold text-purple-600 transition-all border border-purple-200">
-                    <i data-lucide="package" class="w-3 h-3"></i>
-                    <span class="hidden sm:inline">Item Tracker</span>
-                </button>
-                <div class="relative">
-                    <button onclick="toggleBackupMenu()" id="backup-menu-btn"
-                        class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-full text-xs font-bold text-blue-600 transition-all border border-blue-200">
-                        <i data-lucide="hard-drive" class="w-3 h-3"></i>
-                        <span class="hidden sm:inline">Backups</span>
-                        <i data-lucide="chevron-down" class="w-3 h-3"></i>
-                    </button>
-                    <div id="backup-dropdown"
-                        class="hidden absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50">
-                        <button onclick="downloadBackupNow()"
-                            class="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3">
-                            <i data-lucide="download" class="w-4 h-4 text-blue-600"></i>
-                            Download Backup Now
-                        </button>
-                        <button onclick="exportReadableArchive()"
-                            class="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3">
-                            <i data-lucide="file-archive" class="w-4 h-4 text-amber-600"></i>
-                            Export Readable Archive
-                        </button>
-                        <button onclick="openRestoreModal()"
-                            class="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3">
-                            <i data-lucide="upload" class="w-4 h-4 text-emerald-600"></i>
-                            Restore from File
-                        </button>
-                        <div class="border-t border-slate-100 my-2"></div>
-                        <button onclick="openBackupSettingsModal()"
-                            class="w-full px-4 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-3">
-                            <i data-lucide="settings" class="w-4 h-4 text-slate-400"></i>
-                            Backup Settings
-                        </button>
-                    </div>
-                </div>
                 <button id="finance-quick-links-launcher" type="button" onclick="toggleFinanceQuickLinks()"
                     class="finance-quick-links-launcher"
                     aria-label="Toggle quick links" aria-controls="finance-quick-links-panel" aria-expanded="false">
@@ -163,13 +118,15 @@
 
     <!-- Master Key Entry Overlay -->
     <div id="auth-overlay"
-        class="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4">
+        class="fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-xl flex items-center justify-center p-4"
+        role="dialog" aria-modal="true" aria-hidden="false" aria-labelledby="finance-vault-lock-title"
+        data-finance-modal-dismiss="locked">
         <div class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center border border-white/20">
             <div
                 class="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-inner">
                 <i data-lucide="shield-check" class="w-10 h-10"></i>
             </div>
-            <h2 class="text-2xl font-bold text-slate-800 mb-2">Vault Locked</h2>
+            <h2 id="finance-vault-lock-title" class="text-2xl font-bold text-slate-800 mb-2">Vault Locked</h2>
             <p class="text-slate-500 text-sm mb-8">Data is encrypted locally. Enter your <strong>Master Key</strong> to
                 decrypt and sync across devices.</p>
 
@@ -261,7 +218,8 @@
     </div>
 
     <!-- Main Content -->
-    <main class="finance-main-shell max-w-6xl mx-auto p-4 md:p-6 space-y-6 opacity-0 transition-opacity duration-700" id="main-content">
+    <main class="finance-main-shell max-w-6xl mx-auto p-4 md:p-6 space-y-6 opacity-0 transition-opacity duration-700"
+        id="main-content" tabindex="-1">
         <div id="preview-mode-banner"
             class="hidden bg-amber-50 border border-amber-200 rounded-3xl p-4 md:p-5 shadow-sm">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -284,65 +242,317 @@
             </div>
         </div>
 
-        <!-- Summary Dashboard -->
-        <div class="finance-summary-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 items-start">
-            <div
-                class="finance-summary-card finance-summary-card--primary bg-indigo-600 p-6 rounded-3xl shadow-xl shadow-indigo-100 text-white relative overflow-hidden card-hover">
-                <div class="finance-summary-card__content finance-summary-card__content--primary">
-                    <div class="finance-summary-card__metric finance-balance-breakdown-trigger" role="button" tabindex="0"
-                        onclick="openBalanceCalculationModal(event)"
-                        onkeydown="handleBalanceCalculationTriggerKey(event)"
-                        aria-label="Show total balance calculation">
-                        <p class="text-indigo-100 text-sm font-medium mb-1">Total Balance</p>
-                        <h3 class="text-3xl font-bold" id="balance-display">₱0.00</h3>
-                        <p class="text-xs text-indigo-200 mt-2" id="balance-trend">—</p>
-                        <p class="text-[11px] text-indigo-100/80 mt-2">Click to see calculation</p>
-                    </div>
-                    <div class="finance-summary-card__scope">
-                        <div class="finance-scope-slider finance-scope-slider--summary" data-scope-slider
-                            data-active-scope="selected_period" role="tablist" aria-label="Transaction filter scope">
-                            <span class="finance-scope-indicator" aria-hidden="true"></span>
-                            <button type="button"
-                                class="finance-scope-button finance-scope-button--selected is-active"
-                                data-scope-option="selected_period" aria-pressed="true">Selected</button>
-                            <button type="button" class="finance-scope-button finance-scope-button--current"
-                                data-scope-option="current_month" aria-pressed="false">Current</button>
-                            <button type="button" class="finance-scope-button finance-scope-button--all"
-                                data-scope-option="all_time" aria-pressed="false">All-Time</button>
+        <section class="finance-workspace-shell" aria-labelledby="finance-view-title">
+            <div class="finance-workspace-heading">
+                <div class="min-w-0">
+                    <p class="finance-workspace-eyebrow">Finance workspace</p>
+                    <h1 id="finance-view-title" class="finance-workspace-title">Overview</h1>
+                    <p id="finance-view-subtitle" class="finance-workspace-subtitle">Your current position, priorities, and recent signals.</p>
+                </div>
+                <div class="finance-workspace-actions">
+                    <button type="button" class="finance-workspace-add" data-finance-action="openTransactionModal">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        Add entry
+                    </button>
+                    <div class="finance-more-wrap">
+                        <button id="finance-more-button" type="button" class="finance-workspace-more"
+                            aria-expanded="false" aria-controls="finance-more-menu" aria-haspopup="true">
+                            <i data-lucide="menu" class="w-4 h-4"></i>
+                            More
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </button>
+                        <div id="finance-more-menu" class="finance-more-menu" role="group"
+                            aria-label="More Finance destinations and tools" hidden>
+                            <button type="button" data-finance-view-target="reports">
+                                <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Reports
+                            </button>
+                            <button type="button" data-finance-view-target="tools">
+                                <i data-lucide="wrench" class="w-4 h-4"></i> Tools &amp; settings
+                            </button>
+                            <button type="button" data-finance-action="openItemTracker">
+                                <i data-lucide="package" class="w-4 h-4"></i> Item tracker
+                            </button>
+                            <button type="button" data-finance-action="openBudgetModal">
+                                <i data-lucide="target" class="w-4 h-4"></i> Budgets
+                            </button>
+                            <button type="button" data-finance-action="openRecurringModal">
+                                <i data-lucide="repeat" class="w-4 h-4"></i> Reminders
+                            </button>
+                            <button type="button" data-finance-action="toggleFinanceQuickLinks">
+                                <i data-lucide="layout-list" class="w-4 h-4"></i> Quick links
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="finance-summary-card bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
-                <p class="text-slate-400 text-sm font-medium mb-1">Income</p>
-                <h3 class="text-2xl font-bold text-emerald-600" id="income-display">₱0.00</h3>
-                <p class="text-xs mt-2" id="income-trend">—</p>
-                <p class="text-[11px] text-slate-400 mt-1">Earned cash only</p>
-            </div>
-            <div class="finance-summary-card finance-summary-card--non-income bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
-                <p class="text-slate-400 text-sm font-medium mb-1">Non-Income Cash In</p>
-                <h3 class="text-2xl font-bold text-sky-600" id="non-income-cash-in-display">₱0.00</h3>
-                <p class="text-xs text-sky-500 mt-2" id="non-income-cash-in-detail">Cash added, not counted as income</p>
-            </div>
-            <div class="finance-summary-card bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
-                <p class="text-slate-400 text-sm font-medium mb-1">Expenses</p>
-                <h3 class="text-2xl font-bold text-rose-600" id="expense-display">₱0.00</h3>
-                <p class="text-xs mt-2" id="expense-trend">—</p>
-            </div>
-            <div class="finance-summary-card bg-white p-6 rounded-3xl shadow-sm border border-slate-200 card-hover">
-                <p class="text-slate-400 text-sm font-medium mb-1">Savings Rate</p>
-                <h3 class="text-2xl font-bold text-slate-800" id="savings-rate-display">0%</h3>
-                <p class="text-xs text-slate-400 mt-2" id="avg-daily-spend">—</p>
-            </div>
+
+            <nav class="finance-view-tabs" aria-label="Finance sections" role="tablist">
+                <button type="button" role="tab" data-finance-view-target="overview">Overview</button>
+                <button type="button" role="tab" data-finance-view-target="activity">Activity</button>
+                <button type="button" role="tab" data-finance-view-target="plan">Plan</button>
+                <button type="button" role="tab" data-finance-view-target="wealth">Wealth</button>
+                <button type="button" role="tab" data-finance-view-target="reports">Reports</button>
+            </nav>
+        </section>
+
+        <p id="finance-view-announcer" class="sr-only" aria-live="polite"></p>
+        <div id="finance-view-root">
+            <section data-finance-view="overview" aria-labelledby="finance-view-title">
+                <div class="finance-view-layout" data-finance-view-slot="overview"></div>
+            </section>
+            <section data-finance-view="activity" aria-labelledby="finance-view-title" hidden>
+                <aside id="finance-date-quality-banner" class="finance-date-quality-banner" hidden
+                    aria-live="polite" aria-labelledby="finance-date-quality-title">
+                    <div class="finance-date-quality-banner__icon" aria-hidden="true">
+                        <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                    </div>
+                    <div class="finance-date-quality-banner__copy">
+                        <h2 id="finance-date-quality-title">Transaction dates need review</h2>
+                        <p id="finance-date-quality-summary"></p>
+                    </div>
+                    <button id="finance-date-quality-review" type="button"
+                        data-finance-action="openFinanceDateRepairModal">
+                        Review dates
+                    </button>
+                </aside>
+                <div class="finance-view-layout" data-finance-view-slot="activity"></div>
+            </section>
+            <section data-finance-view="plan" aria-labelledby="finance-view-title" hidden>
+                <div class="finance-view-layout" data-finance-view-slot="plan"></div>
+            </section>
+            <section data-finance-view="wealth" aria-labelledby="finance-view-title" hidden>
+                <div class="finance-view-layout" data-finance-view-slot="wealth"></div>
+            </section>
+            <section data-finance-view="reports" aria-labelledby="finance-view-title" hidden>
+                <div class="finance-view-layout" data-finance-view-slot="reports"></div>
+            </section>
+            <section data-finance-view="tools" aria-labelledby="finance-view-title" hidden>
+                <div id="finance-tools-hub" class="finance-tools-hub finance-view-item" data-finance-view-span="full"
+                    data-summary-tone="attention">
+                    <div class="finance-tools-hub__header">
+                        <div>
+                            <p class="finance-tools-eyebrow">Safety center</p>
+                            <h2>Protect the vault, then open a utility</h2>
+                            <p>Recovery, storage, and cloud status stay separate from calculators and trackers.</p>
+                        </div>
+                        <p id="finance-tools-summary-label" class="finance-tools-summary-badge" role="status" aria-live="polite">
+                            Checking safeguards…
+                        </p>
+                    </div>
+
+                    <div class="finance-tools-status-grid" aria-label="Vault safeguard status">
+                        <article class="finance-tools-status-card" data-tools-status="mode" data-tone="neutral">
+                            <p class="finance-tools-status-card__label">Session</p>
+                            <p class="finance-tools-status-card__value" data-tools-status-value>Checking…</p>
+                            <p class="finance-tools-status-card__detail" data-tools-status-detail>Checking the current session.</p>
+                        </article>
+                        <article class="finance-tools-status-card" data-tools-status="backup" data-tone="neutral">
+                            <p class="finance-tools-status-card__label">Recovery file</p>
+                            <p class="finance-tools-status-card__value" data-tools-status-value>Checking…</p>
+                            <p class="finance-tools-status-card__detail" data-tools-status-detail>Checking backup history.</p>
+                        </article>
+                        <article class="finance-tools-status-card" data-tools-status="storage" data-tone="neutral">
+                            <p class="finance-tools-status-card__label">Local protection</p>
+                            <p class="finance-tools-status-card__value" data-tools-status-value>Checking…</p>
+                            <p class="finance-tools-status-card__detail" data-tools-status-detail>Checking local persistence.</p>
+                        </article>
+                        <article class="finance-tools-status-card" data-tools-status="cloud" data-tone="neutral">
+                            <p class="finance-tools-status-card__label">Cloud sync</p>
+                            <p class="finance-tools-status-card__value" data-tools-status-value>Checking…</p>
+                            <p class="finance-tools-status-card__detail" data-tools-status-detail>Checking cloud availability.</p>
+                        </article>
+                    </div>
+
+                    <div class="finance-tools-action-groups">
+                        <section class="finance-tools-action-group" aria-labelledby="finance-tools-recovery-title">
+                            <div class="finance-tools-action-group__heading">
+                                <div>
+                                    <p class="finance-tools-eyebrow">Encrypted recovery</p>
+                                    <h3 id="finance-tools-recovery-title">Backup and restore</h3>
+                                </div>
+                                <i data-lucide="shield-check" class="w-5 h-5" aria-hidden="true"></i>
+                            </div>
+                            <p>Use an encrypted JSON backup for disaster recovery. Restore replaces the active vault.</p>
+                            <div class="finance-tools-action-list">
+                                <button id="finance-tools-download-backup" type="button" class="finance-tools-action finance-tools-action--primary"
+                                    data-finance-action="downloadBackupNow" data-tools-real-vault>
+                                    <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
+                                    <span>Download encrypted backup</span>
+                                </button>
+                                <button id="finance-tools-restore" type="button" class="finance-tools-action"
+                                    data-finance-action="openRestoreModal" data-tools-real-vault>
+                                    <i data-lucide="rotate-ccw" class="w-4 h-4" aria-hidden="true"></i>
+                                    <span>Restore from backup</span>
+                                </button>
+                                <button id="finance-tools-backup-settings" type="button" class="finance-tools-action"
+                                    data-finance-action="openBackupSettingsModal" data-tools-real-vault>
+                                    <i data-lucide="calendar-clock" class="w-4 h-4" aria-hidden="true"></i>
+                                    <span>Backup schedule</span>
+                                </button>
+                            </div>
+                        </section>
+
+                        <section class="finance-tools-action-group" aria-labelledby="finance-tools-portability-title">
+                            <div class="finance-tools-action-group__heading">
+                                <div>
+                                    <p class="finance-tools-eyebrow">Portability and sync</p>
+                                    <h3 id="finance-tools-portability-title">Copies and devices</h3>
+                                </div>
+                                <i data-lucide="cloud-cog" class="w-5 h-5" aria-hidden="true"></i>
+                            </div>
+                            <p>The readable archive is plaintext and is not a recovery backup. Store it more carefully.</p>
+                            <div class="finance-tools-action-list">
+                                <button id="finance-tools-cloud-settings" type="button" class="finance-tools-action"
+                                    data-finance-action="openFirebaseConfigModal" data-tools-real-config>
+                                    <i data-lucide="cloud" class="w-4 h-4" aria-hidden="true"></i>
+                                    <span>Cloud sync settings</span>
+                                </button>
+                                <button id="finance-tools-readable-export" type="button" class="finance-tools-action finance-tools-action--warning"
+                                    data-finance-action="exportReadableArchive" data-tools-real-vault>
+                                    <i data-lucide="file-warning" class="w-4 h-4" aria-hidden="true"></i>
+                                    <span>Export readable archive</span>
+                                </button>
+                            </div>
+                        </section>
+
+                        <section class="finance-tools-action-group" aria-labelledby="finance-tools-utilities-title">
+                            <div class="finance-tools-action-group__heading">
+                                <div>
+                                    <p class="finance-tools-eyebrow">Utilities</p>
+                                    <h3 id="finance-tools-utilities-title">Planning tools</h3>
+                                </div>
+                                <i data-lucide="wrench" class="w-5 h-5" aria-hidden="true"></i>
+                            </div>
+                            <p>Open a focused calculator or tracker without mixing it into backup and recovery actions.</p>
+                            <div class="finance-tools-action-list">
+                                <button type="button" class="finance-tools-action" data-finance-action="openCryptoRebalancingCalculator">
+                                    <i data-lucide="scale" class="w-4 h-4" aria-hidden="true"></i>
+                                    <span>Smart rebalancer</span>
+                                </button>
+                                <button type="button" class="finance-tools-action" data-finance-action="openFxOpportunityLab">
+                                    <i data-lucide="scan-search" class="w-4 h-4" aria-hidden="true"></i>
+                                    <span>FX spread scanner</span>
+                                </button>
+                                <button type="button" class="finance-tools-action" data-finance-action="openItemTracker">
+                                    <i data-lucide="package" class="w-4 h-4" aria-hidden="true"></i>
+                                    <span>Item tracker</span>
+                                </button>
+                            </div>
+                        </section>
+                        <section class="finance-tools-action-group finance-tools-release-gate"
+                            aria-labelledby="finance-tools-release-title">
+                            <div class="finance-tools-action-group__heading">
+                                <div>
+                                    <p class="finance-tools-eyebrow">Release QA</p>
+                                    <h3 id="finance-tools-release-title">Final readiness audit</h3>
+                                </div>
+                                <i data-lucide="badge-check" class="w-5 h-5" aria-hidden="true"></i>
+                            </div>
+                            <p>Preview-only checks combine accessibility, navigation, route layout, performance, and safeguard isolation without reading the real vault.</p>
+                            <div class="finance-tools-action-list">
+                                <button id="finance-tools-release-audit" type="button"
+                                    class="finance-tools-action finance-tools-action--primary"
+                                    data-finance-action="runFinanceReleaseAuditFromTools" data-tools-preview-only
+                                    aria-describedby="finance-release-audit-status" aria-disabled="true" disabled
+                                    title="Run release checks from an isolated Preview Mode session">
+                                    <i data-lucide="shield-check" class="w-4 h-4" aria-hidden="true"></i>
+                                    <span>Run Preview release audit</span>
+                                </button>
+                                <p id="finance-release-audit-status" class="finance-tools-release-status"
+                                    role="status" aria-live="polite" data-tone="neutral">
+                                    Open Preview Mode to run the release audit safely.
+                                </p>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                <div class="finance-view-layout" data-finance-view-slot="tools"></div>
+            </section>
         </div>
+
+        <!-- Phase 3B: Final Overview -->
+        <section class="finance-summary-grid" aria-labelledby="finance-overview-metrics-title">
+            <div class="finance-overview-metrics-heading">
+                <div>
+                    <p class="finance-overview-eyebrow">Core position</p>
+                    <h2 id="finance-overview-metrics-title">The numbers that matter now</h2>
+                    <p>Snapshots stay current while flow metrics follow the selected period.</p>
+                </div>
+                <div class="finance-scope-slider finance-overview-scope" data-scope-slider
+                    data-active-scope="selected_period" role="tablist" aria-label="Overview flow metric scope">
+                    <span class="finance-scope-indicator" aria-hidden="true"></span>
+                    <button type="button" class="finance-scope-button finance-scope-button--selected is-active"
+                        data-scope-option="selected_period" aria-pressed="true">Selected</button>
+                    <button type="button" class="finance-scope-button finance-scope-button--current"
+                        data-scope-option="current_month" aria-pressed="false">Current</button>
+                    <button type="button" class="finance-scope-button finance-scope-button--all"
+                        data-scope-option="all_time" aria-pressed="false">All-Time</button>
+                </div>
+            </div>
+
+            <div class="finance-overview-card-grid">
+                <article id="overview-cash-card"
+                    class="finance-summary-card finance-summary-card--primary finance-overview-card p-6 rounded-3xl text-white relative overflow-hidden"
+                    data-overview-card="cash_on_hand">
+                    <p class="finance-overview-card__label text-indigo-100" id="overview-cash-label">Cash on Hand</p>
+                    <h3 class="finance-overview-card__value" id="overview-cash-value">—</h3>
+                    <p class="finance-overview-card__caption text-indigo-200" id="overview-cash-caption">As of date unavailable</p>
+                    <p class="finance-overview-card__detail text-indigo-100" id="overview-cash-detail">Tracked cash; not a bank-reconciled balance</p>
+                </article>
+
+                <article id="overview-net-cash-flow-card"
+                    class="finance-summary-card finance-overview-card finance-overview-card--interactive p-6 rounded-3xl"
+                    data-overview-card="net_cash_flow">
+                    <div class="finance-balance-breakdown-trigger" role="button" tabindex="0"
+                        aria-label="Show net cash flow calculation">
+                        <p class="finance-overview-card__label" id="balance-label">Net Cash Flow</p>
+                        <h3 class="finance-overview-card__value" id="balance-display">—</h3>
+                        <p class="finance-overview-card__caption" id="balance-trend">For selected period</p>
+                        <p class="finance-overview-card__detail" id="overview-net-cash-flow-detail">Click to see the cash-flow breakdown</p>
+                    </div>
+                </article>
+
+                <article id="overview-spending-income-card"
+                    class="finance-summary-card finance-overview-card p-6 rounded-3xl"
+                    data-overview-card="spending_to_income">
+                    <p class="finance-overview-card__label" id="overview-spending-income-label">Spending to Income</p>
+                    <h3 class="finance-overview-card__value" id="overview-spending-income-value">n/a</h3>
+                    <p class="finance-overview-card__caption" id="overview-spending-income-caption">For selected period</p>
+                    <p class="finance-overview-card__detail" id="overview-spending-income-detail">Consumption spending divided by earned income</p>
+                </article>
+
+                <article id="overview-net-worth-card"
+                    class="finance-summary-card finance-overview-card p-6 rounded-3xl"
+                    data-overview-card="estimated_net_worth">
+                    <p class="finance-overview-card__label" id="overview-net-worth-label">Estimated Net Worth</p>
+                    <h3 class="finance-overview-card__value" id="overview-net-worth-value">—</h3>
+                    <p class="finance-overview-card__caption" id="overview-net-worth-caption">As of date unavailable</p>
+                    <p class="finance-overview-card__detail" id="overview-net-worth-detail">Market-value snapshot</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="finance-overview-attention" class="finance-overview-attention" aria-live="polite">
+            <div class="finance-overview-attention__heading">
+                <div>
+                    <p class="finance-overview-eyebrow">Needs attention</p>
+                    <h2 id="finance-overview-attention-title">Nothing needs immediate attention</h2>
+                </div>
+                <span id="finance-overview-attention-count" class="finance-overview-attention__count">All clear</span>
+            </div>
+            <div id="finance-overview-attention-list" class="finance-overview-attention__list">
+                <p class="finance-overview-attention__empty">Important data and liquidity issues will appear here.</p>
+            </div>
+            <p id="finance-overview-attention-more" class="finance-overview-attention__more" hidden></p>
+        </section>
 
         <div id="balance-calculation-modal"
             class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[70] hidden flex items-center justify-center p-4">
             <div class="bg-white rounded-3xl shadow-2xl shadow-slate-900/20 w-full max-w-md overflow-hidden">
                 <div class="p-6 border-b border-slate-100 flex items-start justify-between gap-4">
                     <div>
-                        <p class="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500">Total Balance</p>
-                        <h3 class="text-2xl font-bold text-slate-900 mt-1">Balance Calculation</h3>
+                        <p class="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-500" id="balance-calc-eyebrow">Net Cash Flow</p>
+                        <h3 class="text-2xl font-bold text-slate-900 mt-1" id="balance-calc-title">Cash Flow Calculation</h3>
                         <p class="text-sm text-slate-500 mt-1" id="balance-calc-scope">Selected period</p>
                     </div>
                     <button type="button" onclick="closeBalanceCalculationModal()" data-balance-calc-close
@@ -353,28 +563,28 @@
                 </div>
                 <div class="p-6 space-y-3">
                     <div class="flex items-center justify-between gap-3">
-                        <span class="text-sm font-semibold text-slate-500">Income</span>
+                        <span class="text-sm font-semibold text-slate-500" id="balance-calc-income-label">Earned Income</span>
                         <span class="text-base font-bold text-emerald-600" id="balance-calc-income">₱0.00</span>
                     </div>
                     <div class="flex items-center justify-between gap-3">
-                        <span class="text-sm font-semibold text-slate-500">Non-Income Cash In</span>
+                        <span class="text-sm font-semibold text-slate-500" id="balance-calc-other-cash-in-label">Other Cash In</span>
                         <span class="text-base font-bold text-sky-600" id="balance-calc-non-income">₱0.00</span>
                     </div>
                     <div class="flex items-center justify-between gap-3">
-                        <span class="text-sm font-semibold text-slate-500">Expenses</span>
+                        <span class="text-sm font-semibold text-slate-500" id="balance-calc-expense-label">Spending</span>
                         <span class="text-base font-bold text-rose-600" id="balance-calc-expenses">-₱0.00</span>
                     </div>
                     <div id="balance-calc-adjustment-row"
                         class="hidden flex items-center justify-between gap-3 pt-1">
-                        <span class="text-sm font-semibold text-slate-500">Cash timing adjustment</span>
+                        <span class="text-sm font-semibold text-slate-500">Other cash activity</span>
                         <span class="text-base font-bold text-slate-700" id="balance-calc-adjustment">₱0.00</span>
                     </div>
                     <div class="border-t border-slate-100 pt-4 mt-4 flex items-center justify-between gap-3">
-                        <span class="text-sm font-black text-slate-700">Total Balance</span>
+                        <span class="text-sm font-black text-slate-700" id="balance-calc-total-label">Net Cash Flow</span>
                         <span class="text-xl font-black text-indigo-600" id="balance-calc-total">₱0.00</span>
                     </div>
                     <p class="text-xs text-slate-400 leading-relaxed" id="balance-calc-note">
-                        Income plus Non-Income Cash In minus Expenses equals the scoped balance.
+                        Earned Income plus Other Cash In minus Spending equals Net Cash Flow for this scope.
                     </p>
                 </div>
             </div>
@@ -399,6 +609,70 @@
             <div id="crypto-duplicate-review-list" class="hidden mt-4 space-y-3"></div>
         </div>
 
+        <!-- Phase 4D Reports Coordinator -->
+        <section id="finance-reports-coordinator" class="finance-reports-coordinator"
+            aria-labelledby="finance-reports-coordinator-title" tabindex="-1">
+            <div class="finance-reports-coordinator__header">
+                <div>
+                    <p class="finance-reports-eyebrow">Shared report scope</p>
+                    <h2 id="finance-reports-coordinator-title">One period for every flow report</h2>
+                    <p id="finance-reports-period">Preparing report scope…</p>
+                </div>
+                <div class="finance-reports-coordinator__actions">
+                    <button type="button" data-finance-reports-action="export_csv">
+                        <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
+                        Export CSV
+                    </button>
+                    <button type="button" data-finance-reports-action="export_pdf" data-action-tone="primary">
+                        <i data-lucide="file-text" class="w-4 h-4" aria-hidden="true"></i>
+                        Export PDF
+                    </button>
+                </div>
+            </div>
+            <div class="finance-reports-scope-controls">
+                <div class="finance-scope-slider finance-reports-scope-slider" data-scope-slider
+                    data-active-scope="selected_period" role="group" aria-label="Reports flow metric scope">
+                    <span class="finance-scope-indicator" aria-hidden="true"></span>
+                    <button type="button" class="finance-scope-button finance-scope-button--selected is-active"
+                        data-scope-option="selected_period" aria-pressed="true">Selected</button>
+                    <button type="button" class="finance-scope-button finance-scope-button--current"
+                        data-scope-option="current_month" aria-pressed="false">Current</button>
+                    <button type="button" class="finance-scope-button finance-scope-button--all"
+                        data-scope-option="all_time" aria-pressed="false">All-Time</button>
+                </div>
+                <label class="finance-reports-filter-field" data-report-period-control>
+                    <span>Month</span>
+                    <select id="reports-filter-month" data-filter-month aria-label="Reports month"></select>
+                </label>
+                <label class="finance-reports-filter-field" data-report-period-control>
+                    <span>Year</span>
+                    <select id="reports-filter-year" data-filter-year aria-label="Reports year"></select>
+                </label>
+            </div>
+            <div class="finance-reports-position-heading">
+                <div>
+                    <p class="finance-reports-eyebrow">Position comparison</p>
+                    <h3>Same as-of date, two explicit valuation bases</h3>
+                </div>
+                <p id="finance-reports-position-as-of">As-of snapshot pending</p>
+            </div>
+            <div class="finance-reports-position-grid">
+                <article class="finance-reports-position" data-report-basis="market">
+                    <span>Estimated Net Worth</span>
+                    <strong id="finance-reports-market-value">n/a</strong>
+                    <small>Market-value snapshot</small>
+                    <p id="finance-reports-market-detail">Waiting for market-value reconciliation</p>
+                </article>
+                <article class="finance-reports-position" data-report-basis="book">
+                    <span>Estimated Net Worth</span>
+                    <strong id="finance-reports-book-value">n/a</strong>
+                    <small>Current book-value estimate</small>
+                    <p id="finance-reports-book-detail">Waiting for book-value reconciliation</p>
+                </article>
+            </div>
+            <p class="finance-reports-basis-note">Flow cards follow the shared period above. Position cards remain current as-of snapshots; the book-value estimate is not a saved month-end statement.</p>
+        </section>
+
         <div id="business-kpi-panel" class="finance-glass-panel bg-white rounded-3xl border border-slate-200 shadow-sm p-4 md:p-5">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
@@ -406,27 +680,27 @@
                     <p id="business-kpi-period" class="text-xs text-slate-500">Scope: selected period</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button onclick="refreshCryptoExpenseDuplicateReview({ notify: true, forceToast: true })"
+                    <button type="button" onclick="refreshCryptoExpenseDuplicateReview({ notify: true, forceToast: true })"
                         class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-xs font-bold border border-amber-200 flex items-center gap-2">
                         <i data-lucide="search" class="w-3 h-3"></i>
                         Crypto Review
                     </button>
-                    <button onclick="openROIModal()"
+                    <button type="button" onclick="openROIModal()"
                         class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold border border-rose-200 flex items-center gap-2">
                         <i data-lucide="calculator" class="w-3 h-3"></i>
                         ROI Calc
                     </button>
-                    <button onclick="openQBRModal()"
+                    <button type="button" onclick="openQBRModal()"
                         class="px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-xl text-xs font-bold border border-violet-200 flex items-center gap-2">
                         <i data-lucide="bar-chart-3" class="w-3 h-3"></i>
                         QBR
                     </button>
-                    <button onclick="openAGMModal()"
+                    <button type="button" onclick="openAGMModal()"
                         class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-200 flex items-center gap-2">
                         <i data-lucide="target" class="w-3 h-3"></i>
                         AGM
                     </button>
-                    <button onclick="openMonthlyCloseModal()"
+                    <button type="button" onclick="openMonthlyCloseModal()"
                         class="px-3 py-1.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 rounded-xl text-xs font-bold border border-cyan-200 flex items-center gap-2">
                         <i data-lucide="clipboard-check" class="w-3 h-3"></i>
                         Monthly Close
@@ -450,11 +724,11 @@
                     <p id="kpi-invest-trend" class="text-[11px] font-bold text-slate-400 mt-1">—</p>
                 </div>
 
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                    <p class="text-[10px] font-black uppercase tracking-wide text-slate-500">Estimated Net Worth</p>
+                <div id="kpi-networth-card" class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p id="kpi-networth-label" class="text-[10px] font-black uppercase tracking-wide text-slate-500">Estimated Net Worth (Market)</p>
                     <p id="kpi-networth-value" class="text-2xl font-black text-slate-800 mt-1">—</p>
-                    <p id="kpi-networth-detail" class="text-[11px] text-slate-500 mt-1">Cash + receivables + crypto -
-                        debt</p>
+                    <p id="kpi-networth-detail" class="text-[11px] text-slate-500 mt-1">Cash + receivables + crypto +
+                        fixed assets - liabilities</p>
                     <p id="kpi-networth-trend" class="text-[11px] font-bold text-slate-400 mt-1">—</p>
                 </div>
 
@@ -469,26 +743,25 @@
             <!-- Financial Health Ratios Row -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
                 <div class="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-slate-50 p-3">
-                    <p class="text-[10px] font-black uppercase tracking-wide text-blue-500">Runway</p>
+                    <p class="text-[10px] font-black uppercase tracking-wide text-blue-500" data-descriptor-key="runway">Liquidity Runway</p>
                     <p id="kpi-runway-value" class="text-2xl font-black text-slate-800 mt-1">—</p>
                     <p id="kpi-runway-detail" class="text-[11px] text-slate-500 mt-1">Months on current cash</p>
                 </div>
                 <div class="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-slate-50 p-3">
-                    <p class="text-[10px] font-black uppercase tracking-wide text-indigo-500">Expense-to-Income</p>
+                    <p class="text-[10px] font-black uppercase tracking-wide text-indigo-500">Spending-to-Income</p>
                     <p id="kpi-expense-ratio-value" class="text-2xl font-black text-slate-800 mt-1">—</p>
                     <p id="kpi-expense-ratio-detail" class="text-[11px] text-slate-500 mt-1">Lower is leaner (&lt;70%)
                     </p>
                 </div>
                 <div class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-slate-50 p-3">
-                    <p class="text-[10px] font-black uppercase tracking-wide text-emerald-500">Emergency Fund</p>
+                    <p class="text-[10px] font-black uppercase tracking-wide text-emerald-500" data-descriptor-key="emergency fund">Emergency Fund (Proxy)</p>
                     <p id="kpi-emergency-fund-value" class="text-2xl font-black text-slate-800 mt-1">—</p>
                     <p id="kpi-emergency-fund-detail" class="text-[11px] text-slate-500 mt-1">Months covered</p>
                 </div>
                 <div class="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-slate-50 p-3">
-                    <p class="text-[10px] font-black uppercase tracking-wide text-amber-500">Current Ratio</p>
+                    <p id="kpi-current-ratio-label" class="text-[10px] font-black uppercase tracking-wide text-amber-500" data-descriptor-key="current ratio">Current Ratio (Proxy)</p>
                     <p id="kpi-current-ratio-value" class="text-2xl font-black text-slate-800 mt-1">—</p>
-                    <p id="kpi-current-ratio-detail" class="text-[11px] text-slate-500 mt-1">Liquid / liabilities
-                        (&gt;1.5)</p>
+                    <p id="kpi-current-ratio-detail" class="text-[11px] text-slate-500 mt-1">Includes receivables and all liabilities; not 30-day coverage</p>
                 </div>
             </div>
 
@@ -532,8 +805,9 @@
                             class="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs font-bold text-slate-300">Live</span>
                     </div>
                     <div class="relative z-10 mt-6">
-                        <p class="mb-1 text-xs font-bold text-slate-400">Portfolio Value</p>
+                        <p class="mb-1 text-xs font-bold text-slate-400">Market Value</p>
                         <h3 class="text-3xl font-black text-white" id="crypto-total-display">₱0.00</h3>
+                        <p id="crypto-total-caption" class="mt-1 text-[10px] font-semibold text-slate-500">Waiting for current prices</p>
                         <div class="mt-2 flex items-center gap-2">
                             <span id="crypto-pnl-display" class="text-xs font-bold text-slate-400">--</span>
                             <span class="text-[10px] text-slate-500">Unrealized P/L</span>
@@ -597,78 +871,59 @@
             </div>
         </section>
 
-        <div id="storage-diagnostics-panel" class="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 md:p-5">
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <section id="storage-diagnostics-panel" class="finance-tools-diagnostics">
+            <div class="finance-tools-diagnostics__header">
                 <div>
-                    <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide">Storage Diagnostics</h3>
-                    <p class="text-xs text-slate-500">Local persistence health and source selection</p>
+                    <p class="finance-tools-eyebrow">Advanced</p>
+                    <h3>Technical storage details</h3>
+                    <p id="tools-technical-summary">Checking storage sources…</p>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="copyStorageDiagnosticsJSON()"
-                        class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-200 flex items-center gap-2">
-                        <i data-lucide="copy" class="w-3 h-3"></i>
-                        Copy JSON
+                <div class="finance-tools-diagnostics__actions">
+                    <button type="button" onclick="copyStorageDiagnosticsJSON()">
+                        <i data-lucide="copy" class="w-4 h-4" aria-hidden="true"></i>
+                        Copy diagnostics
                     </button>
-                    <button onclick="openFirebaseConfigModal()"
-                        class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold border border-emerald-200 flex items-center gap-2">
-                        <i data-lucide="cloud" class="w-3 h-3"></i>
-                        Cloud Sync Config
-                    </button>
-                    <button onclick="refreshStorageDiagnosticsPanel()"
-                        class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 flex items-center gap-2">
-                        <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                    <button type="button" onclick="refreshStorageDiagnosticsPanel()">
+                        <i data-lucide="refresh-cw" class="w-4 h-4" aria-hidden="true"></i>
                         Refresh
                     </button>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-1">
-                    <p class="font-bold text-slate-700">Resolver</p>
-                    <p class="text-slate-500">Preferred source: <span id="diag-source"
-                            class="font-bold text-slate-700">—</span>
-                    </p>
-                    <p class="text-slate-500">Sync updated: <span id="diag-sync-updated"
-                            class="font-bold text-slate-700">—</span></p>
-                    <p class="text-slate-500">Conflict strategy: <span id="diag-conflict-strategy"
-                            class="font-bold text-slate-700">—</span></p>
+            <details class="finance-tools-diagnostics__details">
+                <summary>Show storage source details</summary>
+                <div class="finance-tools-diagnostics__grid">
+                    <div class="finance-tools-diagnostics__source">
+                        <h4>Resolver</h4>
+                        <p>Preferred source: <strong id="diag-source">—</strong></p>
+                        <p>Sync updated: <strong id="diag-sync-updated">—</strong></p>
+                        <p>Conflict strategy: <strong id="diag-conflict-strategy">—</strong></p>
+                    </div>
+
+                    <div class="finance-tools-diagnostics__source">
+                        <h4>Browser storage</h4>
+                        <p>Status: <strong id="diag-local-status">—</strong></p>
+                        <p>Approximate size: <strong id="diag-local-size">—</strong></p>
+                        <p>Database updated: <strong id="diag-local-updated">—</strong></p>
+                    </div>
+
+                    <div class="finance-tools-diagnostics__source">
+                        <h4>IndexedDB</h4>
+                        <p>Status: <strong id="diag-idb-status">—</strong></p>
+                        <p>Approximate size: <strong id="diag-idb-size">—</strong></p>
+                        <p>Database updated: <strong id="diag-idb-updated">—</strong></p>
+                        <p>Last write: <strong id="diag-idb-write">—</strong></p>
+                    </div>
                 </div>
 
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-1">
-                    <p class="font-bold text-slate-700">localStorage</p>
-                    <p class="text-slate-500">Status: <span id="diag-local-status"
-                            class="font-bold text-slate-700">—</span>
-                    </p>
-                    <p class="text-slate-500">Approx size: <span id="diag-local-size"
-                            class="font-bold text-slate-700">—</span>
-                    </p>
-                    <p class="text-slate-500">DB updated: <span id="diag-local-updated"
-                            class="font-bold text-slate-700">—</span></p>
-                </div>
+                <p id="diag-counts" class="finance-tools-diagnostics__counts">Tx — • Bills — • Debts — • Cards — •
+                    Installments — • Lent — • Crypto — • Wishlist — • Assets — • Closes — • KPI — • Forecast — •
+                    Statements — • Undo —</p>
+            </details>
+            <p id="diag-status" class="finance-tools-diagnostics__status" role="status" aria-live="polite">Waiting for refresh…</p>
+        </section>
 
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-1">
-                    <p class="font-bold text-slate-700">IndexedDB</p>
-                    <p class="text-slate-500">Status: <span id="diag-idb-status"
-                            class="font-bold text-slate-700">—</span>
-                    </p>
-                    <p class="text-slate-500">Approx size: <span id="diag-idb-size"
-                            class="font-bold text-slate-700">—</span>
-                    </p>
-                    <p class="text-slate-500">DB updated: <span id="diag-idb-updated"
-                            class="font-bold text-slate-700">—</span>
-                    </p>
-                    <p class="text-slate-500">Last IDB write: <span id="diag-idb-write"
-                            class="font-bold text-slate-700">—</span></p>
-                </div>
-            </div>
-
-            <p id="diag-counts" class="mt-3 text-xs font-bold text-slate-600">Tx — • Bills — • Debts — • Lent — • Crypto
-                — •
-                Wishlist — • Closes — • KPI — • Forecast — • Statements — • Undo —</p>
-            <p id="diag-status" class="mt-1 text-[11px] text-slate-400">Waiting for refresh...</p>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div id="finance-legacy-dashboard-grid" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
             <!-- Left: Transactions & Tools -->
             <div class="lg:col-span-8 space-y-6">
@@ -722,115 +977,273 @@
                 <div id="finance-card-ledger"
                     class="finance-glass-panel bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
                     data-finance-card="ledger" data-finance-card-tone="ledger" tabindex="-1">
-                    <div class="p-4 sm:p-6 border-b border-slate-100 flex flex-wrap items-center gap-3">
-                        <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-                            <h2 class="text-xl font-bold text-slate-800 shrink-0">Recent Movements</h2>
-                            <span class="finance-card-shortcut">Option + Space</span>
-                            <div class="finance-inline-filter-group">
-                                <select id="report-scope" aria-label="Report filter" class="finance-inline-filter-select shrink-0">
-                                    <option value="selected_period">Report: Selected</option>
-                                    <option value="all_records">Report: All records</option>
-                                </select>
-                                <select id="filter-month" data-filter-month aria-label="Filter month"
-                                    class="finance-inline-filter-select shrink-0">
-                                    <!-- Populated by JS -->
-                                </select>
-                                <select id="filter-year" data-filter-year aria-label="Filter year"
-                                    class="finance-inline-filter-select shrink-0">
-                                    <!-- Populated by JS -->
-                                </select>
+                    <div class="finance-activity-header p-4 sm:p-6 border-b border-slate-100">
+                        <div class="finance-activity-heading">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h2 class="text-xl font-bold text-slate-800">Recent Movements</h2>
+                                <span class="finance-card-shortcut">Option + Space</span>
                             </div>
-                            <button onclick="exportToCSV()"
-                                class="text-xs font-bold text-indigo-500 hover:bg-indigo-50 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
-                                <i data-lucide="download" class="w-3 h-3 inline mr-1"></i> Export CSV
-                            </button>
-                            <button onclick="exportToPDF()"
-                                class="text-xs font-bold text-purple-500 hover:bg-purple-50 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
-                                <i data-lucide="file-text" class="w-3 h-3 inline mr-1"></i> Export PDF
-                            </button>
-                            <button onclick="openImportModal()"
-                                class="text-xs font-bold text-emerald-600 hover:bg-emerald-50 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
-                                <i data-lucide="upload" class="w-3 h-3 inline mr-1"></i> Import CSV
-                            </button>
-                            <button onclick="openCategorizationRulesModal()"
-                                class="text-xs font-bold text-amber-600 hover:bg-amber-50 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
-                                <i data-lucide="filter" class="w-3 h-3 inline mr-1"></i> Rules
+                            <p id="activity-filter-summary" class="finance-activity-filter-summary" aria-live="polite">Preparing movements…</p>
+                        </div>
+                        <div class="finance-inline-filter-group finance-activity-filter-grid">
+                            <label class="finance-activity-filter-field">
+                                <span>Export</span>
+                                <select id="report-scope" aria-label="Activity export range" class="finance-inline-filter-select">
+                                    <option value="selected_period">Filtered rows</option>
+                                    <option value="all_records">All records</option>
+                                </select>
+                            </label>
+                            <label class="finance-activity-filter-field">
+                                <span>Classification</span>
+                                <select id="activity-filter-type" aria-label="Filter Activity by canonical classification"
+                                    class="finance-inline-filter-select">
+                                    <option value="all">All movements</option>
+                                    <option value="cash_in">Cash In</option>
+                                    <option value="cash_out">Cash Out</option>
+                                    <option value="earned_income">Earned Income</option>
+                                    <option value="other_cash_in">Other Cash In</option>
+                                    <option value="spending">Spending</option>
+                                    <option value="settlements">Settlements</option>
+                                    <option value="transfers">Transfers</option>
+                                    <option value="position_changes">Assets &amp; Liabilities</option>
+                                    <option value="no_cash">No Cash Movement</option>
+                                    <option value="needs_review">Needs Review</option>
+                                </select>
+                            </label>
+                            <label class="finance-activity-filter-field">
+                                <span>Month</span>
+                                <select id="filter-month" data-filter-month aria-label="Filter Activity month"
+                                    class="finance-inline-filter-select">
+                                    <!-- Populated by JS -->
+                                </select>
+                            </label>
+                            <label class="finance-activity-filter-field">
+                                <span>Year</span>
+                                <select id="filter-year" data-filter-year aria-label="Filter Activity year"
+                                    class="finance-inline-filter-select">
+                                    <!-- Populated by JS -->
+                                </select>
+                            </label>
+                        </div>
+                        <div class="finance-activity-header-actions">
+                            <button id="activity-date-review-button" type="button"
+                                data-finance-action="openFinanceDateRepairModal" data-date-quality-status="healthy"
+                                aria-label="Review transaction dates">
+                                <i data-lucide="calendar-check" class="w-4 h-4"></i>
+                                <span id="activity-date-review-label">Dates checked</span>
+                                <span id="activity-date-review-count" class="finance-activity-action-count" hidden>0</span>
                             </button>
                             <button id="btn-refresh-recent-movements" type="button" onclick="refreshRecentMovementsData()"
-                                title="Refresh movement labels and crypto mirrors" aria-label="Refresh movement labels and crypto mirrors"
-                                class="text-xs font-bold text-sky-600 hover:bg-sky-50 px-3 py-1 rounded-full transition-colors shrink-0">
-                                <i data-lucide="refresh-cw" class="w-3 h-3 inline mr-1"></i> Refresh
+                                aria-label="Refresh movement labels and linked records">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                <span>Refresh</span>
                             </button>
-                            <button onclick="openMonthlyCloseModal()" id="monthly-close-btn"
-                                class="text-xs font-bold text-cyan-600 hover:bg-cyan-50 px-3 py-1 rounded-full transition-colors hidden sm:flex items-center gap-1.5 shrink-0">
-                                <i data-lucide="clipboard-check" class="w-3 h-3"></i>
-                                <span>Monthly Close</span>
-                                <span id="monthly-close-status"
-                                    class="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-cyan-100 text-cyan-700">Open</span>
-                            </button>
-                            <button onclick="undoLastDelete()"
-                                class="text-xs font-bold text-slate-600 hover:bg-slate-100 px-3 py-1 rounded-full transition-colors hidden sm:block shrink-0">
-                                <i data-lucide="rotate-ccw" class="w-3 h-3 inline mr-1"></i> Undo Delete
-                            </button>
-                        </div>
-                        <div class="flex items-center gap-2 ml-auto shrink-0">
-                            <button onclick="openPlanningModal()" title="Open planner" aria-label="Open planner"
-                                class="p-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200">
-                                <i data-lucide="rocket" class="w-5 h-5"></i>
-                            </button>
-                            <button onclick="openTransactionModal()" title="Add transaction"
-                                aria-label="Add transaction"
-                                class="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center gap-1.5">
-                                <i data-lucide="plus" class="w-5 h-5"></i>
-                                <span class="text-xs font-bold hidden lg:inline">Add</span>
+                            <details class="finance-activity-actions-menu">
+                                <summary><i data-lucide="ellipsis" class="w-4 h-4"></i><span>Actions</span></summary>
+                                <div>
+                                    <button type="button" onclick="exportToCSV()"><i data-lucide="download" class="w-4 h-4"></i> Export CSV</button>
+                                    <button type="button" onclick="exportToPDF()"><i data-lucide="file-text" class="w-4 h-4"></i> Export PDF</button>
+                                    <button type="button" onclick="openImportModal()"><i data-lucide="upload" class="w-4 h-4"></i> Import CSV</button>
+                                    <button type="button" onclick="openCategorizationRulesModal()"><i data-lucide="filter" class="w-4 h-4"></i> Categorization rules</button>
+                                    <button type="button" onclick="openMonthlyCloseModal()" id="monthly-close-btn">
+                                        <i data-lucide="clipboard-check" class="w-4 h-4"></i>
+                                        <span>Monthly Close</span>
+                                        <span id="monthly-close-status" class="finance-activity-action-count">Open</span>
+                                    </button>
+                                    <button type="button" onclick="undoLastDelete()"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Undo Delete</button>
+                                    <button type="button" onclick="openPlanningModal()"><i data-lucide="rocket" class="w-4 h-4"></i> Open planner</button>
+                                </div>
+                            </details>
+                            <button onclick="openTransactionModal()" type="button" class="finance-activity-add">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                                <span>Add entry</span>
                             </button>
                         </div>
                     </div>
                     <div class="px-4 sm:px-6 py-4 border-b border-slate-100 bg-slate-50/70">
-                        <details class="group" open>
+                        <details class="group">
                             <summary class="list-none cursor-pointer flex items-start justify-between gap-3">
                                 <div class="min-w-0">
-                                    <p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">How Balance Works</p>
-                                    <p class="text-sm font-bold text-slate-800 mt-1">Use this to read whether a movement changes your cash now, later, or is mainly recorded for tracking.</p>
+                                    <p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Cash versus spending</p>
+                                    <p class="text-sm font-bold text-slate-800 mt-1">See whether a movement changes cash, Spending, another asset, or a liability.</p>
                                 </div>
                                 <span class="shrink-0 mt-0.5 inline-flex items-center gap-1 text-xs font-bold text-indigo-600">
-                                    <span>Show Guide</span>
+                                    <span class="group-open:hidden">Show guide</span>
+                                    <span class="hidden group-open:inline">Hide guide</span>
                                     <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180"></i>
                                 </span>
                             </summary>
                             <div class="mt-4 grid gap-3 md:grid-cols-3">
                                 <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">Adds To Cash Now</p>
-                                    <p class="text-sm font-bold text-emerald-950 mt-2">Cash-in entries increase Total Balance right away.</p>
-                                    <p class="text-xs text-emerald-800 mt-2">This includes normal income you add manually, imported income, and Non-Income Cash In such as fiat crypto sell proceeds, lent repayments, refunds, reimbursements, asset sales, own-account cash transfers, and debt increases only when you explicitly mark that borrowing as cash received on a date.</p>
+                                    <p class="text-sm font-bold text-emerald-950 mt-2">Cash-in entries increase Net Cash Flow right away.</p>
+                                    <p class="text-xs text-emerald-800 mt-2">This includes normal income you add manually, imported income, and Other Cash In such as fiat crypto sell proceeds, lent repayments, refunds, reimbursements, asset sales, own-account cash transfers, and debt increases only when you explicitly mark that borrowing as cash received on a date.</p>
                                 </div>
                                 <div class="rounded-2xl border border-rose-200 bg-rose-50 p-4">
                                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-rose-700">Takes Cash Away Now</p>
-                                    <p class="text-sm font-bold text-rose-950 mt-2">Cash expenses, credit card payments, and BNPL payments reduce Total Balance immediately.</p>
+                                    <p class="text-sm font-bold text-rose-950 mt-2">Cash spending, credit card payments, and BNPL payments reduce Net Cash Flow immediately.</p>
                                     <p class="text-xs text-rose-800 mt-2">This covers regular expenses, bill payments paid by you, wishlist conversions once saved, reminder quick-adds saved as cash expenses, crypto buy expense mirrors, CSV or bridge expenses, debt repayments, credit card payment records, and installment/BNPL payments. Card and BNPL payments are cash leaving you now, even though they settle debt instead of creating a new purchase.</p>
                                 </div>
                                 <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4">
                                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Recorded, Not Cash Gone Yet</p>
-                                    <p class="text-sm font-bold text-blue-950 mt-2">Credit-card charges are shown in Recent Movements, but they do not lower Total Balance until you record the card payment.</p>
+                                    <p class="text-sm font-bold text-blue-950 mt-2">Credit-card charges count as Spending when purchased, but they do not lower Net Cash Flow until you record the card payment.</p>
                                     <p class="text-xs text-blue-800 mt-2">Debt increase entries belong here when they are only tracking that your liability grew. If the borrowing actually gave you money in hand then, use the borrowed-date option so that debt increase also adds to cash on that date.</p>
                                 </div>
                             </div>
                             <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                                 <p class="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Where These Movements Come From</p>
                                 <p class="text-sm text-slate-700 mt-2">Recent Movements includes transactions saved directly from Add Transaction, Non-Income Cash In entries, Reminders quick-add, Credit Card Payment, BNPL Payment, Electricity bill payment records, Debt activity, Wishlist conversion, CSV Import, bridge imports from the main app, and auto-created crypto buy/sell mirror entries. Bills, debts, credit cards, BNPL plans, and wishlist items only appear here after they create an actual transaction.</p>
-                                <p class="text-sm font-bold text-slate-800 mt-3">Quick rule: if you want Total Balance to reflect what you currently have on hand, save card purchases as credit-card charges and only reduce cash when you log the payment.</p>
+                                <p class="text-sm font-bold text-slate-800 mt-3">Quick rule: Spending records consumption when it happens; Net Cash Flow records when cash actually moves.</p>
                             </div>
                         </details>
                     </div>
-                    <div id="transaction-list"
+                    <div id="transaction-list" role="list" aria-label="Activity movements"
                         class="divide-y divide-slate-50 max-h-[500px] overflow-y-auto custom-scrollbar">
                         <div class="p-10 text-center text-slate-400">Decrypting vault...</div>
                     </div>
                 </div>
 
+                <!-- Phase 4B Plan Coordinator -->
+                <section id="finance-plan-coordinator" class="finance-plan-coordinator"
+                    aria-labelledby="finance-plan-coordinator-title" tabindex="-1">
+                    <div class="finance-plan-coordinator__header">
+                        <div>
+                            <p class="finance-plan-eyebrow">Monthly decision view</p>
+                            <h2 id="finance-plan-coordinator-title">Make commitments in the right order</h2>
+                            <p id="finance-plan-period">Preparing the current plan…</p>
+                        </div>
+                        <div class="finance-plan-coordinator__actions">
+                            <button type="button" data-finance-plan-action="manage_budgets">
+                                <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+                                Manage budgets
+                            </button>
+                            <button type="button" data-finance-plan-action="manage_goals" data-action-tone="primary">
+                                <i data-lucide="route" class="w-4 h-4"></i>
+                                Open planner
+                            </button>
+                        </div>
+                    </div>
+                    <div class="finance-plan-summary-grid" aria-label="Planning summary">
+                        <button type="button" class="finance-plan-summary" data-plan-domain="budget"
+                            data-finance-plan-action="focus_budgets" aria-label="Review monthly budgets">
+                            <span>Budget remaining</span>
+                            <strong id="finance-plan-budget-value">—</strong>
+                            <small id="finance-plan-budget-detail">No limits loaded</small>
+                        </button>
+                        <button type="button" class="finance-plan-summary" data-plan-domain="bills"
+                            data-finance-plan-action="focus_bills" aria-label="Review recurring bills">
+                            <span>Active bills</span>
+                            <strong id="finance-plan-bills-value">—</strong>
+                            <small id="finance-plan-bills-detail">Loading obligations</small>
+                        </button>
+                        <button type="button" class="finance-plan-summary" data-plan-domain="goals"
+                            data-finance-plan-action="focus_goals" aria-label="Review financial goals">
+                            <span>Active goals</span>
+                            <strong id="finance-plan-goals-value">—</strong>
+                            <small id="finance-plan-goals-detail">Loading targets</small>
+                        </button>
+                        <button type="button" class="finance-plan-summary" data-plan-domain="wishlist"
+                            data-finance-plan-action="focus_wishlist" aria-label="Review wishlist purchases">
+                            <span>Wishlist planned</span>
+                            <strong id="finance-plan-wishlist-value">—</strong>
+                            <small id="finance-plan-wishlist-detail">Loading purchases</small>
+                        </button>
+                    </div>
+                    <div class="finance-plan-attention">
+                        <div>
+                            <p class="finance-plan-eyebrow">Needs attention</p>
+                            <h3>Before adding another commitment</h3>
+                        </div>
+                        <div id="finance-plan-attention-list" class="finance-plan-attention-list" aria-live="polite">
+                            <p class="finance-plan-empty">Reviewing planning inputs…</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Phase 4C Wealth Coordinator -->
+                <section id="finance-wealth-coordinator" class="finance-wealth-coordinator"
+                    aria-labelledby="finance-wealth-coordinator-title" tabindex="-1">
+                    <div class="finance-wealth-coordinator__header">
+                        <div>
+                            <p class="finance-wealth-eyebrow">Unified position view</p>
+                            <h2 id="finance-wealth-coordinator-title">Assets and obligations, without mixing valuation bases</h2>
+                            <p id="finance-wealth-as-of">Preparing the current position…</p>
+                        </div>
+                        <div class="finance-wealth-coordinator__actions">
+                            <button type="button" data-finance-wealth-action="add_asset">
+                                <i data-lucide="plus" class="w-4 h-4" aria-hidden="true"></i>
+                                Add asset
+                            </button>
+                            <button type="button" data-finance-wealth-action="open_crypto" data-action-tone="primary">
+                                <i data-lucide="bitcoin" class="w-4 h-4" aria-hidden="true"></i>
+                                Open crypto
+                            </button>
+                        </div>
+                    </div>
+                    <div class="finance-wealth-position-grid" aria-label="Current wealth position">
+                        <article class="finance-wealth-position" data-wealth-basis="market">
+                            <span>Estimated Net Worth</span>
+                            <strong id="finance-wealth-market-value">n/a</strong>
+                            <small>Market-value snapshot</small>
+                            <p id="finance-wealth-market-assets">Waiting for market prices and reconciliation</p>
+                        </article>
+                        <article class="finance-wealth-position" data-wealth-basis="book">
+                            <span>Estimated Net Worth</span>
+                            <strong id="finance-wealth-book-value">n/a</strong>
+                            <small>Current book-value estimate</small>
+                            <p id="finance-wealth-book-assets">Waiting for book-value reconciliation</p>
+                        </article>
+                        <article class="finance-wealth-position" data-wealth-basis="cash">
+                            <span>Cash on hand</span>
+                            <strong id="finance-wealth-cash-value">n/a</strong>
+                            <small>Tracked cash, not a bank-verified balance</small>
+                        </article>
+                        <article class="finance-wealth-position" data-wealth-basis="liability">
+                            <span>Total liabilities</span>
+                            <strong id="finance-wealth-liability-value">n/a</strong>
+                            <small>Debt, cards, and contractual installments</small>
+                        </article>
+                    </div>
+                    <div id="finance-wealth-domains" class="finance-wealth-domain-grid" aria-label="Wealth accounts">
+                        <p class="finance-wealth-empty">Loading asset and obligation accounts…</p>
+                    </div>
+                    <div class="finance-wealth-attention">
+                        <div>
+                            <p class="finance-wealth-eyebrow">Needs attention</p>
+                            <h3>Inputs affecting the position</h3>
+                        </div>
+                        <div id="finance-wealth-attention-list" class="finance-wealth-attention-list" aria-live="polite">
+                            <p class="finance-wealth-empty">Reviewing valuations and effective dates…</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Monthly Budget Plan -->
+                <div id="finance-card-plan-budget"
+                    class="finance-plan-card bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
+                    data-finance-card="plan-budget" data-finance-card-tone="variance" tabindex="-1">
+                    <div class="finance-plan-card__header">
+                        <div class="finance-plan-card__title">
+                            <div class="bg-emerald-50 text-emerald-600 p-2 rounded-xl" data-finance-card-icon>
+                                <i data-lucide="wallet-minimal" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2>Monthly Budgets</h2>
+                                <p id="finance-plan-budget-caption">Current-month category limits</p>
+                            </div>
+                        </div>
+                        <button type="button" data-finance-plan-action="manage_budgets" class="finance-plan-card__primary-action">
+                            Manage budgets
+                        </button>
+                    </div>
+                    <div id="finance-plan-budget-panel" class="finance-plan-card__body">
+                        <p class="finance-plan-empty">Loading monthly budget capacity…</p>
+                    </div>
+                </div>
+
                 <!-- Wishlist -->
                 <div id="finance-card-wishlist"
-                    class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
+                    class="finance-plan-card bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
                     data-finance-card="wishlist" data-finance-card-tone="wishlist" tabindex="-1">
                     <div class="p-6 border-b border-slate-100 flex items-center justify-between">
                         <div class="flex items-center gap-3">
@@ -842,9 +1255,9 @@
                                 <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Option + W</p>
                             </div>
                         </div>
-                        <button onclick="openWishlistModal()"
+                        <button type="button" onclick="openWishlistModal()" aria-label="Add wishlist item"
                             class="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full transition-colors">
-                            + Add
+                            + Add item
                         </button>
                     </div>
                     <div id="wishlist-list" class="p-4 space-y-3">
@@ -867,7 +1280,7 @@
                                     Depreciation - Option + F</p>
                             </div>
                         </div>
-                        <button onclick="openAssetModal()"
+                        <button type="button" onclick="openAssetModal()" aria-label="Add fixed asset"
                             class="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1 rounded-full transition-colors">
                             + Add Asset
                         </button>
@@ -892,15 +1305,15 @@
                             </div>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <button onclick="openInstallmentAnalyticsModal()"
+                            <button type="button" onclick="openInstallmentAnalyticsModal()"
                                 class="text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 px-3 py-1.5 rounded-full transition-colors">
                                 Analytics
                             </button>
-                            <button onclick="openInstallmentBulkPaymentModal()"
+                            <button type="button" onclick="openInstallmentBulkPaymentModal()"
                                 class="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-full transition-colors">
                                 Pay Multiple
                             </button>
-                            <button onclick="openInstallmentPlanModal()"
+                            <button type="button" onclick="openInstallmentPlanModal()"
                                 class="text-xs font-bold text-violet-700 hover:text-violet-800 bg-violet-50 px-3 py-1.5 rounded-full transition-colors">
                                 + Add
                             </button>
@@ -939,10 +1352,13 @@
                     class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
                     data-finance-card="revenue" data-finance-card-tone="revenue" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="font-bold text-slate-800 flex items-center gap-2" data-descriptor-key="revenue diversification">
-                            <i data-lucide="git-branch" class="w-5 h-5 text-violet-600"></i>
-                            Revenue Mix
-                        </h2>
+                        <div>
+                            <h2 class="font-bold text-slate-800 flex items-center gap-2" data-descriptor-key="revenue diversification">
+                                <i data-lucide="git-branch" class="w-5 h-5 text-violet-600"></i>
+                                Revenue Mix
+                            </h2>
+                            <p id="reports-revenue-scope" class="finance-reports-card-scope">For selected period</p>
+                        </div>
                         <span class="finance-card-shortcut">Option + R</span>
                     </div>
                     <div id="revenue-diversification-panel">
@@ -955,18 +1371,14 @@
                     class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
                     data-finance-card="trends" data-finance-card-tone="trends" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="font-bold text-slate-800 flex items-center gap-2">
-                            <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
-                            Monthly Trends
-                        </h2>
-                        <div class="flex flex-wrap items-center justify-end gap-2">
-                            <span class="finance-card-shortcut">Option + T</span>
-                            <select id="trend-period" onchange="renderTrendsChart()"
-                                class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none font-bold">
-                                <option value="6">Last 6 Months</option>
-                                <option value="12">Last 12 Months</option>
-                            </select>
+                        <div>
+                            <h2 id="reports-trends-title" class="font-bold text-slate-800 flex items-center gap-2">
+                                <i data-lucide="trending-up" class="w-5 h-5 text-indigo-600"></i>
+                                Income and Spending Trend
+                            </h2>
+                            <p id="reports-trends-scope" class="finance-reports-card-scope">For selected period</p>
                         </div>
+                        <span class="finance-card-shortcut">Option + T</span>
                     </div>
                     <div class="relative h-48 w-full">
                         <canvas id="trendsChart"></canvas>
@@ -975,7 +1387,7 @@
 
                 <!-- Planning -->
                 <div id="finance-card-goals"
-                    class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                    class="finance-plan-card bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
                     data-finance-card="goals" data-finance-card-tone="goals" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="font-bold text-slate-800 flex items-center gap-2">
@@ -993,6 +1405,7 @@
                     <div id="goals-summary-list" class="space-y-2">
                         <div class="text-xs text-slate-400">No goals configured.</div>
                     </div>
+                    <p class="finance-plan-proxy-note">Progress compares current Cash on Hand with each target. Dedicated goal contributions are not tracked yet.</p>
                 </div>
 
                 <!-- Debts Section -->
@@ -1008,7 +1421,7 @@
                         </div>
                         <div class="flex flex-wrap items-center justify-end gap-2">
                             <span class="finance-card-shortcut">Option + D</span>
-                            <button onclick="openDebtModal()"
+                            <button type="button" onclick="openDebtModal()" aria-label="Add debt"
                                 class="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-3 py-1 rounded-full transition-colors">
                                 + Add
                             </button>
@@ -1045,7 +1458,7 @@
                         </div>
                         <div class="flex flex-wrap items-center justify-end gap-2">
                             <span class="finance-card-shortcut">Option + C</span>
-                            <button onclick="openCreditCardModal()"
+                            <button type="button" onclick="openCreditCardModal()" aria-label="Add credit card"
                                 class="text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 px-3 py-1 rounded-full transition-colors">
                                 + Add
                             </button>
@@ -1069,7 +1482,7 @@
                         </div>
                         <div class="flex flex-wrap items-center justify-end gap-2">
                             <span class="finance-card-shortcut">Option + L</span>
-                            <button onclick="toggleModal('lent-modal')"
+                            <button type="button" onclick="toggleModal('lent-modal')" aria-label="Track person for money lent"
                                 class="text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full transition-colors">
                                 + Track Person
                             </button>
@@ -1082,7 +1495,7 @@
 
                 <!-- Bills Section -->
                 <div id="finance-card-bills"
-                    class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                    class="finance-plan-card bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
                     data-finance-card="bills" data-finance-card-tone="bills" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
                         <div class="flex items-center gap-2">
@@ -1093,9 +1506,10 @@
                         </div>
                         <div class="flex flex-wrap items-center justify-end gap-2">
                             <span class="finance-card-shortcut">Option + B</span>
-                            <button onclick="openBillModal()"
-                                class="text-slate-400 hover:text-indigo-600 transition-colors">
+                            <button type="button" onclick="openBillModal()" aria-label="Add recurring bill"
+                                class="finance-plan-card__primary-action">
                                 <i data-lucide="plus" class="w-5 h-5"></i>
+                                <span>Add bill</span>
                             </button>
                         </div>
                     </div>
@@ -1107,10 +1521,13 @@
                     class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200"
                     data-finance-card="spend" data-finance-card-tone="spend" tabindex="-1">
                     <div class="flex justify-between items-center gap-3 mb-4">
-                        <h2 class="text-lg font-bold flex items-center gap-2 text-slate-800">
-                            <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-600"></i>
-                            Spend Breakdown
-                        </h2>
+                        <div>
+                            <h2 class="text-lg font-bold flex items-center gap-2 text-slate-800">
+                                <i data-lucide="pie-chart" class="w-5 h-5 text-indigo-600"></i>
+                                Spend Breakdown
+                            </h2>
+                            <p id="reports-spend-scope" class="finance-reports-card-scope">For selected period</p>
+                        </div>
                         <span class="finance-card-shortcut">Option + S</span>
                     </div>
                     <div class="relative h-64 w-full mb-6">
@@ -1118,7 +1535,8 @@
                     </div>
 
                     <div class="border-t border-slate-100 pt-4">
-                        <h3 class="text-sm font-bold text-slate-500 mb-3">Budget Adherence</h3>
+                        <h3 class="text-sm font-bold text-slate-500">Budget Adherence</h3>
+                        <p id="reports-budget-scope-note" class="finance-reports-card-scope mb-3">Choose one month for monthly budget comparison</p>
                         <div id="budget-breakdown" class="space-y-4">
                             <p class="text-xs text-slate-400 italic text-center">Set budgets to see progress.</p>
                         </div>
@@ -1130,10 +1548,13 @@
                     class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200"
                     data-finance-card="variance" data-finance-card-tone="variance" tabindex="-1">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-bold flex items-center gap-2 text-slate-800">
-                            <i data-lucide="scale" class="w-5 h-5 text-amber-600"></i>
-                            Budget Variance
-                        </h2>
+                        <div>
+                            <h2 class="text-lg font-bold flex items-center gap-2 text-slate-800">
+                                <i data-lucide="scale" class="w-5 h-5 text-amber-600"></i>
+                                Budget Variance
+                            </h2>
+                            <p id="reports-variance-scope" class="finance-reports-card-scope">Choose one month for monthly budget comparison</p>
+                        </div>
                         <span class="finance-card-shortcut">Option + V</span>
                     </div>
                     <div id="variance-panel">
@@ -1143,6 +1564,34 @@
             </div>
         </div>
     </main>
+
+    <div id="finance-modal-portal"></div>
+
+    <!-- Modal: Repair transaction dates -->
+    <div id="finance-date-repair-modal"
+        class="fixed inset-0 z-[145] bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4"
+        role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="finance-date-repair-title">
+        <div class="finance-date-repair-panel bg-white rounded-3xl w-full max-w-3xl max-h-[88vh] shadow-2xl overflow-hidden flex flex-col">
+            <div class="finance-date-repair-header p-5 sm:p-6 border-b border-slate-100 flex items-start justify-between gap-4">
+                <div>
+                    <p class="finance-tools-eyebrow">Data quality</p>
+                    <h2 id="finance-date-repair-title" class="text-xl sm:text-2xl font-black text-slate-800 mt-1">Repair transaction dates</h2>
+                    <p id="finance-date-repair-summary" class="text-sm text-slate-500 mt-2"></p>
+                </div>
+                <button id="finance-date-repair-close" type="button"
+                    class="shrink-0 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                    aria-label="Close date repair">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="finance-date-repair-list" class="finance-date-repair-list p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1"></div>
+            <div class="px-5 sm:px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-4">
+                <p class="text-xs text-slate-500">Each saved repair is encrypted with the rest of your vault.</p>
+                <button id="finance-date-repair-done" type="button"
+                    class="px-4 py-2.5 rounded-xl bg-slate-800 text-white text-sm font-bold hover:bg-slate-700">Done</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Add/Edit Transaction -->
     <div id="transaction-modal"
@@ -3214,13 +3663,14 @@
 
     <!-- Modal: Backup Settings -->
     <div id="backup-settings-modal"
-        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4"
+        role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="backup-settings-title">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
             <div class="flex items-center gap-3 mb-6">
                 <div class="bg-blue-100 p-2 rounded-xl text-blue-600">
                     <i data-lucide="hard-drive" class="w-6 h-6"></i>
                 </div>
-                <h3 class="text-2xl font-bold text-slate-800">Backup Settings</h3>
+                <h3 id="backup-settings-title" class="text-2xl font-bold text-slate-800">Backup Settings</h3>
             </div>
 
             <div class="space-y-4">
@@ -3229,7 +3679,7 @@
                         <p class="font-bold text-slate-700">Auto-backup</p>
                         <p class="text-xs text-slate-400">Daily automatic backups</p>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
+                    <label class="relative inline-flex items-center cursor-pointer" aria-label="Enable daily automatic backups">
                         <input type="checkbox" id="auto-backup-toggle" class="sr-only peer" checked>
                         <div
                             class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600">
@@ -3258,9 +3708,9 @@
             </div>
 
             <div class="flex gap-3 pt-6">
-                <button onclick="toggleModal('backup-settings-modal')"
+                <button type="button" onclick="toggleModal('backup-settings-modal')"
                     class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Close</button>
-                <button onclick="runFinancePendingAction('saveBackupSettingsModal', this, saveBackupSettingsModal)"
+                <button type="button" onclick="runFinancePendingAction('saveBackupSettingsModal', this, saveBackupSettingsModal)"
                     class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">Save
                     Settings</button>
             </div>
@@ -3269,13 +3719,14 @@
 
     <!-- Modal: Restore Backup -->
     <div id="restore-modal"
-        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        class="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4"
+        role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="restore-backup-title">
         <div class="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
             <div class="flex items-center gap-3 mb-6">
                 <div class="bg-emerald-100 p-2 rounded-xl text-emerald-600">
                     <i data-lucide="upload" class="w-6 h-6"></i>
                 </div>
-                <h3 class="text-2xl font-bold text-slate-800">Restore Backup</h3>
+                <h3 id="restore-backup-title" class="text-2xl font-bold text-slate-800">Restore Backup</h3>
             </div>
 
             <input type="file" id="restore-file-input" accept=".json" class="hidden"
@@ -3303,7 +3754,7 @@
                     <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5"></i>
                     <div>
                         <p class="font-bold text-amber-800 text-sm">Warning</p>
-                        <p class="text-xs text-amber-700">This will REPLACE all current data and sync to Firebase.</p>
+                        <p id="restore-impact-message" class="text-xs text-amber-700">This replaces the active vault. If cloud sync is enabled, the restored vault will sync after validation.</p>
                     </div>
                 </div>
             </div>
@@ -3313,16 +3764,16 @@
                     <i data-lucide="file-json" class="w-10 h-10 text-slate-400"></i>
                 </div>
                 <p class="text-slate-500 mb-4">Select a backup file to restore</p>
-                <button onclick="document.getElementById('restore-file-input').click()"
+                <button type="button" onclick="document.getElementById('restore-file-input').click()"
                     class="px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">
                     Choose File
                 </button>
             </div>
 
             <div class="flex gap-3 pt-6">
-                <button onclick="closeRestoreModal()"
+                <button type="button" onclick="closeRestoreModal()"
                     class="flex-1 py-4 bg-slate-100 rounded-2xl font-bold hover:bg-slate-200">Cancel</button>
-                <button onclick="confirmRestore()" id="restore-confirm-btn"
+                <button type="button" onclick="confirmRestore()" id="restore-confirm-btn"
                     class="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 hidden">
                     Restore & Sync
                 </button>
@@ -3691,7 +4142,8 @@
                     <h3 class="text-2xl font-bold text-slate-800">Planner & Scenario Simulator</h3>
                     <p class="text-xs text-slate-500 mt-1">Goals, 45-day forecast, and wishlist affordability.</p>
                 </div>
-                <button onclick="toggleModal('planning-modal')" class="text-slate-400 hover:text-slate-600">
+                <button type="button" onclick="toggleModal('planning-modal')" aria-label="Close planner"
+                    class="text-slate-400 hover:text-slate-600">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -3704,26 +4156,26 @@
                         </div>
                         <input type="hidden" id="pg-id">
                         <div class="grid grid-cols-2 gap-2 mb-2">
-                            <select id="pg-type" class="p-2 bg-white border rounded-lg text-sm">
+                            <select id="pg-type" aria-label="Goal type" class="p-2 bg-white border rounded-lg text-sm">
                                 <option value="emergency_fund">Emergency Fund</option>
                                 <option value="debt_payoff">Debt Payoff</option>
                                 <option value="savings">Savings</option>
                                 <option value="purchase">Purchase</option>
                             </select>
-                            <select id="pg-status" class="p-2 bg-white border rounded-lg text-sm">
+                            <select id="pg-status" aria-label="Goal status" class="p-2 bg-white border rounded-lg text-sm">
                                 <option value="active">Active</option>
                                 <option value="paused">Paused</option>
                                 <option value="completed">Completed</option>
                             </select>
                         </div>
-                        <input id="pg-name" type="text" placeholder="Goal name"
+                        <input id="pg-name" type="text" placeholder="Goal name" aria-label="Goal name"
                             class="w-full mb-2 p-2 bg-white border rounded-lg text-sm">
                         <div class="grid grid-cols-2 gap-2 mb-2">
-                            <input id="pg-target" type="number" step="0.01" placeholder="Target amount"
+                            <input id="pg-target" type="number" step="0.01" placeholder="Target amount" aria-label="Goal target amount"
                                 class="p-2 bg-white border rounded-lg text-sm">
-                            <input id="pg-date" type="date" class="p-2 bg-white border rounded-lg text-sm">
+                            <input id="pg-date" type="date" aria-label="Goal target date" class="p-2 bg-white border rounded-lg text-sm">
                         </div>
-                        <input id="pg-linked-category" type="text" placeholder="Linked category (optional)"
+                        <input id="pg-linked-category" type="text" placeholder="Linked category (optional)" aria-label="Goal linked category"
                             class="w-full mb-3 p-2 bg-white border rounded-lg text-sm">
                         <button onclick="runFinancePendingAction('saveFinancialGoal', this, saveFinancialGoal)"
                             class="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700">
@@ -3736,17 +4188,17 @@
                     <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                         <h4 class="font-bold text-slate-700 mb-3">Scenario Inputs</h4>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                            <input id="sc-salary-day" type="number" min="1" max="31" placeholder="Salary day"
+                            <input id="sc-salary-day" type="number" min="1" max="31" placeholder="Salary day" aria-label="Salary day of month"
                                 class="p-2 bg-white border rounded-lg text-sm">
-                            <input id="sc-salary-amount" type="number" step="0.01" placeholder="Salary amount"
+                            <input id="sc-salary-amount" type="number" step="0.01" placeholder="Salary amount" aria-label="Monthly salary amount"
                                 class="p-2 bg-white border rounded-lg text-sm">
-                            <input id="sc-fixed-obligations" type="number" step="0.01" placeholder="Fixed monthly costs"
+                            <input id="sc-fixed-obligations" type="number" step="0.01" placeholder="Fixed monthly costs" aria-label="Fixed monthly obligations"
                                 class="p-2 bg-white border rounded-lg text-sm">
-                            <input id="sc-extra-saving" type="number" step="0.01" placeholder="Extra monthly saving"
+                            <input id="sc-extra-saving" type="number" step="0.01" placeholder="Extra monthly saving" aria-label="Extra monthly saving"
                                 class="p-2 bg-white border rounded-lg text-sm">
                         </div>
                         <div class="mt-2">
-                            <input id="sc-extra-debt" type="number" step="0.01" placeholder="Extra monthly debt payment"
+                            <input id="sc-extra-debt" type="number" step="0.01" placeholder="Extra monthly debt payment" aria-label="Extra monthly debt payment"
                                 class="w-full p-2 bg-white border rounded-lg text-sm">
                         </div>
                         <button onclick="runScenarioSimulation()"
@@ -4124,74 +4576,104 @@
 
     <!-- App Core -->
     <script src="assets/js/core/config.js?v=20260526b"></script>
-    <script src="assets/js/core/metrics.js?v=20260526f"></script>
+    <script src="assets/js/core/metric-contract.js?v=20260731g"></script>
+    <script src="assets/js/core/transaction-classifier.js?v=20260731b"></script>
+    <script src="assets/js/core/date-quality.js?v=20260731a"></script>
+    <script src="assets/js/core/canonical-metrics.js?v=20260731b"></script>
+    <script src="assets/js/core/canonical-statements.js?v=20260801a"></script>
+    <script src="assets/js/core/canonical-liquidity.js?v=20260731a"></script>
+    <script src="assets/js/core/canonical-snapshots.js?v=20260801a"></script>
+    <script src="assets/js/core/snapshot-schema.js?v=20260731b"></script>
+    <script src="assets/js/core/snapshot-adapter.js?v=20260801a"></script>
+    <script src="assets/js/core/metrics.js?v=20260801a"></script>
+    <script src="assets/js/core/metric-adapter.js?v=20260801a"></script>
+    <script src="assets/js/core/overview-model.js?v=20260801a"></script>
+    <script src="assets/js/core/backup-contract.js?v=20260801a"></script>
+    <script src="assets/js/core/runtime-performance.js?v=20260801a"></script>
     <script src="../assets/js/financeBridgeQueue.js?v=20260425a"></script>
-    <script src="assets/js/core/storage.js?v=20260730b"></script>
-    <script src="assets/js/core/auth.js?v=20260527a"></script>
-    <script src="assets/js/core/preview.js?v=20260524b"></script>
+    <script src="assets/js/core/storage.js?v=20260801d"></script>
+    <script src="assets/js/core/auth.js?v=20260801e"></script>
+    <script src="assets/js/core/preview.js?v=20260801c"></script>
 
     <!-- App Modules -->
     <script src="assets/js/features/xrpl.js?v=20260425a"></script>
     <script src="assets/js/features/ronin.js?v=20260526a"></script>
-    <script src="assets/js/features/crypto.js?v=20260527a"></script>
-    <script src="assets/js/ui/charts.js?v=20260526b"></script>
-    <script src="assets/js/ui/renderers.js?v=20260730b"></script>
-    <script src="assets/js/features/crud.js?v=20260730c"></script>
-    <script src="assets/js/features/backup.js?v=20260730b"></script>
+    <script src="assets/js/features/crypto.js?v=20260731a"></script>
+    <script src="assets/js/ui/activity-presentation.js?v=20260801a"></script>
+    <script src="assets/js/ui/planning-presentation.js?v=20260801a"></script>
+    <script src="assets/js/ui/wealth-presentation.js?v=20260801a"></script>
+    <script src="assets/js/ui/reports-presentation.js?v=20260801a"></script>
+    <script src="assets/js/ui/tools-presentation.js?v=20260801b"></script>
+    <script src="assets/js/ui/charts.js?v=20260801c"></script>
+    <script src="assets/js/ui/renderers.js?v=20260801c"></script>
+    <script src="assets/js/features/crud.js?v=20260801a"></script>
+    <script src="assets/js/features/backup.js?v=20260801b"></script>
+    <script src="assets/js/features/tools.js?v=20260801d"></script>
     <script src="assets/js/features/quick-links.js?v=20260425a"></script>
     <script src="assets/js/features/item-tracking.js?v=20260425a"></script>
-    <script src="assets/js/features/reminders.js?v=20260425a"></script>
-    <script src="assets/js/features/reports.js?v=20260425a"></script>
+    <script src="assets/js/features/reminders.js?v=20260801a"></script>
+    <script src="assets/js/features/reports.js?v=20260801b"></script>
     <script src="assets/js/features/imports.js?v=20260526b"></script>
-    <script src="assets/js/features/insights.js?v=20260526b"></script>
-    <script src="assets/js/features/planning.js?v=20260425a"></script>
-    <script src="assets/js/features/forecast.js?v=20260526b"></script>
-    <script src="assets/js/features/statements.js?v=20260526b"></script>
+    <script src="assets/js/features/insights.js?v=20260801b"></script>
+    <script src="assets/js/features/planning.js?v=20260801b"></script>
+    <script src="assets/js/features/forecast.js?v=20260731a"></script>
+    <script src="assets/js/features/statements.js?v=20260801b"></script>
     <script src="assets/js/features/operations.js?v=20260425a"></script>
-    <script src="assets/js/features/close.js?v=20260425a"></script>
-    <script src="assets/js/features/kpi.js?v=20260524b"></script>
-    <script src="assets/js/features/analytics.js?v=20260425a"></script>
-    <script src="assets/js/features/revenue.js?v=20260526b"></script>
-    <script src="assets/js/features/variance.js?v=20260425a"></script>
-    <script src="assets/js/features/qbr.js?v=20260526b"></script>
+    <script src="assets/js/features/close.js?v=20260801a"></script>
+    <script src="assets/js/features/kpi.js?v=20260801a"></script>
+    <script src="assets/js/features/overview.js?v=20260801b"></script>
+    <script src="assets/js/features/analytics.js?v=20260801a"></script>
+    <script src="assets/js/features/revenue.js?v=20260731a"></script>
+    <script src="assets/js/features/variance.js?v=20260731a"></script>
+    <script src="assets/js/features/qbr.js?v=20260801a"></script>
     <script src="assets/js/features/agm.js?v=20260425a"></script>
-    <script src="assets/js/features/assets.js?v=20260425a"></script>
+    <script src="assets/js/features/assets.js?v=20260731a"></script>
     <script src="assets/js/features/roi.js?v=20260425a"></script>
-    <script src="assets/js/ui/preferences.js?v=20260517a"></script>
-    <script src="assets/js/ui/descriptors.js?v=20260425a"></script>
+    <script src="assets/js/features/date-repair.js?v=20260801a"></script>
+    <script src="assets/js/features/metric-shadow.js?v=20260731c"></script>
+    <script src="assets/js/features/snapshot-shadow.js?v=20260731h"></script>
+    <script src="assets/js/features/wealth.js?v=20260801b"></script>
+    <script src="assets/js/ui/modal-accessibility.js?v=20260801a"></script>
+    <script src="assets/js/ui/navigation.js?v=20260801b"></script>
+    <script src="assets/js/ui/accessibility.js?v=20260801a"></script>
+    <script src="assets/js/ui/preferences.js?v=20260731a"></script>
+    <script src="assets/js/ui/descriptors.js?v=20260731c"></script>
+    <script src="assets/js/core/release-readiness.js?v=20260801a"></script>
 
     <!-- Startup -->
-    <script src="assets/js/core/app-init.js?v=20260425a"></script>
+    <script src="assets/js/core/app-init.js?v=20260801g"></script>
     <!-- Mobile Bottom Navigation -->
     <nav
-        class="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 z-50 pb-safe">
+        class="finance-mobile-nav md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-200 z-50 pb-safe"
+        aria-label="Finance mobile sections">
         <div class="grid grid-cols-5 h-16 items-center justify-items-center">
-            <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})"
-                class="flex flex-col items-center gap-1 text-indigo-600">
+            <button type="button" data-finance-view-target="overview"
+                class="flex flex-col items-center gap-1">
                 <i data-lucide="home" class="w-5 h-5"></i>
-                <span class="text-[10px] font-bold">Home</span>
+                <span class="text-[10px] font-bold">Overview</span>
             </button>
-            <button onclick="openTransactionModal()"
-                class="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-600 transition-colors">
+            <button type="button" data-finance-view-target="activity"
+                class="flex flex-col items-center gap-1">
+                <i data-lucide="list" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold">Activity</span>
+            </button>
+            <button type="button" data-finance-action="openTransactionModal"
+                class="finance-mobile-add flex flex-col items-center gap-1">
                 <div
                     class="bg-indigo-600 text-white p-2 rounded-full -mt-6 shadow-lg shadow-indigo-200 border-4 border-slate-50">
                     <i data-lucide="plus" class="w-6 h-6"></i>
                 </div>
+                <span class="sr-only">Add entry</span>
             </button>
-            <button onclick="openBudgetModal()"
-                class="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-600 transition-colors">
-                <i data-lucide="pie-chart" class="w-5 h-5"></i>
-                <span class="text-[10px] font-bold">Budgets</span>
+            <button type="button" data-finance-view-target="plan"
+                class="flex flex-col items-center gap-1">
+                <i data-lucide="target" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold">Plan</span>
             </button>
-            <button onclick="openRecurringModal()"
-                class="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-600 transition-colors">
-                <i data-lucide="bell" class="w-5 h-5"></i>
-                <span class="text-[10px] font-bold">Reminders</span>
-            </button>
-            <button onclick="toggleDarkMode()"
-                class="flex flex-col items-center gap-1 text-slate-400 hover:text-indigo-600 transition-colors">
-                <i data-lucide="settings" class="w-5 h-5"></i>
-                <span class="text-[10px] font-bold">Settings</span>
+            <button type="button" data-finance-view-target="wealth"
+                class="flex flex-col items-center gap-1">
+                <i data-lucide="landmark" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold">Wealth</span>
             </button>
         </div>
     </nav>
