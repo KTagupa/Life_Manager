@@ -115,15 +115,20 @@
         }
 
         async function syncAllBillsToReminders() {
-            if (rawBills.length === 0) return;
+            if (rawBills.length === 0) {
+                window.allDecryptedBills = [];
+                return;
+            }
 
             const decryptedBills = await Promise.all(rawBills.map(async b => {
                 const data = await decryptData(b.data);
                 return data ? { ...normalizeBillDataShape(data), id: b.id } : null;
             }));
 
+            const usableBills = decryptedBills.filter(b => b);
+            window.allDecryptedBills = usableBills;
             let hasChanges = false;
-            for (const bill of decryptedBills.filter(b => b)) {
+            for (const bill of usableBills) {
                 const changed = await syncBillToReminder(bill.id, bill.name, bill.day, bill.amt, { persist: false, paused: bill.paused === true });
                 hasChanges = hasChanges || changed;
             }

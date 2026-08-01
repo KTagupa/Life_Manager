@@ -12,6 +12,8 @@ const LOCAL_DB_STORE = 'app_kv';
 const INSTALLMENT_IMAGE_STORE = 'installment_images';
 const LOCAL_STORAGE_MIRROR_DELAY_MS = 300;
 const REMOTE_REFRESH_TTL_MS = 30 * 1000;
+const REMOTE_SYNC_RETRY_BASE_MS = 1000;
+const REMOTE_SYNC_RETRY_MAX_MS = 60 * 1000;
 
 let localIndexedDBPromise = null;
 let latestStorageDiagnostics = null;
@@ -21,6 +23,10 @@ let lastRemoteReadAt = 0;
 let remoteRefreshPromise = null;
 let remoteSyncPromise = null;
 let remoteSyncDirty = false;
+let remoteSyncRetryTimer = null;
+let remoteSyncFailureCount = 0;
+let remoteSyncLastFailureAt = null;
+let remoteSyncNextRetryAt = null;
 const previewInstallmentImageRecords = new Map();
 const installmentImageDataUrlCache = new Map();
 
@@ -180,6 +186,30 @@ async function listInstallmentImageRecordsFromIndexedDB() {
     }
 }
 
+async function replaceInstallmentImageRecordsInIndexedDB(records = []) {
+    try {
+        const db = await openLocalIndexedDB();
+        if (!db || !db.objectStoreNames.contains(INSTALLMENT_IMAGE_STORE)) return false;
+        return await new Promise((resolve) => {
+            try {
+                const tx = db.transaction(INSTALLMENT_IMAGE_STORE, 'readwrite');
+                const store = tx.objectStore(INSTALLMENT_IMAGE_STORE);
+                store.clear();
+                records.forEach(record => store.put(record));
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+                tx.onabort = () => resolve(false);
+            } catch (error) {
+                console.warn('Installment image replacement transaction failed:', error);
+                resolve(false);
+            }
+        });
+    } catch (error) {
+        console.warn('Installment image replacement failed:', error);
+        return false;
+    }
+}
+
 async function getInstallmentImageCloudRef(imageRef) {
     if (!hasRemoteSyncSession()) return null;
     const key = normalizeInstallmentImageRef(imageRef);
@@ -281,6 +311,7 @@ async function saveInstallmentImageData(imageRef, dataUrl, metadata = {}) {
     if (cloud.attempted) {
         record = { ...record, cloudSyncPending: !cloud.synced };
         await writeInstallmentImageRecordToIndexedDB(record);
+        if (!cloud.synced) queueRemoteDBSync();
     }
     return {
         record,
@@ -331,38 +362,59 @@ async function setInstallmentImageDeleted(imageRef, deleted = true) {
     if (cloud.attempted) {
         nextRecord = { ...nextRecord, cloudSyncPending: !cloud.synced };
         await writeInstallmentImageRecordToIndexedDB(nextRecord);
+        if (!cloud.synced) queueRemoteDBSync();
     }
     return savedLocally;
 }
 
 async function syncPendingInstallmentImagesToCloud() {
-    if (!hasRemoteSyncSession()) return 0;
+    if (!hasRemoteSyncSession()) return { syncedCount: 0, failedCount: 0, pendingCount: 0 };
     const records = await listInstallmentImageRecordsFromIndexedDB();
     let syncedCount = 0;
+    let failedCount = 0;
+    let pendingCount = 0;
     for (const record of records) {
         if (!record?.key || !record.cloudSyncPending) continue;
+        pendingCount += 1;
         const cloud = await syncInstallmentImageRecordToCloud(record);
-        if (!cloud.synced) continue;
-        await writeInstallmentImageRecordToIndexedDB({
+        if (!cloud.synced) {
+            failedCount += 1;
+            continue;
+        }
+        const markedSynced = await writeInstallmentImageRecordToIndexedDB({
             ...record,
             cloudSyncPending: false
         });
+        if (!markedSynced) {
+            failedCount += 1;
+            continue;
+        }
         syncedCount += 1;
     }
-    return syncedCount;
+    return { syncedCount, failedCount, pendingCount };
 }
 
-async function exportInstallmentImageRecords() {
+async function getPendingInstallmentImageCloudSyncCount() {
+    if (previewMode) return 0;
+    const records = await listInstallmentImageRecordsFromIndexedDB();
+    return records.filter(record => record?.key && record.cloudSyncPending).length;
+}
+
+async function exportInstallmentImageRecords(options = {}) {
     const records = previewMode
         ? Array.from(previewInstallmentImageRecords.values())
         : await listInstallmentImageRecordsFromIndexedDB();
-    return records.filter(record => record && !record.deletedAt);
+    return records.filter(record => record && (options.includeDeleted === true || !record.deletedAt));
 }
 
 async function importInstallmentImageRecords(records = [], options = {}) {
     const normalizedRecords = (Array.isArray(records) ? records : [])
         .filter(record => record && normalizeInstallmentImageRef(record.key))
-        .map(record => ({ ...record, key: normalizeInstallmentImageRef(record.key) }));
+        .map(record => ({
+            ...record,
+            key: normalizeInstallmentImageRef(record.key),
+            ...(options.markCloudPending === true ? { cloudSyncPending: true } : {})
+        }));
 
     if (previewMode) {
         if (options.replace === true) previewInstallmentImageRecords.clear();
@@ -373,23 +425,51 @@ async function importInstallmentImageRecords(records = [], options = {}) {
 
     installmentImageDataUrlCache.clear();
     if (options.replace === true) {
-        const incomingKeys = new Set(normalizedRecords.map(record => record.key));
-        const existingRecords = await listInstallmentImageRecordsFromIndexedDB();
-        for (const existing of existingRecords) {
-            if (!existing?.key || incomingKeys.has(existing.key) || existing.deletedAt) continue;
-            const tombstone = {
-                ...existing,
-                deletedAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-            await writeInstallmentImageRecordToIndexedDB(tombstone);
-            if (options.syncCloud !== false) await syncInstallmentImageRecordToCloud(tombstone);
+        let replacementRecords = normalizedRecords;
+        if (options.exactReplace !== true) {
+            const incomingKeys = new Set(normalizedRecords.map(record => record.key));
+            const existingRecords = await listInstallmentImageRecordsFromIndexedDB();
+            const tombstonedAt = new Date().toISOString();
+            const tombstones = existingRecords
+                .filter(existing => existing?.key && !incomingKeys.has(existing.key))
+                .map(existing => ({
+                    ...existing,
+                    deletedAt: existing.deletedAt || tombstonedAt,
+                    updatedAt: tombstonedAt,
+                    ...(options.markCloudPending === true ? { cloudSyncPending: true } : {})
+                }));
+            replacementRecords = [...normalizedRecords, ...tombstones];
+        }
+
+        const replaced = await replaceInstallmentImageRecordsInIndexedDB(replacementRecords);
+        if (!replaced) throw new Error('Could not replace installment images locally.');
+        if (options.syncCloud !== false) {
+            let cloudFailure = false;
+            for (const record of replacementRecords) {
+                const cloud = await syncInstallmentImageRecordToCloud(record);
+                if (cloud.attempted && !cloud.synced) {
+                    await writeInstallmentImageRecordToIndexedDB({ ...record, cloudSyncPending: true });
+                    cloudFailure = true;
+                }
+            }
+            if (cloudFailure) queueRemoteDBSync();
+        }
+        return normalizedRecords.length;
+    }
+
+    let cloudFailure = false;
+    for (const record of normalizedRecords) {
+        const written = await writeInstallmentImageRecordToIndexedDB(record);
+        if (!written) throw new Error(`Could not save installment image ${record.key} locally.`);
+        if (options.syncCloud !== false) {
+            const cloud = await syncInstallmentImageRecordToCloud(record);
+            if (cloud.attempted && !cloud.synced) {
+                await writeInstallmentImageRecordToIndexedDB({ ...record, cloudSyncPending: true });
+                cloudFailure = true;
+            }
         }
     }
-    for (const record of normalizedRecords) {
-        await writeInstallmentImageRecordToIndexedDB(record);
-        if (options.syncCloud !== false) await syncInstallmentImageRecordToCloud(record);
-    }
+    if (cloudFailure) queueRemoteDBSync();
     return normalizedRecords.length;
 }
 
@@ -410,12 +490,14 @@ function flushLocalStorageMirrorNow() {
         pendingLocalStorageMirrorTimer = null;
     }
 
-    if (!cachedLocalDBSnapshot) return;
+    if (!cachedLocalDBSnapshot) return false;
 
     try {
         localStorage.setItem(DB_KEY, JSON.stringify(cachedLocalDBSnapshot));
+        return true;
     } catch (error) {
         console.error('Failed to update localStorage cache.', error);
+        return false;
     }
 }
 
@@ -502,9 +584,14 @@ function choosePreferredLocalDB(localStorageDB, indexedDBData) {
 
 async function persistLocalDBSnapshot(dbData, options = {}) {
     const normalized = setCachedLocalDBSnapshot(dbData);
-    await writeDBToIndexedDB(normalized);
-    if (options.flushLocalStorage === true) flushLocalStorageMirrorNow();
-    else scheduleLocalStorageMirrorWrite();
+    const indexedDBWritten = await writeDBToIndexedDB(normalized);
+    const localStorageWritten = options.flushLocalStorage === true
+        ? flushLocalStorageMirrorNow()
+        : null;
+    if (options.flushLocalStorage !== true) scheduleLocalStorageMirrorWrite();
+    if (options.requireDurableWrite === true && !indexedDBWritten && localStorageWritten !== true) {
+        throw new Error('The vault could not be written to either durable local store.');
+    }
     return normalized;
 }
 
@@ -600,14 +687,52 @@ function countDBRecords(db) {
 }
 
 async function getStorageDiagnostics() {
-    const rawLocal = (() => {
-        try {
-            return localStorage.getItem(DB_KEY);
-        } catch (error) {
-            console.error('localStorage read failed for diagnostics.', error);
-            return null;
-        }
-    })();
+    if (typeof previewMode !== 'undefined' && previewMode && previewDBSnapshot) {
+        const previewDB = normalizeDBSchema(previewDBSnapshot);
+        return {
+            previewMode: true,
+            preferredSource: 'preview-memory',
+            syncUpdatedAt: previewDB.sync?.updatedAt || null,
+            conflictStrategy: 'not-applicable',
+            counts: countDBRecords(previewDB),
+            sync: {
+                revision: previewDB.sync?.revision || null,
+                lastKnownRemoteRevision: previewDB.sync?.lastKnownRemoteRevision || null,
+                pendingChanges: false,
+                pendingAttachmentCount: 0,
+                recovery: {
+                    failureCount: 0,
+                    lastFailureAt: null,
+                    nextRetryAt: null,
+                    retryScheduled: false
+                }
+            },
+            localStorage: {
+                available: false,
+                excludedFromPreview: true,
+                hasData: false,
+                sizeBytes: 0,
+                updatedAt: null
+            },
+            indexedDB: {
+                supported: canUseIndexedDB(),
+                excludedFromPreview: true,
+                hasData: false,
+                sizeBytes: 0,
+                updatedAt: null,
+                writeTimestamp: null
+            }
+        };
+    }
+
+    let localStorageAvailable = true;
+    let rawLocal = null;
+    try {
+        rawLocal = localStorage.getItem(DB_KEY);
+    } catch (error) {
+        localStorageAvailable = false;
+        console.error('localStorage read failed for diagnostics.', error);
+    }
 
     let localParsed = null;
     try {
@@ -628,14 +753,23 @@ async function getStorageDiagnostics() {
 
     const preferred = choosePreferredLocalDB(localParsed, idbParsed);
     const preferredDB = normalizeDBSchema(preferred.db || getDefaultDB());
+    const pendingAttachmentCount = await getPendingInstallmentImageCloudSyncCount();
 
     return {
+        previewMode: false,
         preferredSource: preferred.source,
         syncUpdatedAt: preferredDB.sync?.updatedAt || null,
         conflictStrategy: preferredDB.sync?.conflictStrategy || 'local_wins',
         counts: countDBRecords(preferredDB),
+        sync: {
+            revision: preferredDB.sync?.revision || null,
+            lastKnownRemoteRevision: preferredDB.sync?.lastKnownRemoteRevision || null,
+            pendingChanges: hasUnsyncedLocalChanges(preferredDB) || pendingAttachmentCount > 0,
+            pendingAttachmentCount,
+            recovery: getRemoteSyncRecoveryState()
+        },
         localStorage: {
-            available: true,
+            available: localStorageAvailable,
             hasData: !!localParsed,
             sizeBytes: estimateSerializedBytes(rawLocal),
             updatedAt: localParsed?.sync?.updatedAt || null
@@ -694,12 +828,18 @@ function downloadDiagnosticsJSON(json) {
 async function copyStorageDiagnosticsJSON() {
     setDiagText('diag-status', 'Preparing diagnostics JSON...');
     try {
-        const diagnostics = latestStorageDiagnostics || await getStorageDiagnostics();
+        const previewActive = typeof previewMode !== 'undefined' && previewMode === true;
+        const diagnostics = previewActive
+            ? await getStorageDiagnostics()
+            : (latestStorageDiagnostics || await getStorageDiagnostics());
         latestStorageDiagnostics = diagnostics;
         const payload = {
             exportedAt: new Date().toISOString(),
             appId: typeof appId !== 'undefined' ? appId : null,
-            diagnostics
+            diagnostics,
+            performance: typeof getFinancePerformanceDiagnostics === 'function'
+                ? getFinancePerformanceDiagnostics()
+                : null
         };
         const json = JSON.stringify(payload, null, 2);
 
@@ -739,10 +879,14 @@ async function refreshStorageDiagnosticsPanel() {
     try {
         const diag = await getStorageDiagnostics();
         latestStorageDiagnostics = diag;
-        const localStatus = diag.localStorage.hasData ? 'Data present' : 'No data';
-        const idbStatus = !diag.indexedDB.supported
+        const localStatus = diag.previewMode
+            ? 'Not inspected in Preview'
+            : (!diag.localStorage.available ? 'Unavailable' : (diag.localStorage.hasData ? 'Data present' : 'No data'));
+        const idbStatus = diag.previewMode
+            ? 'Not inspected in Preview'
+            : (!diag.indexedDB.supported
             ? 'Not supported'
-            : (diag.indexedDB.hasData ? 'Data present' : 'No data');
+            : (diag.indexedDB.hasData ? 'Data present' : 'No data'));
 
         setDiagText('diag-source', diag.preferredSource);
         setDiagText('diag-sync-updated', formatDiagnosticTime(diag.syncUpdatedAt));
@@ -763,6 +907,9 @@ async function refreshStorageDiagnosticsPanel() {
             `Tx ${diag.counts.transactions} • Bills ${diag.counts.bills} • Debts ${diag.counts.debts} • Cards ${diag.counts.creditCards} • BNPL ${diag.counts.installmentPlans} • Lent ${diag.counts.lent} • Crypto ${diag.counts.crypto} • Wishlist ${diag.counts.wishlist} • Assets ${diag.counts.fixedAssets} • AGM ${diag.counts.agmRecords} • Closes ${diag.counts.monthlyCloses} • KPI ${diag.counts.kpiSnapshots} • Forecast ${diag.counts.forecastRuns} • Statements ${diag.counts.statementSnapshots} • Undo ${diag.counts.undoLog}`
         );
         setDiagText('diag-status', `Last refresh: ${new Date().toLocaleTimeString()}`);
+        if (typeof window !== 'undefined' && typeof window.CustomEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('finance:toolschange', { detail: { diagnostics: diag } }));
+        }
     } catch (error) {
         console.error('Storage diagnostics refresh failed.', error);
         setDiagText('diag-status', 'Could not refresh diagnostics');
@@ -1198,6 +1345,54 @@ function normalizeISOString(value) {
     return new Date(ts).toISOString();
 }
 
+function normalizeStoredMetricProvenance(rawProvenance) {
+    const source = rawProvenance && typeof rawProvenance === 'object'
+        ? rawProvenance
+        : {};
+    const engine = source.engine === 'canonical' ? 'canonical' : 'legacy';
+    const nullableText = value => {
+        const normalized = String(value || '').trim();
+        return normalized || null;
+    };
+    return {
+        schemaVersion: Math.max(1, Math.round(toFiniteNumber(source.schemaVersion, 1))),
+        source: nullableText(source.source) || 'saved_metric_snapshot',
+        engine,
+        semanticMode: engine === 'canonical' ? 'canonical' : 'legacy_fallback',
+        engineVersion: nullableText(source.engineVersion),
+        classifierVersion: nullableText(source.classifierVersion),
+        adapterVersion: nullableText(source.adapterVersion),
+        cutoverReason: engine === 'canonical'
+            ? null
+            : (nullableText(source.cutoverReason) || 'unversioned_saved_snapshot')
+    };
+}
+
+function normalizeStoredStatementProvenance(rawProvenance) {
+    const source = rawProvenance && typeof rawProvenance === 'object'
+        ? rawProvenance
+        : {};
+    const engine = source.engine === 'canonical' ? 'canonical' : 'legacy';
+    const nullableText = value => {
+        const normalized = String(value || '').trim();
+        return normalized || null;
+    };
+    return {
+        schemaVersion: Math.max(1, Math.round(toFiniteNumber(source.schemaVersion, 1))),
+        source: engine === 'canonical'
+            ? 'canonical_statement_projection'
+            : 'legacy_statement_projection',
+        engine,
+        semanticMode: engine === 'canonical' ? 'canonical' : 'legacy_fallback',
+        projectionVersion: nullableText(source.projectionVersion),
+        metricEngineVersion: nullableText(source.metricEngineVersion),
+        classifierVersion: nullableText(source.classifierVersion),
+        cutoverReason: engine === 'canonical'
+            ? null
+            : (nullableText(source.cutoverReason) || 'unversioned_saved_snapshot')
+    };
+}
+
 function normalizeKpiTargetsShape(rawTargets) {
     const defaults = getDefaultKpiTargets();
     const source = rawTargets && typeof rawTargets === 'object' && !Array.isArray(rawTargets)
@@ -1228,10 +1423,13 @@ function normalizeKpiSnapshotEntry(entry) {
     return {
         id: String(id),
         month,
+        metricProvenance: normalizeStoredMetricProvenance(entry.metricProvenance),
         summary: {
             income: Math.max(0, toFiniteNumber(summary.income, 0)),
             expense: Math.max(0, toFiniteNumber(summary.expense, 0)),
-            savingsRate: toFiniteNumber(summary.savingsRate, 0),
+            savingsRate: Object.prototype.hasOwnProperty.call(summary, 'savingsRate') && summary.savingsRate == null
+                ? null
+                : toFiniteNumber(summary.savingsRate, 0),
             avgDailySpend: Math.max(0, toFiniteNumber(summary.avgDailySpend, 0)),
             monthEndBalance: toFiniteNumber(summary.monthEndBalance, 0),
             runwayDays: Math.max(0, toFiniteNumber(summary.runwayDays, 0)),
@@ -1263,10 +1461,13 @@ function normalizeMonthlyCloseEntry(entry) {
         month,
         status: entry.status === 'closed' ? 'closed' : 'open',
         notes: String(entry.notes || ''),
+        metricProvenance: normalizeStoredMetricProvenance(entry.metricProvenance),
         summary: {
             income: Math.max(0, toFiniteNumber(summary.income, 0)),
             expense: Math.max(0, toFiniteNumber(summary.expense, 0)),
-            savingsRate: toFiniteNumber(summary.savingsRate, 0),
+            savingsRate: Object.prototype.hasOwnProperty.call(summary, 'savingsRate') && summary.savingsRate == null
+                ? null
+                : toFiniteNumber(summary.savingsRate, 0),
             avgDailySpend: Math.max(0, toFiniteNumber(summary.avgDailySpend, 0)),
             monthEndBalance: toFiniteNumber(summary.monthEndBalance, 0),
             totalBudget: Math.max(0, toFiniteNumber(summary.totalBudget, 0)),
@@ -1421,10 +1622,37 @@ function normalizeStatementSnapshotEntry(entry) {
     const pnl = entry.pnl && typeof entry.pnl === 'object' ? entry.pnl : {};
     const cashflow = entry.cashflow && typeof entry.cashflow === 'object' ? entry.cashflow : {};
     const balanceSheet = entry.balanceSheet && typeof entry.balanceSheet === 'object' ? entry.balanceSheet : {};
+    const statementDiagnostics = entry.statementDiagnostics && typeof entry.statementDiagnostics === 'object'
+        ? entry.statementDiagnostics
+        : null;
+    const normalizedPosition = typeof normalizeFinanceStatementPosition === 'function'
+        ? normalizeFinanceStatementPosition(balanceSheet)
+        : {
+            cash: toFiniteNumber(balanceSheet.cash, 0),
+            receivables: toFiniteNumber(balanceSheet.receivables, 0),
+            crypto: toFiniteNumber(balanceSheet.crypto, 0),
+            debt: toFiniteNumber(balanceSheet.debt, 0),
+            creditCardDebt: toFiniteNumber(balanceSheet.creditCardDebt, 0),
+            installmentDebt: toFiniteNumber(balanceSheet.installmentDebt, 0),
+            totalAssets: toFiniteNumber(balanceSheet.totalAssets, 0),
+            totalLiabilities: toFiniteNumber(balanceSheet.totalLiabilities, 0),
+            netWorth: toFiniteNumber(balanceSheet.netWorth, 0)
+        };
 
     return {
         id: String(entry.id || `statement_${month.replace('-', '')}`),
         month,
+        snapshotSchemaVersion: Math.max(1, Math.round(toFiniteNumber(entry.snapshotSchemaVersion, 1))),
+        statementProjectionSchemaVersion: Math.max(1, Math.round(toFiniteNumber(entry.statementProjectionSchemaVersion, 1))),
+        asOf: normalizeISOString(entry.asOf),
+        metricProvenance: normalizeStoredMetricProvenance(entry.metricProvenance),
+        statementProvenance: normalizeStoredStatementProvenance(entry.statementProvenance),
+        statementDiagnostics: statementDiagnostics ? {
+            safeForVisibleCutover: statementDiagnostics.safeForVisibleCutover === true,
+            cashFlowReconciles: statementDiagnostics.cashFlowReconciles === true,
+            cashFlowDifference: toFiniteNumber(statementDiagnostics.cashFlowDifference, 0),
+            unassignedCashFlow: toFiniteNumber(statementDiagnostics.unassignedCashFlow, 0)
+        } : null,
         pnl: {
             income: Math.max(0, toFiniteNumber(pnl.income, 0)),
             costOfEarning: Math.max(0, toFiniteNumber(pnl.costOfEarning, 0)),
@@ -1433,36 +1661,39 @@ function normalizeStatementSnapshotEntry(entry) {
             operatingExpenses: Math.max(0, toFiniteNumber(pnl.operatingExpenses, 0)),
             ebitda: toFiniteNumber(pnl.ebitda, 0),
             ebitdaMargin: toFiniteNumber(pnl.ebitdaMargin, 0),
+            financeCosts: Math.max(0, toFiniteNumber(pnl.financeCosts, 0)),
             debtService: Math.max(0, toFiniteNumber(pnl.debtService, 0)),
             growthSpend: Math.max(0, toFiniteNumber(pnl.growthSpend, 0)),
             netIncome: toFiniteNumber(pnl.netIncome, 0),
-            netMargin: toFiniteNumber(pnl.netMargin, 0)
+            netMargin: toFiniteNumber(pnl.netMargin, 0),
+            basis: String(pnl.basis || (entry.statementProvenance?.engine === 'canonical'
+                ? 'operating_before_depreciation_and_tax'
+                : 'legacy_business_framing'))
         },
         cashflow: {
             operatingCashFlow: toFiniteNumber(cashflow.operatingCashFlow, 0),
             investingCashFlow: toFiniteNumber(cashflow.investingCashFlow, 0),
+            financingCashFlow: toFiniteNumber(cashflow.financingCashFlow, 0),
+            transferCashFlow: toFiniteNumber(cashflow.transferCashFlow, 0),
             cashRecoveryIn: Math.max(0, toFiniteNumber(cashflow.cashRecoveryIn, 0)),
             assetSaleIn: Math.max(0, toFiniteNumber(cashflow.assetSaleIn, 0)),
             ownTransferIn: Math.max(0, toFiniteNumber(cashflow.ownTransferIn, 0)),
+            ownTransferOut: Math.max(0, toFiniteNumber(cashflow.ownTransferOut, 0)),
             otherNonIncomeCashIn: Math.max(0, toFiniteNumber(cashflow.otherNonIncomeCashIn, 0)),
             nonIncomeCashIn: Math.max(0, toFiniteNumber(cashflow.nonIncomeCashIn, 0)),
             debtCashIn: Math.max(0, toFiniteNumber(cashflow.debtCashIn, 0)),
             creditCardBorrowing: Math.max(0, toFiniteNumber(cashflow.creditCardBorrowing, 0)),
             creditCardPayments: Math.max(0, toFiniteNumber(cashflow.creditCardPayments, 0)),
-            financingCashFlow: toFiniteNumber(cashflow.financingCashFlow, 0),
+            debtPayments: Math.max(0, toFiniteNumber(cashflow.debtPayments, 0)),
+            installmentPayments: Math.max(0, toFiniteNumber(cashflow.installmentPayments, 0)),
+            savingsContribution: Math.max(0, toFiniteNumber(cashflow.savingsContribution, 0)),
+            assetAcquisitions: Math.max(0, toFiniteNumber(cashflow.assetAcquisitions, 0)),
             freeCashFlow: toFiniteNumber(cashflow.freeCashFlow, 0),
-            netCashFlow: toFiniteNumber(cashflow.netCashFlow, 0)
+            netCashFlow: toFiniteNumber(cashflow.netCashFlow, 0),
+            bucketedNetCashFlow: toFiniteNumber(cashflow.bucketedNetCashFlow, cashflow.netCashFlow),
+            unassignedCashFlow: toFiniteNumber(cashflow.unassignedCashFlow, 0)
         },
-        balanceSheet: {
-            cash: toFiniteNumber(balanceSheet.cash, 0),
-            receivables: toFiniteNumber(balanceSheet.receivables, 0),
-            crypto: toFiniteNumber(balanceSheet.crypto, 0),
-            debt: toFiniteNumber(balanceSheet.debt, 0),
-            creditCardDebt: toFiniteNumber(balanceSheet.creditCardDebt, 0),
-            totalAssets: toFiniteNumber(balanceSheet.totalAssets, 0),
-            totalLiabilities: toFiniteNumber(balanceSheet.totalLiabilities, 0),
-            netWorth: toFiniteNumber(balanceSheet.netWorth, 0)
-        },
+        balanceSheet: normalizedPosition,
         createdAt,
         lastModified: Math.max(
             0,
@@ -1708,6 +1939,53 @@ function hasRemoteSyncSession() {
     return !previewMode && !!(masterKey && firestoreDB);
 }
 
+function getRemoteSyncRecoveryState() {
+    return {
+        failureCount: remoteSyncFailureCount,
+        lastFailureAt: remoteSyncLastFailureAt,
+        nextRetryAt: remoteSyncNextRetryAt,
+        retryScheduled: remoteSyncRetryTimer != null
+    };
+}
+
+function clearRemoteSyncRetryTimer() {
+    if (remoteSyncRetryTimer != null) {
+        clearTimeout(remoteSyncRetryTimer);
+        remoteSyncRetryTimer = null;
+    }
+    remoteSyncNextRetryAt = null;
+}
+
+function resetRemoteSyncRecoveryState() {
+    remoteSyncFailureCount = 0;
+    remoteSyncLastFailureAt = null;
+    clearRemoteSyncRetryTimer();
+}
+
+function recordRemoteSyncFailure() {
+    remoteSyncFailureCount += 1;
+    remoteSyncLastFailureAt = new Date().toISOString();
+}
+
+function scheduleRemoteSyncRetry() {
+    if (!remoteSyncDirty || !hasRemoteSyncSession() || remoteSyncRetryTimer != null) return;
+    const delay = typeof getFinanceSyncRetryDelay === 'function'
+        ? getFinanceSyncRetryDelay(remoteSyncFailureCount, {
+            baseMs: REMOTE_SYNC_RETRY_BASE_MS,
+            maxMs: REMOTE_SYNC_RETRY_MAX_MS,
+            jitterRatio: 0.15
+        })
+        : Math.min(REMOTE_SYNC_RETRY_MAX_MS, REMOTE_SYNC_RETRY_BASE_MS * (2 ** Math.max(0, remoteSyncFailureCount - 1)));
+    remoteSyncNextRetryAt = new Date(Date.now() + delay).toISOString();
+    remoteSyncRetryTimer = setTimeout(() => {
+        remoteSyncRetryTimer = null;
+        remoteSyncNextRetryAt = null;
+        queueRemoteDBSync().catch(error => {
+            console.error('❌ Firebase sync retry enqueue failed:', error);
+        });
+    }, delay);
+}
+
 function hasUnsyncedLocalChanges(db) {
     if (!hasRemoteSyncSession()) return false;
     const snapshot = db && typeof db === 'object' ? db : cachedLocalDBSnapshot;
@@ -1795,68 +2073,86 @@ function queueRemoteDBSync() {
             remoteSyncDirty = false;
 
             const localSnapshot = getCachedLocalDBSnapshotClone() || await getLocalDBSnapshot();
-            if (!hasUnsyncedLocalChanges(localSnapshot)) continue;
+            const dbPending = hasUnsyncedLocalChanges(localSnapshot);
+            const pendingAttachmentCount = await getPendingInstallmentImageCloudSyncCount();
+            if (!dbPending && pendingAttachmentCount === 0) {
+                resetRemoteSyncRecoveryState();
+                continue;
+            }
 
             const processingRevision = localSnapshot.sync?.revision || null;
             const localCryptoPrices = { ...(localSnapshot.crypto_prices || {}) };
             let dbToSync = normalizeDBSchema(localSnapshot);
 
             try {
-                const vaultId = await getVaultId(masterKey);
-                const ref = firestoreDB.collection('vaults').doc(vaultId);
-                const remoteDoc = await ref.get();
-                lastRemoteReadAt = Date.now();
-                const remoteDB = remoteDoc.exists ? normalizeDBSchema(remoteDoc.data().vaultData || getDefaultDB()) : null;
+                if (dbPending) {
+                    const vaultId = await getVaultId(masterKey);
+                    const ref = firestoreDB.collection('vaults').doc(vaultId);
+                    const remoteDoc = await ref.get();
+                    lastRemoteReadAt = Date.now();
+                    const remoteDB = remoteDoc.exists ? normalizeDBSchema(remoteDoc.data().vaultData || getDefaultDB()) : null;
 
-                if (remoteDB) {
-                    const remoteRev = remoteDB.sync?.revision || null;
-                    const knownRemoteRev = dbToSync.sync?.lastKnownRemoteRevision || null;
-                    const localRev = dbToSync.sync?.revision || null;
-                    const strategy = dbToSync.sync?.conflictStrategy || 'local_wins';
-                    const conflictDetected = !!(
-                        remoteRev &&
-                        ((knownRemoteRev && remoteRev !== knownRemoteRev) ||
-                            (!knownRemoteRev && localRev && remoteRev !== localRev))
-                    );
+                    if (remoteDB) {
+                        const remoteRev = remoteDB.sync?.revision || null;
+                        const knownRemoteRev = dbToSync.sync?.lastKnownRemoteRevision || null;
+                        const localRev = dbToSync.sync?.revision || null;
+                        const strategy = dbToSync.sync?.conflictStrategy || 'local_wins';
+                        const conflictDetected = !!(
+                            remoteRev &&
+                            ((knownRemoteRev && remoteRev !== knownRemoteRev) ||
+                                (!knownRemoteRev && localRev && remoteRev !== localRev))
+                        );
 
-                    if (conflictDetected) {
-                        if (strategy === 'remote_wins') {
-                            dbToSync = remoteDB;
-                        } else if (strategy === 'merge_safe_lists') {
-                            dbToSync = mergeSafeDB(dbToSync, remoteDB);
+                        if (conflictDetected) {
+                            if (strategy === 'remote_wins') {
+                                dbToSync = remoteDB;
+                            } else if (strategy === 'merge_safe_lists') {
+                                dbToSync = mergeSafeDB(dbToSync, remoteDB);
+                            }
                         }
                     }
+
+                    dbToSync.crypto_prices = localCryptoPrices;
+
+                    const newRevision = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                    dbToSync.sync.revision = newRevision;
+                    dbToSync.sync.lastKnownRemoteRevision = newRevision;
+                    dbToSync.sync.updatedAt = new Date().toISOString();
+
+                    await firestoreDB.collection('vaults').doc(vaultId).set({
+                        vaultData: buildRemoteVaultPayload(dbToSync),
+                        kdfMeta: kdfMeta || null,
+                        kdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        lastModified: firebase.firestore.FieldValue.serverTimestamp()
+                    });
                 }
 
-                dbToSync.crypto_prices = localCryptoPrices;
-
-                const newRevision = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-                dbToSync.sync.revision = newRevision;
-                dbToSync.sync.lastKnownRemoteRevision = newRevision;
-                dbToSync.sync.updatedAt = new Date().toISOString();
-
-                await firestoreDB.collection('vaults').doc(vaultId).set({
-                    vaultData: buildRemoteVaultPayload(dbToSync),
-                    kdfMeta: kdfMeta || null,
-                    kdfUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    lastModified: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                await syncPendingInstallmentImagesToCloud();
-
-                const latestLocal = getCachedLocalDBSnapshotClone();
-                if (latestLocal && (latestLocal.sync?.revision || null) === processingRevision) {
-                    await persistLocalDBSnapshot(dbToSync);
-                } else {
-                    remoteSyncDirty = true;
+                const imageSync = await syncPendingInstallmentImagesToCloud();
+                if (imageSync.failedCount > 0) {
+                    throw new Error(`${imageSync.failedCount} installment attachment(s) remain pending.`);
                 }
+
+                if (dbPending) {
+                    const latestLocal = getCachedLocalDBSnapshotClone();
+                    if (latestLocal && (latestLocal.sync?.revision || null) === processingRevision) {
+                        await persistLocalDBSnapshot(dbToSync);
+                    } else {
+                        remoteSyncDirty = true;
+                    }
+                }
+                resetRemoteSyncRecoveryState();
             } catch (error) {
                 console.error('❌ Background Firebase sync failed:', error);
+                recordRemoteSyncFailure();
+                remoteSyncDirty = true;
+                break;
             }
         }
 
         return getCachedLocalDBSnapshotClone();
     })().finally(() => {
         remoteSyncPromise = null;
+        scheduleRemoteSyncRetry();
     });
 
     return remoteSyncPromise;
@@ -1894,7 +2190,7 @@ async function getDB(options = {}) {
     return normalizeDBSchema(localDB);
 }
 
-async function saveDB(inputDB) {
+async function saveDB(inputDB, options = {}) {
     let db = normalizeDBSchema(inputDB);
     if (previewMode) {
         const nowISO = new Date().toISOString();
@@ -1904,6 +2200,14 @@ async function saveDB(inputDB) {
         db.sync.updatedAt = nowISO;
         previewDBSnapshot = cloneStorageSafeValue(db);
         return normalizeDBSchema(cloneStorageSafeValue(previewDBSnapshot));
+    }
+
+    if (options.preserveRevision === true) {
+        await persistLocalDBSnapshot(db, {
+            flushLocalStorage: options.flushLocalStorage === true,
+            requireDurableWrite: options.requireDurableWrite === true
+        });
+        return db;
     }
 
     const localCryptoPrices = { ...(db.crypto_prices || {}) };
@@ -1947,9 +2251,12 @@ async function saveDB(inputDB) {
         db.sync.lastKnownRemoteRevision = db.sync.lastKnownRemoteRevision || null;
     }
     db.sync.updatedAt = nowISO;
-    await persistLocalDBSnapshot(db);
+    await persistLocalDBSnapshot(db, {
+        flushLocalStorage: options.flushLocalStorage === true,
+        requireDurableWrite: options.requireDurableWrite === true
+    });
 
-    if (hasRemoteSyncSession()) {
+    if (hasRemoteSyncSession() && options.queueRemote !== false) {
         queueRemoteDBSync().catch((error) => {
             console.error('❌ Firebase sync enqueue failed:', error);
         });

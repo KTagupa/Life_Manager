@@ -6,9 +6,16 @@
 
         function computeRevenueDiversification(scope = metricScope) {
             const allTx = window.allDecryptedTransactions || [];
-            const scopedTx = getTransactionsForScope(scope, allTx, window.filteredTransactions);
+            const reportsPresentation = typeof getFinanceReportsPresentation === 'function'
+                ? getFinanceReportsPresentation()
+                : null;
+            const scopedTx = typeof getFinanceReportsScopedTransactions === 'function'
+                ? getFinanceReportsScopedTransactions()
+                : getTransactionsForScope(scope, allTx, window.filteredTransactions);
             const incomeTx = scopedTx.filter(t => {
-                const amount = typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.type === 'income' ? (Number(t.amt) || 0) : 0);
+                const amount = typeof getDisplayTxEarnedIncomeDelta === 'function'
+                    ? getDisplayTxEarnedIncomeDelta(t)
+                    : (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.type === 'income' ? (Number(t.amt) || 0) : 0));
                 return amount > 0;
             });
 
@@ -17,7 +24,9 @@
 
             incomeTx.forEach(t => {
                 const cat = t.category || 'Others';
-                const amount = typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.amt || 0);
+                const amount = typeof getDisplayTxEarnedIncomeDelta === 'function'
+                    ? getDisplayTxEarnedIncomeDelta(t)
+                    : (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.amt || 0));
                 bySource[cat] = (bySource[cat] || 0) + amount;
                 totalIncome += amount;
             });
@@ -62,15 +71,26 @@
             const passiveRatio = totalIncome > 0 ? (passiveIncome / totalIncome) * 100 : 0;
 
             // Month-over-month income comparison
-            const now = new Date();
-            const currentMonthTx = allTx.filter(t => (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.type === 'income' ? (Number(t.amt) || 0) : 0)) > 0 && getTxMonth(t) === (now.getMonth() + 1) && getTxYear(t) === now.getFullYear());
-            const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth();
-            const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-            const prevMonthTx = allTx.filter(t => (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.type === 'income' ? (Number(t.amt) || 0) : 0)) > 0 && getTxMonth(t) === prevMonth && getTxYear(t) === prevYear);
+            const comparisonEnd = new Date(reportsPresentation?.scope?.end || Date.now());
+            const comparisonYear = comparisonEnd.getFullYear();
+            const comparisonMonth = comparisonEnd.getMonth() + 1;
+            const currentMonthTx = allTx.filter(t => (typeof getDisplayTxEarnedIncomeDelta === 'function'
+                ? getDisplayTxEarnedIncomeDelta(t)
+                : (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.type === 'income' ? (Number(t.amt) || 0) : 0))) > 0 && getTxMonth(t) === comparisonMonth && getTxYear(t) === comparisonYear);
+            const prevMonth = comparisonMonth === 1 ? 12 : comparisonMonth - 1;
+            const prevYear = comparisonMonth === 1 ? comparisonYear - 1 : comparisonYear;
+            const prevMonthTx = allTx.filter(t => (typeof getDisplayTxEarnedIncomeDelta === 'function'
+                ? getDisplayTxEarnedIncomeDelta(t)
+                : (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.type === 'income' ? (Number(t.amt) || 0) : 0))) > 0 && getTxMonth(t) === prevMonth && getTxYear(t) === prevYear);
 
-            const currentMonthIncome = currentMonthTx.reduce((s, t) => s + (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.amt || 0)), 0);
-            const prevMonthIncome = prevMonthTx.reduce((s, t) => s + (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.amt || 0)), 0);
-            const momChange = prevMonthIncome > 0 ? ((currentMonthIncome - prevMonthIncome) / prevMonthIncome) * 100 : 0;
+            const currentMonthIncome = currentMonthTx.reduce((s, t) => s + (typeof getDisplayTxEarnedIncomeDelta === 'function'
+                ? getDisplayTxEarnedIncomeDelta(t)
+                : (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.amt || 0))), 0);
+            const prevMonthIncome = prevMonthTx.reduce((s, t) => s + (typeof getDisplayTxEarnedIncomeDelta === 'function'
+                ? getDisplayTxEarnedIncomeDelta(t)
+                : (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : (t.amt || 0))), 0);
+            const momChange = prevMonthIncome > 0 ? ((currentMonthIncome - prevMonthIncome) / prevMonthIncome) * 100 : NaN;
+            const comparisonLabel = `${new Date(comparisonYear, comparisonMonth - 1, 1).toLocaleDateString('en', { month: 'short', year: 'numeric' })} vs ${new Date(prevYear, prevMonth - 1, 1).toLocaleDateString('en', { month: 'short', year: 'numeric' })}`;
 
             return {
                 sources,
@@ -85,6 +105,7 @@
                 passiveRatio,
                 sourceCount: sources.length,
                 momChange,
+                comparisonLabel,
                 currentMonthIncome,
                 prevMonthIncome
             };
@@ -137,10 +158,11 @@
             }).join('');
 
             // MoM trend
-            const momIcon = data.momChange >= 0 ? 'trending-up' : 'trending-down';
-            const momColor = data.momChange >= 0 ? 'text-emerald-600' : 'text-rose-600';
-            const momBg = data.momChange >= 0 ? 'bg-emerald-50' : 'bg-rose-50';
-            const momSign = data.momChange >= 0 ? '+' : '';
+            const momAvailable = Number.isFinite(data.momChange);
+            const momIcon = !momAvailable ? 'minus' : (data.momChange >= 0 ? 'trending-up' : 'trending-down');
+            const momColor = !momAvailable ? 'text-slate-500' : (data.momChange >= 0 ? 'text-emerald-600' : 'text-rose-600');
+            const momBg = !momAvailable ? 'bg-slate-50' : (data.momChange >= 0 ? 'bg-emerald-50' : 'bg-rose-50');
+            const momSign = momAvailable && data.momChange >= 0 ? '+' : '';
 
             panel.innerHTML = `
                 <div class="space-y-4">
@@ -179,9 +201,9 @@
                     <div class="${momBg} rounded-xl p-3 flex items-center justify-between border border-slate-100">
                         <div class="flex items-center gap-2">
                             <i data-lucide="${momIcon}" class="w-4 h-4 ${momColor}"></i>
-                            <span class="text-xs font-bold text-slate-700">Monthly Income Trend</span>
+                            <span class="text-xs font-bold text-slate-700">${escapeHTML(data.comparisonLabel)}</span>
                         </div>
-                        <span class="text-xs font-black ${momColor}">${momSign}${data.momChange.toFixed(1)}%</span>
+                        <span class="text-xs font-black ${momColor}">${momAvailable ? `${momSign}${data.momChange.toFixed(1)}%` : 'n/a'}</span>
                     </div>
                 </div>`;
 

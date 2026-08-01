@@ -401,6 +401,11 @@
             }
         }
 
+        function isFinanceRouteActive(routeId) {
+            if (typeof shouldRenderFinanceRoute === 'function') return shouldRenderFinanceRoute(routeId);
+            return document.body?.dataset?.financeActiveView === routeId;
+        }
+
         async function refreshLinkedPanels(options = {}) {
             const {
                 refreshKPI = false,
@@ -410,19 +415,20 @@
                 refreshPlanning = false
             } = options;
 
-            if (refreshKPI && typeof refreshBusinessKPIPanel === 'function') {
+            const reportsActive = isFinanceRouteActive('reports');
+            if (reportsActive && refreshKPI && typeof refreshBusinessKPIPanel === 'function') {
                 await refreshBusinessKPIPanel();
             }
-            if (refreshMonthlyClose && typeof refreshMonthlyCloseUI === 'function') {
+            if (reportsActive && refreshMonthlyClose && typeof refreshMonthlyCloseUI === 'function') {
                 await refreshMonthlyCloseUI();
             }
-            if (refreshForecast && typeof refreshForecastModuleUI === 'function') {
+            if (reportsActive && refreshForecast && typeof refreshForecastModuleUI === 'function') {
                 await refreshForecastModuleUI();
             }
-            if (refreshStatements && typeof refreshStatementsModuleUI === 'function') {
+            if (reportsActive && refreshStatements && typeof refreshStatementsModuleUI === 'function') {
                 await refreshStatementsModuleUI();
             }
-            if (refreshPlanning && typeof renderGoalsAndSimulator === 'function') {
+            if (isFinanceRouteActive('plan') && refreshPlanning && typeof renderGoalsAndSimulator === 'function') {
                 renderGoalsAndSimulator();
             }
         }
@@ -2400,7 +2406,7 @@
             rawTransactions = (persistedDB.transactions || db.transactions || []).filter(t => !t.deletedAt);
             toggleModal('credit-card-modal');
             await loadAndRender();
-            await renderCreditCards(rawCreditCards);
+            await renderCreditCards(rawCreditCards, { render: isFinanceRouteActive('wealth') });
             populateCreditCardSelect(document.getElementById('t-credit-card'));
             refreshTransactionPaymentSourceUI();
             if (typeof renderRecurringList === 'function') {
@@ -2478,7 +2484,7 @@
             rawTransactions = db.transactions.filter(t => !t.deletedAt);
             toggleModal('credit-card-payment-modal');
             await loadAndRender();
-            await renderCreditCards(rawCreditCards);
+            await renderCreditCards(rawCreditCards, { render: isFinanceRouteActive('wealth') });
             if (typeof renderRecurringList === 'function') {
                 renderRecurringList();
             }
@@ -2676,7 +2682,7 @@
                 existingRef: ''
             };
             await loadAndRender();
-            await renderInstallmentPlans(rawInstallmentPlans);
+            await renderInstallmentPlans(rawInstallmentPlans, { render: isFinanceRouteActive('wealth') });
             refreshTransactionCategorySelect();
             await refreshLinkedPanels({
                 refreshKPI: true,
@@ -3532,7 +3538,7 @@
             rawTransactions = (persistedDB.transactions || db.transactions || []).filter(t => !t.deletedAt);
             toggleModal('installment-bulk-payment-modal');
             await loadAndRender();
-            await renderInstallmentPlans(rawInstallmentPlans);
+            await renderInstallmentPlans(rawInstallmentPlans, { render: isFinanceRouteActive('wealth') });
             refreshTransactionCategorySelect();
             await refreshLinkedPanels({
                 refreshKPI: true,
@@ -3618,7 +3624,7 @@
                 const persistedDB = await saveDB(db);
                 rawInstallmentPlans = (persistedDB.installment_plans || db.installment_plans || []).filter(item => !item.deletedAt);
                 toggleModal('installment-payment-modal');
-                await renderInstallmentPlans(rawInstallmentPlans);
+                await renderInstallmentPlans(rawInstallmentPlans, { render: isFinanceRouteActive('wealth') });
                 await refreshLinkedPanels({
                     refreshKPI: true,
                     refreshForecast: true,
@@ -3663,7 +3669,7 @@
             rawTransactions = (persistedDB.transactions || db.transactions || []).filter(t => !t.deletedAt);
             toggleModal('installment-payment-modal');
             await loadAndRender();
-            await renderInstallmentPlans(rawInstallmentPlans);
+            await renderInstallmentPlans(rawInstallmentPlans, { render: isFinanceRouteActive('wealth') });
             refreshTransactionCategorySelect();
             await refreshLinkedPanels({
                 refreshKPI: true,
@@ -3760,8 +3766,8 @@
             await loadAndRender(); // Updates transaction list
 
             // Re-render debts because a transaction might have been a payment towards a debt
-            await renderDebts(rawDebts);
-            await renderCreditCards(rawCreditCards);
+            await renderDebts(rawDebts, { render: isFinanceRouteActive('wealth') });
+            await renderCreditCards(rawCreditCards, { render: isFinanceRouteActive('wealth') });
             if (typeof renderRecurringList === 'function') {
                 renderRecurringList();
             }
@@ -3838,7 +3844,7 @@
             rawBills = (persistedDB.bills || []).filter(b => !b.deletedAt);
             recurringTransactions = persistedDB.recurring_transactions || recurringTransactions;
             toggleModal('bill-modal');
-            await renderBills(rawBills);
+            await renderBills(rawBills, { render: isFinanceRouteActive('plan') });
             if (typeof renderRecurringList === 'function') {
                 renderRecurringList();
             }
@@ -3946,7 +3952,7 @@
 
             document.getElementById('electricity-cycle-modal').classList.add('hidden');
             await loadAndRender();
-            await renderBills(rawBills);
+            await renderBills(rawBills, { render: isFinanceRouteActive('plan') });
             if (typeof renderRecurringList === 'function') {
                 renderRecurringList();
             }
@@ -3993,7 +3999,7 @@
 
                 // Render the new state immediately so pause/resume feels instant.
                 rawBills = db.bills.filter(b => !b.deletedAt);
-                await renderBills(rawBills);
+                await renderBills(rawBills, { render: isFinanceRouteActive('plan') });
                 checkRecurringReminders();
 
                 try {
@@ -4001,7 +4007,7 @@
                 } catch (error) {
                     rawBills = previousRawBills;
                     recurringTransactions = previousRecurringTransactions;
-                    await renderBills(rawBills);
+                    await renderBills(rawBills, { render: isFinanceRouteActive('plan') });
                     checkRecurringReminders();
                     console.error('Failed to persist bill pause state.', error);
                     showToast('❌ Could not update bill status');
@@ -4072,7 +4078,7 @@
             rawTransactions = (db.transactions || []).filter(t => !t.deletedAt);
             toggleModal('debt-modal');
             await loadAndRender();
-            await renderDebts(rawDebts);
+            await renderDebts(rawDebts, { render: isFinanceRouteActive('wealth') });
             refreshTransactionCategorySelect(debtCategory);
             if (uniqueName !== name) {
                 showToast(`✅ Debt saved as "${uniqueName}"`);
@@ -4296,7 +4302,7 @@
             rawTransactions = (persistedDB.transactions || []).filter(entry => !entry.deletedAt);
 
             await loadAndRender();
-            await renderDebts(rawDebts);
+            await renderDebts(rawDebts, { render: isFinanceRouteActive('wealth') });
             refreshTransactionCategorySelect(newDebtCategory);
             await openUpdateDebtModal(debtId);
             showToast('✅ Debt updated');
@@ -4385,7 +4391,7 @@
             rawTransactions = db.transactions.filter(t => !t.deletedAt);
             toggleModal('update-debt-modal');
             await loadAndRender(); // Updates transaction list
-            await renderDebts(rawDebts); // Update debt progress
+            await renderDebts(rawDebts, { render: isFinanceRouteActive('wealth') }); // Update debt progress
             showToast(typeKey === 'repayment' ? '✅ Debt payment recorded' : '✅ Debt activity recorded');
         }
 
@@ -4409,7 +4415,7 @@
 
             rawLent = db.lent.filter(l => !l.deletedAt);
             toggleModal('lent-modal');
-            await renderLent(rawLent);
+            await renderLent(rawLent, { render: isFinanceRouteActive('wealth') });
             refreshTransactionCategorySelect(`Lent: ${uniqueName}`);
             await refreshLinkedPanels({
                 refreshKPI: true,
@@ -4590,7 +4596,7 @@
             await saveDB(db);
             rawWishlist = db.wishlist.filter(w => !w.deletedAt);
             toggleModal('wishlist-modal');
-            await loadAndRenderWishlist();
+            await loadAndRenderWishlist({ render: isFinanceRouteActive('plan') });
             await refreshLinkedPanels({ refreshPlanning: true });
             showToast('✅ Wishlist updated');
         }
@@ -4628,7 +4634,7 @@
             rawWishlist = db.wishlist.filter(w => !w.deletedAt);
             await saveDB(db);
             undoLog = db.undo_log;
-            await loadAndRenderWishlist();
+            await loadAndRenderWishlist({ render: isFinanceRouteActive('plan') });
             await refreshLinkedPanels({ refreshPlanning: true });
         }
 
@@ -4864,20 +4870,20 @@
             if (col === 'transactions') {
                 rawTransactions = (persistedDB.transactions || []).filter(t => !t.deletedAt);
                 await loadAndRender();
-                await renderDebts(rawDebts); // Update debt progress if a payment was deleted
-                await renderCreditCards(rawCreditCards);
-                await renderInstallmentPlans(rawInstallmentPlans);
+                await renderDebts(rawDebts, { render: isFinanceRouteActive('wealth') }); // Update debt progress if a payment was deleted
+                await renderCreditCards(rawCreditCards, { render: isFinanceRouteActive('wealth') });
+                await renderInstallmentPlans(rawInstallmentPlans, { render: isFinanceRouteActive('wealth') });
             } else if (col === 'bills') {
                 rawBills = (persistedDB.bills || []).filter(b => !b.deletedAt);
                 recurringTransactions = persistedDB.recurring_transactions || recurringTransactions;
-                await renderBills(rawBills);
+                await renderBills(rawBills, { render: isFinanceRouteActive('plan') });
                 checkRecurringReminders(); // Update reminder banner
                 await refreshLinkedPanels({ refreshMonthlyClose: true });
             } else if (col === 'debts') {
                 rawDebts = (persistedDB.debts || []).filter(d => !d.deletedAt);
                 rawTransactions = (persistedDB.transactions || []).filter(t => !t.deletedAt);
                 await loadAndRender();
-                await renderDebts(rawDebts);
+                await renderDebts(rawDebts, { render: isFinanceRouteActive('wealth') });
                 populateBudgetInputs();
                 refreshTransactionCategorySelect();
                 await refreshLinkedPanels({
@@ -4887,7 +4893,7 @@
                 });
             } else if (col === 'installment_plans') {
                 rawInstallmentPlans = (persistedDB.installment_plans || []).filter(plan => !plan.deletedAt);
-                await renderInstallmentPlans(rawInstallmentPlans);
+                await renderInstallmentPlans(rawInstallmentPlans, { render: isFinanceRouteActive('wealth') });
                 await refreshLinkedPanels({
                     refreshKPI: true,
                     refreshForecast: true,
@@ -4895,7 +4901,7 @@
                 });
             } else if (col === 'lent') {
                 rawLent = (persistedDB.lent || []).filter(l => !l.deletedAt);
-                await renderLent(rawLent);
+                await renderLent(rawLent, { render: isFinanceRouteActive('wealth') });
                 refreshTransactionCategorySelect();
                 await refreshLinkedPanels({
                     refreshKPI: true,
@@ -4905,7 +4911,7 @@
                 await loadFromStorage();
             } else if (col === 'wishlist') {
                 rawWishlist = (persistedDB.wishlist || []).filter(w => !w.deletedAt);
-                await loadAndRenderWishlist();
+                await loadAndRenderWishlist({ render: isFinanceRouteActive('plan') });
                 await refreshLinkedPanels({ refreshPlanning: true });
             }
         }
@@ -4923,12 +4929,9 @@
             const symbols = { PHP: '₱', USD: '$', JPY: '¥' };
             document.getElementById('active-currency').innerText = `${activeCurrency} (${symbols[activeCurrency]})`;
 
-            loadAndRender();
-            renderBills(rawBills);
-            renderDebts(rawDebts);
-            renderCreditCards(rawCreditCards);
-            renderLent(rawLent);
-            renderCryptoWidget(); // Update crypto summary
+            Promise.resolve(loadAndRender()).catch(error => {
+                console.error('[finance-routes] Currency refresh failed.', error);
+            });
             if (!document.getElementById('crypto-portfolio-modal').classList.contains('hidden')) {
                 renderCryptoPortfolio();
             }

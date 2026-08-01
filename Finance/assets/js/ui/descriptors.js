@@ -18,14 +18,14 @@
         'mom trend': 'MoM Trend compares this month against the previous month.\nUse it to see whether income momentum and expense control are improving.',
         'debt service ratio': 'Debt Service Ratio = debt payments / income.\nLower is healthier because less income is locked into obligations.',
         'investment rate': 'Investment Rate measures what share of income goes to savings and investments.\nHigher rates accelerate future net worth growth.',
-        'estimated net worth': 'Estimated Net Worth is assets minus liabilities.\nIt is your long-term scoreboard, not just month-to-month cash.',
+        'estimated net worth': 'Estimated Net Worth (Market) uses current crypto prices and fixed-asset net book value.\nStatements show Net Worth (Book). Missing market prices display n/a instead of substituting book value.',
         'close readiness': 'Close Readiness indicates how prepared your selected month is for final review.\nAim for complete categories, reconciled entries, and no unresolved reminders.',
-        'runway': 'Runway estimates how long liquid funds can cover current spending.\nMore runway gives flexibility during income shocks.',
-        'burn rate': 'Burn Rate is the pace at which cash is being spent.\nLower burn relative to income and reserves extends runway.',
+        'runway': 'Liquidity Runway divides tracked cash by average canonical spending across the previous three complete months.\nReceivables, crypto, and fixed assets are excluded.',
+        'burn rate': 'Burn Rate is average canonical consumption across the previous three complete calendar months.\nSettlements, transfers, lending, and asset purchases are excluded.',
         'unusual spend': 'Unusual Spend flags transactions that are far outside typical behavior.\nReview these entries to catch errors, one-offs, or hidden spending drift.',
         'expense-to-income': 'Expense-to-Income compares total expenses against total income.\nBelow 100% means you are living within your means.',
-        'emergency fund': 'Emergency Fund shows how many months of essential expenses you can cover.\nA common target is 3-6 months, higher if income is volatile.',
-        'current ratio': 'Current Ratio = liquid assets / short-term liabilities.\nAbove 1.0 generally means near-term obligations are covered.',
+        'emergency fund': 'Emergency Fund (Proxy) shows how many months tracked cash can cover using the three-complete-month spending average.\nIt remains a proxy until essential spending can be identified.',
+        'current ratio': 'Current Ratio (Proxy) includes receivables and all tracked liabilities.\nIt is not 30-Day Obligation Coverage, which remains deferred until due-date data is sufficient.',
         'monthly close': 'Monthly Close is the end-of-month process to finalize records and performance.\nIt creates consistent snapshots for trend and quarter comparisons.',
         'time roi calculator': 'Time ROI estimates whether effort and cost produce worthwhile return.\nUse it before projects so you prioritize high-leverage work.',
         'quarterly business review': 'QBR analyzes quarter-over-quarter performance and strategic execution.\nIt helps convert monthly noise into decision-ready trends.',
@@ -220,14 +220,18 @@
         if (!descriptor?.body) return;
         const host = getDescriptorIconHost(anchor);
         if (!host) return;
-        if (host.classList.contains('descriptor-icon-disabled')) return;
+        if (host.matches('button, a[href]') || host.classList.contains('descriptor-icon-disabled')) {
+            host.querySelector('.descriptor-hint-icon')?.remove();
+            host.classList.add('descriptor-icon-disabled');
+            return;
+        }
         const existingIcon = host.querySelector('.descriptor-hint-icon');
         if (existingIcon) {
             configureDescriptorIcon(existingIcon, descriptor, host);
             return;
         }
 
-        const icon = document.createElement('span');
+        const icon = document.createElement('button');
         configureDescriptorIcon(icon, descriptor, host);
 
         host.appendChild(document.createTextNode(' '));
@@ -238,11 +242,11 @@
         if (!(icon instanceof Element)) return;
         const label = formatDescriptorTitle(descriptor?.key || descriptor?.label || 'Definition');
         icon.className = 'descriptor-hint-icon';
+        icon.type = 'button';
         icon.textContent = '?';
         icon.dataset.descriptorTrigger = 'true';
-        icon.setAttribute('role', 'button');
         icon.setAttribute('aria-label', `Show description for ${label}`);
-        icon.setAttribute('tabindex', host?.matches('button') ? '-1' : '0');
+        icon.setAttribute('tabindex', '0');
     }
 
     function isDescriptorCandidate(element) {

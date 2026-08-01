@@ -27,15 +27,27 @@
         function hydrateTransactionCache(tx) {
             if (!tx || typeof tx !== 'object') return tx;
 
-            if (!Number.isFinite(tx._ts)) {
-                const parsedTs = Date.parse(tx.date);
-                tx._ts = Number.isFinite(parsedTs) ? parsedTs : Date.now();
-            }
+            const dateSource = tx.date instanceof Date
+                ? (Number.isFinite(tx.date.getTime()) ? tx.date.toISOString() : 'invalid-date')
+                : String(tx.date ?? '').trim();
+            if (tx._dateQualitySource !== dateSource) {
+                const quality = typeof getFinanceTransactionDateQuality === 'function'
+                    ? getFinanceTransactionDateQuality(tx)
+                    : null;
+                const parsedTs = quality?.usable ? quality.timestamp : Date.parse(dateSource);
+                const usable = quality ? quality.usable : Number.isFinite(parsedTs);
+                const fallbackDateKey = usable
+                    ? new Date(parsedTs).toISOString().slice(0, 10)
+                    : '';
+                const dateKey = quality?.dateKey || fallbackDateKey;
 
-            if (!Number.isInteger(tx._year) || !Number.isInteger(tx._month)) {
-                const d = new Date(tx._ts);
-                tx._year = d.getFullYear();
-                tx._month = d.getMonth() + 1;
+                tx._dateQualitySource = dateSource;
+                tx._dateQualityStatus = quality?.status || (usable ? 'valid' : 'quarantined');
+                tx._dateKey = dateKey;
+                tx._ts = usable && Number.isFinite(parsedTs) ? parsedTs : null;
+                tx._year = dateKey ? Number(dateKey.slice(0, 4)) : 0;
+                tx._month = dateKey ? Number(dateKey.slice(5, 7)) : 0;
+                tx._activityTs = null;
             }
 
             if (typeof tx._searchText !== 'string') {
@@ -52,17 +64,17 @@
 
         function getTxTimestamp(tx) {
             const cached = hydrateTransactionCache(tx);
-            return cached && Number.isFinite(cached._ts) ? cached._ts : 0;
+            return cached && Number.isFinite(cached._ts) ? cached._ts : NaN;
         }
 
         function getTxYear(tx) {
             const cached = hydrateTransactionCache(tx);
-            return cached && Number.isInteger(cached._year) ? cached._year : 1970;
+            return cached && Number.isInteger(cached._year) ? cached._year : 0;
         }
 
         function getTxMonth(tx) {
             const cached = hydrateTransactionCache(tx);
-            return cached && Number.isInteger(cached._month) ? cached._month : 1;
+            return cached && Number.isInteger(cached._month) ? cached._month : 0;
         }
 
         function getTxSearchText(tx) {
@@ -295,21 +307,7 @@
 
         function getTxAssignedDateKey(tx) {
             const cached = hydrateTransactionCache(tx);
-            if (cached && typeof cached._dateKey === 'string' && cached._dateKey) {
-                return cached._dateKey;
-            }
-
-            const rawDate = String(tx?.date || '').trim();
-            const matchedDate = rawDate.match(/^\d{4}-\d{2}-\d{2}/);
-            const dateKey = matchedDate
-                ? matchedDate[0]
-                : getLocalDateKey(new Date(getTxTimestamp(tx)));
-
-            if (cached) {
-                cached._dateKey = dateKey;
-            }
-
-            return dateKey;
+            return cached && typeof cached._dateKey === 'string' ? cached._dateKey : '';
         }
 
         function getTxActivityTimestamp(tx) {
@@ -318,10 +316,11 @@
                 return cached._activityTs;
             }
 
+            const assignedTs = getTxTimestamp(tx);
             const activityTs = Math.max(
                 toTxMetaTimestamp(tx?.createdAt),
                 toTxMetaTimestamp(tx?.lastModified),
-                getTxTimestamp(tx)
+                Number.isFinite(assignedTs) ? assignedTs : 0
             );
 
             if (cached) {
@@ -338,7 +337,10 @@
             const activityDiff = getTxActivityTimestamp(b) - getTxActivityTimestamp(a);
             if (activityDiff !== 0) return activityDiff;
 
-            const txDiff = getTxTimestamp(b) - getTxTimestamp(a);
+            const aTimestamp = getTxTimestamp(a);
+            const bTimestamp = getTxTimestamp(b);
+            const txDiff = (Number.isFinite(bTimestamp) ? bTimestamp : 0)
+                - (Number.isFinite(aTimestamp) ? aTimestamp : 0);
             if (txDiff !== 0) return txDiff;
 
             return String(b?.id || '').localeCompare(String(a?.id || ''));
@@ -361,12 +363,21 @@
         }
 
         function getTransactionsForScope(scope = metricScope, allTransactions = null, filteredTransactions = null) {
-            const allTx = allTransactions || window.allDecryptedTransactions || [];
-            const filteredTx = filteredTransactions || window.filteredTransactions || allTx;
-
+            const onlyUsable = transactions => (Array.isArray(transactions) ? transactions : []).filter(tx => (
+                typeof isFinanceTransactionDateUsable === 'function'
+                    ? isFinanceTransactionDateUsable(tx)
+                    : Number.isFinite(getTxTimestamp(tx))
+            ));
+            const allTx = onlyUsable(allTransactions || window.allDecryptedTransactions || []);
             if (scope === 'all_time') return allTx;
             if (scope === 'current_month') return getCurrentMonthTransactions(allTx);
-            return filteredTx;
+            const selectedMonth = document.getElementById('filter-month')?.value || 'all';
+            const selectedYear = document.getElementById('filter-year')?.value || 'all';
+            return allTx.filter(transaction => {
+                if (selectedYear !== 'all' && getTxYear(transaction) !== Number(selectedYear)) return false;
+                if (selectedMonth !== 'all' && getTxMonth(transaction) !== Number(selectedMonth)) return false;
+                return true;
+            });
         }
 
         function getMetricDayCount(scope, scopedTransactions, referenceDate = new Date()) {
@@ -387,11 +398,16 @@
 
         function computeSummaryMetrics(allTransactions, scope = metricScope, options = {}) {
             const referenceDate = options.referenceDate || new Date();
-            const scopedTransactions = options.scopeTransactions || getTransactionsForScope(
+            const requestedTransactions = options.scopeTransactions || getTransactionsForScope(
                 scope,
                 allTransactions,
                 options.filteredTransactions || window.filteredTransactions || []
             );
+            const scopedTransactions = (Array.isArray(requestedTransactions) ? requestedTransactions : []).filter(tx => (
+                typeof isFinanceTransactionDateUsable === 'function'
+                    ? isFinanceTransactionDateUsable(tx)
+                    : Number.isFinite(getTxTimestamp(tx))
+            ));
 
             let income = 0;
             let expense = 0;
@@ -447,6 +463,7 @@
                 nonIncomeCashIn,
                 balance,
                 savingsRate,
+                metricDayCount: days,
                 avgDailySpend,
                 categoryExpenses,
                 transactionCount: scopedTransactions.length,
@@ -456,27 +473,38 @@
 
         function renderSummaryCards(metrics) {
             latestSummaryMetrics = metrics;
-            document.getElementById('balance-display').innerText = fmt(metrics.balance);
-            document.getElementById('income-display').innerText = fmt(metrics.income);
+            const setText = (id, value) => {
+                const element = document.getElementById(id);
+                if (element) element.innerText = value;
+            };
+            setText('balance-display', fmt(metrics.balance));
+            setText('income-display', fmt(metrics.income));
             const nonIncomeCashInDisplay = document.getElementById('non-income-cash-in-display');
             if (nonIncomeCashInDisplay) {
                 nonIncomeCashInDisplay.innerText = fmt(metrics.nonIncomeCashIn || 0);
             }
-            document.getElementById('expense-display').innerText = fmt(metrics.expense);
-            document.getElementById('savings-rate-display').innerText = `${metrics.savingsRate}%`;
-            document.getElementById('avg-daily-spend').innerText = `Avg ${fmt(metrics.avgDailySpend)}/day`;
+            setText('expense-display', fmt(metrics.expense));
+            setText('savings-rate-display', typeof formatFinanceSavingsRate === 'function'
+                ? formatFinanceSavingsRate(metrics.savingsRate)
+                : (metrics.savingsRate != null && Number.isFinite(Number(metrics.savingsRate))
+                    ? `${metrics.savingsRate}%`
+                    : 'n/a'));
+            setText('avg-daily-spend', `Avg ${fmt(metrics.avgDailySpend)}/day`);
             const nonIncomeCashInEl = document.getElementById('non-income-cash-in-detail');
             if (nonIncomeCashInEl) {
                 nonIncomeCashInEl.innerText = Number(metrics.nonIncomeCashIn || 0) > 0
-                    ? 'Cash added, not counted as income'
-                    : 'No non-income cash in this scope';
+                    ? 'Cash added, not counted as earned income'
+                    : 'No other cash in this scope';
             }
 
             const selectedLabel = getSelectedPeriodLabel();
             const scopeCaption = metrics.scope === 'selected_period'
                 ? `Selected: ${selectedLabel}`
                 : `${metrics.scopeLabel}`;
-            document.getElementById('balance-trend').innerText = scopeCaption;
+            setText('balance-trend', scopeCaption);
+            if (typeof refreshFinanceOverview === 'function') {
+                refreshFinanceOverview({ flowMetrics: metrics });
+            }
         }
 
         function formatSignedBalanceAmount(amount) {
@@ -521,9 +549,14 @@
             setText('balance-calc-expenses', `-${fmt(expense)}`);
             setText('balance-calc-adjustment', formatSignedBalanceAmount(adjustment));
             setText('balance-calc-total', fmt(balance));
+            const canonical = metrics.metricEngine === 'canonical';
             setText('balance-calc-note', showAdjustment
-                ? 'Income plus Non-Income Cash In minus Expenses is reconciled to cash balance with timing adjustments such as credit-card spending that has not reduced cash yet.'
-                : 'Income plus Non-Income Cash In minus Expenses equals the scoped balance.');
+                ? (canonical
+                    ? 'Earned Income plus Other Cash In minus Spending is reconciled to Net Cash Flow by settlements, transfers, lending, and asset activity.'
+                    : 'Legacy Income plus Non-Income Cash In minus Legacy Expenses is reconciled to cash flow with timing adjustments.')
+                : (canonical
+                    ? 'Earned Income plus Other Cash In minus Spending equals Net Cash Flow for this scope.'
+                    : 'Legacy Income plus Non-Income Cash In minus Legacy Expenses equals the scoped cash flow.'));
 
             const adjustmentRow = document.getElementById('balance-calc-adjustment-row');
             if (adjustmentRow) adjustmentRow.classList.toggle('hidden', !showAdjustment);

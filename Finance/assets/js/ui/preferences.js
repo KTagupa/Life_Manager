@@ -72,6 +72,18 @@
         }
 
         function focusFinanceCard(cardKey) {
+            const viewId = typeof window.getFinanceViewForCard === 'function'
+                ? window.getFinanceViewForCard(cardKey)
+                : null;
+
+            if (viewId && typeof window.openFinanceView === 'function') {
+                window.openFinanceView(viewId, { historyMode: 'push', scroll: false });
+            }
+
+            window.requestAnimationFrame(() => focusFinanceCardInActiveView(cardKey));
+        }
+
+        function focusFinanceCardInActiveView(cardKey) {
             const card = document.querySelector(`[data-finance-card="${cardKey}"]`);
             const toolbar = document.querySelector(`[data-finance-card-toolbar="${cardKey}"]`);
             const scrollTarget = cardKey === 'ledger' ? (toolbar || card) : card;

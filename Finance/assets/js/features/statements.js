@@ -399,8 +399,19 @@ function getStatementsTrendCacheKey(endMonthKey) {
         return ts > max ? ts : max;
     }, 0);
 
+    const bookCutoverMode = typeof getFinanceSnapshotCutoverState === 'function'
+        ? getFinanceSnapshotCutoverState()?.bookStatement?.mode || 'legacy'
+        : 'legacy';
+    const flowCutoverMode = typeof getFinanceMetricShadowReport === 'function'
+        && getFinanceMetricShadowReport()?.readyForVisibleCutover === true
+        ? 'canonical'
+        : 'legacy';
+
     return [
         endMonthKey,
+        bookCutoverMode,
+        flowCutoverMode,
+        window.FINANCE_CANONICAL_STATEMENTS_VERSION || 'unavailable',
         txs.length,
         txHash,
         snapshotLastModified,
@@ -411,6 +422,28 @@ function getStatementsTrendCacheKey(endMonthKey) {
         (rawLent || []).length,
         (rawCreditCards || []).length
     ].join('|');
+}
+
+function statementsResolveBookPosition(balanceSheet = {}) {
+    if (typeof getFinanceStatementBookPosition === 'function') {
+        return getFinanceStatementBookPosition(balanceSheet);
+    }
+    return {
+        mode: 'legacy',
+        basis: 'book',
+        source: 'legacy_compatible',
+        cash: Number(balanceSheet.cash || 0),
+        receivables: Number(balanceSheet.receivables || 0),
+        fixedAssets: 0,
+        cryptoBookValue: Number(balanceSheet.crypto || 0),
+        debt: Number(balanceSheet.debt || 0),
+        creditCardDebt: Number(balanceSheet.creditCardDebt || 0),
+        installmentDebt: Number(balanceSheet.installmentDebt || 0),
+        totalAssetsBookValue: Number(balanceSheet.totalAssets || 0),
+        totalLiabilities: Number(balanceSheet.totalLiabilities || 0),
+        netWorthBookValue: Number(balanceSheet.netWorth || 0),
+        reason: 'adapter_unavailable'
+    };
 }
 
 function renderEmptyStatementsTrend(message) {
@@ -462,7 +495,7 @@ function renderStatementsTrendChart(points, endMonthKey) {
                     pointRadius: 0
                 },
                 {
-                    label: 'Net Worth',
+                    label: 'Net Worth (Book)',
                     data: points.map(point => Number(point.netWorth || 0)),
                     borderColor: '#10b981',
                     backgroundColor: 'rgba(16, 185, 129, 0.08)',
@@ -504,7 +537,8 @@ function renderStatementsTrendChart(points, endMonthKey) {
     const netWorthDeltaLabel = `${netWorthDelta >= 0 ? '+' : ''}${fmt(netWorthDelta)}`;
 
     statusEl.textContent = `12 months ending ${statementsGetMonthLabel(endMonthKey)}`;
-    summaryEl.textContent = `Net income ${fmt(Number(first.netIncome || 0))} → ${fmt(Number(last.netIncome || 0))} (${incomeDeltaLabel}) • Net worth ${fmt(Number(first.netWorth || 0))} → ${fmt(Number(last.netWorth || 0))} (${netWorthDeltaLabel})`;
+    const legacyPointCount = points.filter(point => point.positionMode !== 'canonical').length;
+    summaryEl.textContent = `Net income ${fmt(Number(first.netIncome || 0))} → ${fmt(Number(last.netIncome || 0))} (${incomeDeltaLabel}) • Net worth (book) ${fmt(Number(first.netWorth || 0))} → ${fmt(Number(last.netWorth || 0))} (${netWorthDeltaLabel})${legacyPointCount ? ` • ${legacyPointCount} legacy point${legacyPointCount === 1 ? '' : 's'}` : ''}`;
 }
 
 async function refreshStatementsTrendChart(endMonthKey) {
@@ -526,10 +560,12 @@ async function refreshStatementsTrendChart(endMonthKey) {
     for (const key of monthKeys) {
         const { statement } = await resolveStatementForMonth(key, { preferSnapshotForClosed: true });
         if (!statement) continue;
+        const bookPosition = statementsResolveBookPosition(statement?.balanceSheet || {});
         points.push({
             month: key,
             netIncome: Number(statement?.pnl?.netIncome || 0),
-            netWorth: Number(statement?.balanceSheet?.netWorth || 0)
+            netWorth: Number(bookPosition.netWorthBookValue || 0),
+            positionMode: bookPosition.mode
         });
     }
 
@@ -550,13 +586,21 @@ function statementsNormalizeSnapshotPayload(payload) {
     return payload;
 }
 
-async function computeStatementForMonth(monthKey) {
-    const normalizedMonth = statementsNormalizeMonthKey(monthKey) || statementsDateToMonthKey(new Date());
-    const range = statementsGetMonthRange(normalizedMonth);
-    if (!range) return null;
+const STATEMENT_COGS_KEYWORDS = Object.freeze([
+    'transport',
+    'commute',
+    'tools',
+    'work',
+    'equipment',
+    'office',
+    'uniform',
+    'professional',
+    'license',
+    'certification',
+    'internet'
+]);
 
-    const allTransactions = window.allDecryptedTransactions || [];
-    const monthTransactions = statementsGetTransactionsForMonth(normalizedMonth, allTransactions);
+function computeLegacyStatementFlowProjection(monthTransactions, cryptoPosition) {
     const debtList = window.allDecryptedDebts || [];
     const debtNames = typeof getDebtCategoryMatchSet === 'function'
         ? getDebtCategoryMatchSet(debtList)
@@ -566,12 +610,9 @@ async function computeStatementForMonth(monthKey) {
         ? isAutoCryptoBuyExpenseTx
         : () => false;
 
-    // COGS categories: expenses directly tied to earning income
-    const cogsKeywords = ['transport', 'commute', 'tools', 'work', 'equipment', 'office', 'uniform', 'professional', 'license', 'certification', 'internet'];
-
     let income = 0;
     let debtCashIn = 0;
-    let costOfEarning = 0; // COGS equivalent
+    let costOfEarning = 0;
     let operatingExpenses = 0;
     let debtService = 0;
     let savingsContribution = 0;
@@ -582,14 +623,16 @@ async function computeStatementForMonth(monthKey) {
     let ownTransferIn = 0;
     let otherNonIncomeCashIn = 0;
 
-    monthTransactions.forEach(tx => {
+    (monthTransactions || []).forEach(tx => {
         const amount = Number(tx?.amt || 0);
         if (!Number.isFinite(amount) || amount <= 0) return;
         const category = String(tx?.category || '').trim();
         const categoryLower = category.toLowerCase();
 
         if (tx.type === 'income') {
-            const reportedIncome = typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(tx) : amount;
+            const reportedIncome = typeof getTxReportedIncomeDelta === 'function'
+                ? getTxReportedIncomeDelta(tx)
+                : amount;
             income += reportedIncome;
             if (typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(tx)) {
                 debtCashIn += amount;
@@ -600,14 +643,13 @@ async function computeStatementForMonth(monthKey) {
         }
 
         if (tx.type === 'debt_increase') {
-            if (typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(tx)) {
-                debtCashIn += amount;
-            }
+            if (typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(tx)) debtCashIn += amount;
             return;
         }
 
         if (typeof isNonIncomeCashInTx === 'function' && isNonIncomeCashInTx(tx)) {
-            const isCryptoSellMirror = typeof isAutoCryptoSellProceedsTx === 'function' && isAutoCryptoSellProceedsTx(tx);
+            const isCryptoSellMirror = typeof isAutoCryptoSellProceedsTx === 'function'
+                && isAutoCryptoSellProceedsTx(tx);
             if (isCryptoSellMirror) return;
 
             if (category.startsWith('Lent: ') || categoryLower.includes('refund') || categoryLower.includes('reimburse')) {
@@ -626,54 +668,167 @@ async function computeStatementForMonth(monthKey) {
             creditCardPayments += amount;
             return;
         }
-
-        if (tx.type !== 'expense') return;
-
-        if (isAutoCryptoExpense(tx)) return;
-
-        if (isCreditCardCharge(tx)) {
-            creditCardBorrowing += amount;
-        }
+        if (tx.type !== 'expense' || isAutoCryptoExpense(tx)) return;
+        if (isCreditCardCharge(tx)) creditCardBorrowing += amount;
 
         const txDebtId = String(tx?.debtId || '').trim();
         if ((txDebtId && debtIds.has(txDebtId)) || debtNames.has(category)) {
             debtService += amount;
             return;
         }
-
         if (categoryLower === 'savings') {
             savingsContribution += amount;
             return;
         }
 
-        // Classify as COGS if category matches work-related keywords
-        const isCOGS = cogsKeywords.some(kw => categoryLower.includes(kw));
-        if (isCOGS) {
+        if (STATEMENT_COGS_KEYWORDS.some(keyword => categoryLower.includes(keyword))) {
             costOfEarning += amount;
         } else {
             operatingExpenses += amount;
         }
     });
 
-    const cryptoPosition = await statementsComputeCryptoPositionAsOf(range.endTs, normalizedMonth);
-    const growthSpend = savingsContribution + cryptoPosition.buyOutflowInMonth;
-
-    // Business-framed P&L
+    const growthSpend = savingsContribution + Number(cryptoPosition?.buyOutflowInMonth || 0);
     const grossProfit = income - costOfEarning;
     const ebitda = grossProfit - operatingExpenses;
     const netIncome = ebitda - debtService - growthSpend;
-
-    // Margin percentages
     const grossMargin = income > 0 ? (grossProfit / income) * 100 : 0;
     const ebitdaMargin = income > 0 ? (ebitda / income) * 100 : 0;
     const netMargin = income > 0 ? (netIncome / income) * 100 : 0;
-
     const operatingCashFlow = income - costOfEarning - operatingExpenses + cashRecoveryIn;
-    const investingCashFlow = -(savingsContribution + cryptoPosition.buyOutflowInMonth) + cryptoPosition.sellInflowInMonth + assetSaleIn;
-    const financingCashFlow = debtCashIn + creditCardBorrowing + otherNonIncomeCashIn - debtService - creditCardPayments;
+    const investingCashFlow = -growthSpend
+        + Number(cryptoPosition?.sellInflowInMonth || 0)
+        + assetSaleIn;
+    const financingCashFlow = debtCashIn
+        + creditCardBorrowing
+        + otherNonIncomeCashIn
+        - debtService
+        - creditCardPayments;
     const nonIncomeCashIn = cashRecoveryIn + assetSaleIn + ownTransferIn + otherNonIncomeCashIn;
     const freeCashFlow = operatingCashFlow + investingCashFlow;
     const netCashFlow = operatingCashFlow + investingCashFlow + financingCashFlow + ownTransferIn;
+
+    return {
+        pnl: {
+            income,
+            costOfEarning,
+            grossProfit,
+            grossMargin,
+            operatingExpenses,
+            ebitda,
+            ebitdaMargin,
+            financeCosts: 0,
+            debtService,
+            growthSpend,
+            netIncome,
+            netMargin,
+            basis: 'legacy_business_framing'
+        },
+        cashflow: {
+            operatingCashFlow,
+            investingCashFlow,
+            financingCashFlow,
+            transferCashFlow: ownTransferIn,
+            cashRecoveryIn,
+            assetSaleIn,
+            ownTransferIn,
+            ownTransferOut: 0,
+            otherNonIncomeCashIn,
+            nonIncomeCashIn,
+            debtCashIn,
+            creditCardBorrowing,
+            creditCardPayments,
+            debtPayments: debtService,
+            installmentPayments: 0,
+            savingsContribution,
+            assetAcquisitions: Number(cryptoPosition?.buyOutflowInMonth || 0),
+            freeCashFlow,
+            netCashFlow
+        }
+    };
+}
+
+function resolveStatementFlowProjection(monthTransactions, allTransactions, cryptoPosition, referenceDate) {
+    const legacy = computeLegacyStatementFlowProjection(monthTransactions, cryptoPosition);
+    const summary = computeSummaryMetrics(allTransactions, 'selected_period', {
+        scopeTransactions: monthTransactions,
+        filteredTransactions: monthTransactions,
+        referenceDate
+    });
+    const metricProvenance = typeof getFinanceMetricProvenance === 'function'
+        ? getFinanceMetricProvenance(summary)
+        : null;
+    const fallback = reason => ({
+        ...legacy,
+        mode: 'legacy',
+        metricProvenance,
+        statementProvenance: typeof createFinanceStatementProvenance === 'function'
+            ? createFinanceStatementProvenance('legacy', {
+                cutoverReason: reason,
+                metricEngineVersion: metricProvenance?.engineVersion,
+                classifierVersion: metricProvenance?.classifierVersion
+            })
+            : {
+                schemaVersion: 1,
+                source: 'legacy_statement_projection',
+                engine: 'legacy',
+                semanticMode: 'legacy_fallback',
+                projectionVersion: null,
+                metricEngineVersion: metricProvenance?.engineVersion || null,
+                classifierVersion: metricProvenance?.classifierVersion || null,
+                cutoverReason: reason
+            },
+        diagnostics: null
+    });
+
+    if (summary.metricEngine !== 'canonical') {
+        return fallback(metricProvenance?.cutoverReason || 'metric_cutover_gate_not_ready');
+    }
+    if (typeof computeCanonicalFinanceStatementProjection !== 'function') {
+        return fallback('canonical_statement_engine_unavailable');
+    }
+
+    try {
+        const canonical = computeCanonicalFinanceStatementProjection(monthTransactions, {
+            context: typeof getRuntimeFinanceClassificationContext === 'function'
+                ? getRuntimeFinanceClassificationContext()
+                : {},
+            cogsKeywords: STATEMENT_COGS_KEYWORDS
+        });
+        if (canonical.diagnostics?.safeForVisibleCutover !== true) {
+            return fallback('canonical_statement_diagnostics_not_ready');
+        }
+        if (Math.abs(Number(canonical.cashflow?.netCashFlow || 0) - Number(summary.balance || 0)) > 0.005) {
+            return fallback('canonical_statement_cash_reconciliation_failed');
+        }
+        return {
+            pnl: canonical.pnl,
+            cashflow: canonical.cashflow,
+            mode: 'canonical',
+            metricProvenance,
+            statementProvenance: canonical.provenance,
+            diagnostics: canonical.diagnostics
+        };
+    } catch (error) {
+        console.warn('[statements] Canonical flow projection unavailable.', error);
+        return fallback('canonical_statement_projection_failed');
+    }
+}
+
+async function computeStatementForMonth(monthKey) {
+    const normalizedMonth = statementsNormalizeMonthKey(monthKey) || statementsDateToMonthKey(new Date());
+    const range = statementsGetMonthRange(normalizedMonth);
+    if (!range) return null;
+
+    const allTransactions = window.allDecryptedTransactions || [];
+    const monthTransactions = statementsGetTransactionsForMonth(normalizedMonth, allTransactions);
+    const cryptoPosition = await statementsComputeCryptoPositionAsOf(range.endTs, normalizedMonth);
+    const flowProjection = resolveStatementFlowProjection(
+        monthTransactions,
+        allTransactions,
+        cryptoPosition,
+        new Date(range.start.getFullYear(), range.start.getMonth(), 15)
+    );
 
     const cashFromTransactions = statementsComputeCashBalanceAsOf(range.endTs, allTransactions);
     const cash = cashFromTransactions - cryptoPosition.buyOutflowToDate + cryptoPosition.sellInflowToDate;
@@ -685,48 +840,48 @@ async function computeStatementForMonth(monthKey) {
     const totalAssets = cash + receivables + crypto;
     const totalLiabilities = debt + creditCardDebt + installmentDebt;
     const netWorth = totalAssets - totalLiabilities;
+    const legacyBalanceSheet = {
+        cash,
+        receivables,
+        crypto,
+        debt,
+        creditCardDebt,
+        installmentDebt,
+        totalAssets,
+        totalLiabilities,
+        netWorth
+    };
+    let canonicalBookSnapshot = null;
+    if (typeof buildFinanceCanonicalSnapshotInput === 'function'
+        && typeof computeCanonicalFinanceSnapshot === 'function') {
+        try {
+            canonicalBookSnapshot = computeCanonicalFinanceSnapshot(
+                buildFinanceCanonicalSnapshotInput({
+                    bookValue: crypto,
+                    marketValue: null,
+                    missingPriceCount: 0
+                }),
+                { asOf: range.endTs }
+            );
+        } catch (error) {
+            console.warn('[statements] Canonical book position unavailable.', error);
+        }
+    }
+    const balanceSheet = typeof buildFinanceStatementSnapshotPosition === 'function'
+        ? buildFinanceStatementSnapshotPosition(legacyBalanceSheet, canonicalBookSnapshot)
+        : legacyBalanceSheet;
 
     return {
         month: normalizedMonth,
-        pnl: {
-            income,
-            costOfEarning,
-            grossProfit,
-            grossMargin,
-            operatingExpenses,
-            ebitda,
-            ebitdaMargin,
-            debtService,
-            growthSpend,
-            netIncome,
-            netMargin
-        },
-        cashflow: {
-            operatingCashFlow,
-            investingCashFlow,
-            cashRecoveryIn,
-            assetSaleIn,
-            ownTransferIn,
-            otherNonIncomeCashIn,
-            nonIncomeCashIn,
-            debtCashIn,
-            creditCardBorrowing,
-            creditCardPayments,
-            financingCashFlow,
-            freeCashFlow,
-            netCashFlow
-        },
-        balanceSheet: {
-            cash,
-            receivables,
-            crypto,
-            debt,
-            creditCardDebt,
-            installmentDebt,
-            totalAssets,
-            totalLiabilities,
-            netWorth
-        },
+        snapshotSchemaVersion: Number(window.FINANCE_STATEMENT_SNAPSHOT_SCHEMA_VERSION || 1),
+        statementProjectionSchemaVersion: Number(window.FINANCE_STATEMENT_PROJECTION_SCHEMA_VERSION || 1),
+        asOf: range.end.toISOString(),
+        metricProvenance: flowProjection.metricProvenance,
+        statementProvenance: flowProjection.statementProvenance,
+        statementDiagnostics: flowProjection.diagnostics,
+        pnl: flowProjection.pnl,
+        cashflow: flowProjection.cashflow,
+        balanceSheet,
         createdAt: new Date().toISOString(),
         lastModified: Date.now()
     };
@@ -745,16 +900,23 @@ function statementsDescriptorKeyForLabel(label) {
         'gross profit': 'gross profit',
         'operating expenses': 'operating expenses',
         'ebitda': 'ebitda',
+        'finance costs': 'debt service',
         'debt service': 'debt service',
         'debt cash in': 'financing cash flow',
         'cash recovery': 'operating cash flow',
         'asset sale in': 'investing cash flow',
         'own transfer in': 'cash flow statement',
+        'own transfer out': 'cash flow statement',
+        'account transfers': 'cash flow statement',
         'other cash in': 'financing cash flow',
         'card borrowing': 'financing cash flow',
+        'card purchases': 'financing cash flow',
         'card payments': 'financing cash flow',
+        'debt payments': 'financing cash flow',
+        'installment payments': 'financing cash flow',
         'growth/investment': 'growth investment',
         'net income': 'net income',
+        'net income, pre-d&a/tax': 'net income',
         'operating cf': 'operating cash flow',
         'investing cf': 'investing cash flow',
         'financing cf': 'financing cash flow',
@@ -762,6 +924,7 @@ function statementsDescriptorKeyForLabel(label) {
         'net cash flow': 'net cash flow',
         'cash': 'balance sheet',
         'receivables': 'receivables',
+        'fixed assets': 'total assets',
         'crypto': 'balance sheet',
         'debt': 'debt service',
         'credit cards': 'total liabilities',
@@ -777,6 +940,32 @@ function statementsDescriptorKeyForLabel(label) {
     }
 
     return '';
+}
+
+function statementsGetFlowProvenance(statement = {}) {
+    if (statement.statementProvenance && typeof statement.statementProvenance === 'object') {
+        return statement.statementProvenance;
+    }
+    return {
+        schemaVersion: 1,
+        source: 'legacy_statement_projection',
+        engine: 'legacy',
+        semanticMode: 'legacy_fallback',
+        projectionVersion: null,
+        metricEngineVersion: null,
+        classifierVersion: null,
+        cutoverReason: 'unversioned_saved_snapshot'
+    };
+}
+
+function statementsFormatFlowProvenance(statement = {}, source = 'live') {
+    const provenance = statementsGetFlowProvenance(statement);
+    if (provenance.engine === 'canonical') {
+        return provenance.projectionVersion
+            ? `Flow: Canonical v${provenance.projectionVersion}`
+            : 'Flow: Canonical';
+    }
+    return source === 'snapshot' ? 'Flow: Legacy snapshot' : 'Flow: Legacy fallback';
 }
 
 function statementsMetricRow(label, value, valueClass = 'text-slate-700') {
@@ -800,11 +989,14 @@ function renderStatementPanels(statement, source = 'live') {
     const pnl = statement.pnl || {};
     const cashflow = statement.cashflow || {};
     const balanceSheet = statement.balanceSheet || {};
+    const bookPosition = statementsResolveBookPosition(balanceSheet);
+    const flowProvenance = statementsGetFlowProvenance(statement);
+    const canonicalFlow = flowProvenance.engine === 'canonical';
     const closeStatus = statementsGetCloseStatus(statement.month);
 
     const netIncomeClass = Number(pnl.netIncome || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600';
     const netCashFlowClass = Number(cashflow.netCashFlow || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600';
-    const netWorthClass = Number(balanceSheet.netWorth || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600';
+    const netWorthClass = Number(bookPosition.netWorthBookValue || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600';
 
     // Enhanced P&L with business framing
     const grossProfitClass = Number(pnl.grossProfit || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600';
@@ -827,47 +1019,74 @@ function renderStatementPanels(statement, source = 'live') {
     pnlRows.push(
         statementsMetricRow('Operating Expenses', fmt(Number(pnl.operatingExpenses || 0))),
         '<div class="border-t border-slate-100 my-1"></div>',
-        statementsMetricRow(`EBITDA (${fmtMargin(pnl.ebitdaMargin)})`, fmt(Number(pnl.ebitda || 0)), ebitdaClass),
-        statementsMetricRow('Debt Service', fmt(Number(pnl.debtService || 0))),
-        statementsMetricRow('Growth/Investment', fmt(Number(pnl.growthSpend || 0))),
-        '<div class="border-t border-slate-200 my-1.5"></div>',
-        statementsMetricRow(`Net Income (${fmtMargin(pnl.netMargin)})`, fmt(Number(pnl.netIncome || 0)), netIncomeClass + ' font-black'),
+        statementsMetricRow(`EBITDA (${fmtMargin(pnl.ebitdaMargin)})`, fmt(Number(pnl.ebitda || 0)), ebitdaClass)
     );
+    if (canonicalFlow) {
+        pnlRows.push(
+            statementsMetricRow('Finance Costs', fmt(Number(pnl.financeCosts || 0))),
+            '<div class="border-t border-slate-200 my-1.5"></div>',
+            statementsMetricRow(`Net Income, Pre-D&A/Tax (${fmtMargin(pnl.netMargin)})`, fmt(Number(pnl.netIncome || 0)), netIncomeClass + ' font-black'),
+            '<div class="border-t border-dashed border-slate-200 my-1.5"></div>',
+            statementsMetricRow('Debt Service (Cash, not P&L)', fmt(Number(pnl.debtService || 0)), 'text-slate-500'),
+            statementsMetricRow('Growth/Investment (Cash, not P&L)', fmt(Number(pnl.growthSpend || 0)), 'text-slate-500')
+        );
+    } else {
+        pnlRows.push(
+            statementsMetricRow('Debt Service', fmt(Number(pnl.debtService || 0))),
+            statementsMetricRow('Growth/Investment', fmt(Number(pnl.growthSpend || 0))),
+            '<div class="border-t border-slate-200 my-1.5"></div>',
+            statementsMetricRow(`Net Income (${fmtMargin(pnl.netMargin)})`, fmt(Number(pnl.netIncome || 0)), netIncomeClass + ' font-black')
+        );
+    }
 
     pnlEl.innerHTML = pnlRows.join('');
 
     cfEl.innerHTML = [
         statementsMetricRow('Operating CF', fmt(Number(cashflow.operatingCashFlow || 0))),
         statementsMetricRow('Investing CF', fmt(Number(cashflow.investingCashFlow || 0))),
+        statementsMetricRow('Financing CF', fmt(Number(cashflow.financingCashFlow || 0))),
+        statementsMetricRow('Account Transfers', fmt(Number(cashflow.transferCashFlow || 0))),
+        '<div class="border-t border-slate-100 my-1"></div>',
         statementsMetricRow('Cash Recovery', fmt(Number(cashflow.cashRecoveryIn || 0))),
         statementsMetricRow('Asset Sale In', fmt(Number(cashflow.assetSaleIn || 0))),
         statementsMetricRow('Own Transfer In', fmt(Number(cashflow.ownTransferIn || 0))),
+        statementsMetricRow('Own Transfer Out', fmt(Number(cashflow.ownTransferOut || 0))),
         statementsMetricRow('Other Cash In', fmt(Number(cashflow.otherNonIncomeCashIn || 0))),
         statementsMetricRow('Debt Cash In', fmt(Number(cashflow.debtCashIn || 0))),
-        statementsMetricRow('Card Borrowing', fmt(Number(cashflow.creditCardBorrowing || 0))),
+        statementsMetricRow(canonicalFlow ? 'Card Purchases (Non-cash)' : 'Card Borrowing', fmt(Number(cashflow.creditCardBorrowing || 0))),
+        statementsMetricRow('Debt Payments', fmt(Number(cashflow.debtPayments || 0))),
         statementsMetricRow('Card Payments', fmt(Number(cashflow.creditCardPayments || 0))),
-        statementsMetricRow('Financing CF', fmt(Number(cashflow.financingCashFlow || 0))),
+        statementsMetricRow('Installment Payments', fmt(Number(cashflow.installmentPayments || 0))),
         statementsMetricRow('Free Cash Flow', fmt(Number(cashflow.freeCashFlow || 0))),
         '<div class="border-t border-slate-100 my-1"></div>',
         statementsMetricRow('Net Cash Flow', fmt(Number(cashflow.netCashFlow || 0)), netCashFlowClass)
     ].join('');
 
     bsEl.innerHTML = [
-        statementsMetricRow('Cash', fmt(Number(balanceSheet.cash || 0))),
-        statementsMetricRow('Receivables', fmt(Number(balanceSheet.receivables || 0))),
-        statementsMetricRow('Crypto (Book)', fmt(Number(balanceSheet.crypto || 0))),
-        statementsMetricRow('Debt', fmt(Number(balanceSheet.debt || 0))),
-        statementsMetricRow('Credit Cards', fmt(Number(balanceSheet.creditCardDebt || 0))),
-        statementsMetricRow('Installment/BNPL', fmt(Number(balanceSheet.installmentDebt || 0))),
+        statementsMetricRow('Cash', fmt(bookPosition.cash)),
+        statementsMetricRow('Receivables', fmt(bookPosition.receivables)),
+        statementsMetricRow('Fixed Assets (NBV)', fmt(bookPosition.fixedAssets)),
+        statementsMetricRow('Crypto (Book)', fmt(bookPosition.cryptoBookValue)),
+        statementsMetricRow('Debt', fmt(bookPosition.debt)),
+        statementsMetricRow('Credit Cards', fmt(bookPosition.creditCardDebt)),
+        statementsMetricRow('Installment/BNPL', fmt(bookPosition.installmentDebt)),
         '<div class="border-t border-slate-100 my-1"></div>',
-        statementsMetricRow('Total Assets', fmt(Number(balanceSheet.totalAssets || 0))),
-        statementsMetricRow('Total Liabilities', fmt(Number(balanceSheet.totalLiabilities || 0))),
-        statementsMetricRow('Net Worth', fmt(Number(balanceSheet.netWorth || 0)), netWorthClass)
+        statementsMetricRow('Total Assets (Book)', fmt(bookPosition.totalAssetsBookValue)),
+        statementsMetricRow('Total Liabilities', fmt(bookPosition.totalLiabilities)),
+        statementsMetricRow('Net Worth (Book)', fmt(bookPosition.netWorthBookValue), netWorthClass)
     ].join('');
 
     const sourceLabel = source === 'snapshot' ? 'Snapshot' : 'Live';
     const closeLabel = closeStatus === 'closed' ? 'Closed period' : 'Open period';
-    statusEl.textContent = `${statementsGetMonthLabel(statement.month)} • ${closeLabel} • ${sourceLabel}`;
+    const positionLabel = bookPosition.mode === 'canonical'
+        ? 'Book: Canonical'
+        : (source === 'snapshot' ? 'Book: Legacy snapshot' : 'Book: Legacy fallback');
+    statusEl.textContent = `${statementsGetMonthLabel(statement.month)} • ${closeLabel} • ${sourceLabel} • ${statementsFormatFlowProvenance(statement, source)} • ${positionLabel}`;
+    if (document.body) {
+        document.body.dataset.financeStatementEngine = flowProvenance.engine;
+        document.body.dataset.financeStatementVersion = flowProvenance.projectionVersion || '';
+        document.body.dataset.financeSnapshotBookEngine = bookPosition.mode;
+    }
 }
 
 function getStatementSnapshotById(snapshotId) {
@@ -898,6 +1117,8 @@ function renderStatementsHistory() {
     historyEl.innerHTML = snapshots.slice(0, 18).map(snapshot => {
         const encodedId = encodeInlineArg(snapshot.id);
         const closeStatus = statementsGetCloseStatus(snapshot.month);
+        const bookPosition = statementsResolveBookPosition(snapshot?.balanceSheet || {});
+        const flowProvenance = statementsGetFlowProvenance(snapshot);
         const closeStatusClass = closeStatus === 'closed'
             ? 'bg-emerald-100 text-emerald-700'
             : 'bg-amber-100 text-amber-700';
@@ -921,7 +1142,7 @@ function renderStatementsHistory() {
                             </div>
                         </div>
                         <p class="text-[11px] text-slate-500 mt-1">
-                            Net income ${fmt(Number(snapshot?.pnl?.netIncome || 0))} • Net worth ${fmt(Number(snapshot?.balanceSheet?.netWorth || 0))}
+                            Net income ${fmt(Number(snapshot?.pnl?.netIncome || 0))} • Net worth (book) ${fmt(bookPosition.netWorthBookValue)} • Flow ${flowProvenance.engine === 'canonical' ? `Canonical v${flowProvenance.projectionVersion || '?'}` : 'Legacy'} • Book ${bookPosition.mode === 'canonical' ? 'Canonical' : 'Legacy'}
                         </p>
                     </div>
                 `;
@@ -975,6 +1196,9 @@ async function exportStatementToPDF(statement, sourceLabel = 'Live') {
     try {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
+        const bookPosition = statementsResolveBookPosition(statement?.balanceSheet || {});
+        const flowProvenance = statementsGetFlowProvenance(statement);
+        const canonicalFlow = flowProvenance.engine === 'canonical';
 
         doc.setFontSize(18);
         doc.text('FinanceFlow Financial Statement', 14, 16);
@@ -982,6 +1206,9 @@ async function exportStatementToPDF(statement, sourceLabel = 'Live') {
         doc.text(`Month: ${statementsGetMonthLabel(statement.month)} (${statement.month})`, 14, 23);
         doc.text(`Close Status: ${statementsGetCloseStatus(statement.month) === 'closed' ? 'Closed' : 'Open'}`, 14, 28);
         doc.text(`Source: ${sourceLabel}`, 14, 33);
+        const savedSource = sourceLabel === 'Snapshot';
+        doc.text(`Flow Projection: ${canonicalFlow ? `Canonical v${flowProvenance.projectionVersion || '?'}` : (savedSource ? 'Legacy snapshot' : 'Legacy fallback')}`, 14, 38);
+        doc.text(`Book Position: ${bookPosition.mode === 'canonical' ? 'Canonical' : (savedSource ? 'Legacy snapshot' : 'Legacy fallback')}`, 14, 43);
 
         const pnlRows = [
             ['Revenue', fmt(Number(statement?.pnl?.income || 0))],
@@ -989,40 +1216,46 @@ async function exportStatementToPDF(statement, sourceLabel = 'Live') {
             ['Gross Profit', fmt(Number(statement?.pnl?.grossProfit || 0))],
             ['Operating Expenses', fmt(Number(statement?.pnl?.operatingExpenses || 0))],
             ['EBITDA', fmt(Number(statement?.pnl?.ebitda || 0))],
-            ['Debt Service', fmt(Number(statement?.pnl?.debtService || 0))],
-            ['Growth/Investment', fmt(Number(statement?.pnl?.growthSpend || 0))],
-            ['Net Income', fmt(Number(statement?.pnl?.netIncome || 0))]
+            [canonicalFlow ? 'Finance Costs' : 'Debt Service', fmt(Number((canonicalFlow ? statement?.pnl?.financeCosts : statement?.pnl?.debtService) || 0))],
+            [canonicalFlow ? 'Net Income (Pre-D&A/Tax)' : 'Growth/Investment', fmt(Number((canonicalFlow ? statement?.pnl?.netIncome : statement?.pnl?.growthSpend) || 0))],
+            [canonicalFlow ? 'Debt Service (Cash, not P&L)' : 'Net Income', fmt(Number((canonicalFlow ? statement?.pnl?.debtService : statement?.pnl?.netIncome) || 0))],
+            ...(canonicalFlow ? [['Growth/Investment (Cash, not P&L)', fmt(Number(statement?.pnl?.growthSpend || 0))]] : [])
         ];
 
         const cashFlowRows = [
             ['Operating CF', fmt(Number(statement?.cashflow?.operatingCashFlow || 0))],
             ['Investing CF', fmt(Number(statement?.cashflow?.investingCashFlow || 0))],
+            ['Financing CF', fmt(Number(statement?.cashflow?.financingCashFlow || 0))],
+            ['Account Transfers', fmt(Number(statement?.cashflow?.transferCashFlow || 0))],
             ['Cash Recovery', fmt(Number(statement?.cashflow?.cashRecoveryIn || 0))],
             ['Asset Sale In', fmt(Number(statement?.cashflow?.assetSaleIn || 0))],
             ['Own Transfer In', fmt(Number(statement?.cashflow?.ownTransferIn || 0))],
+            ['Own Transfer Out', fmt(Number(statement?.cashflow?.ownTransferOut || 0))],
             ['Other Cash In', fmt(Number(statement?.cashflow?.otherNonIncomeCashIn || 0))],
             ['Debt Cash In', fmt(Number(statement?.cashflow?.debtCashIn || 0))],
-            ['Card Borrowing', fmt(Number(statement?.cashflow?.creditCardBorrowing || 0))],
+            [canonicalFlow ? 'Card Purchases (Non-cash)' : 'Card Borrowing', fmt(Number(statement?.cashflow?.creditCardBorrowing || 0))],
+            ['Debt Payments', fmt(Number(statement?.cashflow?.debtPayments || 0))],
             ['Card Payments', fmt(Number(statement?.cashflow?.creditCardPayments || 0))],
-            ['Financing CF', fmt(Number(statement?.cashflow?.financingCashFlow || 0))],
+            ['Installment Payments', fmt(Number(statement?.cashflow?.installmentPayments || 0))],
             ['Free Cash Flow', fmt(Number(statement?.cashflow?.freeCashFlow || 0))],
             ['Net Cash Flow', fmt(Number(statement?.cashflow?.netCashFlow || 0))]
         ];
 
         const balanceSheetRows = [
-            ['Cash', fmt(Number(statement?.balanceSheet?.cash || 0))],
-            ['Receivables', fmt(Number(statement?.balanceSheet?.receivables || 0))],
-            ['Crypto (Book)', fmt(Number(statement?.balanceSheet?.crypto || 0))],
-            ['Debt', fmt(Number(statement?.balanceSheet?.debt || 0))],
-            ['Credit Cards', fmt(Number(statement?.balanceSheet?.creditCardDebt || 0))],
-            ['Installment/BNPL', fmt(Number(statement?.balanceSheet?.installmentDebt || 0))],
-            ['Total Assets', fmt(Number(statement?.balanceSheet?.totalAssets || 0))],
-            ['Total Liabilities', fmt(Number(statement?.balanceSheet?.totalLiabilities || 0))],
-            ['Net Worth', fmt(Number(statement?.balanceSheet?.netWorth || 0))]
+            ['Cash', fmt(bookPosition.cash)],
+            ['Receivables', fmt(bookPosition.receivables)],
+            ['Fixed Assets (NBV)', fmt(bookPosition.fixedAssets)],
+            ['Crypto (Book)', fmt(bookPosition.cryptoBookValue)],
+            ['Debt', fmt(bookPosition.debt)],
+            ['Credit Cards', fmt(bookPosition.creditCardDebt)],
+            ['Installment/BNPL', fmt(bookPosition.installmentDebt)],
+            ['Total Assets (Book)', fmt(bookPosition.totalAssetsBookValue)],
+            ['Total Liabilities', fmt(bookPosition.totalLiabilities)],
+            ['Net Worth (Book)', fmt(bookPosition.netWorthBookValue)]
         ];
 
         doc.autoTable({
-            startY: 38,
+            startY: 48,
             head: [['P&L', 'Value']],
             body: pnlRows,
             theme: 'grid',
@@ -1127,6 +1360,25 @@ async function generateMonthlyStatementSnapshot() {
         const rawSnapshot = {
             id: existing?.id || `statement_${monthKey.replace('-', '')}`,
             month: monthKey,
+            snapshotSchemaVersion: Number(
+                statement?.snapshotSchemaVersion
+                || window.FINANCE_STATEMENT_SNAPSHOT_SCHEMA_VERSION
+                || 1
+            ),
+            statementProjectionSchemaVersion: Number(
+                statement?.statementProjectionSchemaVersion
+                || window.FINANCE_STATEMENT_PROJECTION_SCHEMA_VERSION
+                || 1
+            ),
+            asOf: statement?.asOf || statementsGetMonthRange(monthKey)?.end?.toISOString() || null,
+            metricProvenance: statement?.metricProvenance || null,
+            statementProvenance: statement?.statementProvenance || null,
+            statementDiagnostics: statement?.statementDiagnostics ? {
+                safeForVisibleCutover: statement.statementDiagnostics.safeForVisibleCutover === true,
+                cashFlowReconciles: statement.statementDiagnostics.cashFlowReconciles === true,
+                cashFlowDifference: Number(statement.statementDiagnostics.cashFlowDifference || 0),
+                unassignedCashFlow: Number(statement.statementDiagnostics.unassignedCashFlow || 0)
+            } : null,
             pnl: {
                 income: Number(statement?.pnl?.income || 0),
                 costOfEarning: Number(statement?.pnl?.costOfEarning || 0),
@@ -1135,36 +1387,49 @@ async function generateMonthlyStatementSnapshot() {
                 operatingExpenses: Number(statement?.pnl?.operatingExpenses || 0),
                 ebitda: Number(statement?.pnl?.ebitda || 0),
                 ebitdaMargin: Number(statement?.pnl?.ebitdaMargin || 0),
+                financeCosts: Number(statement?.pnl?.financeCosts || 0),
                 debtService: Number(statement?.pnl?.debtService || 0),
                 growthSpend: Number(statement?.pnl?.growthSpend || 0),
                 netIncome: Number(statement?.pnl?.netIncome || 0),
-                netMargin: Number(statement?.pnl?.netMargin || 0)
+                netMargin: Number(statement?.pnl?.netMargin || 0),
+                basis: String(statement?.pnl?.basis || 'legacy_business_framing')
             },
             cashflow: {
                 operatingCashFlow: Number(statement?.cashflow?.operatingCashFlow || 0),
                 investingCashFlow: Number(statement?.cashflow?.investingCashFlow || 0),
+                financingCashFlow: Number(statement?.cashflow?.financingCashFlow || 0),
+                transferCashFlow: Number(statement?.cashflow?.transferCashFlow || 0),
                 cashRecoveryIn: Number(statement?.cashflow?.cashRecoveryIn || 0),
                 assetSaleIn: Number(statement?.cashflow?.assetSaleIn || 0),
                 ownTransferIn: Number(statement?.cashflow?.ownTransferIn || 0),
+                ownTransferOut: Number(statement?.cashflow?.ownTransferOut || 0),
                 otherNonIncomeCashIn: Number(statement?.cashflow?.otherNonIncomeCashIn || 0),
                 nonIncomeCashIn: Number(statement?.cashflow?.nonIncomeCashIn || 0),
                 debtCashIn: Number(statement?.cashflow?.debtCashIn || 0),
                 creditCardBorrowing: Number(statement?.cashflow?.creditCardBorrowing || 0),
                 creditCardPayments: Number(statement?.cashflow?.creditCardPayments || 0),
-                financingCashFlow: Number(statement?.cashflow?.financingCashFlow || 0),
+                debtPayments: Number(statement?.cashflow?.debtPayments || 0),
+                installmentPayments: Number(statement?.cashflow?.installmentPayments || 0),
+                savingsContribution: Number(statement?.cashflow?.savingsContribution || 0),
+                assetAcquisitions: Number(statement?.cashflow?.assetAcquisitions || 0),
                 freeCashFlow: Number(statement?.cashflow?.freeCashFlow || 0),
-                netCashFlow: Number(statement?.cashflow?.netCashFlow || 0)
+                netCashFlow: Number(statement?.cashflow?.netCashFlow || 0),
+                bucketedNetCashFlow: Number(statement?.cashflow?.bucketedNetCashFlow || statement?.cashflow?.netCashFlow || 0),
+                unassignedCashFlow: Number(statement?.cashflow?.unassignedCashFlow || 0)
             },
-            balanceSheet: {
-                cash: Number(statement?.balanceSheet?.cash || 0),
-                receivables: Number(statement?.balanceSheet?.receivables || 0),
-                crypto: Number(statement?.balanceSheet?.crypto || 0),
-                debt: Number(statement?.balanceSheet?.debt || 0),
-                creditCardDebt: Number(statement?.balanceSheet?.creditCardDebt || 0),
-                totalAssets: Number(statement?.balanceSheet?.totalAssets || 0),
-                totalLiabilities: Number(statement?.balanceSheet?.totalLiabilities || 0),
-                netWorth: Number(statement?.balanceSheet?.netWorth || 0)
-            },
+            balanceSheet: typeof normalizeFinanceStatementPosition === 'function'
+                ? { ...normalizeFinanceStatementPosition(statement?.balanceSheet || {}) }
+                : {
+                    cash: Number(statement?.balanceSheet?.cash || 0),
+                    receivables: Number(statement?.balanceSheet?.receivables || 0),
+                    crypto: Number(statement?.balanceSheet?.crypto || 0),
+                    debt: Number(statement?.balanceSheet?.debt || 0),
+                    creditCardDebt: Number(statement?.balanceSheet?.creditCardDebt || 0),
+                    installmentDebt: Number(statement?.balanceSheet?.installmentDebt || 0),
+                    totalAssets: Number(statement?.balanceSheet?.totalAssets || 0),
+                    totalLiabilities: Number(statement?.balanceSheet?.totalLiabilities || 0),
+                    netWorth: Number(statement?.balanceSheet?.netWorth || 0)
+                },
             createdAt: existing?.createdAt || new Date().toISOString(),
             lastModified: Date.now()
         };
@@ -1181,7 +1446,7 @@ async function generateMonthlyStatementSnapshot() {
             refreshOperationsReviewModuleUI();
         }
         if (statusEl) {
-            statusEl.textContent = `Snapshot saved ${new Date().toLocaleTimeString()}`;
+            statusEl.textContent = `${statusEl.textContent} • Saved ${new Date().toLocaleTimeString()}`;
         }
         showToast('✅ Statement snapshot saved');
         return persistedSnapshot;
@@ -1222,3 +1487,13 @@ async function refreshStatementsModuleUI() {
         statusEl.textContent = 'Statements unavailable.';
     }
 }
+
+window.addEventListener?.('finance:snapshot-shadow-updated', () => {
+    statementsTrendCache = { key: null, points: null };
+    if (typeof refreshStatementsModuleUI === 'function') refreshStatementsModuleUI();
+});
+
+window.addEventListener?.('finance:metric-shadow-updated', () => {
+    statementsTrendCache = { key: null, points: null };
+    if (typeof refreshStatementsModuleUI === 'function') refreshStatementsModuleUI();
+});

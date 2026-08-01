@@ -141,6 +141,10 @@ async function renderAssets() {
 
     const db = await getDB();
     const assetsList = db.fixed_assets || [];
+    window.allFinanceFixedAssets = assetsList.map(asset => ({ ...asset }));
+    if (typeof scheduleFinanceSnapshotShadowRefresh === 'function') {
+        scheduleFinanceSnapshotShadowRefresh();
+    }
     const activeAssets = assetsList.filter(a => !a.deletedAt).sort((a, b) => b.value - a.value);
 
     if (activeAssets.length === 0) {
@@ -149,48 +153,55 @@ async function renderAssets() {
     }
 
     let html = '';
-    const currency = 'PHP'; // Use standard format or extract if it exists
-    const formatter = new Intl.NumberFormat('en-PH', { style: 'currency', currency: currency });
-
-    let totalDepreciation = 0;
-    let totalValue = 0;
-    let totalCurrentValue = 0;
+    const currency = 'PHP';
+    const formatter = new Intl.NumberFormat('en-PH', { style: 'currency', currency });
+    const canonicalBook = typeof computeFinanceFixedAssetBookValue === 'function'
+        ? computeFinanceFixedAssetBookValue(activeAssets, Date.now())
+        : null;
+    const canonicalById = new Map((canonicalBook?.assets || []).map(position => [String(position.id), position]));
+    const totalValue = canonicalBook?.acquisitionCost ?? activeAssets.reduce((sum, asset) => sum + Math.max(0, Number(asset.value || 0)), 0);
+    const totalAccumulatedDepreciation = canonicalBook?.accumulatedDepreciation
+        ?? activeAssets.reduce((sum, asset) => sum + calculateAccumulatedDepreciation(asset), 0);
+    const totalCurrentValue = canonicalBook?.netBookValue ?? Math.max(0, totalValue - totalAccumulatedDepreciation);
 
     activeAssets.forEach(asset => {
-        const isFullyDepreciated = checkForFullDepreciation(asset);
-        const monthlyDepreciation = isFullyDepreciated ? 0 : calculateMonthlyDepreciation(asset);
-
-        totalDepreciation += monthlyDepreciation;
-        totalValue += asset.value;
-
-        const accumulatedDepreciation = calculateAccumulatedDepreciation(asset);
-        const currentValue = Math.max(0, asset.value - accumulatedDepreciation);
-        totalCurrentValue += currentValue;
-
-        const statusClass = currentValue <= 0 ? 'text-slate-400 line-through' : 'text-slate-700';
+        const position = canonicalById.get(String(asset.id));
+        const currentValue = position?.netBookValue;
+        const monthlyDepreciation = position?.netBookValue > 0 ? position.monthlyDepreciation : 0;
+        const isFullyDepreciated = !!position && position.elapsedMonths >= position.lifespanMonths;
+        const needsReview = !position;
+        const statusClass = currentValue === 0 ? 'text-slate-400 line-through' : 'text-slate-700';
+        const safeAssetName = escapeHtml(asset.name || 'Fixed asset');
+        const safeAssetNameAttr = String(asset.name || 'Fixed asset')
+            .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const encodedAssetId = typeof encodeInlineArg === 'function'
+            ? encodeInlineArg(asset.id)
+            : encodeURIComponent(String(asset.id || '')).replace(/'/g, '%27');
 
         html += `
-            <div class="flex flex-col gap-1 p-3 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100 transition-colors group cursor-pointer" onclick="openAssetModal('${asset.id}')">
-                <div class="flex items-center justify-between">
-                    <div class="flex flex-col">
-                        <span class="font-bold text-sm ${statusClass}">${escapeHtml(asset.name)}</span>
-                        <span class="text-[10px] text-slate-500">Orig: ${formatter.format(asset.value)} • ${asset.lifespan} mos</span>
+            <article class="finance-wealth-list-row flex flex-col gap-1 p-3 bg-slate-50 border border-slate-100 rounded-xl transition-colors group">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex flex-col min-w-0">
+                        <span class="font-bold text-sm ${statusClass}">${safeAssetName}</span>
+                        <span class="text-[10px] text-slate-500">Cost: ${formatter.format(Number(asset.value || 0))} • ${Number(asset.lifespan || 0)} months</span>
+                        <span class="text-[10px] ${needsReview ? 'text-amber-600' : 'text-slate-400'}">${needsReview ? 'Needs purchase date or value review' : (isFullyDepreciated ? 'Fully depreciated' : `${formatter.format(monthlyDepreciation)} monthly depreciation`)}</span>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <div class="text-right">
-                            <span class="font-bold text-sm text-rose-600 block">-${formatter.format(monthlyDepreciation)}/mo</span>
-                            <span class="text-[10px] text-slate-400 block">${isFullyDepreciated ? 'Fully Depr.' : 'Depreciating'}</span>
-                        </div>
-                        <button onclick="event.stopPropagation(); deleteAsset('${asset.id}')" class="text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100 p-2">
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button type="button" onclick="openAssetModal(decodeURIComponent('${encodedAssetId}'))"
+                            aria-label="Edit ${safeAssetNameAttr}"
+                            class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200">Edit</button>
+                        <button type="button" onclick="deleteAsset(decodeURIComponent('${encodedAssetId}'))"
+                            aria-label="Delete ${safeAssetNameAttr}"
+                            class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
                     </div>
                 </div>
                 <div class="flex items-center justify-between mt-1 pt-2 border-t border-slate-200">
                     <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Net Book Value</span>
-                    <span class="font-black text-sm text-indigo-600">${formatter.format(currentValue)}</span>
+                    <span class="font-black text-sm ${needsReview ? 'text-amber-600' : 'text-indigo-600'}">${needsReview ? 'n/a' : formatter.format(currentValue)}</span>
                 </div>
-            </div>
+            </article>
         `;
     });
 
@@ -202,8 +213,8 @@ async function renderAssets() {
                     <p class="font-black text-blue-800 text-sm">${formatter.format(totalValue)}</p>
                 </div>
                 <div class="text-right">
-                    <p class="text-[10px] font-bold text-rose-600 uppercase">Monthly Depr.</p>
-                    <p class="font-black text-rose-800 text-sm">-${formatter.format(totalDepreciation)}/mo</p>
+                    <p class="text-[10px] font-bold text-rose-600 uppercase">Accumulated Depr.</p>
+                    <p class="font-black text-rose-800 text-sm">-${formatter.format(totalAccumulatedDepreciation)}</p>
                 </div>
             </div>
             <div class="flex justify-between items-center">

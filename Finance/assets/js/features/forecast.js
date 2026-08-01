@@ -129,7 +129,9 @@
             historyMonthKeys.forEach(monthKey => {
                 const monthTx = forecastGetTransactionsForMonth(monthKey, txs);
                 const income = monthTx
-                    .reduce((sum, tx) => sum + (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(tx) : (tx.type === 'income' ? (Number(tx.amt) || 0) : 0)), 0);
+                    .reduce((sum, tx) => sum + (typeof getDisplayTxEarnedIncomeDelta === 'function'
+                        ? getDisplayTxEarnedIncomeDelta(tx)
+                        : (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(tx) : (tx.type === 'income' ? (Number(tx.amt) || 0) : 0))), 0);
                 const expense = monthTx
                     .filter(tx => tx.type === 'expense' && !isCreditCardCharge(tx) && !isAutoCryptoExpense(tx))
                     .reduce((sum, tx) => sum + (Number(tx.amt) || 0), 0);

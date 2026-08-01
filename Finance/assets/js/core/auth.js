@@ -483,7 +483,6 @@ async function unlockApp() {
     document.getElementById('main-content').classList.remove('opacity-0');
 
     initFilters();
-    initChart();
     await loadFromStorage();  // ← Added 'await' here
 
     if (bridgeImportSummary && bridgeImportSummary.checked > 0 && typeof showToast === 'function') {
@@ -526,8 +525,15 @@ async function unlockApp() {
 }  // ← Make sure this closing brace is here!
 
 async function loadFromStorage(options = {}) {
-    const { forceRemote = false, notify = false } = options || {};
-    let db = await getDB({ forceRemote });
+    const { forceRemote = false, allowRemote = true, queueRemote = true, notify = false } = options || {};
+    let db = await getDB({ forceRemote, allowRemote });
+    const activeViewId = typeof getFinanceActiveViewId === 'function'
+        ? getFinanceActiveViewId()
+        : (document.body?.dataset?.financeActiveView || 'overview');
+    const renderPlanRoute = activeViewId === 'plan';
+    const renderWealthRoute = activeViewId === 'wealth';
+    const renderReportsRoute = activeViewId === 'reports';
+    const renderToolsRoute = activeViewId === 'tools';
 
     const syncCryptoMirrors = typeof syncCryptoMirrorTransactionsInDB === 'function'
         ? syncCryptoMirrorTransactionsInDB
@@ -536,7 +542,7 @@ async function loadFromStorage(options = {}) {
         try {
             const syncResult = await syncCryptoMirrors(db);
             if (syncResult?.changed) {
-                db = await saveDB(syncResult.db || db);
+                db = await saveDB(syncResult.db || db, { queueRemote });
             }
         } catch (error) {
             console.error('Crypto mirror transaction sync failed during load.', error);
@@ -554,10 +560,13 @@ async function loadFromStorage(options = {}) {
     customCategories = db.custom_categories || [];
     recurringTransactions = db.recurring_transactions || [];
     rawTransactions = (db.transactions || []).filter(t => !t.deletedAt);
+    rawDebts = (db.debts || []).filter(d => !d.deletedAt);
+    if (typeof primeFinanceMetricShadowContext === 'function') {
+        await primeFinanceMetricShadowContext(rawDebts);
+    }
     await loadAndRender();
 
     rawBills = (db.bills || []).filter(b => !b.deletedAt);
-    rawDebts = (db.debts || []).filter(d => !d.deletedAt);
     rawCreditCards = (db.credit_cards || []).filter(card => !card.deletedAt);
     rawInstallmentPlans = (db.installment_plans || []).filter(plan => !plan.deletedAt);
     rawLent = (db.lent || []).filter(l => !l.deletedAt);
@@ -571,11 +580,21 @@ async function loadFromStorage(options = {}) {
         invalidateCryptoComputationCache();
     }
 
-    await runLoadStep('bills', async () => renderBills(rawBills));
-    await runLoadStep('debts', async () => renderDebts(rawDebts));
-    await runLoadStep('credit-cards', async () => renderCreditCards(rawCreditCards));
-    await runLoadStep('installments-bnpl', async () => renderInstallmentPlans(rawInstallmentPlans));
-    await runLoadStep('lent', async () => renderLent(rawLent));
+    await runLoadStep('snapshot-history', async () => {
+        if (typeof hydrateFinanceSnapshotHistory === 'function') {
+            await hydrateFinanceSnapshotHistory(db);
+        }
+    });
+
+    window.allDecryptedBills = [];
+    window.allDecryptedWishlist = [];
+    if (renderPlanRoute) {
+        await runLoadStep('bills', async () => renderBills(rawBills, { render: true }));
+    }
+    await runLoadStep('debts', async () => renderDebts(rawDebts, { render: renderWealthRoute }));
+    await runLoadStep('credit-cards', async () => renderCreditCards(rawCreditCards, { render: renderWealthRoute }));
+    await runLoadStep('installments-bnpl', async () => renderInstallmentPlans(rawInstallmentPlans, { render: renderWealthRoute }));
+    await runLoadStep('lent', async () => renderLent(rawLent, { render: renderWealthRoute }));
     await runLoadStep('ledger-linked-records-refresh', async () => {
         if (typeof refreshTransactionCategorySelect === 'function') {
             refreshTransactionCategorySelect();
@@ -585,19 +604,28 @@ async function loadFromStorage(options = {}) {
         }
     });
     await runLoadStep('post-ledger-refresh', async () => {
-        if (typeof refreshBusinessKPIPanel === 'function') {
+        if (renderReportsRoute && typeof refreshBusinessKPIPanel === 'function') {
             await refreshBusinessKPIPanel();
         }
-        if (typeof refreshForecastModuleUI === 'function') {
+        if (renderReportsRoute && typeof refreshForecastModuleUI === 'function') {
             await refreshForecastModuleUI();
         }
-        if (typeof refreshStatementsModuleUI === 'function') {
+        if (renderReportsRoute && typeof refreshStatementsModuleUI === 'function') {
             await refreshStatementsModuleUI();
         }
     });
-    await runLoadStep('wishlist', async () => loadAndRenderWishlist());
-    await runLoadStep('assets', async () => { if (typeof renderAssets === 'function') await renderAssets() });
-    await runLoadStep('crypto-widget', async () => renderCryptoWidget());
+    if (renderPlanRoute) {
+        await runLoadStep('wishlist', async () => loadAndRenderWishlist({ render: true }));
+    }
+    if (renderWealthRoute) {
+        await runLoadStep('assets', async () => { if (typeof renderAssets === 'function') await renderAssets() });
+        await runLoadStep('crypto-widget', async () => renderCryptoWidget());
+    }
+    await runLoadStep('snapshot-shadow', async () => {
+        if (typeof refreshFinanceSnapshotShadow === 'function') {
+            await refreshFinanceSnapshotShadow();
+        }
+    });
     // AUTO-SYNC: Sync all bills to reminders on load
     await runLoadStep('sync-bills-reminders', async () => syncAllBillsToReminders());
     await runLoadStep('sync-credit-card-reminders', async () => {
@@ -630,23 +658,28 @@ async function loadFromStorage(options = {}) {
         }
     });
     checkRecurringReminders();
-    renderBudgets(window.allDecryptedTransactions || []);
-    if (typeof renderInsightsPanel === 'function') renderInsightsPanel();
-    if (typeof renderGoalsAndSimulator === 'function') renderGoalsAndSimulator();
-    if (typeof refreshMonthlyCloseUI === 'function') {
+    if (renderPlanRoute) renderBudgets(window.allDecryptedTransactions || []);
+    if (activeViewId === 'overview' && typeof renderInsightsPanel === 'function') renderInsightsPanel();
+    if (renderPlanRoute && typeof renderGoalsAndSimulator === 'function') renderGoalsAndSimulator();
+    if (renderReportsRoute && typeof refreshMonthlyCloseUI === 'function') {
         await runLoadStep('monthly-close', async () => refreshMonthlyCloseUI());
     }
-    if (typeof refreshBusinessKPIPanel === 'function') {
+    if (renderReportsRoute && typeof refreshBusinessKPIPanel === 'function') {
         await runLoadStep('business-kpi', async () => refreshBusinessKPIPanel());
     }
-    if (typeof refreshForecastModuleUI === 'function') {
+    if (renderReportsRoute && typeof refreshForecastModuleUI === 'function') {
         await runLoadStep('forecast-module', async () => refreshForecastModuleUI());
     }
-    if (typeof refreshStatementsModuleUI === 'function') {
+    if (renderReportsRoute && typeof refreshStatementsModuleUI === 'function') {
         await runLoadStep('statements-module', async () => refreshStatementsModuleUI());
     }
-    if (typeof refreshStorageDiagnosticsPanel === 'function') {
+    if (renderToolsRoute && typeof refreshStorageDiagnosticsPanel === 'function') {
         await runLoadStep('storage-diagnostics', async () => refreshStorageDiagnosticsPanel());
+    }
+    if (typeof window !== 'undefined' && typeof window.CustomEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('finance:dataready', {
+            detail: { reason: options.reason || 'vault-load', activeViewId }
+        }));
     }
     if (notify && typeof showToast === 'function') {
         showToast('Recent movements refreshed');

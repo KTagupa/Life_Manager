@@ -78,124 +78,106 @@
         window.openRecentMovementTransaction = openRecentMovementTransaction;
         window.deleteRecentMovementTransaction = deleteRecentMovementTransaction;
 
+        function formatRecentMovementEffect(effect) {
+            if (effect.status) return escapeHTML(effect.status);
+            const value = Number(effect.value || 0);
+            const sign = effect.showSign ? (value > 0 ? '+' : (value < 0 ? '−' : '')) : '';
+            return `${sign}${fmt(Math.abs(value))}`;
+        }
+
+        function renderRecentMovementEffects(presentation) {
+            return (presentation.effects || []).map(effect => `
+                <span class="finance-activity-effect" data-activity-effect="${escapeAttr(effect.key)}"
+                    data-activity-tone="${escapeAttr(effect.tone)}">
+                    <span>${escapeHTML(effect.label)}</span>
+                    <strong>${formatRecentMovementEffect(effect)}</strong>
+                </span>`).join('');
+        }
+
         function renderTransactions(items) {
             const list = document.getElementById('transaction-list');
-            const debtNames = typeof getDebtCategoryMatchSet === 'function'
-                ? getDebtCategoryMatchSet(window.allDecryptedDebts || [])
-                : new Set((window.allDecryptedDebts || []).map(d => String(d?.name || '').trim()).filter(Boolean));
-            const debtIds = new Set((window.allDecryptedDebts || []).map(d => String(d?.id || '').trim()).filter(Boolean));
+            if (!list) return;
+            const classificationContext = typeof getRuntimeFinanceClassificationContext === 'function'
+                ? getRuntimeFinanceClassificationContext()
+                : {};
 
-            list.innerHTML = items.length ? '' : '<div class="p-10 text-center text-slate-400">No transactions found.</div>';
+            list.innerHTML = items.length ? '' : `
+                <div class="finance-activity-empty" role="status">
+                    <p>No movements match the current Activity filters.</p>
+                    <button type="button" onclick="resetFilters()">Reset filters</button>
+                </div>`;
 
             items.forEach(i => {
-                const isDebtCashIn = typeof isDebtBorrowCashInTx === 'function' && isDebtBorrowCashInTx(i);
-                const isDebtInc = i.type === 'debt_increase' || isDebtCashIn;
-                const isInc = i.type === 'income' && !isDebtCashIn;
-                const isNonIncomeCashIn = (typeof isNonIncomeCashInTx === 'function'
-                    ? isNonIncomeCashInTx(i)
-                    : (i.type === 'non_income_cash_in' || i.type === 'crypto_sell_proceeds'))
-                    || isDebtCashIn
-                    || (i.type === 'income' && String(i.category || '').trim().startsWith('Lent: '));
-                const isCryptoSellProceeds = typeof isAutoCryptoSellProceedsTx === 'function'
-                    ? isAutoCryptoSellProceedsTx(i)
-                    : i.type === 'crypto_sell_proceeds';
-                const isCardPayment = i.type === 'credit_card_payment';
-                const isInstallmentPay = typeof isInstallmentPayment === 'function' ? isInstallmentPayment(i) : i.type === 'installment_payment';
-                const isCardCharge = typeof isCreditCardCharge === 'function' ? isCreditCardCharge(i) : false;
-                const txDebtId = String(i.debtId || '').trim();
                 const isOrphanedDebtTx = typeof isOrphanedDebtTransaction === 'function'
                     ? isOrphanedDebtTransaction(i, window.allDecryptedDebts || [])
                     : false;
-                const isDebtPayment = i.type === 'expense' && ((txDebtId && debtIds.has(txDebtId)) || debtNames.has(String(i.category || '').trim()));
                 const isToday = isTxAssignedToToday(i);
                 const encodedTxId = encodeInlineArg(i.id);
                 const safeDesc = escapeHTML(i.desc || 'Untitled');
+                const safeDescAttr = escapeAttr(i.desc || 'Untitled movement');
                 const safeCategory = escapeHTML(i.category || 'Uncategorized');
                 const initials = escapeHTML(i.category ? i.category.substring(0, 2).toUpperCase() : '??');
                 const displayDate = new Date(i.date).toLocaleDateString();
                 const safeCardName = escapeHTML((typeof getTxCreditCardName === 'function' ? getTxCreditCardName(i) : '') || '');
                 const featureLockInfo = getRecentMovementFeatureLockInfo(i);
+                const presentation = buildFinanceActivityPresentation(i, { context: classificationContext });
 
-                const div = document.createElement('div');
-                div.className = `recent-movement-item p-4 flex items-center justify-between group transition-colors cursor-pointer ${isToday ? 'recent-movement-item--today' : 'hover:bg-slate-50'}`;
-                div.onclick = (e) => {
-                    if (e.target.closest('button')) return;
-                    openRecentMovementTransaction(i.id);
-                };
+                const row = document.createElement('article');
+                row.className = `recent-movement-item finance-activity-row group ${isToday ? 'recent-movement-item--today' : ''}`;
+                row.setAttribute('role', 'listitem');
+                row.dataset.activityClass = presentation.classId;
+                row.dataset.activityReview = presentation.reviewRequired ? 'true' : 'false';
 
                 const currencyBadge = i.originalCurrency && i.originalCurrency !== 'PHP'
-                    ? `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold">${escapeHTML(i.originalCurrency)}</span>`
+                    ? `<span class="finance-activity-context-badge">${escapeHTML(i.originalCurrency)}</span>`
                     : '';
-                const creditCardBadge = isCardCharge && safeCardName
-                    ? `<span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">CARD • ${safeCardName}</span>`
-                    : isCardPayment && safeCardName
-                        ? `<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">PAYMENT • ${safeCardName}</span>`
-                        : '';
-                const debtPaymentBadge = isDebtPayment
-                    ? '<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">DEBT PAYMENT</span>'
-                    : '';
-                const debtIncreaseBadge = isDebtInc
-                    ? `<span class="text-[9px] ${isDebtCashIn ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'} px-1.5 py-0.5 rounded font-bold">${isDebtCashIn ? 'DEBT + CASH' : 'DEBT ONLY'}</span>`
-                    : '';
-                const cryptoSaleBadge = isCryptoSellProceeds
-                    ? '<span class="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">CRYPTO SALE</span>'
-                    : '';
-                const nonIncomeCashInBadge = isNonIncomeCashIn
-                    ? '<span class="text-[9px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded font-bold">NOT INCOME</span>'
-                    : '';
-                const installmentBadge = isInstallmentPay
-                    ? '<span class="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">BNPL PAYMENT</span>'
+                const creditCardBadge = safeCardName
+                    && ['credit_card_consumption_charge', 'credit_card_settlement'].includes(presentation.classId)
+                    ? `<span class="finance-activity-context-badge">${safeCardName}</span>`
                     : '';
                 const orphanedDebtBadge = isOrphanedDebtTx
-                    ? '<span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">MISSING DEBT</span>'
+                    ? '<span class="finance-activity-context-badge finance-activity-context-badge--warning">Missing debt</span>'
                     : '';
                 const managedBadge = featureLockInfo
-                    ? `<span class="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold">MANAGED • ${escapeHTML(featureLockInfo.feature)}</span>`
+                    ? `<span class="finance-activity-context-badge">Managed in ${escapeHTML(featureLockInfo.feature)}</span>`
                     : '';
-                const badges = [currencyBadge, creditCardBadge, cryptoSaleBadge, nonIncomeCashInBadge, installmentBadge, debtPaymentBadge, debtIncreaseBadge, orphanedDebtBadge, managedBadge].filter(Boolean).join(' ');
+                const contextBadges = [currencyBadge, creditCardBadge, orphanedDebtBadge, managedBadge].filter(Boolean).join('');
+                const reviewBadge = presentation.reviewRequired
+                    ? `<span class="finance-activity-review-badge" data-review-severity="${escapeAttr(presentation.reviewSeverity)}"
+                        title="${escapeAttr(presentation.issueSummary || 'Review this movement classification')}">Needs review</span>`
+                    : '';
+                const amountSign = presentation.cashDelta > 0 ? '+' : (presentation.cashDelta < 0 ? '−' : '');
+                const amountValue = presentation.cashDelta !== 0 ? Math.abs(presentation.cashDelta) : presentation.amount;
+                const amountText = `${amountSign}${fmt(amountValue)}`;
+                const effects = renderRecentMovementEffects(presentation);
 
-                // Icon & Color Logic
-                let iconBg, iconText, amountColor, sign, amountText;
-                if (isInc || isNonIncomeCashIn) {
-                    iconBg = 'bg-emerald-50'; iconText = 'text-emerald-600';
-                    amountColor = 'text-emerald-600'; sign = '+';
-                } else if (isDebtInc) {
-                    iconBg = isDebtCashIn ? 'bg-emerald-50' : 'bg-blue-50';
-                    iconText = isDebtCashIn ? 'text-emerald-600' : 'text-blue-600';
-                    amountColor = isDebtCashIn ? 'text-emerald-600' : 'text-blue-600';
-                    sign = isDebtCashIn ? '+' : '';
-                } else if (isCardCharge) {
-                    iconBg = 'bg-blue-50'; iconText = 'text-blue-600';
-                    amountColor = 'text-blue-600'; sign = '';
-                } else if (isCardPayment) {
-                    iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
-                    amountColor = 'text-rose-600'; sign = '-';
-                } else if (isInstallmentPay) {
-                    iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
-                    amountColor = 'text-rose-600'; sign = '-';
-                } else {
-                    iconBg = 'bg-rose-50'; iconText = 'text-rose-600';
-                    amountColor = 'text-rose-600'; sign = '-';
-                }
-                amountText = (isDebtInc && !isDebtCashIn) || isCardCharge ? fmt(i.amt) : `${sign}${fmt(i.amt)}`;
-
-                div.innerHTML = `
-                    <div class="flex items-center gap-4">
-                        <div class="recent-movement-badge w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold ${iconBg} ${iconText}">
+                row.innerHTML = `
+                    <div class="finance-activity-row__identity">
+                        <div class="recent-movement-badge" data-activity-tone="${escapeAttr(presentation.tone)}" aria-hidden="true">
                             ${initials}
                         </div>
-                        <div>
-                            <p class="font-bold text-slate-800">${safeDesc}${badges ? ` ${badges}` : ''}</p>
+                        <div class="finance-activity-row__copy">
+                            <div class="finance-activity-row__title-line">
+                                <p class="font-bold text-slate-800">${safeDesc}</p>
+                                <span class="finance-activity-classification" data-activity-tone="${escapeAttr(presentation.tone)}">${escapeHTML(presentation.classLabel)}</span>
+                                ${reviewBadge}
+                            </div>
                             <p class="recent-movement-meta text-[10px] uppercase font-bold text-slate-400 tracking-widest">${displayDate} • ${safeCategory}</p>
+                            ${contextBadges ? `<div class="finance-activity-context">${contextBadges}</div>` : ''}
+                            <div class="finance-activity-effects" aria-label="Classification effects">${effects}</div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-4">
-                        <p class="font-bold ${amountColor}">${amountText}</p>
+                    <div class="finance-activity-row__amount" data-activity-tone="${escapeAttr(presentation.amountTone)}">
+                        <p>${amountText}</p>
+                        <span>${escapeHTML(presentation.amountRole)}</span>
+                    </div>
+                    <div class="finance-activity-row__actions">
                         ${featureLockInfo
-                            ? `<button type="button" title="Managed by ${escapeAttr(featureLockInfo.feature)}" onclick="deleteRecentMovementTransaction(decodeURIComponent('${encodedTxId}'))" class="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"><i data-lucide="lock" class="w-4 h-4"></i></button>`
-                            : `<button type="button" onclick="deleteRecentMovementTransaction(decodeURIComponent('${encodedTxId}'))" class="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
+                            ? `<button type="button" aria-label="Show where ${safeDescAttr} is managed" title="Managed by ${escapeAttr(featureLockInfo.feature)}" onclick="openRecentMovementTransaction(decodeURIComponent('${encodedTxId}'))"><i data-lucide="lock" class="w-4 h-4"></i></button>`
+                            : `<button type="button" aria-label="Edit ${safeDescAttr}" onclick="openRecentMovementTransaction(decodeURIComponent('${encodedTxId}'))"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                               <button type="button" aria-label="Delete ${safeDescAttr}" data-action-tone="danger" onclick="deleteRecentMovementTransaction(decodeURIComponent('${encodedTxId}'))"><i data-lucide="trash-2" class="w-4 h-4"></i></button>`}
                     </div>`;
-                list.appendChild(div);
+                list.appendChild(row);
             });
 
             const metrics = computeSummaryMetrics(window.allDecryptedTransactions || [], metricScope, {
@@ -208,7 +190,7 @@
 
             // Update Budget Inputs UI to include Debt categories if any
             populateBudgetInputs();
-            lucide.createIcons();
+            if (window.lucide) window.lucide.createIcons();
         }
 
         function buildDebtAndLentAggregates(transactions) {
@@ -469,11 +451,10 @@
             })}/${unit}`;
         }
 
-        async function renderDebts(items) {
+        async function renderDebts(items, options = {}) {
             const list = document.getElementById('debt-list');
-            list.innerHTML = '';
 
-            const decryptedDebts = (await Promise.all(items.map(async i => {
+            const decryptedDebts = (await Promise.all((items || []).map(async i => {
                 const d = await decryptData(i.data);
                 return d ? {
                     ...d,
@@ -484,6 +465,14 @@
 
             // Store for category usage
             window.allDecryptedDebts = decryptedDebts;
+            if (typeof scheduleFinanceSnapshotHistoryRefresh === 'function') {
+                scheduleFinanceSnapshotHistoryRefresh();
+            } else if (typeof scheduleFinanceSnapshotShadowRefresh === 'function') {
+                scheduleFinanceSnapshotShadowRefresh();
+            }
+            if (options.render === false) return decryptedDebts;
+            if (!list) return decryptedDebts;
+            list.innerHTML = '';
 
             if (decryptedDebts.length === 0) {
                 list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No debts tracked. Good job!</div>';
@@ -506,6 +495,7 @@
             const rowsToRender = debtListScope === 'completed' ? completedRows : activeRows;
             rowsToRender.forEach(({ debt: d, status }) => {
                 const safeDebtName = escapeHTML(d.name || 'Debt');
+                const safeDebtNameAttr = escapeAttr(d.name || 'Debt');
                 const safeDateAdded = escapeHTML(formatDebtAddedDate(d.dateAdded));
                 const encodedDebtId = encodeInlineArg(d.id);
                 const { paid, totalDebt, percentage, remaining, completed } = status;
@@ -513,12 +503,8 @@
                 const percentColor = completed ? 'text-emerald-600' : 'text-rose-600';
                 const overpaid = Math.max(0, paid - totalDebt);
                 const remainingText = completed && overpaid > 0.01 ? `Paid off • ${fmt(overpaid)} over` : completed ? 'Paid off' : `${fmt(remaining)} left`;
-                const div = document.createElement('div');
-                div.className = "group relative cursor-pointer hover:bg-slate-50 p-2 -mx-2 rounded-xl transition-colors";
-                div.onclick = (e) => {
-                    if (e.target.closest('button')) return;
-                    openUpdateDebtModal(d.id);
-                };
+                const div = document.createElement('article');
+                div.className = "finance-wealth-list-row group relative border border-slate-100 bg-slate-50 p-3 rounded-xl transition-colors";
                 div.innerHTML = `
                         <div class="flex justify-between items-end mb-1">
                             <div>
@@ -530,7 +516,11 @@
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-black ${percentColor}">${percentage}%</span>
-                                <button onclick="deleteItem('debts', decodeURIComponent('${encodedDebtId}'))" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
+                                <button type="button" onclick="openUpdateDebtModal(decodeURIComponent('${encodedDebtId}'))"
+                                    aria-label="Manage ${safeDebtNameAttr}"
+                                    class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200">Manage</button>
+                                <button type="button" onclick="deleteItem('debts', decodeURIComponent('${encodedDebtId}'))"
+                                    aria-label="Delete ${safeDebtNameAttr}" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50">
                                     <i data-lucide="trash-2" class="w-3 h-3"></i>
                                 </button>
                             </div>
@@ -550,17 +540,28 @@
             lucide.createIcons();
         }
 
-        async function renderCreditCards(items) {
+        async function renderCreditCards(items, options = {}) {
             const list = document.getElementById('credit-card-list');
-            if (!list) return;
-            list.innerHTML = '';
 
             const decrypted = (await Promise.all((items || []).map(async item => {
                 const data = await decryptData(item.data);
-                return data ? { ...data, id: item.id } : null;
+                return data ? {
+                    ...data,
+                    id: item.id,
+                    createdAt: item.createdAt || data.createdAt || null,
+                    lastModified: item.lastModified || data.lastModified || 0
+                } : null;
             }))).filter(Boolean);
 
             window.allDecryptedCreditCards = decrypted;
+            if (typeof scheduleFinanceSnapshotHistoryRefresh === 'function') {
+                scheduleFinanceSnapshotHistoryRefresh();
+            } else if (typeof scheduleFinanceSnapshotShadowRefresh === 'function') {
+                scheduleFinanceSnapshotShadowRefresh();
+            }
+            if (options.render === false) return decrypted;
+            if (!list) return decrypted;
+            list.innerHTML = '';
 
             if (decrypted.length === 0) {
                 list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No credit cards tracked yet.</div>';
@@ -573,6 +574,7 @@
 
             decrypted.forEach(card => {
                 const safeName = escapeHTML(card.name || 'Credit Card');
+                const safeNameAttr = escapeAttr(card.name || 'Credit Card');
                 const safeLast4 = escapeHTML(card.last4 || '');
                 const outstanding = Number(outstandingMap.get(card.id) || 0);
                 const limit = Number(card.limit || 0);
@@ -586,8 +588,8 @@
                     : 'No payment reminder set';
                 const encodedCardId = encodeInlineArg(card.id);
 
-                const div = document.createElement('div');
-                div.className = 'p-4 bg-slate-50 rounded-2xl border border-slate-200';
+                const div = document.createElement('article');
+                div.className = 'finance-wealth-list-row p-4 bg-slate-50 rounded-2xl border border-slate-200';
                 div.innerHTML = `
                     <div class="flex items-start justify-between gap-3">
                         <div>
@@ -595,9 +597,11 @@
                             <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">Outstanding ${fmt(outstanding)}</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button onclick="openCreditCardPaymentModal(decodeURIComponent('${encodedCardId}'))"
+                            <button type="button" onclick="openCreditCardPaymentModal(decodeURIComponent('${encodedCardId}'))"
+                                aria-label="Record payment for ${safeNameAttr}"
                                 class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Payment</button>
-                            <button onclick="openCreditCardModal(decodeURIComponent('${encodedCardId}'))"
+                            <button type="button" onclick="openCreditCardModal(decodeURIComponent('${encodedCardId}'))"
+                                aria-label="Edit ${safeNameAttr}"
                                 class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
                         </div>
                     </div>
@@ -646,17 +650,28 @@
             return `Due every ${dueDay}${typeof getDaySuffix === 'function' ? getDaySuffix(dueDay) : 'th'}`;
         }
 
-        async function renderInstallmentPlans(items) {
+        async function renderInstallmentPlans(items, options = {}) {
             const list = document.getElementById('installment-plan-list');
-            if (!list) return;
-            list.innerHTML = '';
 
             const decrypted = (await Promise.all((items || []).map(async item => {
                 const data = await decryptData(item.data);
-                return data ? { ...data, id: item.id } : null;
+                return data ? {
+                    ...data,
+                    id: item.id,
+                    createdAt: item.createdAt || data.createdAt || null,
+                    lastModified: item.lastModified || data.lastModified || 0
+                } : null;
             }))).filter(Boolean);
 
             window.allDecryptedInstallmentPlans = decrypted;
+            if (typeof scheduleFinanceSnapshotHistoryRefresh === 'function') {
+                scheduleFinanceSnapshotHistoryRefresh();
+            } else if (typeof scheduleFinanceSnapshotShadowRefresh === 'function') {
+                scheduleFinanceSnapshotShadowRefresh();
+            }
+            if (options.render === false) return decrypted;
+            if (!list) return decrypted;
+            list.innerHTML = '';
 
             if (decrypted.length === 0) {
                 list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No installment plans tracked yet.</div>';
@@ -727,8 +742,9 @@
             const completedRows = rows.filter(row => row.isComplete);
 
             activeRows.forEach(row => {
-                const div = document.createElement('div');
-                div.className = 'p-4 bg-slate-50 rounded-2xl border border-slate-200';
+                const safePlanNameAttr = escapeAttr(row.plan.name || 'installment plan');
+                const div = document.createElement('article');
+                div.className = 'finance-wealth-list-row p-4 bg-slate-50 rounded-2xl border border-slate-200';
                 div.innerHTML = `
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex items-start gap-3 min-w-0">
@@ -752,13 +768,17 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
-                            <button onclick="openInstallmentPaymentModal(decodeURIComponent('${row.encodedPlanId}'))"
+                            <button type="button" onclick="openInstallmentPaymentModal(decodeURIComponent('${row.encodedPlanId}'))"
+                                aria-label="Record payment for ${safePlanNameAttr}"
                                 class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Payment</button>
-                            <button onclick="openInstallmentPaymentModal(decodeURIComponent('${row.encodedPlanId}'), { recordOnly: true })"
+                            <button type="button" onclick="openInstallmentPaymentModal(decodeURIComponent('${row.encodedPlanId}'), { recordOnly: true })"
+                                aria-label="Record previous payment for ${safePlanNameAttr}"
                                 class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-violet-100 text-violet-700 hover:bg-violet-200">Previous</button>
-                            <button onclick="openInstallmentPlanModal(decodeURIComponent('${row.encodedPlanId}'))"
+                            <button type="button" onclick="openInstallmentPlanModal(decodeURIComponent('${row.encodedPlanId}'))"
+                                aria-label="Edit ${safePlanNameAttr}"
                                 class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
-                            <button onclick="deleteItem('installment_plans', decodeURIComponent('${row.encodedPlanId}'))"
+                            <button type="button" onclick="deleteItem('installment_plans', decodeURIComponent('${row.encodedPlanId}'))"
+                                aria-label="Delete ${safePlanNameAttr}"
                                 class="text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
                         </div>
                     </div>
@@ -790,8 +810,9 @@
                 `;
                 const completedList = completedWrap.querySelector('div');
                 completedRows.forEach(row => {
-                    const item = document.createElement('div');
-                    item.className = 'rounded-xl border border-slate-200 bg-white/70 px-3 py-3';
+                    const safePlanNameAttr = escapeAttr(row.plan.name || 'installment plan');
+                    const item = document.createElement('article');
+                    item.className = 'finance-wealth-list-row rounded-xl border border-slate-200 bg-white/70 px-3 py-3';
                     item.innerHTML = `
                         <div class="flex items-start justify-between gap-3">
                             <div class="flex items-start gap-3 min-w-0">
@@ -812,9 +833,11 @@
                                 </div>
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
-                                <button onclick="openInstallmentPlanModal(decodeURIComponent('${row.encodedPlanId}'))"
+                                <button type="button" onclick="openInstallmentPlanModal(decodeURIComponent('${row.encodedPlanId}'))"
+                                    aria-label="Edit ${safePlanNameAttr}"
                                     class="px-2.5 py-1.5 text-[10px] font-bold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300">Edit</button>
-                                <button onclick="deleteItem('installment_plans', decodeURIComponent('${row.encodedPlanId}'))"
+                                <button type="button" onclick="deleteItem('installment_plans', decodeURIComponent('${row.encodedPlanId}'))"
+                                    aria-label="Delete ${safePlanNameAttr}"
                                     class="text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
                             </div>
                         </div>
@@ -833,16 +856,28 @@
             lucide.createIcons();
         }
 
-        async function renderLent(items) {
+        async function renderLent(items, options = {}) {
             const list = document.getElementById('lent-list');
-            list.innerHTML = '';
 
-            const decryptedLent = (await Promise.all(items.map(async i => {
+            const decryptedLent = (await Promise.all((items || []).map(async i => {
                 const d = await decryptData(i.data);
-                return d ? { ...d, id: i.id } : null;
+                return d ? {
+                    ...d,
+                    id: i.id,
+                    createdAt: i.createdAt || d.createdAt || null,
+                    lastModified: i.lastModified || d.lastModified || 0
+                } : null;
             }))).filter(x => x);
 
             window.allDecryptedLent = decryptedLent;
+            if (typeof scheduleFinanceSnapshotHistoryRefresh === 'function') {
+                scheduleFinanceSnapshotHistoryRefresh();
+            } else if (typeof scheduleFinanceSnapshotShadowRefresh === 'function') {
+                scheduleFinanceSnapshotShadowRefresh();
+            }
+            if (options.render === false) return decryptedLent;
+            if (!list) return decryptedLent;
+            list.innerHTML = '';
 
             if (decryptedLent.length === 0) {
                 list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No money lent out.</div>';
@@ -855,13 +890,14 @@
 
             decryptedLent.forEach(l => {
                 const safeLentName = escapeHTML(l.name || 'Lent');
+                const safeLentNameAttr = escapeAttr(l.name || 'Lent');
                 const encodedLentId = encodeInlineArg(l.id);
                 const { expenses, income } = getLentAggregateAmounts(l, aggregates, fallbackOwners);
 
                 const balance = expenses - income;
 
-                const div = document.createElement('div');
-                div.className = "group relative bg-slate-50 p-3 rounded-2xl border border-slate-100";
+                const div = document.createElement('article');
+                div.className = "finance-wealth-list-row group relative bg-slate-50 p-3 rounded-2xl border border-slate-100";
                 div.innerHTML = `
                     <div class="flex justify-between items-center">
                         <div>
@@ -873,7 +909,8 @@
                                 <p class="text-xs font-bold text-slate-400 uppercase">Balance</p>
                                 <p class="font-black ${balance > 0 ? 'text-emerald-600' : 'text-slate-400'}">${fmt(balance)}</p>
                             </div>
-                            <button onclick="deleteItem('lent', decodeURIComponent('${encodedLentId}'))" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition-opacity">
+                            <button type="button" onclick="deleteItem('lent', decodeURIComponent('${encodedLentId}'))"
+                                aria-label="Stop tracking ${safeLentNameAttr}" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
                         </div>
@@ -884,23 +921,27 @@
             lucide.createIcons();
         }
 
-        async function renderBills(items) {
+        async function renderBills(items, options = {}) {
             const list = document.getElementById('bill-list');
-            list.innerHTML = '';
-            const decrypted = (await Promise.all(items.map(async i => {
+            const decrypted = (await Promise.all((items || []).map(async i => {
                 const d = await decryptData(i.data);
                 return d ? { ...normalizeBillDataShape(d), id: i.id } : null;
             }))).filter(x => x);
             window.allDecryptedBills = decrypted;
+            if (options.render === false) return decrypted;
+            if (!list) return decrypted;
+            list.innerHTML = '';
 
             if (decrypted.length === 0) {
                 list.innerHTML = '<div class="text-center text-xs text-slate-400 py-2">No bills set.</div>';
+                if (typeof renderFinancePlanCoordinator === 'function') renderFinancePlanCoordinator();
                 return;
             }
 
             decrypted.forEach(b => {
                 const encodedBillId = encodeInlineArg(b.id);
                 const safeBillName = escapeHTML(b.name || 'Bill');
+                const safeBillNameAttr = escapeAttr(b.name || 'Bill');
                 const safeBillDay = Number.isFinite(Number(b.day)) ? Number(b.day) : 1;
                 const isPaused = !!b.paused;
                 const isElectricity = b.billType === 'electricity';
@@ -921,9 +962,8 @@
                     ? '<span class="text-[10px] align-middle bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">Electricity</span>'
                     : '';
                 const amountLabel = isElectricity && latestCycle ? fmt(latestCycle.amount) : fmt(b.amt);
-                const div = document.createElement('div');
-                div.className = `p-3 bg-slate-50 rounded-2xl border group cursor-pointer transition-colors ${isPaused ? 'border-amber-300 hover:border-amber-400' : isElectricity ? 'border-amber-200 hover:border-amber-300' : 'hover:border-indigo-300'}`;
-                div.onclick = (e) => { if (!e.target.closest('button')) openBillModal(b.id); };
+                const div = document.createElement('article');
+                div.className = `finance-plan-list-row p-3 bg-slate-50 rounded-2xl border group transition-colors ${isPaused ? 'border-amber-300' : isElectricity ? 'border-amber-200' : 'border-slate-100'}`;
 
                 if (isElectricity) {
                     div.innerHTML = `
@@ -965,11 +1005,12 @@
                         </div>
 
                         <div class="mt-3 flex flex-wrap items-center gap-2">
-                            <button onclick="openBillPaymentTrigger(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 whitespace-nowrap">Pay</button>
-                            <button onclick="openElectricityCycleModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 whitespace-nowrap">${latestCycle ? 'Record Bill' : 'Add Cycle'}</button>
-                            <button onclick="openElectricityHistoryModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap">History</button>
-                            <button onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'} whitespace-nowrap">${isPaused ? 'Resume' : 'Pause'}</button>
-                            <button onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="ml-auto text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                            <button type="button" aria-label="Record payment for ${safeBillNameAttr}" onclick="openBillPaymentTrigger(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 whitespace-nowrap">Pay</button>
+                            <button type="button" aria-label="Record electricity cycle for ${safeBillNameAttr}" onclick="openElectricityCycleModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 whitespace-nowrap">${latestCycle ? 'Record Bill' : 'Add Cycle'}</button>
+                            <button type="button" aria-label="View electricity history for ${safeBillNameAttr}" onclick="openElectricityHistoryModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap">History</button>
+                            <button type="button" aria-label="${isPaused ? 'Resume' : 'Pause'} ${safeBillNameAttr}" onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'} whitespace-nowrap">${isPaused ? 'Resume' : 'Pause'}</button>
+                            <button type="button" aria-label="Edit ${safeBillNameAttr}" onclick="openBillModal(decodeURIComponent('${encodedBillId}'))" class="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap">Edit</button>
+                            <button type="button" aria-label="Delete ${safeBillNameAttr}" onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="ml-auto text-slate-300 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
                         </div>
                     `;
                     list.appendChild(div);
@@ -984,22 +1025,38 @@
                         </div>
                         <div class="flex items-center gap-2 shrink-0">
                             <span class="font-bold text-slate-500">${amountLabel}</span>
-                            <button onclick="openBillPaymentTrigger(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 whitespace-nowrap">Pay</button>
-                            <button onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'} whitespace-nowrap">${isPaused ? 'Resume' : 'Pause'}</button>
-                            <button onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
+                            <button type="button" aria-label="Record payment for ${safeBillNameAttr}" onclick="openBillPaymentTrigger(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 whitespace-nowrap">Pay</button>
+                            <button type="button" aria-label="${isPaused ? 'Resume' : 'Pause'} ${safeBillNameAttr}" onclick="toggleBillPaused(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg ${isPaused ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'} whitespace-nowrap">${isPaused ? 'Resume' : 'Pause'}</button>
+                            <button type="button" aria-label="Edit ${safeBillNameAttr}" onclick="openBillModal(decodeURIComponent('${encodedBillId}'))" class="px-2 py-1 text-[10px] font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap">Edit</button>
+                            <button type="button" aria-label="Delete ${safeBillNameAttr}" onclick="deleteItem('bills', decodeURIComponent('${encodedBillId}'))" class="text-slate-300 hover:text-rose-500"><i data-lucide="x-circle" class="w-4 h-4"></i></button>
                         </div>
                     </div>
                 `;
                 list.appendChild(div);
             });
-            lucide.createIcons();
+            if (typeof renderFinancePlanCoordinator === 'function') renderFinancePlanCoordinator();
+            if (window.lucide) window.lucide.createIcons();
         }
 
         function renderBudgets(items) {
             const container = document.getElementById('budget-breakdown');
+            const reportsPresentation = typeof getFinanceReportsPresentation === 'function'
+                ? getFinanceReportsPresentation()
+                : null;
+            const budgetComparison = reportsPresentation?.cards?.spending?.budgetComparison;
+            if (budgetComparison && budgetComparison.available !== true) {
+                container.innerHTML = `
+                    <div class="finance-reports-scope-empty" data-report-scope-state="single-month-required">
+                        <i data-lucide="calendar-range" class="w-5 h-5" aria-hidden="true"></i>
+                        <p>Choose one month to compare monthly category limits with Spending.</p>
+                    </div>`;
+                if (window.lucide) window.lucide.createIcons();
+                return;
+            }
             const hasBudgets = Object.values(budgets).some(v => v > 0);
             if (!hasBudgets) {
                 container.innerHTML = '<p class="text-xs text-slate-400 italic text-center">Set budgets to see progress.</p>';
+                if (typeof renderFinancePlanCoordinator === 'function') renderFinancePlanCoordinator();
                 return;
             }
 
@@ -1029,16 +1086,18 @@
                 `;
                 container.appendChild(div);
             });
+            if (typeof renderFinancePlanCoordinator === 'function') renderFinancePlanCoordinator();
         }
 
-        async function loadAndRenderWishlist() {
+        async function loadAndRenderWishlist(options = {}) {
             const decrypted = (await Promise.all(rawWishlist.map(async i => {
                 const d = await decryptData(i.data);
                 return d ? { ...d, id: i.id } : null;
             }))).filter(x => x).sort((a, b) => new Date(a.targetDate || a.createdAt) - new Date(b.targetDate || b.createdAt));
 
             window.allDecryptedWishlist = decrypted;
-            renderWishlist(decrypted);
+            if (options.render !== false) renderWishlist(decrypted);
+            return decrypted;
         }
 
         function renderWishlist(items) {
@@ -1047,6 +1106,7 @@
 
             if (!items || items.length === 0) {
                 list.innerHTML = '<div class="text-center text-xs text-slate-400 py-4">No wishlist items yet.</div>';
+                if (typeof renderFinancePlanCoordinator === 'function') renderFinancePlanCoordinator();
                 return;
             }
 
@@ -1057,15 +1117,12 @@
                 const targetDate = i.targetDate ? new Date(i.targetDate).toLocaleDateString() : 'No date set';
                 const encodedWishlistId = encodeInlineArg(i.id);
                 const safeDesc = escapeHTML(i.desc || 'Wishlist item');
+                const safeDescAttr = escapeAttr(i.desc || 'Wishlist item');
                 const safeCategory = escapeHTML(categoryLabel);
                 const safeTargetDate = escapeHTML(targetDate);
 
-                const div = document.createElement('div');
-                div.className = 'p-3 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all group cursor-pointer';
-                div.onclick = (e) => {
-                    if (e.target.closest('button')) return;
-                    openWishlistModal(i.id);
-                };
+                const div = document.createElement('article');
+                div.className = 'finance-plan-list-row p-3 bg-slate-50 rounded-2xl border border-slate-100 transition-all group';
                 div.innerHTML = `
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex-1">
@@ -1074,8 +1131,9 @@
                             <p class="text-xs text-slate-500 mt-1">Planned: ${amountLabel}</p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <button onclick="convertWishlistToExpense(decodeURIComponent('${encodedWishlistId}'))" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">Convert</button>
-                            <button onclick="deleteWishlistItem(decodeURIComponent('${encodedWishlistId}'))" class="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all">
+                            <button type="button" aria-label="Edit ${safeDescAttr}" onclick="openWishlistModal(decodeURIComponent('${encodedWishlistId}'))" class="px-3 py-1.5 text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg">Edit</button>
+                            <button type="button" aria-label="Convert ${safeDescAttr} to a purchase" onclick="convertWishlistToExpense(decodeURIComponent('${encodedWishlistId}'))" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">Buy now</button>
+                            <button type="button" aria-label="Delete ${safeDescAttr}" onclick="deleteWishlistItem(decodeURIComponent('${encodedWishlistId}'))" class="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
                         </div>
@@ -1084,5 +1142,6 @@
                 list.appendChild(div);
             });
 
-            lucide.createIcons();
+            if (typeof renderFinancePlanCoordinator === 'function') renderFinancePlanCoordinator();
+            if (window.lucide) window.lucide.createIcons();
         }

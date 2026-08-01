@@ -79,13 +79,11 @@
                 .map(([category, limit]) => ({ category, limit: Number(limit) || 0 }))
                 .filter(entry => entry.limit > 0);
 
-            const expenseByCategory = Object.create(null);
-            (monthTransactions || []).forEach(tx => {
-                if (tx.type !== 'expense') return;
-                const category = String(tx.category || '').trim();
-                if (!category) return;
-                expenseByCategory[category] = (expenseByCategory[category] || 0) + (Number(tx.amt) || 0);
+            const monthMetrics = computeSummaryMetrics(window.allDecryptedTransactions || [], 'selected_period', {
+                scopeTransactions: monthTransactions || [],
+                filteredTransactions: monthTransactions || []
             });
+            const expenseByCategory = monthMetrics.categoryExpenses || Object.create(null);
 
             const overages = budgetEntries
                 .map(entry => {
@@ -191,6 +189,9 @@
             return {
                 monthKey,
                 metrics,
+                metricProvenance: typeof getFinanceMetricProvenance === 'function'
+                    ? getFinanceMetricProvenance(metrics)
+                    : null,
                 monthEndBalance,
                 burnRateMonthly,
                 runwayDays,
@@ -294,8 +295,11 @@
                 },
                 {
                     label: 'Savings target met',
-                    pass: snapshot.metrics.savingsRate >= targets.savingsRatePct,
-                    detail: `${snapshot.metrics.savingsRate}% vs target ${targets.savingsRatePct}%`
+                    pass: Number.isFinite(snapshot.metrics.savingsRate)
+                        && snapshot.metrics.savingsRate >= targets.savingsRatePct,
+                    detail: Number.isFinite(snapshot.metrics.savingsRate)
+                        ? `${typeof formatFinanceSavingsRate === 'function' ? formatFinanceSavingsRate(snapshot.metrics.savingsRate) : `${snapshot.metrics.savingsRate}%`} vs target ${targets.savingsRatePct}%`
+                        : 'n/a — no earned income in this period'
                 },
                 {
                     label: 'Runway target met',
@@ -320,19 +324,19 @@
 
             const cards = [
                 {
-                    label: 'Income',
+                    label: snapshot.metrics.metricLabels?.income || 'Earned Income',
                     value: fmt(snapshot.metrics.income),
                     tone: 'emerald'
                 },
                 {
-                    label: 'Expenses',
+                    label: snapshot.metrics.metricLabels?.expense || 'Spending',
                     value: fmt(snapshot.metrics.expense),
                     tone: 'rose'
                 },
                 {
                     label: 'Savings Rate',
-                    value: `${snapshot.metrics.savingsRate}%`,
-                    tone: snapshot.metrics.savingsRate >= 0 ? 'indigo' : 'rose'
+                    value: typeof formatFinanceSavingsRate === 'function' ? formatFinanceSavingsRate(snapshot.metrics.savingsRate) : 'n/a',
+                    tone: !Number.isFinite(snapshot.metrics.savingsRate) || snapshot.metrics.savingsRate >= 0 ? 'indigo' : 'rose'
                 },
                 {
                     label: 'Month-end Balance',
@@ -431,7 +435,9 @@
 
             list.innerHTML = closes.slice(0, 8).map(record => {
                 const closedAtLabel = record.closedAt ? new Date(record.closedAt).toLocaleDateString() : 'n/a';
-                const savingsRate = Number(record.summary?.savingsRate || 0);
+                const savingsRate = Number(record.summary?.income || 0) > 0 && record.summary?.savingsRate != null
+                    ? Number(record.summary.savingsRate)
+                    : null;
                 const runwayDays = Number(record.summary?.runwayDays || 0);
                 const encodedMonth = encodeInlineArg(record.month);
                 return `
@@ -446,7 +452,7 @@
                                 <span class="text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">Closed</span>
                             </div>
                         </div>
-                        <p class="text-[11px] text-slate-500 mt-1">Closed ${escapeHTML(closedAtLabel)} • Savings ${savingsRate.toFixed(0)}% • Runway ${Math.round(runwayDays)}d</p>
+                        <p class="text-[11px] text-slate-500 mt-1">Closed ${escapeHTML(closedAtLabel)} • Savings ${typeof formatFinanceSavingsRate === 'function' ? formatFinanceSavingsRate(savingsRate, { digits: 0 }) : 'n/a'} • Runway ${Math.round(runwayDays)}d</p>
                     </div>
                 `;
             }).join('');
@@ -478,6 +484,11 @@
             const snapshot = computeMonthlyCloseSnapshot(monthKey);
             const targets = getEffectiveKpiTargets();
             const existingRecord = getMonthlyCloseRecord(monthKey);
+            const modal = document.getElementById('monthly-close-modal');
+            if (modal) {
+                modal.dataset.financeMetricEngine = snapshot.metricProvenance?.engine || 'legacy';
+                modal.dataset.financeMetricVersion = snapshot.metricProvenance?.engineVersion || '';
+            }
 
             renderCloseTargetGuardrails(targets);
             updateMonthlyCloseStatusPill(monthKey, existingRecord);
@@ -556,16 +567,18 @@
 
             const existing = db.monthly_closes.find(record => record && record.month === monthKey);
             const runwayDaysForStorage = Number.isFinite(snapshot.runwayDays) ? Math.max(0, Math.round(snapshot.runwayDays)) : 0;
+            const metricProvenance = snapshot.metricProvenance || null;
 
             const closeRecord = {
                 id: existing?.id || `close_${monthKey.replace('-', '')}`,
                 month: monthKey,
                 status: 'closed',
                 notes,
+                metricProvenance,
                 summary: {
                     income: Number(snapshot.metrics.income || 0),
                     expense: Number(snapshot.metrics.expense || 0),
-                    savingsRate: Number(snapshot.metrics.savingsRate || 0),
+                    savingsRate: Number.isFinite(snapshot.metrics.savingsRate) ? snapshot.metrics.savingsRate : null,
                     avgDailySpend: Number(snapshot.metrics.avgDailySpend || 0),
                     monthEndBalance: Number(snapshot.monthEndBalance || 0),
                     totalBudget: Number(snapshot.budgetSummary.totalBudget || 0),
@@ -593,10 +606,11 @@
             const kpiSnapshot = {
                 id: `kpi_${monthKey.replace('-', '')}`,
                 month: monthKey,
+                metricProvenance,
                 summary: {
                     income: Number(snapshot.metrics.income || 0),
                     expense: Number(snapshot.metrics.expense || 0),
-                    savingsRate: Number(snapshot.metrics.savingsRate || 0),
+                    savingsRate: Number.isFinite(snapshot.metrics.savingsRate) ? snapshot.metrics.savingsRate : null,
                     avgDailySpend: Number(snapshot.metrics.avgDailySpend || 0),
                     monthEndBalance: Number(snapshot.monthEndBalance || 0),
                     runwayDays: runwayDaysForStorage,
@@ -666,12 +680,17 @@
                 doc.text(`Status: ${summaryStatus}`, 14, cursorY);
                 cursorY += 5;
                 doc.text(`Closed At: ${closedAtLabel}`, 14, cursorY);
+                cursorY += 5;
+                const metricSource = typeof formatFinanceMetricProvenance === 'function'
+                    ? formatFinanceMetricProvenance(snapshot.metricProvenance)
+                    : (snapshot.metricProvenance?.engine === 'canonical' ? 'Canonical metrics' : 'Legacy metrics');
+                doc.text(`Metric source: ${metricSource}`, 14, cursorY);
                 cursorY += 7;
 
                 const kpiRows = [
-                    ['Income', fmt(snapshot.metrics.income)],
-                    ['Expenses', fmt(snapshot.metrics.expense)],
-                    ['Savings Rate', `${snapshot.metrics.savingsRate}%`],
+                    [snapshot.metrics.metricLabels?.income || 'Earned Income', fmt(snapshot.metrics.income)],
+                    [snapshot.metrics.metricLabels?.expense || 'Spending', fmt(snapshot.metrics.expense)],
+                    ['Savings Rate', typeof formatFinanceSavingsRate === 'function' ? formatFinanceSavingsRate(snapshot.metrics.savingsRate) : 'n/a'],
                     ['Month-end Balance', fmt(snapshot.monthEndBalance)],
                     ['Burn Rate (Monthly)', fmt(snapshot.burnRateMonthly)],
                     ['Runway', formatRunwayDays(snapshot.runwayDays)],

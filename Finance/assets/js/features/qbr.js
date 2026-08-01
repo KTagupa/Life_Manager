@@ -35,38 +35,41 @@ function getCurrentQuarter() {
 function computeQuarterMetrics(year, quarter) {
     const months = getQuarterMonths(year, quarter);
     const allTx = window.allDecryptedTransactions || [];
-
-    let income = 0;
-    let expenses = 0;
-    const categoryExpenses = {};
-    const incomeSources = {};
-    let txCount = 0;
-
-    allTx.forEach(t => {
+    const quarterTransactions = allTx.filter(t => {
         const d = new Date(t.date);
         const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        if (!months.includes(mk)) return;
-
-        txCount++;
-        const amount = t.amt || 0;
-
-        const reportedIncome = typeof getTxReportedIncomeDelta === 'function'
-            ? getTxReportedIncomeDelta(t)
-            : (t.type === 'income' ? amount : 0);
-        if (reportedIncome > 0) {
-            income += reportedIncome;
-            const cat = t.category || 'Others';
-            incomeSources[cat] = (incomeSources[cat] || 0) + reportedIncome;
-        } else if ((typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? amount : 0)) > 0) {
-            const expenseAmount = typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : amount;
-            expenses += expenseAmount;
-            const cat = typeof getTxExpenseCategory === 'function' ? getTxExpenseCategory(t) : (t.category || 'Others');
-            categoryExpenses[cat] = (categoryExpenses[cat] || 0) + expenseAmount;
-        }
+        return months.includes(mk);
+    });
+    const summary = computeSummaryMetrics(allTx, 'selected_period', {
+        scopeTransactions: quarterTransactions,
+        filteredTransactions: quarterTransactions
     });
 
+    const income = Number(summary.income || 0);
+    const expenses = Number(summary.expense || 0);
+    const categoryExpenses = { ...(summary.categoryExpenses || {}) };
+    const consumerBreakdown = typeof buildFinanceConsumerBreakdown === 'function'
+        ? buildFinanceConsumerBreakdown(summary)
+        : null;
+    const incomeSources = consumerBreakdown?.available
+        ? { ...consumerBreakdown.incomeByCategory }
+        : {};
+    const txCount = quarterTransactions.length;
+
+    if (!consumerBreakdown?.available) {
+        quarterTransactions.forEach(t => {
+            const reportedIncome = typeof getDisplayTxEarnedIncomeDelta === 'function'
+                ? getDisplayTxEarnedIncomeDelta(t)
+                : (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(t) : 0);
+            if (reportedIncome > 0) {
+                const cat = t.category || 'Others';
+                incomeSources[cat] = (incomeSources[cat] || 0) + reportedIncome;
+            }
+        });
+    }
+
     const netIncome = income - expenses;
-    const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
+    const savingsRate = summary.savingsRate;
     const avgMonthlyIncome = income / 3;
     const avgMonthlyExpenses = expenses / 3;
 
@@ -78,17 +81,17 @@ function computeQuarterMetrics(year, quarter) {
 
     // Monthly breakdown for chart
     const monthlyBreakdown = months.map(mk => {
-        let mIncome = 0, mExpense = 0;
-        allTx.forEach(t => {
+        const monthTransactions = quarterTransactions.filter(t => {
             const d = new Date(t.date);
             const tmk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            if (tmk !== mk) return;
-            const reportedIncome = typeof getTxReportedIncomeDelta === 'function'
-                ? getTxReportedIncomeDelta(t)
-                : (t.type === 'income' ? (t.amt || 0) : 0);
-            if (reportedIncome > 0) mIncome += reportedIncome;
-            else mExpense += typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0);
+            return tmk === mk;
         });
+        const monthSummary = computeSummaryMetrics(allTx, 'selected_period', {
+            scopeTransactions: monthTransactions,
+            filteredTransactions: monthTransactions
+        });
+        const mIncome = Number(monthSummary.income || 0);
+        const mExpense = Number(monthSummary.expense || 0);
         return { month: mk, income: mIncome, expense: mExpense, net: mIncome - mExpense };
     });
 
@@ -120,14 +123,19 @@ function computeQuarterMetrics(year, quarter) {
         txCount,
         budgetAdherence,
         budgetedCategories,
-        underBudget
+        underBudget,
+        metricProvenance: typeof getFinanceMetricProvenance === 'function'
+            ? getFinanceMetricProvenance(summary)
+            : null
     };
 }
 
 function computeQoQComparison(current, previous) {
     const incomeChange = previous.income > 0 ? ((current.income - previous.income) / previous.income) * 100 : 0;
     const expenseChange = previous.expenses > 0 ? ((current.expenses - previous.expenses) / previous.expenses) * 100 : 0;
-    const savingsRateChange = current.savingsRate - previous.savingsRate;
+    const savingsRateChange = Number.isFinite(current.savingsRate) && Number.isFinite(previous.savingsRate)
+        ? current.savingsRate - previous.savingsRate
+        : null;
     const netIncomeChange = previous.netIncome !== 0 ? ((current.netIncome - previous.netIncome) / Math.abs(previous.netIncome)) * 100 : 0;
 
     return {
@@ -137,7 +145,7 @@ function computeQoQComparison(current, previous) {
         netIncomeChange,
         incomeTrend: incomeChange >= 0 ? 'up' : 'down',
         expenseTrend: expenseChange <= 0 ? 'up' : 'down', // lower expense = good
-        savingsRateTrend: savingsRateChange >= 0 ? 'up' : 'down'
+        savingsRateTrend: savingsRateChange == null ? 'unavailable' : (savingsRateChange >= 0 ? 'up' : 'down')
     };
 }
 
@@ -145,7 +153,8 @@ function scorePerformanceGrade(metrics) {
     const grades = [];
 
     // Savings rate: 🟢 >20%, 🟡 10-20%, 🔴 <10%
-    if (metrics.savingsRate >= 20) grades.push({ kpi: 'Savings Rate', grade: '🟢', label: `${metrics.savingsRate.toFixed(0)}%`, status: 'On Track' });
+    if (!Number.isFinite(metrics.savingsRate)) grades.push({ kpi: 'Savings Rate', grade: '⚪', label: 'n/a', status: 'No earned income' });
+    else if (metrics.savingsRate >= 20) grades.push({ kpi: 'Savings Rate', grade: '🟢', label: `${metrics.savingsRate.toFixed(0)}%`, status: 'On Track' });
     else if (metrics.savingsRate >= 10) grades.push({ kpi: 'Savings Rate', grade: '🟡', label: `${metrics.savingsRate.toFixed(0)}%`, status: 'Needs Attention' });
     else grades.push({ kpi: 'Savings Rate', grade: '🔴', label: `${metrics.savingsRate.toFixed(0)}%`, status: 'Off Track' });
 
@@ -208,6 +217,11 @@ function renderQBRContent() {
     const previous = computeQuarterMetrics(prev.year, prev.quarter);
     const comparison = computeQoQComparison(current, previous);
     const grades = scorePerformanceGrade(current);
+    const metricSource = typeof formatFinanceMetricProvenance === 'function'
+        ? formatFinanceMetricProvenance(current.metricProvenance)
+        : (current.metricProvenance?.engine === 'canonical' ? 'Canonical metrics' : 'Legacy metrics');
+    container.dataset.financeMetricEngine = current.metricProvenance?.engine || 'legacy';
+    container.dataset.financeMetricVersion = current.metricProvenance?.engineVersion || '';
 
     if (current.txCount === 0) {
         container.innerHTML = `
@@ -220,9 +234,9 @@ function renderQBRContent() {
 
     // Q-over-Q comparison cards
     const comparisons = [
-        { label: 'Income', value: current.income, change: comparison.incomeChange, positive: comparison.incomeChange >= 0 },
-        { label: 'Expenses', value: current.expenses, change: comparison.expenseChange, positive: comparison.expenseChange <= 0 },
-        { label: 'Savings Rate', value: null, displayValue: `${current.savingsRate.toFixed(0)}%`, change: comparison.savingsRateChange, positive: comparison.savingsRateChange >= 0, isSuffix: true },
+        { label: 'Earned Income', value: current.income, change: comparison.incomeChange, positive: comparison.incomeChange >= 0 },
+        { label: 'Spending', value: current.expenses, change: comparison.expenseChange, positive: comparison.expenseChange <= 0 },
+        { label: 'Savings Rate', value: null, displayValue: typeof formatFinanceSavingsRate === 'function' ? formatFinanceSavingsRate(current.savingsRate, { digits: 0 }) : 'n/a', change: comparison.savingsRateChange, positive: comparison.savingsRateChange == null || comparison.savingsRateChange >= 0, isSuffix: true },
         { label: 'Net Income', value: current.netIncome, change: comparison.netIncomeChange, positive: current.netIncome >= 0 }
     ];
 
@@ -230,7 +244,8 @@ function renderQBRContent() {
         const color = c.positive ? 'text-emerald-600' : 'text-rose-600';
         const bg = c.positive ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200';
         const icon = c.positive ? 'trending-up' : 'trending-down';
-        const sign = c.change >= 0 ? '+' : '';
+        const changeAvailable = Number.isFinite(c.change);
+        const sign = changeAvailable && c.change >= 0 ? '+' : '';
         const display = c.displayValue || fmt(c.value);
         return `
                     <div class="${bg} rounded-2xl p-4 border">
@@ -239,7 +254,7 @@ function renderQBRContent() {
                             <i data-lucide="${icon}" class="w-3 h-3 ${color}"></i>
                         </div>
                         <p class="text-xl font-black text-slate-800">${display}</p>
-                        <p class="text-[11px] font-bold ${color} mt-1">${sign}${c.change.toFixed(1)}% vs ${getQuarterLabel(prev.year, prev.quarter)}</p>
+                        <p class="text-[11px] font-bold ${color} mt-1">${changeAvailable ? `${sign}${c.change.toFixed(1)}%` : 'n/a'} vs ${getQuarterLabel(prev.year, prev.quarter)}</p>
                     </div>
                 `;
     }).join('');
@@ -294,6 +309,7 @@ function renderQBRContent() {
         grades.filter(g => g.grade === '🔴').length >= grades.length / 2 ? '🔴 Needs Work' : '🟡 Mixed';
 
     container.innerHTML = `
+                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-3">Metric source: ${escapeHTML(metricSource)}</p>
                 <!-- Q-over-Q Cards -->
                 <div class="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">${comparisonHTML}</div>
 
@@ -307,8 +323,8 @@ function renderQBRContent() {
                                 <span class="text-xs font-black">${overallGrade}</span>
                             </div>
                             <p class="text-xs text-slate-600 leading-relaxed">
-                                In ${current.label}, total revenue was <strong>${fmt(current.income)}</strong> with expenses at <strong>${fmt(current.expenses)}</strong>,
-                                yielding a savings rate of <strong>${current.savingsRate.toFixed(0)}%</strong>.
+                                In ${current.label}, earned income was <strong>${fmt(current.income)}</strong> with spending at <strong>${fmt(current.expenses)}</strong>,
+                                yielding a savings rate of <strong>${typeof formatFinanceSavingsRate === 'function' ? formatFinanceSavingsRate(current.savingsRate, { digits: 0 }) : 'n/a'}</strong>.
                                 ${comparison.incomeChange >= 0 ? 'Income grew' : 'Income declined'} by <strong>${Math.abs(comparison.incomeChange).toFixed(1)}%</strong>
                                 compared to ${getQuarterLabel(prev.year, prev.quarter)}.
                                 ${current.topCategories.length > 0 ? `Top spending area: <strong>${escapeHTML(current.topCategories[0].category)}</strong> at ${fmt(current.topCategories[0].amount)}.` : ''}
@@ -336,8 +352,8 @@ function renderQBRContent() {
                                 <thead class="bg-slate-50">
                                     <tr>
                                         <th class="text-left text-[10px] font-black uppercase text-slate-500 px-3 py-2">Month</th>
-                                        <th class="text-right text-[10px] font-black uppercase text-slate-500 px-3 py-2">Income</th>
-                                        <th class="text-right text-[10px] font-black uppercase text-slate-500 px-3 py-2">Expenses</th>
+                                        <th class="text-right text-[10px] font-black uppercase text-slate-500 px-3 py-2">Earned Income</th>
+                                        <th class="text-right text-[10px] font-black uppercase text-slate-500 px-3 py-2">Spending</th>
                                         <th class="text-right text-[10px] font-black uppercase text-slate-500 px-3 py-2">Net</th>
                                     </tr>
                                 </thead>

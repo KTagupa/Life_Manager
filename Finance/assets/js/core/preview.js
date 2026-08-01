@@ -164,6 +164,16 @@
             });
         }
 
+        const malformedDateEntryCreatedAt = previewDateDaysAgo(13, rand);
+        db.transactions.push(createPreviewEncryptedEntry(makeId, 'tx', {
+            desc: 'Imported receipt needs a date',
+            amt: 680,
+            category: 'Food',
+            type: 'expense',
+            date: '2026-02-30',
+            notes: 'Preview malformed-date sample for the Phase 2B repair workflow'
+        }, malformedDateEntryCreatedAt));
+
         const debtOriginDate = previewDateDaysAgo(95, rand);
         db.transactions.push(createPreviewEncryptedEntry(makeId, 'tx', {
             desc: 'Laptop Financing Approved',
@@ -171,6 +181,7 @@
             category: laptopDebtCategory,
             type: 'debt_increase',
             date: debtOriginDate,
+            debtPrincipalSeed: true,
             notes: 'Preview debt source'
         }, debtOriginDate));
 
@@ -181,6 +192,7 @@
             category: familyDebtCategory,
             type: 'debt_increase',
             date: familyDebtOriginDate,
+            debtPrincipalSeed: true,
             notes: 'Preview debt source'
         }, familyDebtOriginDate));
 
@@ -689,7 +701,6 @@
 
         try {
             if (typeof initFilters === 'function') initFilters();
-            if (!spendChart && typeof initChart === 'function') initChart();
             await loadFromStorage();
         } catch (error) {
             hadSoftLoadIssue = true;

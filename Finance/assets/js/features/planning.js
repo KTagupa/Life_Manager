@@ -2,15 +2,167 @@
         // SECTION 13: GOALS & SCENARIO PLANNING
         // =============================================
 
+        function getFinancePlanningPresentation() {
+            if (typeof buildFinancePlanningPresentation !== 'function') return null;
+            const context = typeof getRuntimeFinanceClassificationContext === 'function'
+                ? getRuntimeFinanceClassificationContext()
+                : {};
+            return buildFinancePlanningPresentation({
+                transactions: window.allDecryptedTransactions || [],
+                budgets: typeof budgets === 'object' && budgets ? budgets : {},
+                bills: window.allDecryptedBills || [],
+                goals: typeof financialGoals !== 'undefined' ? financialGoals : [],
+                wishlist: window.allDecryptedWishlist || []
+            }, { context });
+        }
+
+        function setFinancePlanText(id, value) {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value;
+        }
+
+        function formatFinancePlanDate(dateKey) {
+            if (!dateKey) return 'No target date';
+            const date = new Date(`${dateKey}T00:00:00`);
+            return Number.isFinite(date.getTime())
+                ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                : 'Date unavailable';
+        }
+
+        function renderFinancePlanBudgetPanel(presentation) {
+            const container = document.getElementById('finance-plan-budget-panel');
+            if (!container || !presentation) return;
+            const budget = presentation.budget;
+            setFinancePlanText('finance-plan-budget-caption', `For ${presentation.periodLabel}`);
+
+            if (!budget.configuredCount) {
+                container.innerHTML = `
+                    <div class="finance-plan-empty-state">
+                        <i data-lucide="wallet-minimal" class="w-5 h-5" aria-hidden="true"></i>
+                        <p>No monthly category limits are configured.</p>
+                        <button type="button" data-finance-plan-action="manage_budgets">Set budgets</button>
+                    </div>`;
+                return;
+            }
+
+            const rows = budget.rows.slice(0, 6).map(row => {
+                const safeCategory = escapeHTML(row.category);
+                const percentage = Math.max(0, Math.min(100, Number(row.utilization || 0)));
+                const statusLabel = row.status === 'over'
+                    ? `${fmt(Math.abs(row.remaining))} over`
+                    : `${fmt(Math.max(0, row.remaining))} left`;
+                return `
+                    <div class="finance-plan-budget-row" data-budget-status="${row.status}">
+                        <div>
+                            <span>${safeCategory}</span>
+                            <strong>${fmt(row.spent)} of ${fmt(row.limit)}</strong>
+                        </div>
+                        <div class="finance-plan-budget-track" aria-hidden="true">
+                            <span style="width:${percentage}%"></span>
+                        </div>
+                        <small>${escapeHTML(statusLabel)}</small>
+                    </div>`;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="finance-plan-budget-totals">
+                    <div><span>Limits</span><strong>${fmt(budget.totalLimit)}</strong></div>
+                    <div><span>Used</span><strong>${fmt(budget.budgetedSpending)}</strong></div>
+                    <div data-budget-status="${budget.remaining < 0 ? 'over' : 'on_track'}"><span>Remaining</span><strong>${fmt(budget.remaining)}</strong></div>
+                </div>
+                <div class="finance-plan-budget-list">${rows}</div>
+                ${budget.unbudgetedSpending > 0
+                    ? `<p class="finance-plan-budget-note">${fmt(budget.unbudgetedSpending)} of current-month Spending is in categories without a limit.</p>`
+                    : ''}`;
+        }
+
+        function renderFinancePlanAttention(attention) {
+            const container = document.getElementById('finance-plan-attention-list');
+            if (!container) return;
+            container.innerHTML = (attention || []).map(item => `
+                <article class="finance-plan-attention-item" data-plan-tone="${escapeAttr(item.tone)}">
+                    <div>
+                        <strong>${escapeHTML(item.title)}</strong>
+                        <p>${escapeHTML(item.detail)}</p>
+                    </div>
+                    <button type="button" data-finance-plan-action="${escapeAttr(item.actionId)}">${escapeHTML(item.actionLabel)}</button>
+                </article>`).join('');
+        }
+
+        function renderFinancePlanCoordinator() {
+            const presentation = getFinancePlanningPresentation();
+            if (!presentation) return;
+            window.financePlanningPresentation = presentation;
+
+            setFinancePlanText('finance-plan-period', `For ${presentation.periodLabel} • Updated as of ${formatFinancePlanDate(presentation.asOf)}`);
+            setFinancePlanText('finance-plan-budget-value', presentation.budget.configuredCount ? fmt(presentation.budget.remaining) : 'Not set');
+            setFinancePlanText('finance-plan-budget-detail', presentation.budget.configuredCount
+                ? `${fmt(presentation.budget.budgetedSpending)} of ${fmt(presentation.budget.totalLimit)} used`
+                : 'Add at least one category limit');
+            setFinancePlanText('finance-plan-bills-value', String(presentation.bills.activeCount));
+            setFinancePlanText('finance-plan-bills-detail', `${fmt(presentation.bills.monthlyExpected)} expected monthly`);
+            setFinancePlanText('finance-plan-goals-value', String(presentation.goals.activeCount));
+            setFinancePlanText('finance-plan-goals-detail', `${fmt(presentation.goals.targetTotal)} combined targets`);
+            setFinancePlanText('finance-plan-wishlist-value', fmt(presentation.wishlist.plannedTotal));
+            setFinancePlanText('finance-plan-wishlist-detail', `${presentation.wishlist.count} ${presentation.wishlist.count === 1 ? 'planned purchase' : 'planned purchases'}`);
+
+            const coordinator = document.getElementById('finance-plan-coordinator');
+            if (coordinator) {
+                coordinator.dataset.budgetStatus = presentation.budget.status;
+                coordinator.dataset.attentionCount = String(presentation.attention.length);
+            }
+            renderFinancePlanBudgetPanel(presentation);
+            renderFinancePlanAttention(presentation.attention);
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        function focusFinancePlanCard(cardId) {
+            const card = document.getElementById(cardId);
+            if (!card) return;
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            card.focus({ preventScroll: true });
+        }
+
+        function handleFinancePlanAction(actionId) {
+            if (actionId === 'manage_budgets' && typeof openBudgetModal === 'function') return openBudgetModal();
+            if (actionId === 'manage_goals' && typeof openPlanningModal === 'function') return openPlanningModal();
+            if (actionId === 'add_bill' && typeof openBillModal === 'function') return openBillModal();
+            if (actionId === 'add_wishlist' && typeof openWishlistModal === 'function') return openWishlistModal();
+            const targets = {
+                focus_budgets: 'finance-card-plan-budget',
+                focus_bills: 'finance-card-bills',
+                focus_goals: 'finance-card-goals',
+                focus_wishlist: 'finance-card-wishlist'
+            };
+            if (targets[actionId]) focusFinancePlanCard(targets[actionId]);
+        }
+
+        function initFinancePlanCoordination() {
+            if (window.__financePlanCoordinationInitialized) return;
+            window.__financePlanCoordinationInitialized = true;
+            document.addEventListener('click', event => {
+                const action = event.target.closest('[data-finance-plan-action]');
+                if (!action) return;
+                event.preventDefault();
+                handleFinancePlanAction(action.dataset.financePlanAction);
+            });
+        }
+
+        window.getFinancePlanningPresentation = getFinancePlanningPresentation;
+        window.renderFinancePlanCoordinator = renderFinancePlanCoordinator;
+        window.initFinancePlanCoordination = initFinancePlanCoordination;
+
         function openPlanningModal() {
             document.getElementById('planning-modal').classList.remove('hidden');
             const allTx = window.allDecryptedTransactions || [];
             const current = computeSummaryMetrics(allTx, 'current_month', { filteredTransactions: window.filteredTransactions || [] });
+            const plan = getFinancePlanningPresentation();
             if (!document.getElementById('sc-salary-amount').value) {
                 document.getElementById('sc-salary-amount').value = current.income ? current.income.toFixed(2) : '';
             }
             if (!document.getElementById('sc-fixed-obligations').value) {
-                document.getElementById('sc-fixed-obligations').value = current.expense ? current.expense.toFixed(2) : '';
+                const fixedObligations = plan?.bills?.monthlyExpected || current.expense || 0;
+                document.getElementById('sc-fixed-obligations').value = fixedObligations ? fixedObligations.toFixed(2) : '';
             }
             renderGoalsAndSimulator();
             if (!scenarioChart) runScenarioSimulation();
@@ -32,11 +184,11 @@
             const el = document.getElementById(targetElId);
             if (!el) return;
 
-            const activeGoals = (financialGoals || []).filter(g => g.status !== 'completed');
+            const activeGoals = (financialGoals || []).filter(g => (g.status || 'active') === 'active');
             const currentBalance = computeCurrentBalance(window.allDecryptedTransactions || []);
 
             if (!activeGoals.length) {
-                el.innerHTML = '<div class="text-xs text-slate-400">No goals configured.</div>';
+                el.innerHTML = '<div class="text-xs text-slate-400">No active goals configured.</div>';
                 return;
             }
 
@@ -49,7 +201,7 @@
                     <div class="p-2 ${compact ? 'bg-slate-50 border border-slate-200 rounded-lg' : 'bg-white border border-slate-200 rounded-xl'}">
                         <div class="flex justify-between items-center">
                             <p class="text-xs font-bold text-slate-700">${safeName}</p>
-                            <span class="text-[10px] font-bold text-slate-500">${progress.toFixed(0)}%</span>
+                            <span class="text-[10px] font-bold text-slate-500">Cash proxy ${progress.toFixed(0)}%</span>
                         </div>
                         <p class="text-[10px] text-slate-500">${fmt(g.targetAmount)} • ${safeDateLabel}</p>
                         <div class="h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
@@ -62,6 +214,7 @@
 
         function renderGoalsAndSimulator() {
             renderGoalsSummaryCards('goals-summary-list', true);
+            renderFinancePlanCoordinator();
             const modalVisible = !document.getElementById('planning-modal')?.classList.contains('hidden');
             if (modalVisible) {
                 renderDetailedGoalsListWithActions();
@@ -157,6 +310,7 @@
                 const progress = getGoalProgress(g, currentBalance);
                 const statusColor = g.status === 'completed' ? 'emerald' : g.status === 'paused' ? 'amber' : 'indigo';
                 const safeName = escapeHTML(g.name || 'Goal');
+                const safeNameAttr = escapeAttr(g.name || 'Goal');
                 const safeType = escapeHTML((g.type || 'savings').replace('_', ' '));
                 const safeStatus = escapeHTML(g.status || 'active');
                 const safeDate = g.targetDate ? `• ${escapeHTML(new Date(g.targetDate).toLocaleDateString())}` : '';
@@ -167,11 +321,11 @@
                             <div>
                                 <p class="text-sm font-bold text-slate-700">${safeName}</p>
                                 <p class="text-[10px] text-slate-500 uppercase">${safeType} • ${safeStatus}</p>
-                                <p class="text-[10px] text-slate-500">${fmt(g.targetAmount)} ${safeDate}</p>
+                                <p class="text-[10px] text-slate-500">${fmt(g.targetAmount)} ${safeDate} • Cash proxy ${progress.toFixed(0)}%</p>
                             </div>
                             <div class="flex gap-2">
-                                <button onclick="hydrateGoalEditor(decodeURIComponent('${encodedGoalId}'))" class="text-[10px] font-bold text-indigo-600">Edit</button>
-                                <button onclick="deleteFinancialGoal(decodeURIComponent('${encodedGoalId}'))" class="text-[10px] font-bold text-rose-600">Delete</button>
+                                <button type="button" aria-label="Edit ${safeNameAttr}" onclick="hydrateGoalEditor(decodeURIComponent('${encodedGoalId}'))" class="text-[10px] font-bold text-indigo-600">Edit</button>
+                                <button type="button" aria-label="Delete ${safeNameAttr}" onclick="deleteFinancialGoal(decodeURIComponent('${encodedGoalId}'))" class="text-[10px] font-bold text-rose-600">Delete</button>
                             </div>
                         </div>
                         <div class="h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
@@ -285,7 +439,7 @@
             renderDetailedGoalsListWithActions();
             renderGoalsSummaryCards('goals-summary-list', true);
 
-            const activeGoals = (financialGoals || []).filter(g => g.status === 'active');
+            const activeGoals = (financialGoals || []).filter(g => (g.status || 'active') === 'active');
             const etaLines = activeGoals.map(g => {
                 const hit = points.find(p => p.balance >= g.targetAmount);
                 if (!hit) return `${g.name}: not reached in 45 days`;

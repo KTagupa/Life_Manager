@@ -2,10 +2,10 @@
         // SECTION 8: BACKUP & RESTORE
         // =============================================
         async function computeBackupHash(dataObj) {
-            const json = JSON.stringify(dataObj);
-            const bytes = new TextEncoder().encode(json);
-            const hash = await crypto.subtle.digest('SHA-256', bytes);
-            return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+            if (typeof computeFinanceBackupHash !== 'function') {
+                throw new Error('Finance backup integrity contract is unavailable.');
+            }
+            return computeFinanceBackupHash(dataObj);
         }
 
         const READABLE_EXPORT_ENCRYPTED_COLLECTIONS = [
@@ -250,7 +250,9 @@
             if (!metrics) {
                 const income = transactions
                     .filter(tx => tx.type === 'income')
-                    .reduce((sum, tx) => sum + (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(tx) : (Number(tx.amt) || 0)), 0);
+                    .reduce((sum, tx) => sum + (typeof getDisplayTxEarnedIncomeDelta === 'function'
+                        ? getDisplayTxEarnedIncomeDelta(tx)
+                        : (typeof getTxReportedIncomeDelta === 'function' ? getTxReportedIncomeDelta(tx) : (Number(tx.amt) || 0))), 0);
                 const nonIncomeCashIn = transactions
                     .reduce((sum, tx) => sum + (typeof getTxNonIncomeCashInDelta === 'function' ? getTxNonIncomeCashInDelta(tx) : 0), 0);
                 const expense = transactions
@@ -259,22 +261,28 @@
                 const balance = typeof getTxCashBalanceDelta === 'function'
                     ? transactions.reduce((sum, tx) => sum + getTxCashBalanceDelta(tx), 0)
                     : income + nonIncomeCashIn - expense;
-                metrics = {
+                const legacyMetrics = {
+                    scope: 'all_time',
                     balance,
                     income,
                     nonIncomeCashIn,
                     expense,
-                    savingsRate: income > 0 ? Math.round(((income - expense) / income) * 100) : 0
+                    savingsRate: income > 0 ? Math.round(((income - expense) / income) * 100) : null,
+                    categoryExpenses: {},
+                    scopedTransactions: transactions
                 };
+                metrics = typeof buildLegacyDisplayMetrics === 'function'
+                    ? buildLegacyDisplayMetrics(legacyMetrics, null, 'backup_summary_helper_failed')
+                    : {
+                        ...legacyMetrics,
+                        metricEngine: 'legacy',
+                        metricProvenance: typeof createFinanceMetricProvenance === 'function'
+                            ? createFinanceMetricProvenance('legacy', { cutoverReason: 'backup_summary_helper_failed' })
+                            : null
+                    };
             }
 
-            const expenseByCategory = {};
-            transactions
-                .filter(tx => typeof isExpenseLikeTx === 'function' ? isExpenseLikeTx(tx) : tx.type === 'expense')
-                .forEach(tx => {
-                    const category = String(tx.category || 'Uncategorized');
-                    expenseByCategory[category] = (expenseByCategory[category] || 0) + (Number(tx.amt) || 0);
-                });
+            const expenseByCategory = { ...(metrics.categoryExpenses || {}) };
 
             const topExpenseCategories = Object.entries(expenseByCategory)
                 .sort((a, b) => b[1] - a[1])
@@ -332,16 +340,20 @@
             doc.setFontSize(10);
             doc.text(`Exported: ${exportedAt.toLocaleString()}`, 14, 24);
             doc.text(`Schema: ${readable.metadata.schemaVersion} | Currency view: ${readable.metadata.activeCurrency || 'PHP'}`, 14, 30);
-            doc.text('Plaintext archive: store the ZIP carefully.', 14, 36);
+            const metricSource = typeof formatFinanceMetricProvenance === 'function'
+                ? formatFinanceMetricProvenance(metrics)
+                : (metrics.metricEngine === 'canonical' ? 'Canonical metrics' : 'Legacy metrics');
+            doc.text(`Metric source: ${metricSource}`, 14, 36);
+            doc.text('Plaintext archive: store the ZIP carefully.', 14, 42);
 
             const overviewRows = [
-                ['Balance', formatReadableExportMoney(metrics.balance)],
-                ['Income', formatReadableExportMoney(metrics.income)],
-                ['Expenses', formatReadableExportMoney(metrics.expense)],
-                ['Savings Rate', `${Number(metrics.savingsRate || 0).toFixed(1)}%`]
+                [metrics.metricLabels?.balance || 'Net Cash Flow', formatReadableExportMoney(metrics.balance)],
+                [metrics.metricLabels?.income || 'Earned Income', formatReadableExportMoney(metrics.income)],
+                [metrics.metricLabels?.expense || 'Spending', formatReadableExportMoney(metrics.expense)],
+                ['Savings Rate', typeof formatFinanceSavingsRate === 'function' ? formatFinanceSavingsRate(metrics.savingsRate) : 'n/a']
             ];
 
-            let y = addReadableSummaryPdfTable(doc, 'Snapshot Summary', 46, ['Metric', 'Value'], overviewRows, {
+            let y = addReadableSummaryPdfTable(doc, 'Snapshot Summary', 52, ['Metric', 'Value'], overviewRows, {
                 fillColor: [79, 70, 229]
             });
 
@@ -421,69 +433,22 @@
         }
 
         async function validateBackupFilePayload(backup) {
-            const issues = [];
-            if (!backup || typeof backup !== 'object') {
-                issues.push('Backup payload is not an object.');
-                return { ok: false, issues, stats: null };
+            if (typeof validateFinanceBackupPackage !== 'function') {
+                return { ok: false, issues: ['Finance backup validation contract is unavailable.'], warnings: [], stats: null };
             }
-
-            if (!backup.data || typeof backup.data !== 'object') {
-                issues.push('Missing data block.');
-                return { ok: false, issues, stats: null };
-            }
-
-            const data = backup.data;
-            const schemaVersion = parseInt(data.schema_version || 1, 10);
-            if (Number.isNaN(schemaVersion) || schemaVersion < 1) {
-                issues.push('Invalid schema_version.');
-            }
-
-            const stats = {
-                schemaVersion,
-                transactions: (data.transactions || []).length,
-                bills: (data.bills || []).length,
-                debts: (data.debts || []).length,
-                installmentPlans: (data.installment_plans || []).length,
-                installmentImages: (backup.attachments?.installmentImages || []).length,
-                crypto: (data.crypto || []).length,
-                budgets: backup.metadata?.budgetCategoryCount || 0
-            };
-
-            const encryptedCollections = ['transactions', 'bills', 'debts', 'installment_plans', 'lent', 'crypto', 'wishlist'];
-            encryptedCollections.forEach(key => {
-                (data[key] || []).forEach((item, idx) => {
-                    if (!item || !item.data || !isEncryptedPayload(item.data)) {
-                        issues.push(`Invalid encrypted payload in ${key}[${idx}]`);
-                    }
-                });
-            });
-
-            if (backup.integrity?.hash) {
-                const expected = backup.integrity.hash;
-                const actual = await computeBackupHash(data);
-                if (expected !== actual) {
-                    issues.push('Integrity hash mismatch.');
-                }
-            }
-            if (backup.integrity?.attachmentsHash) {
-                const expected = backup.integrity.attachmentsHash;
-                const actual = await computeBackupHash(backup.attachments || {});
-                if (expected !== actual) {
-                    issues.push('Attachment integrity hash mismatch.');
-                }
-            }
-
-            return {
-                ok: issues.length === 0,
-                issues,
-                stats
-            };
+            return validateFinanceBackupPackage(backup, { maxSchemaVersion: CURRENT_SCHEMA_VERSION });
         }
 
         // Toggle backup dropdown menu
+        function notifyFinanceToolsChanged() {
+            if (typeof window !== 'undefined' && typeof window.CustomEvent === 'function') {
+                window.dispatchEvent(new CustomEvent('finance:toolschange'));
+            }
+        }
+
         function toggleBackupMenu() {
             const dropdown = document.getElementById('backup-dropdown');
-            dropdown.classList.toggle('hidden');
+            if (dropdown) dropdown.classList.toggle('hidden');
         }
 
         // Close dropdown when clicking outside
@@ -497,6 +462,10 @@
 
         // Open backup settings modal
         function openBackupSettingsModal() {
+            if (typeof previewMode !== 'undefined' && previewMode) {
+                showToast('Backup settings are paused in Preview Mode');
+                return;
+            }
             const settings = getBackupSettings();
             document.getElementById('auto-backup-toggle').checked = settings.autoBackupEnabled;
             document.getElementById('backup-hour-select').value = settings.backupHour;
@@ -508,7 +477,7 @@
                 document.getElementById('last-backup-display').innerText = 'Never';
             }
 
-            document.getElementById('backup-dropdown').classList.add('hidden');
+            document.getElementById('backup-dropdown')?.classList.add('hidden');
             toggleModal('backup-settings-modal');
         }
 
@@ -523,11 +492,16 @@
             saveBackupSettings(settings);
             toggleModal('backup-settings-modal');
             showToast('✅ Backup settings saved');
+            notifyFinanceToolsChanged();
         }
 
         // Download backup now
         async function downloadBackupNow() {
-            document.getElementById('backup-dropdown').classList.add('hidden');
+            if (typeof previewMode !== 'undefined' && previewMode) {
+                showToast('Encrypted backup is unavailable in Preview Mode');
+                return;
+            }
+            document.getElementById('backup-dropdown')?.classList.add('hidden');
             showToast('📦 Preparing backup...');
 
             try {
@@ -535,28 +509,20 @@
                 const installmentImages = typeof exportInstallmentImageRecords === 'function'
                     ? await exportInstallmentImageRecords()
                     : [];
-                const attachments = { installmentImages };
-                const dataHash = await computeBackupHash(db);
-                const attachmentsHash = await computeBackupHash(attachments);
-                const backupData = {
-                    appVersion: "4.1",
-                    backupDate: new Date().toISOString(),
-                    schemaVersion: db.schema_version || CURRENT_SCHEMA_VERSION,
-                    encryptionVersion: "AES-GCM-v3",
+                if (typeof createFinanceBackupPackage !== 'function') {
+                    throw new Error('Finance backup contract is unavailable.');
+                }
+                const backupData = await createFinanceBackupPackage({
+                    db,
+                    installmentImages,
                     metadata: {
                         budgetCategoryCount: Object.keys(budgets || {}).length,
-                        transactionCount: (db.transactions || []).length,
-                        installmentImageCount: installmentImages.length,
                         conflictStrategy: db.sync?.conflictStrategy || 'local_wins'
                     },
-                    integrity: {
-                        algorithm: "SHA-256",
-                        hash: dataHash,
-                        attachmentsHash
-                    },
-                    data: db,
-                    attachments
-                };
+                }, {
+                    appVersion: '4.1',
+                    schemaVersion: db.schema_version || CURRENT_SCHEMA_VERSION
+                });
 
                 const jsonStr = JSON.stringify(backupData, null, 2);
                 const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -577,6 +543,7 @@
                 saveBackupSettings(settings);
 
                 showToast('✅ Backup downloaded!');
+                notifyFinanceToolsChanged();
             } catch (error) {
                 console.error('Backup failed:', error);
                 showToast('❌ Backup failed');
@@ -586,6 +553,11 @@
         async function exportReadableArchive() {
             const dropdown = document.getElementById('backup-dropdown');
             if (dropdown) dropdown.classList.add('hidden');
+
+            if (typeof previewMode !== 'undefined' && previewMode) {
+                alert('Readable vault exports are unavailable in Preview Mode because its records are demo data, not an encrypted vault.');
+                return;
+            }
 
             if (!masterKey || !cryptoKey) {
                 alert('Unlock FinanceFlow before exporting a readable archive.');
@@ -689,7 +661,11 @@
 
         // Open restore modal
         function openRestoreModal() {
-            document.getElementById('backup-dropdown').classList.add('hidden');
+            if (typeof previewMode !== 'undefined' && previewMode) {
+                showToast('Restore is unavailable in Preview Mode');
+                return;
+            }
+            document.getElementById('backup-dropdown')?.classList.add('hidden');
             document.getElementById('restore-preview').classList.add('hidden');
             document.getElementById('restore-select').classList.remove('hidden');
             document.getElementById('restore-confirm-btn').classList.add('hidden');
@@ -699,11 +675,17 @@
         // Close restore modal
         function closeRestoreModal() {
             document.getElementById('restore-file-input').value = '';
+            delete window.pendingRestore;
             toggleModal('restore-modal');
         }
 
         // Preview backup file
         async function previewBackupFile(event) {
+            if (typeof previewMode !== 'undefined' && previewMode) {
+                showToast('Restore is unavailable in Preview Mode');
+                event.target.value = '';
+                return;
+            }
             const file = event.target.files[0];
             if (!file) return;
 
@@ -719,9 +701,18 @@
                 if (!validation.ok) {
                     throw new Error(validation.issues.join('\n'));
                 }
+                const decryption = await verifyFinanceBackupDecryptability(backup, {
+                    decryptPayload: payload => decryptData(payload),
+                    decryptAttachment: record => decryptInstallmentImageRecord(record)
+                });
+                if (!decryption.ok) {
+                    throw new Error(decryption.issues.join('\n'));
+                }
 
-                // Store backup data temporarily
-                window.pendingRestore = backup;
+                const restorePlan = createFinanceRestorePlan(backup, validation);
+
+                // Store only the validated, immutable restore plan temporarily.
+                window.pendingRestore = { backup, validation, restorePlan };
 
                 // Show preview
                 document.getElementById('restore-filename').innerText = file.name;
@@ -755,36 +746,81 @@
         async function confirmRestore() {
             if (!window.pendingRestore) return;
 
+            if (typeof previewMode !== 'undefined' && previewMode) {
+                showToast('Restore is unavailable in Preview Mode');
+                delete window.pendingRestore;
+                return;
+            }
+
             if (!confirm('Are you sure? This will replace ALL current data.')) return;
 
             showToast('🔄 Restoring backup...');
 
             try {
-                const backup = window.pendingRestore;
+                const pending = window.pendingRestore;
+                const backup = pending.backup;
                 const validation = await validateBackupFilePayload(backup);
                 if (!validation.ok) {
                     throw new Error(`Backup validation failed: ${validation.issues.join('; ')}`);
                 }
-
-                // Persist locally + sync to Firebase
-                await saveDB(backup.data);
-                if (typeof importInstallmentImageRecords === 'function') {
-                    await importInstallmentImageRecords(
-                        backup.attachments?.installmentImages || [],
-                        { replace: true }
-                    );
+                const decryption = await verifyFinanceBackupDecryptability(backup, {
+                    decryptPayload: payload => decryptData(payload),
+                    decryptAttachment: record => decryptInstallmentImageRecord(record)
+                });
+                if (!decryption.ok) {
+                    throw new Error(`Backup decryption check failed: ${decryption.issues.join('; ')}`);
                 }
 
-                // Reload all data safely through the normal pipeline
-                await loadFromStorage();
+                const restorePlan = createFinanceRestorePlan(backup, validation);
+                const remoteEnabled = typeof hasRemoteSyncSession === 'function' && hasRemoteSyncSession();
+                const restoreAdapters = {
+                    readDB: () => getDB({ allowRemote: false }),
+                    readAttachments: () => exportInstallmentImageRecords({ includeDeleted: true }),
+                    writeDB: data => saveDB(data, {
+                        queueRemote: false,
+                        flushLocalStorage: true,
+                        requireDurableWrite: true
+                    }),
+                    replaceAttachments: records => importInstallmentImageRecords(records, {
+                        replace: true,
+                        syncCloud: false,
+                        markCloudPending: remoteEnabled
+                    }),
+                    reload: () => loadFromStorage({ allowRemote: false, queueRemote: false }),
+                    rollbackAttachments: records => importInstallmentImageRecords(records, {
+                        replace: true,
+                        exactReplace: true,
+                        syncCloud: false,
+                        markCloudPending: false
+                    }),
+                    rollbackDB: data => saveDB(data, {
+                        queueRemote: false,
+                        flushLocalStorage: true,
+                        requireDurableWrite: true,
+                        preserveRevision: true
+                    })
+                };
+                if (remoteEnabled) {
+                    restoreAdapters.queueRemote = () => {
+                        queueRemoteDBSync().catch(error => {
+                            console.error('Restore cloud sync remains pending:', error);
+                        });
+                    };
+                }
+
+                const restoreResult = await executeFinanceRestoreTransaction(restorePlan, restoreAdapters);
 
                 closeRestoreModal();
-                showToast('✅ Backup restored successfully!');
-
-                delete window.pendingRestore;
+                showToast(restoreResult.remoteQueued
+                    ? '✅ Backup restored; cloud sync queued'
+                    : '✅ Backup restored locally');
+                notifyFinanceToolsChanged();
             } catch (error) {
                 console.error('Restore failed:', error);
-                showToast('❌ Restore failed');
+                const rollbackWarning = Array.isArray(error?.rollbackIssues) && error.rollbackIssues.length > 0
+                    ? ' Restore rollback needs attention.'
+                    : '';
+                showToast(`❌ Restore failed.${rollbackWarning}`);
             }
         }
 

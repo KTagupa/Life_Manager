@@ -2756,7 +2756,7 @@
             titleEl.className = 'text-lg font-bold text-emerald-950 mt-1';
             summaryEl.className = 'text-sm text-emerald-900/80 mt-1';
             titleEl.innerText = 'No likely duplicate crypto expenses found';
-            summaryEl.innerText = `Checked ${autoCount} auto-created crypto-buy expense${autoCount === 1 ? '' : 's'} against ${manualCount} other expense${manualCount === 1 ? '' : 's'}. Total Balance can still be lower now because crypto buys are counted as cash outflows by design.`;
+            summaryEl.innerText = `Checked ${autoCount} auto-created crypto-buy expense${autoCount === 1 ? '' : 's'} against ${manualCount} other expense${manualCount === 1 ? '' : 's'}. Net Cash Flow can still be lower because crypto buys move cash into an asset without counting as Spending.`;
             listEl.classList.add('hidden');
             listEl.innerHTML = '';
         }
@@ -3690,28 +3690,42 @@
 
         async function renderCryptoWidget() {
             const holdings = await calculateHoldings();
-            let totalVal = 0;
+            let marketValue = 0;
+            let bookValue = 0;
             let unrealizedPL = 0;
+            let missingPriceCount = 0;
+            let holdingCount = 0;
 
             Object.entries(holdings).forEach(([id, h]) => {
                 if (h.amount <= 0.000001) return;
+                holdingCount += 1;
+                bookValue += Math.max(0, Number(h.totalCost || 0));
                 const currentPrice = cryptoPrices[id]?.price || 0; // Use cached price
                 const val = h.amount * currentPrice;
                 const avgPrice = h.totalCost / h.amount;
 
                 if (currentPrice > 0) {
-                    totalVal += val;
+                    marketValue += val;
                     unrealizedPL += (currentPrice - avgPrice) * h.amount;
                 } else {
-                    // Fallback: value at cost if no price
-                    totalVal += h.totalCost;
+                    missingPriceCount += 1;
                 }
             });
 
-            document.getElementById('crypto-total-display').innerText = fmt(totalVal);
+            const totalDisplay = document.getElementById('crypto-total-display');
+            const totalCaption = document.getElementById('crypto-total-caption');
+            totalDisplay.innerText = missingPriceCount > 0 ? 'n/a' : fmt(marketValue);
+            if (totalCaption) {
+                totalCaption.innerText = missingPriceCount > 0
+                    ? `${missingPriceCount} ${missingPriceCount === 1 ? 'price' : 'prices'} missing • Book value ${fmt(bookValue)}`
+                    : `${holdingCount} ${holdingCount === 1 ? 'holding' : 'holdings'} • Book value ${fmt(bookValue)}`;
+            }
             const plSpan = document.getElementById('crypto-pnl-display');
-            plSpan.innerText = (unrealizedPL >= 0 ? '+' : '') + fmt(unrealizedPL);
-            plSpan.className = `text-xs font-bold ${unrealizedPL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+            plSpan.innerText = missingPriceCount > 0 ? 'n/a' : `${unrealizedPL >= 0 ? '+' : ''}${fmt(unrealizedPL)}`;
+            plSpan.className = `text-xs font-bold ${missingPriceCount > 0 ? 'text-amber-300' : (unrealizedPL >= 0 ? 'text-emerald-400' : 'text-rose-400')}`;
+            if (typeof scheduleFinanceSnapshotShadowRefresh === 'function') {
+                scheduleFinanceSnapshotShadowRefresh();
+            }
         }
 
         let cryptoTargetLossesOnly = true;

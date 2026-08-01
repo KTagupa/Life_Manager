@@ -8,9 +8,13 @@ function computeBudgetVariance(monthTransactions, currentBudgets) {
 
     const categorySpent = {};
     txList.forEach(t => {
-        const expenseAmount = typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0);
+        const expenseAmount = typeof getDisplayTxSpendingDelta === 'function'
+            ? getDisplayTxSpendingDelta(t)
+            : (typeof getTxExpenseDelta === 'function' ? getTxExpenseDelta(t) : (t.type === 'expense' ? (t.amt || 0) : 0));
         if (!expenseAmount) return;
-        const cat = typeof getTxExpenseCategory === 'function' ? getTxExpenseCategory(t) : (t.category || 'Others');
+        const cat = typeof getDisplayTxSpendingCategory === 'function'
+            ? getDisplayTxSpendingCategory(t)
+            : (typeof getTxExpenseCategory === 'function' ? getTxExpenseCategory(t) : (t.category || 'Others'));
         categorySpent[cat] = (categorySpent[cat] || 0) + expenseAmount;
     });
 
@@ -82,6 +86,20 @@ function renderBudgetVariancePanel() {
     const panel = document.getElementById('variance-panel');
     if (!panel) return;
 
+    const reportsPresentation = typeof getFinanceReportsPresentation === 'function'
+        ? getFinanceReportsPresentation()
+        : null;
+    const varianceScope = reportsPresentation?.cards?.variance;
+    if (varianceScope && varianceScope.available !== true) {
+        panel.innerHTML = `
+            <div class="finance-reports-scope-empty" data-report-scope-state="single-month-required">
+                <i data-lucide="calendar-range" class="w-5 h-5" aria-hidden="true"></i>
+                <p>Budget Variance compares one monthly plan with one month of Spending. Choose a specific month and year.</p>
+            </div>`;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+    }
+
     const hasBudgets = Object.values(budgets || {}).some(v => v > 0);
     if (!hasBudgets) {
         panel.innerHTML = `
@@ -91,7 +109,9 @@ function renderBudgetVariancePanel() {
         return;
     }
 
-    const txScope = getTransactionsForScope(metricScope);
+    const txScope = typeof getFinanceReportsScopedTransactions === 'function'
+        ? getFinanceReportsScopedTransactions()
+        : getTransactionsForScope(metricScope);
     const data = computeBudgetVariance(txScope, budgets);
 
     if (data.rows.length === 0) {

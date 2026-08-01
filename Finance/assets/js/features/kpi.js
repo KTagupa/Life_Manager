@@ -212,27 +212,13 @@ function getLatestClosedRecord() {
         .sort((a, b) => (b.month || '').localeCompare(a.month || ''))[0] || null;
 }
 
-async function refreshBusinessKPIPanel() {
-    const panel = document.getElementById('business-kpi-panel');
-    if (!panel) return;
-
-    const seq = ++businessKpiRenderSeq;
-    const allTx = window.allDecryptedTransactions || [];
-    const scopedTransactions = getTransactionsForScope(metricScope, allTx, window.filteredTransactions || []);
-    const metrics = computeSummaryMetrics(allTx, metricScope, {
-        scopeTransactions: scopedTransactions,
-        filteredTransactions: window.filteredTransactions || []
-    });
-    const range = getScopeDateRange(metricScope);
-    const startTs = range.start.getTime();
-    const endTs = range.end.getTime();
-
+function computeLegacyKpiConsumerBreakdown(scopedTransactions) {
     const debtList = window.allDecryptedDebts || [];
     const debtNameSet = typeof getDebtCategoryMatchSet === 'function'
         ? getDebtCategoryMatchSet(debtList)
         : new Set(debtList.map(d => String(d.name || '').trim()).filter(Boolean));
     const debtIdSet = new Set(debtList.map(d => String(d.id || '').trim()).filter(Boolean));
-    const debtService = scopedTransactions.reduce((sum, tx) => {
+    const debtService = (scopedTransactions || []).reduce((sum, tx) => {
         const amount = Number(tx.amt) || 0;
         if (!Number.isFinite(amount) || amount <= 0) return sum;
         if (isCreditCardPayment(tx)) return sum + amount;
@@ -240,16 +226,99 @@ async function refreshBusinessKPIPanel() {
         const txDebtId = String(tx.debtId || '').trim();
         if (txDebtId && debtIdSet.has(txDebtId)) return sum + amount;
         const category = String(tx.category || '').trim();
-        if (!debtNameSet.has(category)) return sum;
-        return sum + amount;
+        return debtNameSet.has(category) ? sum + amount : sum;
     }, 0);
-
-    const savingsContribution = scopedTransactions.reduce((sum, tx) => {
+    const savingsContribution = (scopedTransactions || []).reduce((sum, tx) => {
         if (tx.type !== 'expense') return sum;
-        const category = String(tx.category || '').trim().toLowerCase();
-        if (category !== 'savings') return sum;
-        return sum + (Number(tx.amt) || 0);
+        return String(tx.category || '').trim().toLowerCase() === 'savings'
+            ? sum + (Number(tx.amt) || 0)
+            : sum;
     }, 0);
+    return { debtService, savingsContribution, source: 'legacy_fallback' };
+}
+
+function getKpiConsumerBreakdown(metrics, scopedTransactions) {
+    const canonical = typeof buildFinanceConsumerBreakdown === 'function'
+        ? buildFinanceConsumerBreakdown(metrics)
+        : null;
+    return canonical?.available
+        ? { ...canonical, source: 'canonical_classifications' }
+        : computeLegacyKpiConsumerBreakdown(scopedTransactions);
+}
+
+function computeLegacyKpiCorePositionAsOf(endTs, transactions) {
+    return computeCashBalanceAsOf(endTs, transactions)
+        + computeLentOutstandingAsOf(endTs, transactions)
+        - (computeDebtOutstandingAsOf(endTs, transactions)
+            + computeCreditCardOutstandingAsOf(endTs, transactions)
+            + computeInstallmentOutstandingAsOf(endTs, transactions));
+}
+
+function computeKpiCorePositionAsOf(endTs, transactions) {
+    const fallback = () => ({
+        value: computeLegacyKpiCorePositionAsOf(endTs, transactions),
+        trackedCash: computeCashBalanceAsOf(endTs, transactions),
+        source: 'legacy_fallback'
+    });
+    const shadowReport = typeof getFinanceSnapshotShadowReport === 'function'
+        ? getFinanceSnapshotShadowReport()
+        : window.financeSnapshotShadowReport;
+    if (shadowReport?.history?.ready !== true
+        || typeof buildFinanceCanonicalSnapshotInput !== 'function'
+        || typeof computeCanonicalFinanceSnapshot !== 'function') return fallback();
+
+    try {
+        const canonical = computeCanonicalFinanceSnapshot(
+            buildFinanceCanonicalSnapshotInput({
+                bookValue: null,
+                marketValue: null,
+                missingPriceCount: 0
+            }),
+            { asOf: endTs }
+        );
+        const diagnostics = canonical?.diagnostics || {};
+        if (diagnostics.safeForShadowComparison !== true
+            || Number(diagnostics.missingLiabilityStartDateCount || 0) > 0) return fallback();
+        return {
+            value: Number(canonical.trackedCash || 0)
+                + Number(canonical.receivables || 0)
+                - Number(canonical.liabilities?.total || 0),
+            trackedCash: Number(canonical.trackedCash || 0),
+            source: 'canonical_snapshot',
+            engineVersion: canonical.engineVersion || null
+        };
+    } catch (error) {
+        console.warn('[business-kpi] Canonical core position unavailable.', error);
+        return fallback();
+    }
+}
+
+async function refreshBusinessKPIPanel() {
+    const panel = document.getElementById('business-kpi-panel');
+    if (!panel) return;
+
+    const seq = ++businessKpiRenderSeq;
+    const allTx = window.allDecryptedTransactions || [];
+    const reportsPresentation = typeof getFinanceReportsPresentation === 'function'
+        ? getFinanceReportsPresentation()
+        : null;
+    const scopedTransactions = typeof getFinanceReportsScopedTransactions === 'function'
+        ? getFinanceReportsScopedTransactions()
+        : getTransactionsForScope(metricScope, allTx, window.filteredTransactions || []);
+    const metrics = computeSummaryMetrics(allTx, metricScope, {
+        scopeTransactions: scopedTransactions,
+        filteredTransactions: window.filteredTransactions || []
+    });
+    const reportStart = new Date(reportsPresentation?.scope?.start || '');
+    const reportEnd = new Date(reportsPresentation?.scope?.end || '');
+    const range = Number.isFinite(reportStart.getTime()) && Number.isFinite(reportEnd.getTime())
+        ? { start: reportStart, end: reportEnd }
+        : getScopeDateRange(metricScope);
+    const startTs = range.start.getTime();
+    const endTs = range.end.getTime();
+    const consumerBreakdown = getKpiConsumerBreakdown(metrics, scopedTransactions);
+    const debtService = Number(consumerBreakdown.debtService || 0);
+    const savingsContribution = Number(consumerBreakdown.savingsContribution || 0);
 
     const [cryptoContribution, cryptoValue] = await Promise.all([
         computeCryptoBuyContribution(startTs, endTs),
@@ -264,28 +333,65 @@ async function refreshBusinessKPIPanel() {
     const investmentContribution = savingsContribution + cryptoContribution;
     const investmentRate = income > 0 ? (investmentContribution / income) * 100 : NaN;
 
-    const cashNow = computeCurrentBalance(allTx);
+    const currentPosition = computeKpiCorePositionAsOf(Date.now(), allTx);
+    const cashNow = Number(currentPosition.trackedCash || 0);
     const debtOutstandingNow = computeDebtOutstandingAsOf(Date.now(), allTx) + computeCreditCardOutstandingAsOf(Date.now(), allTx) + computeInstallmentOutstandingAsOf(Date.now(), allTx);
     const lentOutstandingNow = computeLentOutstandingAsOf(Date.now(), allTx);
     const netWorth = cashNow + lentOutstandingNow + cryptoValue - debtOutstandingNow;
+    const netWorthView = typeof getFinanceMarketNetWorthView === 'function'
+        ? getFinanceMarketNetWorthView({
+            netWorth,
+            cash: cashNow,
+            receivables: lentOutstandingNow,
+            crypto: cryptoValue,
+            liabilities: debtOutstandingNow,
+            asOf: new Date().toISOString()
+        })
+        : {
+            mode: 'legacy',
+            value: netWorth,
+            cash: cashNow,
+            receivables: lentOutstandingNow,
+            fixedAssets: 0,
+            crypto: cryptoValue,
+            liabilities: debtOutstandingNow,
+            reason: 'adapter_unavailable'
+        };
+    const liquidityMetrics = typeof computeCanonicalFinanceLiquidity === 'function'
+        ? computeCanonicalFinanceLiquidity({
+            transactions: allTx,
+            trackedCash: cashNow,
+            additionalQuarantinedCount: Number(window.financeTransactionDateQuality?.quarantinedCount || 0)
+        }, {
+            asOf: new Date(),
+            context: typeof getRuntimeFinanceClassificationContext === 'function'
+                ? getRuntimeFinanceClassificationContext()
+                : {}
+        })
+        : null;
 
     const selectedMonthKey = getMonthKeyFromDate(range.end);
     const currentEndTs = range.end.getTime();
     const prevMonthEnd = new Date(range.end.getFullYear(), range.end.getMonth(), 0, 23, 59, 59, 999);
-    const currentCore = computeCashBalanceAsOf(currentEndTs, allTx)
-        + computeLentOutstandingAsOf(currentEndTs, allTx)
-        - (computeDebtOutstandingAsOf(currentEndTs, allTx) + computeCreditCardOutstandingAsOf(currentEndTs, allTx) + computeInstallmentOutstandingAsOf(currentEndTs, allTx));
-    const prevCore = computeCashBalanceAsOf(prevMonthEnd.getTime(), allTx)
-        + computeLentOutstandingAsOf(prevMonthEnd.getTime(), allTx)
-        - (computeDebtOutstandingAsOf(prevMonthEnd.getTime(), allTx) + computeCreditCardOutstandingAsOf(prevMonthEnd.getTime(), allTx) + computeInstallmentOutstandingAsOf(prevMonthEnd.getTime(), allTx));
+    const currentCorePosition = computeKpiCorePositionAsOf(currentEndTs, allTx);
+    const previousCorePosition = computeKpiCorePositionAsOf(prevMonthEnd.getTime(), allTx);
+    const currentCore = currentCorePosition.value;
+    const prevCore = previousCorePosition.value;
     const coreTrendPct = Math.abs(prevCore) > 0.01
         ? ((currentCore - prevCore) / Math.abs(prevCore)) * 100
         : NaN;
 
     const periodEl = document.getElementById('business-kpi-period');
     if (periodEl) {
-        periodEl.textContent = `Scope: ${metrics.scopeLabel} (${getSelectedPeriodLabel()})`;
+        const metricSource = typeof formatFinanceMetricProvenance === 'function'
+            ? formatFinanceMetricProvenance(metrics)
+            : (metrics.metricEngine === 'canonical' ? 'Canonical metrics' : 'Legacy metrics');
+        periodEl.textContent = `${reportsPresentation?.cards?.scorecard?.caption || `For ${metrics.scopeLabel}`} • ${metricSource}`;
     }
+    panel.dataset.financeMetricEngine = metrics.metricProvenance?.engine || metrics.metricEngine || 'legacy';
+    panel.dataset.financeMetricVersion = metrics.metricProvenance?.engineVersion || '';
+    panel.dataset.financeBreakdownSource = consumerBreakdown.source || 'legacy_fallback';
+    panel.dataset.financePositionSource = currentCorePosition.source || 'legacy_fallback';
 
     const dsrGood = Number.isFinite(debtServiceRatio) && debtServiceRatio <= 30;
     const dsrWarn = Number.isFinite(debtServiceRatio) && debtServiceRatio > 30;
@@ -315,16 +421,44 @@ async function refreshBusinessKPIPanel() {
     });
 
     const trendPositive = Number.isFinite(coreTrendPct) && coreTrendPct >= 0;
-    setBusinessKpiCard('kpi-networth', {
-        valueText: fmt(netWorth),
-        detailText: `Cash ${fmt(cashNow)} + lent ${fmt(lentOutstandingNow)} + crypto ${fmt(cryptoValue)} - liabilities ${fmt(debtOutstandingNow)}`,
-        trendText: Number.isFinite(coreTrendPct)
+    const netWorthLabelEl = document.getElementById('kpi-networth-label');
+    const netWorthCardEl = document.getElementById('kpi-networth-card');
+    if (netWorthLabelEl) {
+        netWorthLabelEl.textContent = netWorthView.mode === 'legacy'
+            ? 'Estimated Net Worth (Legacy)'
+            : 'Estimated Net Worth (Market)';
+    }
+    if (netWorthCardEl) netWorthCardEl.dataset.valuationState = netWorthView.mode;
+    if (document.body) document.body.dataset.financeSnapshotMarketEngine = netWorthView.mode;
+
+    const missingMarketPrices = Math.max(0, Number(netWorthView.missingPriceCount || 0));
+    const marketUnavailable = netWorthView.mode === 'unavailable';
+    const netWorthAsOfDate = netWorthView.asOf ? new Date(netWorthView.asOf) : new Date();
+    const netWorthAsOfLabel = Number.isFinite(netWorthAsOfDate.getTime())
+        ? `As of ${netWorthAsOfDate.toLocaleDateString('en', { month: 'short', day: 'numeric' })}`
+        : 'As of now';
+    const netWorthDetail = marketUnavailable
+        ? (missingMarketPrices > 0
+            ? `${netWorthAsOfLabel} • Market value unavailable — prices missing for ${missingMarketPrices} crypto holding${missingMarketPrices === 1 ? '' : 's'}`
+            : `${netWorthAsOfLabel} • Market value is currently unavailable`)
+        : `${netWorthAsOfLabel} • ${netWorthView.mode === 'legacy' ? 'Legacy estimate • ' : ''}Cash ${fmt(netWorthView.cash)} + receivables ${fmt(netWorthView.receivables)} + crypto ${fmt(netWorthView.crypto)} + fixed assets ${fmt(netWorthView.fixedAssets)} - liabilities ${fmt(netWorthView.liabilities)}`;
+    const netWorthTrend = marketUnavailable
+        ? 'See the separate book-value estimate in the Reports position comparison'
+        : `${netWorthView.mode === 'legacy' ? 'Canonical reconciliation unavailable • ' : ''}${Number.isFinite(coreTrendPct)
             ? `Core trend vs prior month: ${coreTrendPct >= 0 ? '+' : ''}${coreTrendPct.toFixed(1)}%`
-            : 'Core trend vs prior month: n/a',
-        valueClass: netWorth >= 0 ? 'text-slate-800' : 'text-rose-600',
-        trendClass: Number.isFinite(coreTrendPct)
+            : 'Core trend vs prior month: n/a'}`;
+    setBusinessKpiCard('kpi-networth', {
+        valueText: marketUnavailable || netWorthView.value == null ? 'n/a' : fmt(netWorthView.value),
+        detailText: netWorthDetail,
+        trendText: netWorthTrend,
+        valueClass: marketUnavailable
+            ? 'text-slate-500'
+            : (Number(netWorthView.value) >= 0 ? 'text-slate-800' : 'text-rose-600'),
+        trendClass: marketUnavailable
+            ? 'text-indigo-600'
+            : (Number.isFinite(coreTrendPct)
             ? (trendPositive ? 'text-emerald-600' : 'text-rose-600')
-            : 'text-slate-400'
+            : 'text-slate-400')
     });
 
     const selectedClose = getCloseRecordForMonth(selectedMonthKey);
@@ -337,7 +471,13 @@ async function refreshBusinessKPIPanel() {
         : 'No close history yet';
     let closeTrendClass = latestClose ? 'text-slate-500' : 'text-slate-400';
 
-    if (selectedClose && selectedClose.status === 'closed') {
+    if (reportsPresentation && !reportsPresentation.scope.isSingleMonth) {
+        closeValue = 'n/a';
+        closeValueClass = 'text-slate-500';
+        closeDetail = 'Choose one month to review close readiness';
+        closeTrend = latestClose ? `Latest close: ${latestClose.month}` : 'No close history yet';
+        closeTrendClass = 'text-slate-400';
+    } else if (selectedClose && selectedClose.status === 'closed') {
         closeValue = 'Closed';
         closeValueClass = 'text-emerald-600';
         closeDetail = `${selectedMonthKey} closed on ${selectedClose.closedAt ? new Date(selectedClose.closedAt).toLocaleDateString() : 'date n/a'}`;
@@ -375,7 +515,7 @@ async function refreshBusinessKPIPanel() {
     // ----- Financial Health Ratios (Priority 5) -----
     const totalExpense = Number(metrics.expense || 0);
 
-    // 1. Expense-to-Income Ratio
+    // 1. Spending-to-Income Ratio
     const expenseRatio = income > 0 ? (totalExpense / income) * 100 : NaN;
     const expenseRatioEl = document.getElementById('kpi-expense-ratio-value');
     const expenseRatioDetail = document.getElementById('kpi-expense-ratio-detail');
@@ -383,36 +523,37 @@ async function refreshBusinessKPIPanel() {
         if (Number.isFinite(expenseRatio)) {
             expenseRatioEl.textContent = formatPct(expenseRatio, 0);
             expenseRatioEl.className = `text-2xl font-black mt-1 ${expenseRatio <= 70 ? 'text-emerald-600' : expenseRatio <= 90 ? 'text-amber-600' : 'text-rose-600'}`;
-            if (expenseRatioDetail) expenseRatioDetail.textContent = `${fmt(totalExpense)} of ${fmt(income)} income spent`;
+            if (expenseRatioDetail) expenseRatioDetail.textContent = `${fmt(totalExpense)} of ${fmt(income)} earned income spent`;
         } else {
             expenseRatioEl.textContent = 'n/a';
             expenseRatioEl.className = 'text-2xl font-black mt-1 text-slate-500';
         }
     }
 
-    // 2. Emergency Fund Coverage (months)
-    const monthlyExpenseEstimate = (() => {
-        const now = new Date();
-        const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        const recentExpenses = allTx.filter(t => {
-            if (t.type !== 'expense') return false;
-            const ts = getTxTimestamp(t);
-            return ts >= threeMonthsAgo.getTime() && ts <= now.getTime();
-        });
-        const totalRecentExpense = recentExpenses.reduce((s, t) => s + (t.amt || 0), 0);
-        return totalRecentExpense / 3;
-    })();
-    const emergencyMonths = monthlyExpenseEstimate > 0 ? cashNow / monthlyExpenseEstimate : NaN;
+    // 2. Emergency Fund Coverage proxy (cash / 3 complete months of canonical spending)
+    const monthlyExpenseEstimate = Number(liquidityMetrics?.averageMonthlyConsumption || 0);
+    const liquidityReady = liquidityMetrics?.diagnostics?.safeForVisibleCutover === true;
+    const liquidityPeriodLabel = liquidityMetrics?.window?.label || 'previous 3 complete months';
+    const emergencyMonths = liquidityReady
+        && liquidityMetrics?.emergencyFundCoverageMonths != null
+        && Number.isFinite(Number(liquidityMetrics?.emergencyFundCoverageMonths))
+        ? Number(liquidityMetrics.emergencyFundCoverageMonths)
+        : NaN;
     const emergencyEl = document.getElementById('kpi-emergency-fund-value');
     const emergencyDetail = document.getElementById('kpi-emergency-fund-detail');
     if (emergencyEl) {
         if (Number.isFinite(emergencyMonths)) {
             emergencyEl.textContent = `${emergencyMonths.toFixed(1)}mo`;
             emergencyEl.className = `text-2xl font-black mt-1 ${emergencyMonths >= 6 ? 'text-emerald-600' : emergencyMonths >= 3 ? 'text-amber-600' : 'text-rose-600'}`;
-            if (emergencyDetail) emergencyDetail.textContent = `${fmt(cashNow)} cash / ${fmt(monthlyExpenseEstimate)}/mo avg expenses`;
+            if (emergencyDetail) emergencyDetail.textContent = `${fmt(liquidityMetrics.eligibleCash)} cash / ${fmt(monthlyExpenseEstimate)}/mo spending • ${liquidityPeriodLabel}`;
         } else {
             emergencyEl.textContent = 'n/a';
             emergencyEl.className = 'text-2xl font-black mt-1 text-slate-500';
+            if (emergencyDetail) {
+                emergencyDetail.textContent = !liquidityReady
+                    ? 'Liquidity data needs review before coverage can be calculated'
+                    : `No consumption recorded in ${liquidityPeriodLabel}`;
+            }
         }
     }
 
@@ -426,36 +567,40 @@ async function refreshBusinessKPIPanel() {
         if (currentRatio === Infinity) {
             currentRatioEl.textContent = '∞';
             currentRatioEl.className = 'text-2xl font-black mt-1 text-emerald-600';
-            if (currentRatioDetail) currentRatioDetail.textContent = 'No liabilities — excellent position';
+            if (currentRatioDetail) currentRatioDetail.textContent = 'No tracked liabilities • proxy, not 30-day coverage';
         } else if (Number.isFinite(currentRatio)) {
             currentRatioEl.textContent = `${currentRatio.toFixed(2)}x`;
             currentRatioEl.className = `text-2xl font-black mt-1 ${currentRatio >= 1.5 ? 'text-emerald-600' : currentRatio >= 1.0 ? 'text-amber-600' : 'text-rose-600'}`;
-            if (currentRatioDetail) currentRatioDetail.textContent = `${fmt(liquidAssets)} liquid / ${fmt(currentLiabilities)} liabilities`;
+            if (currentRatioDetail) currentRatioDetail.textContent = `${fmt(liquidAssets)} cash + receivables / ${fmt(currentLiabilities)} all liabilities • proxy`;
         } else {
             currentRatioEl.textContent = 'n/a';
             currentRatioEl.className = 'text-2xl font-black mt-1 text-slate-500';
+            if (currentRatioDetail) currentRatioDetail.textContent = '30-day obligation coverage is deferred';
         }
     }
 
-    // 4. Runway (Months on current cash)
-    const activeBurnRate = monthlyExpenseEstimate; // from Emergency Fund calculation
-    // Assume liquid assets for runway includes cash + lent + crypto
-    const runwayLiquidAssets = liquidAssets + cryptoValue;
-    const runwayMonths = activeBurnRate > 0 ? runwayLiquidAssets / activeBurnRate : NaN;
+    // 4. Liquidity Runway (tracked cash only; receivables and crypto are excluded)
+    const activeBurnRate = monthlyExpenseEstimate;
+    const runwayMonths = liquidityReady
+        && liquidityMetrics?.liquidityRunwayMonths != null
+        && Number.isFinite(Number(liquidityMetrics?.liquidityRunwayMonths))
+        ? Number(liquidityMetrics.liquidityRunwayMonths)
+        : NaN;
     const runwayEl = document.getElementById('kpi-runway-value');
     const runwayDetail = document.getElementById('kpi-runway-detail');
     if (runwayEl) {
-        if (activeBurnRate <= 0) {
-            runwayEl.textContent = '∞';
-            runwayEl.className = 'text-2xl font-black mt-1 text-emerald-600';
-            if (runwayDetail) runwayDetail.textContent = 'No recent burn rate';
-        } else if (Number.isFinite(runwayMonths)) {
+        if (Number.isFinite(runwayMonths)) {
             runwayEl.textContent = `${runwayMonths.toFixed(1)}mo`;
             runwayEl.className = `text-2xl font-black mt-1 ${runwayMonths >= 6 ? 'text-emerald-600' : runwayMonths >= 3 ? 'text-amber-600' : 'text-rose-600'}`;
-            if (runwayDetail) runwayDetail.textContent = `${fmt(runwayLiquidAssets)} liquid / ${fmt(activeBurnRate)}/mo burn`;
+            if (runwayDetail) runwayDetail.textContent = `${fmt(liquidityMetrics.eligibleCash)} cash only / ${fmt(activeBurnRate)}/mo spending • ${liquidityPeriodLabel}`;
         } else {
             runwayEl.textContent = 'n/a';
             runwayEl.className = 'text-2xl font-black mt-1 text-slate-500';
+            if (runwayDetail) {
+                runwayDetail.textContent = !liquidityReady
+                    ? 'Liquidity data needs review before runway can be calculated'
+                    : `No consumption recorded in ${liquidityPeriodLabel}`;
+            }
         }
     }
 
@@ -468,3 +613,7 @@ async function refreshBusinessKPIPanel() {
         updatedEl.textContent = `KPI refreshed at ${new Date().toLocaleTimeString()}`;
     }
 }
+
+window.addEventListener?.('finance:snapshot-shadow-updated', () => {
+    if (typeof refreshBusinessKPIPanel === 'function') refreshBusinessKPIPanel();
+});

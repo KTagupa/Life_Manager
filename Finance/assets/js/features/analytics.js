@@ -25,10 +25,14 @@
                 ? ((currentMetrics.expense - lastMetrics.expense) / lastMetrics.expense) * 100
                 : 0;
 
-            incTrend.innerHTML = incChange === 0
-                ? '—'
-                : `<span class="${incChange > 0 ? 'text-emerald-600' : 'text-rose-600'}">${incChange > 0 ? '↑' : '↓'} ${Math.abs(incChange).toFixed(1)}%</span> vs last month`;
-            expTrend.innerHTML = expChange === 0
-                ? '—'
-                : `<span class="${expChange > 0 ? 'text-rose-600' : 'text-emerald-600'}">${expChange > 0 ? '↑' : '↓'} ${Math.abs(expChange).toFixed(1)}%</span> vs last month`;
+            if (incTrend) {
+                incTrend.innerHTML = incChange === 0
+                    ? '—'
+                    : `<span class="${incChange > 0 ? 'text-emerald-600' : 'text-rose-600'}">${incChange > 0 ? '↑' : '↓'} ${Math.abs(incChange).toFixed(1)}%</span> vs last month`;
+            }
+            if (expTrend) {
+                expTrend.innerHTML = expChange === 0
+                    ? '—'
+                    : `<span class="${expChange > 0 ? 'text-rose-600' : 'text-emerald-600'}">${expChange > 0 ? '↑' : '↓'} ${Math.abs(expChange).toFixed(1)}%</span> vs last month`;
+            }
         }
